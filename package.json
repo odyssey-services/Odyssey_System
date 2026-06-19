@@ -1,0 +1,15 @@
+{
+  "name": "owlbear-body-hp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@owlbear-rodeo/sdk": "3.1.0",
+    "@supabase/supabase-js": "^2.108.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  }
+}

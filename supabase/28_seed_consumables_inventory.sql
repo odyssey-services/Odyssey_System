@@ -1,0 +1,68 @@
+insert into public.odyssey_item_defs (
+  code,
+  name,
+  item_type,
+  description,
+  is_stackable,
+  default_quantity,
+  max_stack,
+  default_max_charges,
+  default_current_charges,
+  use_action_type,
+  effect_data,
+  data,
+  tags,
+  is_custom,
+  sort_order
+)
+values
+  (
+    'small_energy_cell',
+    'Small Energy Cell',
+    'resource',
+    'A small replaceable energy cell used to reload certain weapon features such as plasma edge.',
+    true,
+    1,
+    null,
+    null,
+    null,
+    'none',
+    '{}'::jsonb,
+    '{}'::jsonb,
+    '["stage4d","resource","energy"]'::jsonb,
+    false,
+    10
+  ),
+  (
+    'basic_medkit',
+    'Basic Medkit',
+    'medical',
+    'Heals selected body part: removes 1 serious, or converts 1 critical into 1 serious, or clears all minor damage. Also removes unconscious if present. Not consumed if nothing can be healed.',
+    true,
+    1,
+    null,
+    null,
+    null,
+    'heal',
+    '{}'::jsonb,
+    '{}'::jsonb,
+    '["stage4d","medical","healing"]'::jsonb,
+    false,
+    20
+  )
+on conflict (code) do update
+set
+  name = excluded.name,
+  item_type = excluded.item_type,
+  description = excluded.description,
+  is_stackable = excluded.is_stackable,
+  default_quantity = excluded.default_quantity,
+  max_stack = excluded.max_stack,
+  default_max_charges = excluded.default_max_charges,
+  default_current_charges = excluded.default_current_charges,
+  use_action_type = excluded.use_action_type,
+  effect_data = excluded.effect_data,
+  data = excluded.data,
+  tags = excluded.tags,
+  is_custom = excluded.is_custom,
+  sort_order = excluded.sort_order;

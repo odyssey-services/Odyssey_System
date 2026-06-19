@@ -1,0 +1,15 @@
+.character-catalog-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sheet-wide {
+  width: 100%;
+}
+
+.character-sheet-weapon-row {
+  grid-template-columns: minmax(0, 1fr) 78px 78px 78px 78px auto;
+}
+
+.character-sheet-weapon-row-header {
+  grid-template-columns: minmax(0, 1fr) 78px 78px 78px 78px auto;
+}
