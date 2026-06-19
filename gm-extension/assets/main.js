@@ -26481,7 +26481,7 @@ function createTokenRealtimeSync({ runtime: runtime2 }) {
 }
 
 // screens/placement/placementStyles.css
-var placementStyles_default = "/* Placement Screen \u2014 scoped styles (.pl- prefix). Reuses shell design tokens. */\n.pl-screen { display: flex; flex-direction: column; gap: 14px; }\n.pl-screen-nogm { align-items: center; justify-content: center; padding: 40px 0; }\n.pl-header { display: flex; align-items: center; gap: 8px; }\n.pl-title { font-size: 14px; font-weight: 700; }\n.pl-muted { color: var(--muted); font-size: 12px; }\n.pl-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\n.pl-section { display: flex; flex-direction: column; gap: 8px; }\n.pl-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n\n/* banners */\n.pl-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\n.pl-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\n.pl-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\n.pl-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\n.pl-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\n\n/* token panel */\n.pl-token-panel { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }\n.pl-token-row { display: flex; align-items: center; gap: 8px; }\n.pl-token-name { font-weight: 600; font-size: 13px; }\n.pl-token-layer { font-size: 10px; }\n.pl-link-row { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }\n.pl-link-state { font-size: 11px; color: var(--muted); }\n.pl-actions-row { display: flex; gap: 6px; flex-wrap: wrap; }\n\n/* badges */\n.pl-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\n.pl-badge-player { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\n.pl-badge-template { border-color: rgba(255,194,75,.4); color: #ffe6b3; background: rgba(255,194,75,.10); }\n.pl-badge-active { border-color: rgba(62,210,130,.4); color: #b3ffd9; background: rgba(62,210,130,.10); }\n.pl-badge-on-scene { border-color: rgba(62,210,130,.5); color: #b3ffd9; background: rgba(62,210,130,.14); font-weight: 700; }\n\n/* catalog */\n.pl-catalog { display: flex; flex-direction: column; gap: 10px; }\n.pl-catalog-controls { display: flex; flex-direction: column; gap: 8px; }\n.pl-control-group { display: flex; flex-direction: column; gap: 4px; }\n.pl-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }\n.pl-search { font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; width: 100%; }\n.pl-filter { font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; width: 100%; }\n.pl-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }\n\n/* catalog items */\n.pl-item { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }\n.pl-item-linked { border-color: rgba(62,210,130,.35); background: rgba(62,210,130,.06); }\n.pl-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }\n.pl-item-name { font-size: 13px; font-weight: 600; flex: 1; }\n.pl-item-status { font-size: 11px; }\n.pl-item-actions { display: flex; gap: 6px; flex-wrap: wrap; }\n\n/* buttons */\n.pl-btn { font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; transition: background .12s, border-color .12s; }\n.pl-btn:disabled { opacity: .5; cursor: not-allowed; }\n.pl-btn-primary { background: rgba(62,166,255,.18); border-color: rgba(62,166,255,.5); color: #d8eeff; }\n.pl-btn-primary:not(:disabled):hover { background: rgba(62,166,255,.28); }\n.pl-btn-secondary { background: var(--panel-soft); border-color: var(--line); color: var(--text); }\n.pl-btn-secondary:not(:disabled):hover { border-color: var(--accent); }\n.pl-btn-danger { background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.45); color: #ffd9de; }\n.pl-btn-danger:not(:disabled):hover { background: rgba(201,75,88,.26); }\n.pl-btn-ghost { background: none; border-color: var(--line); color: var(--muted); }\n.pl-btn-ghost:not(:disabled):hover { color: var(--text); border-color: var(--accent); }\n\n/* delete confirm dialog */\n.pl-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.65); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\n.pl-dialog { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }\n.pl-dialog h3 { margin: 0; font-size: 14px; }\n.pl-dialog p { margin: 0; font-size: 12px; line-height: 1.5; }\n.pl-dialog-actions { display: flex; gap: 8px; }\n";
+var placementStyles_default = "/* Placement Screen \u2014 scoped styles (.pl- prefix). Reuses shell design tokens. */\n.pl-screen { display: flex; flex-direction: column; gap: 14px; }\n.pl-screen-nogm { align-items: center; justify-content: center; padding: 40px 0; }\n.pl-header { display: flex; align-items: center; gap: 8px; }\n.pl-title { font-size: 14px; font-weight: 700; }\n.pl-muted { color: var(--muted); font-size: 12px; }\n.pl-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\n.pl-section { display: flex; flex-direction: column; gap: 8px; }\n.pl-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n\n/* banners */\n.pl-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\n.pl-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\n.pl-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\n.pl-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\n.pl-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\n\n/* token panel */\n.pl-token-panel { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }\n.pl-token-row { display: flex; align-items: center; gap: 8px; }\n.pl-token-name { font-weight: 600; font-size: 13px; }\n.pl-token-layer { font-size: 10px; }\n.pl-link-row { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }\n.pl-link-state { font-size: 11px; color: var(--muted); }\n.pl-actions-row { display: flex; gap: 6px; flex-wrap: wrap; }\n\n/* badges */\n.pl-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\n.pl-badge-player { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\n.pl-badge-template { border-color: rgba(255,194,75,.4); color: #ffe6b3; background: rgba(255,194,75,.10); }\n.pl-badge-active { border-color: rgba(62,210,130,.4); color: #b3ffd9; background: rgba(62,210,130,.10); }\n.pl-badge-on-scene { border-color: rgba(62,210,130,.5); color: #b3ffd9; background: rgba(62,210,130,.14); font-weight: 700; }\n\n/* catalog */\n.pl-catalog { display: flex; flex-direction: column; gap: 10px; }\n.pl-catalog-controls { display: flex; flex-direction: column; gap: 8px; }\n.pl-control-group { display: flex; flex-direction: column; gap: 4px; }\n.pl-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }\n.pl-search { font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; width: 100%; }\n.pl-filter { font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; width: 100%; }\n.pl-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }\n\n/* catalog items */\n.pl-item { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }\n.pl-item-linked { border-color: rgba(62,210,130,.35); background: rgba(62,210,130,.06); }\n.pl-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }\n.pl-item-name { font-size: 13px; font-weight: 600; flex: 1; }\n.pl-item-status { font-size: 11px; }\n.pl-item-actions { display: flex; gap: 6px; flex-wrap: wrap; }\n\n/* buttons */\n.pl-btn { font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; transition: background .12s, border-color .12s; }\n.pl-btn:disabled { opacity: .5; cursor: not-allowed; }\n.pl-btn-primary { background: rgba(62,166,255,.18); border-color: rgba(62,166,255,.5); color: #d8eeff; }\n.pl-btn-primary:not(:disabled):hover { background: rgba(62,166,255,.28); }\n.pl-btn-secondary { background: var(--panel-soft); border-color: var(--line); color: var(--text); }\n.pl-btn-secondary:not(:disabled):hover { border-color: var(--accent); }\n.pl-btn-danger { background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.45); color: #ffd9de; }\n.pl-btn-danger:not(:disabled):hover { background: rgba(201,75,88,.26); }\n.pl-btn-ghost { background: none; border-color: var(--line); color: var(--muted); }\n.pl-btn-ghost:not(:disabled):hover { color: var(--text); border-color: var(--accent); }\n\n/* debug panel */\n.pl-debug { border: 1px solid rgba(61,92,129,.5); border-radius: 10px; overflow: hidden; }\n.pl-debug-title { font-size: 11px; color: var(--muted); padding: 6px 10px; cursor: pointer; user-select: none; }\n.pl-debug-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; background: rgba(8,17,28,.6); }\n.pl-debug-row { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-family: monospace; }\n.pl-debug-row span:first-child { color: var(--muted); }\n.pl-debug-row span:last-child { color: var(--text); word-break: break-all; }\n\n/* delete confirm dialog */\n.pl-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.65); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\n.pl-dialog { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }\n.pl-dialog h3 { margin: 0; font-size: 14px; }\n.pl-dialog p { margin: 0; font-size: 12px; line-height: 1.5; }\n.pl-dialog-actions { display: flex; gap: 8px; }\n";
 
 // screens/resolveAttack/resolveAttackSettings.js
 var DEV_STORAGE_KEY = "odyssey.resolveAttack.devSettings";
@@ -26540,28 +26540,22 @@ function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
     obr: { roomId: "", sceneId: "", campaignId: "" },
     // selected OBR token
     selectedToken: null,
-    // { id, name, layer }
     existingLink: null,
-    // current scene link for selected token
     // catalog
     catalog: [],
     catalogFilter: "all",
-    // "all" | "player" | "npc_template" | "npc_active"
     catalogSearch: "",
     catalogLoading: false,
-    // preview
-    previewCharacter: null,
-    // { id, display_name, character_bucket, summary }
     // delete confirm
     deleteTarget: null,
-    // { id, display_name } pending confirmation
     deleteMode: "",
-    // "archive" | "hard_delete"
     // ui state
     busy: false,
     notice: "",
     noticeKind: "info",
-    sceneLinksLoading: false
+    sceneLinksLoading: false,
+    // debug
+    _debug: { settingsUrl: "", settingsKey: false, lastResCount: null, lastError: "", initDone: false }
   };
   const settings = () => state.settings;
   const isGM = () => state.role === "GM";
@@ -26573,6 +26567,9 @@ function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
       const resolved = await resolveEffectiveSettings();
       state.settings = resolved.settings;
     }
+    const s = state.settings;
+    state._debug.settingsUrl = s.url ? s.url.slice(0, 30) + (s.url.length > 30 ? "\u2026" : "") : "(empty)";
+    state._debug.settingsKey = !!s.apiKey;
     const player = await withTimeout2(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null);
     if (player?.role) state.role = String(player.role).toUpperCase() === "GM" ? "GM" : "PLAYER";
     const ctx = await withTimeout2(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null);
@@ -26581,6 +26578,7 @@ function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
       state.obr.sceneId = ctx.sceneId || "";
       state.obr.campaignId = ctx.campaignId || "";
     }
+    state._debug.initDone = true;
     render();
     if (isGM()) {
       loadCatalog();
@@ -26647,16 +26645,17 @@ function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
         limit: 100
       };
       if (state.catalogSearch) payload.search = state.catalogSearch;
-      console.log("[Placement] loadCatalog payload:", payload, "settings url:", s.url ? s.url.slice(0, 40) + "\u2026" : "EMPTY", "key:", s.apiKey ? "SET" : "EMPTY");
       const res = await api.placement.getCharacterSpawnCatalog(payload, s);
-      console.log("[Placement] loadCatalog response:", JSON.stringify(res));
       state.catalog = arr(res?.characters);
+      state._debug.lastResCount = state.catalog.length;
+      state._debug.lastError = res?.ok === false ? res?.message || "ok=false" : "";
       if (!res?.ok) {
         setNotice("err", res?.message || "Catalog load failed.");
         state.catalog = [];
       }
     } catch (e) {
-      console.error("[Placement] loadCatalog error:", e);
+      state._debug.lastError = e.message;
+      state._debug.lastResCount = -1;
       setNotice("err", `Catalog error: ${e.message}`);
       state.catalog = [];
     }
@@ -26866,6 +26865,27 @@ function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
         </div>
       </div>`;
   }
+  function renderDebug() {
+    const d = state._debug;
+    const rows = [
+      ["Settings URL", d.settingsUrl || "(not loaded yet)"],
+      ["API Key", d.settingsKey ? "SET" : "EMPTY"],
+      ["Role", state.role],
+      ["Room ID", state.obr.roomId || "(empty)"],
+      ["Scene ID", state.obr.sceneId || "(empty)"],
+      ["Init done", d.initDone ? "yes" : "no"],
+      ["Catalog result", d.lastResCount === null ? "not loaded" : d.lastResCount === -1 ? "error" : `${d.lastResCount} rows`],
+      ["Last error", d.lastError || "none"]
+    ];
+    return `
+      <details class="pl-debug">
+        <summary class="pl-debug-title">Debug info</summary>
+        <div class="pl-debug-body">
+          ${rows.map(([k, v]) => `<div class="pl-debug-row"><span>${esc(k)}</span><span>${esc(String(v))}</span></div>`).join("")}
+          <button class="pl-btn pl-btn-ghost pl-debug-reload" data-action="reload-catalog" style="margin-top:6px;width:100%">Reload Catalog</button>
+        </div>
+      </details>`;
+  }
   function render() {
     if (!isGM()) {
       root2.innerHTML = `<div class="pl-screen pl-screen-nogm"><p class="pl-muted">Placement tools are available to GMs only.</p></div>`;
@@ -26885,6 +26905,7 @@ function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
           <div class="pl-section-title">Character Catalog</div>
           ${renderCatalog()}
         </section>
+        ${renderDebug()}
         ${renderDeleteConfirm()}
       </div>`;
     bindEvents();
@@ -26911,6 +26932,10 @@ function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
     if (!btn) return;
     const action = btn.dataset.action;
     const charId = btn.dataset.char;
+    if (action === "reload-catalog") {
+      loadCatalog();
+      return;
+    }
     if (action === "bind") {
       onBind(charId);
       return;

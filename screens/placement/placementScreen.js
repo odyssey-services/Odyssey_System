@@ -40,23 +40,23 @@ export function mountPlacementScreen({ root, runtime }) {
     role: "PLAYER",
     obr: { roomId: "", sceneId: "", campaignId: "" },
     // selected OBR token
-    selectedToken: null,         // { id, name, layer }
-    existingLink: null,          // current scene link for selected token
+    selectedToken: null,
+    existingLink: null,
     // catalog
     catalog: [],
-    catalogFilter: "all",        // "all" | "player" | "npc_template" | "npc_active"
+    catalogFilter: "all",
     catalogSearch: "",
     catalogLoading: false,
-    // preview
-    previewCharacter: null,      // { id, display_name, character_bucket, summary }
     // delete confirm
-    deleteTarget: null,          // { id, display_name } pending confirmation
-    deleteMode: "",              // "archive" | "hard_delete"
+    deleteTarget: null,
+    deleteMode: "",
     // ui state
     busy: false,
     notice: "",
     noticeKind: "info",
     sceneLinksLoading: false,
+    // debug
+    _debug: { settingsUrl: "", settingsKey: false, lastResCount: null, lastError: "", initDone: false },
   };
 
   const settings = () => state.settings;
@@ -71,10 +71,14 @@ export function mountPlacementScreen({ root, runtime }) {
       const resolved = await resolveEffectiveSettings();
       state.settings = resolved.settings;
     }
+    const s = state.settings;
+    state._debug.settingsUrl = s.url ? s.url.slice(0, 30) + (s.url.length > 30 ? "…" : "") : "(empty)";
+    state._debug.settingsKey = !!s.apiKey;
     const player = await withTimeout(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null);
     if (player?.role) state.role = String(player.role).toUpperCase() === "GM" ? "GM" : "PLAYER";
     const ctx = await withTimeout(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null);
     if (ctx) { state.obr.roomId = ctx.roomId || ""; state.obr.sceneId = ctx.sceneId || ""; state.obr.campaignId = ctx.campaignId || ""; }
+    state._debug.initDone = true;
     render();
     if (isGM()) {
       loadCatalog();
@@ -144,16 +148,17 @@ export function mountPlacementScreen({ root, runtime }) {
         limit: 100,
       };
       if (state.catalogSearch) payload.search = state.catalogSearch;
-      console.log("[Placement] loadCatalog payload:", payload, "settings url:", s.url ? s.url.slice(0, 40) + "…" : "EMPTY", "key:", s.apiKey ? "SET" : "EMPTY");
       const res = await api.placement.getCharacterSpawnCatalog(payload, s);
-      console.log("[Placement] loadCatalog response:", JSON.stringify(res));
       state.catalog = arr(res?.characters);
+      state._debug.lastResCount = state.catalog.length;
+      state._debug.lastError = res?.ok === false ? (res?.message || "ok=false") : "";
       if (!res?.ok) {
         setNotice("err", res?.message || "Catalog load failed.");
         state.catalog = [];
       }
     } catch (e) {
-      console.error("[Placement] loadCatalog error:", e);
+      state._debug.lastError = e.message;
+      state._debug.lastResCount = -1;
       setNotice("err", `Catalog error: ${e.message}`);
       state.catalog = [];
     }
@@ -354,6 +359,28 @@ export function mountPlacementScreen({ root, runtime }) {
       </div>`;
   }
 
+  function renderDebug() {
+    const d = state._debug;
+    const rows = [
+      ["Settings URL", d.settingsUrl || "(not loaded yet)"],
+      ["API Key", d.settingsKey ? "SET" : "EMPTY"],
+      ["Role", state.role],
+      ["Room ID", state.obr.roomId || "(empty)"],
+      ["Scene ID", state.obr.sceneId || "(empty)"],
+      ["Init done", d.initDone ? "yes" : "no"],
+      ["Catalog result", d.lastResCount === null ? "not loaded" : d.lastResCount === -1 ? "error" : `${d.lastResCount} rows`],
+      ["Last error", d.lastError || "none"],
+    ];
+    return `
+      <details class="pl-debug">
+        <summary class="pl-debug-title">Debug info</summary>
+        <div class="pl-debug-body">
+          ${rows.map(([k, v]) => `<div class="pl-debug-row"><span>${esc(k)}</span><span>${esc(String(v))}</span></div>`).join("")}
+          <button class="pl-btn pl-btn-ghost pl-debug-reload" data-action="reload-catalog" style="margin-top:6px;width:100%">Reload Catalog</button>
+        </div>
+      </details>`;
+  }
+
   function render() {
     if (!isGM()) {
       root.innerHTML = `<div class="pl-screen pl-screen-nogm"><p class="pl-muted">Placement tools are available to GMs only.</p></div>`;
@@ -373,6 +400,7 @@ export function mountPlacementScreen({ root, runtime }) {
           <div class="pl-section-title">Character Catalog</div>
           ${renderCatalog()}
         </section>
+        ${renderDebug()}
         ${renderDeleteConfirm()}
       </div>`;
     bindEvents();
@@ -403,6 +431,7 @@ export function mountPlacementScreen({ root, runtime }) {
     const action = btn.dataset.action;
     const charId = btn.dataset.char;
 
+    if (action === "reload-catalog") { loadCatalog(); return; }
     if (action === "bind") { onBind(charId); return; }
     if (action === "unbind") { onUnbind(); return; }
     if (action === "confirm-delete") { onDelete(state.deleteTarget.id, state.deleteMode); return; }
