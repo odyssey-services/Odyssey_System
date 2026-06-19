@@ -144,7 +144,7 @@ export function mountPlacementScreen({ root, runtime }) {
         scene_id: state.obr.sceneId || undefined,
         search: state.catalogSearch || undefined,
         buckets,
-        include_active_npcs: includeActive,
+        include_active_npc: includeActive,
         limit: 100,
       }, settings());
       state.catalog = arr(res?.items);

@@ -4521,7 +4521,7 @@ async function mountBridgeShell({
           campaign_id: state.roomContext.campaignId,
           room_id: state.roomContext.roomId,
           scene_id: state.roomContext.sceneId,
-          include_active_npcs: state.placement.includeActiveNpc
+          include_active_npc: state.placement.includeActiveNpc
         },
         state.settings
       );

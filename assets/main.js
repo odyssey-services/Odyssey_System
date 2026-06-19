@@ -4528,7 +4528,7 @@ async function mountBridgeShell({
           campaign_id: state.roomContext.campaignId,
           room_id: state.roomContext.roomId,
           scene_id: state.roomContext.sceneId,
-          include_active_npcs: state.placement.includeActiveNpc
+          include_active_npc: state.placement.includeActiveNpc
         },
         state.settings
       );
@@ -29193,7 +29193,7 @@ function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
         scene_id: state.obr.sceneId || void 0,
         search: state.catalogSearch || void 0,
         buckets,
-        include_active_npcs: includeActive,
+        include_active_npc: includeActive,
         limit: 100
       }, settings());
       state.catalog = arr3(res?.items);
