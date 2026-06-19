@@ -334,10 +334,10 @@ var require_events = __commonJS({
     EventEmitter2.prototype.eventNames = function eventNames() {
       return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
     };
-    function arrayClone(arr, n) {
+    function arrayClone(arr2, n) {
       var copy = new Array(n);
       for (var i = 0; i < n; ++i)
-        copy[i] = arr[i];
+        copy[i] = arr2[i];
       return copy;
     }
     function spliceOne(list, index) {
@@ -345,10 +345,10 @@ var require_events = __commonJS({
         list[index] = list[index + 1];
       list.pop();
     }
-    function unwrapListeners(arr) {
-      var ret = new Array(arr.length);
+    function unwrapListeners(arr2) {
+      var ret = new Array(arr2.length);
       for (var i = 0; i < ret.length; ++i) {
-        ret[i] = arr[i].listener || arr[i];
+        ret[i] = arr2[i].listener || arr2[i];
       }
       return ret;
     }
@@ -759,8 +759,8 @@ var byteToHex = [];
 for (let i = 0; i < 256; ++i) {
   byteToHex.push((i + 256).toString(16).slice(1));
 }
-function unsafeStringify(arr, offset = 0) {
-  return byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + "-" + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + "-" + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + "-" + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + "-" + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]];
+function unsafeStringify(arr2, offset = 0) {
+  return byteToHex[arr2[offset + 0]] + byteToHex[arr2[offset + 1]] + byteToHex[arr2[offset + 2]] + byteToHex[arr2[offset + 3]] + "-" + byteToHex[arr2[offset + 4]] + byteToHex[arr2[offset + 5]] + "-" + byteToHex[arr2[offset + 6]] + byteToHex[arr2[offset + 7]] + "-" + byteToHex[arr2[offset + 8]] + byteToHex[arr2[offset + 9]] + "-" + byteToHex[arr2[offset + 10]] + byteToHex[arr2[offset + 11]] + byteToHex[arr2[offset + 12]] + byteToHex[arr2[offset + 13]] + byteToHex[arr2[offset + 14]] + byteToHex[arr2[offset + 15]];
 }
 
 // node_modules/uuid/dist/esm-browser/native.js
@@ -10918,14 +10918,14 @@ var toArray = (value, type) => {
   const closeBrace = value[lastIdx];
   const openBrace = value[0];
   if (openBrace === "{" && closeBrace === "}") {
-    let arr;
+    let arr2;
     const valTrim = value.slice(1, lastIdx);
     try {
-      arr = JSON.parse("[" + valTrim + "]");
+      arr2 = JSON.parse("[" + valTrim + "]");
     } catch (_) {
-      arr = valTrim ? valTrim.split(",") : [];
+      arr2 = valTrim ? valTrim.split(",") : [];
     }
-    return arr.map((val) => convertCell(type, val));
+    return arr2.map((val) => convertCell(type, val));
   }
   return value;
 };
@@ -26576,6 +26576,451 @@ function createTokenRealtimeSync({ runtime: runtime2 }) {
   return api;
 }
 
+// screens/placement/placementStyles.css
+var placementStyles_default = "/* Placement Screen \u2014 scoped styles (.pl- prefix). Reuses shell design tokens. */\n.pl-screen { display: flex; flex-direction: column; gap: 14px; }\n.pl-screen-nogm { align-items: center; justify-content: center; padding: 40px 0; }\n.pl-header { display: flex; align-items: center; gap: 8px; }\n.pl-title { font-size: 14px; font-weight: 700; }\n.pl-muted { color: var(--muted); font-size: 12px; }\n.pl-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\n.pl-section { display: flex; flex-direction: column; gap: 8px; }\n.pl-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n\n/* banners */\n.pl-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\n.pl-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\n.pl-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\n.pl-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\n.pl-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\n\n/* token panel */\n.pl-token-panel { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }\n.pl-token-row { display: flex; align-items: center; gap: 8px; }\n.pl-token-name { font-weight: 600; font-size: 13px; }\n.pl-token-layer { font-size: 10px; }\n.pl-link-row { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }\n.pl-link-state { font-size: 11px; color: var(--muted); }\n.pl-actions-row { display: flex; gap: 6px; flex-wrap: wrap; }\n\n/* badges */\n.pl-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\n.pl-badge-player { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\n.pl-badge-template { border-color: rgba(255,194,75,.4); color: #ffe6b3; background: rgba(255,194,75,.10); }\n.pl-badge-active { border-color: rgba(62,210,130,.4); color: #b3ffd9; background: rgba(62,210,130,.10); }\n.pl-badge-on-scene { border-color: rgba(62,210,130,.5); color: #b3ffd9; background: rgba(62,210,130,.14); font-weight: 700; }\n\n/* catalog */\n.pl-catalog { display: flex; flex-direction: column; gap: 8px; }\n.pl-catalog-head { display: flex; gap: 6px; }\n.pl-search { flex: 1; font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; }\n.pl-filter { font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; }\n.pl-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }\n\n/* catalog items */\n.pl-item { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }\n.pl-item-linked { border-color: rgba(62,210,130,.35); background: rgba(62,210,130,.06); }\n.pl-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }\n.pl-item-name { font-size: 13px; font-weight: 600; flex: 1; }\n.pl-item-status { font-size: 11px; }\n.pl-item-actions { display: flex; gap: 6px; flex-wrap: wrap; }\n\n/* buttons */\n.pl-btn { font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; transition: background .12s, border-color .12s; }\n.pl-btn:disabled { opacity: .5; cursor: not-allowed; }\n.pl-btn-primary { background: rgba(62,166,255,.18); border-color: rgba(62,166,255,.5); color: #d8eeff; }\n.pl-btn-primary:not(:disabled):hover { background: rgba(62,166,255,.28); }\n.pl-btn-secondary { background: var(--panel-soft); border-color: var(--line); color: var(--text); }\n.pl-btn-secondary:not(:disabled):hover { border-color: var(--accent); }\n.pl-btn-danger { background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.45); color: #ffd9de; }\n.pl-btn-danger:not(:disabled):hover { background: rgba(201,75,88,.26); }\n.pl-btn-ghost { background: none; border-color: var(--line); color: var(--muted); }\n.pl-btn-ghost:not(:disabled):hover { color: var(--text); border-color: var(--accent); }\n\n/* delete confirm dialog */\n.pl-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.65); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\n.pl-dialog { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }\n.pl-dialog h3 { margin: 0; font-size: 14px; }\n.pl-dialog p { margin: 0; font-size: 12px; line-height: 1.5; }\n.pl-dialog-actions { display: flex; gap: 8px; }\n";
+
+// screens/resolveAttack/resolveAttackSettings.js
+var DEV_STORAGE_KEY = "odyssey.resolveAttack.devSettings";
+function readLocalStorage() {
+  try {
+    return JSON.parse(localStorage.getItem(DEV_STORAGE_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+function loadDevSettings() {
+  return normalizeSupabaseSettings(readLocalStorage());
+}
+function hasUsableSettings(settings) {
+  const s = normalizeSupabaseSettings(settings);
+  return Boolean(s.url && s.apiKey);
+}
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    promise.catch(() => fallback),
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
+  ]);
+}
+async function resolveEffectiveSettings() {
+  const dev = loadDevSettings();
+  if (hasUsableSettings(dev)) return { settings: dev, source: "local" };
+  const room = await withTimeout(loadRoomSupabaseSettings(), 1500, null);
+  if (room && hasUsableSettings(room)) return { settings: room, source: "room" };
+  return { settings: dev, source: hasUsableSettings(dev) ? "local" : "none" };
+}
+
+// screens/placement/placementScreen.js
+var esc = (v) => escapeHtml(v);
+var arr = (v) => Array.isArray(v) ? v : [];
+var OBR_TIMEOUT = 1500;
+function withTimeout2(promise, ms, fallback) {
+  return Promise.race([
+    Promise.resolve().then(() => promise).catch(() => fallback),
+    new Promise((r) => setTimeout(() => r(fallback), ms))
+  ]);
+}
+function injectStylesOnce() {
+  if (document.getElementById("pl-screen-styles")) return;
+  const s = document.createElement("style");
+  s.id = "pl-screen-styles";
+  s.textContent = placementStyles_default;
+  document.head.appendChild(s);
+}
+function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
+  injectStylesOnce();
+  const api = runtime2?.api ?? {};
+  const bridges = runtime2?.bridges ?? {};
+  const state = {
+    settings: loadDevSettings(),
+    role: "PLAYER",
+    obr: { roomId: "", sceneId: "", campaignId: "" },
+    // selected OBR token
+    selectedToken: null,
+    // { id, name, layer }
+    existingLink: null,
+    // current scene link for selected token
+    // catalog
+    catalog: [],
+    catalogFilter: "all",
+    // "all" | "player" | "npc_template" | "npc_active"
+    catalogSearch: "",
+    catalogLoading: false,
+    // preview
+    previewCharacter: null,
+    // { id, display_name, character_bucket, summary }
+    // delete confirm
+    deleteTarget: null,
+    // { id, display_name } pending confirmation
+    deleteMode: "",
+    // "archive" | "hard_delete"
+    // ui state
+    busy: false,
+    notice: "",
+    noticeKind: "info",
+    sceneLinksLoading: false
+  };
+  const settings = () => state.settings;
+  const isGM = () => state.role === "GM";
+  (async () => {
+    const dev = loadDevSettings();
+    if (hasUsableSettings(dev)) {
+      state.settings = dev;
+    } else {
+      const resolved = await resolveEffectiveSettings();
+      state.settings = resolved.settings;
+    }
+    const player = await withTimeout2(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null);
+    if (player?.role) state.role = String(player.role).toUpperCase() === "GM" ? "GM" : "PLAYER";
+    const ctx = await withTimeout2(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null);
+    if (ctx) {
+      state.obr.roomId = ctx.roomId || "";
+      state.obr.sceneId = ctx.sceneId || "";
+      state.obr.campaignId = ctx.campaignId || "";
+    }
+    render();
+    if (isGM()) {
+      loadCatalog();
+      await subscribeObrSelection();
+    }
+    root2.addEventListener("click", onRootClick);
+  })();
+  let _unsubPlayerChanges = null;
+  async function syncSelectedToken(selectedIds) {
+    const id = arr(selectedIds)[0] || null;
+    if (!id) {
+      state.selectedToken = null;
+      state.existingLink = null;
+      state.previewCharacter = null;
+      render();
+      return;
+    }
+    const sceneItems = await withTimeout2(bridges.obr?.getSceneItems?.(), OBR_TIMEOUT, []);
+    const token = arr(sceneItems).find((t) => t.id === id);
+    state.selectedToken = token ? { id: token.id, name: token.name || token.id, layer: token.layer || "CHARACTER" } : { id, name: id, layer: "CHARACTER" };
+    state.existingLink = null;
+    state.previewCharacter = null;
+    render();
+    if (isGM() && state.obr.roomId && state.obr.sceneId) {
+      await loadSceneLink(id);
+    }
+  }
+  async function subscribeObrSelection() {
+    const selectedIds = await withTimeout2(bridges.obr?.getSelectedTokenIds?.(), OBR_TIMEOUT, []);
+    await syncSelectedToken(selectedIds);
+    if (!bridges.obr?.subscribePlayerChanges) return;
+    _unsubPlayerChanges = bridges.obr.subscribePlayerChanges((player) => {
+      syncSelectedToken(player.selection);
+    });
+  }
+  async function loadSceneLink(tokenId) {
+    state.sceneLinksLoading = true;
+    render();
+    try {
+      const res = await api.placement.getSceneTokenLinks({
+        room_id: state.obr.roomId,
+        scene_id: state.obr.sceneId,
+        token_id: tokenId
+      }, settings());
+      const link = arr(res?.links).find((l) => l.token_id === tokenId && l.is_active !== false);
+      state.existingLink = link || null;
+    } catch {
+      state.existingLink = null;
+    }
+    state.sceneLinksLoading = false;
+    render();
+  }
+  async function loadCatalog() {
+    state.catalogLoading = true;
+    render();
+    try {
+      const buckets = state.catalogFilter === "all" ? ["player", "npc_template"] : [state.catalogFilter];
+      const includeActive = state.catalogFilter === "npc_active" || state.catalogFilter === "all";
+      const res = await api.placement.getCharacterSpawnCatalog({
+        campaign_id: state.obr.campaignId || void 0,
+        room_id: state.obr.roomId || void 0,
+        scene_id: state.obr.sceneId || void 0,
+        search: state.catalogSearch || void 0,
+        buckets,
+        include_active_npc: includeActive,
+        limit: 100
+      }, settings());
+      state.catalog = arr(res?.items);
+    } catch (e) {
+      setNotice("err", `Catalog error: ${esc(e.message)}`);
+      state.catalog = [];
+    }
+    state.catalogLoading = false;
+    render();
+  }
+  function setNotice(kind, msg) {
+    state.noticeKind = kind;
+    state.notice = msg;
+  }
+  async function onBind(sourceCharacterId) {
+    if (!state.selectedToken) {
+      setNotice("warn", "Select a token first.");
+      render();
+      return;
+    }
+    if (state.selectedToken.layer !== "CHARACTER") {
+      setNotice("warn", `Tokens on the "${esc(state.selectedToken.layer)}" layer cannot be bound. Only CHARACTER layer is supported.`);
+      render();
+      return;
+    }
+    if (state.busy) return;
+    state.busy = true;
+    setNotice("info", "Binding\u2026");
+    render();
+    try {
+      const selectedChar = arr(state.catalog).find((c) => c.id === sourceCharacterId);
+      const bucket = selectedChar?.character_bucket || "unknown";
+      const params = {
+        source_character_id: sourceCharacterId,
+        token_id: state.selectedToken.id,
+        token_name: state.selectedToken.name,
+        token_layer: state.selectedToken.layer || "CHARACTER",
+        character_bucket: bucket,
+        campaign_id: state.obr.campaignId || void 0,
+        room_id: state.obr.roomId,
+        scene_id: state.obr.sceneId,
+        replace_existing_token_link: !!state.existingLink
+      };
+      if (bucket === "npc_active") {
+        params.allow_rebind_active_npc = true;
+      }
+      const res = await api.placement.loadCharacterToToken(params, settings());
+      if (res?.ok === false) {
+        setNotice("err", res.message || "Bind failed.");
+      } else {
+        const action = res?.action ?? "linked";
+        setNotice("ok", actionLabel(action, res?.character?.display_name));
+        await loadSceneLink(state.selectedToken.id);
+        await loadCatalog();
+      }
+    } catch (e) {
+      setNotice("err", e.message || "Bind failed.");
+    }
+    state.busy = false;
+    render();
+  }
+  async function onUnbind() {
+    if (!state.selectedToken || !state.existingLink) return;
+    if (state.busy) return;
+    state.busy = true;
+    setNotice("info", "Unbinding\u2026");
+    render();
+    try {
+      const res = await api.placement.unbindTokenCharacter({
+        room_id: state.obr.roomId,
+        scene_id: state.obr.sceneId,
+        token_id: state.selectedToken.id
+      }, settings());
+      if (res?.ok === false) {
+        setNotice("err", res.message || "Unbind failed.");
+      } else {
+        setNotice("ok", `Unbound: ${esc(res?.character?.display_name || state.existingLink.character?.display_name || "")}`);
+        state.existingLink = null;
+        await loadCatalog();
+      }
+    } catch (e) {
+      setNotice("err", e.message || "Unbind failed.");
+    }
+    state.busy = false;
+    render();
+  }
+  async function onDelete(characterId, mode) {
+    if (state.busy) return;
+    state.busy = true;
+    setNotice("info", mode === "hard_delete" ? "Deleting permanently\u2026" : "Archiving\u2026");
+    render();
+    try {
+      const res = await api.placement.purgeActiveNpcs({ character_id: characterId, mode }, settings());
+      if (res?.ok === false) {
+        setNotice("err", res.message || "Delete failed.");
+      } else {
+        setNotice("ok", mode === "hard_delete" ? "NPC permanently deleted." : "NPC archived.");
+        state.deleteTarget = null;
+        state.deleteMode = "";
+        if (state.existingLink?.character?.id === characterId) state.existingLink = null;
+        await loadCatalog();
+      }
+    } catch (e) {
+      setNotice("err", e.message || "Delete failed.");
+    }
+    state.busy = false;
+    render();
+  }
+  function actionLabel(action, name) {
+    const n = name ? ` "${esc(name)}"` : "";
+    if (action === "spawned_npc") return `NPC${n} spawned and bound to token.`;
+    if (action === "linked_player") return `Player${n} bound to token.`;
+    if (action === "relinked_active_npc") return `NPC${n} rebound to token.`;
+    return `Bound${n}.`;
+  }
+  function bucketLabel(b) {
+    if (b === "player") return "Player";
+    if (b === "npc_template") return "NPC Template";
+    if (b === "npc_active") return "NPC Active";
+    return b || "\u2014";
+  }
+  function bucketBadge(b) {
+    const cls = b === "player" ? "pl-badge-player" : b === "npc_template" ? "pl-badge-template" : "pl-badge-active";
+    return `<span class="pl-badge ${cls}">${bucketLabel(b)}</span>`;
+  }
+  function renderNotice() {
+    if (!state.notice) return "";
+    return `<div class="pl-banner ${state.noticeKind}">${esc(state.notice)}</div>`;
+  }
+  function renderTokenPanel() {
+    const t = state.selectedToken;
+    if (!t) return `<div class="pl-empty">No token selected \u2014 click a token on the scene.</div>`;
+    const link = state.existingLink;
+    const loading = state.sceneLinksLoading;
+    return `
+      <div class="pl-token-panel">
+        <div class="pl-token-row">
+          <span class="pl-token-name">${esc(t.name)}</span>
+          <span class="pl-token-layer pl-badge">${esc(t.layer || "CHARACTER")}</span>
+        </div>
+        ${loading ? `<div class="pl-muted">Checking link\u2026</div>` : link ? `
+          <div class="pl-link-row">
+            <span class="pl-muted">Linked to:</span>
+            <strong>${esc(link.character?.display_name || link.character?.character_key || link.character_id || "\u2014")}</strong>
+            ${bucketBadge(link.character?.character_bucket)}
+          </div>
+          <div class="pl-link-state">${esc(link.state?.status_summary || "")}</div>
+          <div class="pl-actions-row">
+            <button class="pl-btn pl-btn-danger" data-action="unbind" ${state.busy ? "disabled" : ""}>Unbind</button>
+          </div>` : `<div class="pl-muted">No active link \u2014 select a character below to bind.</div>`}
+      </div>`;
+  }
+  function renderCatalog() {
+    const items = state.catalog;
+    const loading = state.catalogLoading;
+    return `
+      <div class="pl-catalog">
+        <div class="pl-catalog-head">
+          <input class="pl-search" type="text" placeholder="Search\u2026" value="${esc(state.catalogSearch)}" data-ref="search">
+          <select class="pl-filter" data-ref="filter">
+            <option value="all" ${state.catalogFilter === "all" ? "selected" : ""}>All</option>
+            <option value="player" ${state.catalogFilter === "player" ? "selected" : ""}>Player</option>
+            <option value="npc_template" ${state.catalogFilter === "npc_template" ? "selected" : ""}>NPC Template</option>
+            <option value="npc_active" ${state.catalogFilter === "npc_active" ? "selected" : ""}>NPC Active</option>
+          </select>
+        </div>
+        ${loading ? `<div class="pl-muted">Loading\u2026</div>` : !items.length ? `<div class="pl-empty">No characters found.</div>` : `
+          <div class="pl-list">
+            ${items.map(renderCatalogItem).join("")}
+          </div>`}
+      </div>`;
+  }
+  function renderCatalogItem(c) {
+    const isActive = c.character_bucket === "npc_active";
+    const isTemplate = c.character_bucket === "npc_template";
+    const isLinked = c.scene_link?.is_active;
+    const canBind = !!state.selectedToken && !state.busy;
+    const btnLabel = c.character_bucket === "player" ? "Bind Player" : c.character_bucket === "npc_template" ? "Spawn NPC" : "Rebind NPC";
+    return `
+      <div class="pl-item ${isLinked ? "pl-item-linked" : ""}">
+        <div class="pl-item-head">
+          <span class="pl-item-name">${esc(c.display_name || c.character_key)}</span>
+          ${bucketBadge(c.character_bucket)}
+          ${isLinked ? `<span class="pl-badge pl-badge-on-scene">On scene</span>` : ""}
+        </div>
+        ${c.summary?.status_summary ? `<div class="pl-item-status pl-muted">${esc(c.summary.status_summary)}</div>` : ""}
+        <div class="pl-item-actions">
+          <button class="pl-btn pl-btn-primary" data-action="bind" data-char="${esc(c.id)}" ${canBind ? "" : "disabled"}>${btnLabel}</button>
+        </div>
+      </div>`;
+  }
+  function renderDeleteConfirm() {
+    if (!state.deleteTarget) return "";
+    const hard = state.deleteMode === "hard_delete";
+    return `
+      <div class="pl-overlay">
+        <div class="pl-dialog">
+          <h3>${hard ? "Permanently delete NPC?" : "Archive NPC?"}</h3>
+          <p class="pl-muted">${hard ? `<strong>${esc(state.deleteTarget.display_name)}</strong> and all associated logs, links, and initiative entries will be <strong>permanently removed</strong>. This cannot be undone.` : `<strong>${esc(state.deleteTarget.display_name)}</strong> will be hidden from the scene. History is preserved and the NPC can be restored.`}</p>
+          <div class="pl-dialog-actions">
+            <button class="pl-btn ${hard ? "pl-btn-danger" : "pl-btn-secondary"}" data-action="confirm-delete">
+              ${hard ? "Delete permanently" : "Archive"}
+            </button>
+            <button class="pl-btn pl-btn-ghost" data-action="cancel-delete">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  function render() {
+    if (!isGM()) {
+      root2.innerHTML = `<div class="pl-screen pl-screen-nogm"><p class="pl-muted">Placement tools are available to GMs only.</p></div>`;
+      return;
+    }
+    root2.innerHTML = `
+      <div class="pl-screen">
+        <div class="pl-header">
+          <span class="pl-title">Token Placement</span>
+        </div>
+        ${renderNotice()}
+        <section class="pl-section">
+          <div class="pl-section-title">Selected Token</div>
+          ${renderTokenPanel()}
+        </section>
+        <section class="pl-section">
+          <div class="pl-section-title">Character Catalog</div>
+          ${renderCatalog()}
+        </section>
+        ${renderDeleteConfirm()}
+      </div>`;
+    bindEvents();
+  }
+  function bindEvents() {
+    const searchEl = root2.querySelector("[data-ref='search']");
+    if (searchEl) {
+      searchEl.addEventListener("input", (e) => {
+        state.catalogSearch = e.target.value;
+        clearTimeout(state._searchTimer);
+        state._searchTimer = setTimeout(() => loadCatalog(), 300);
+      });
+    }
+    const filterEl = root2.querySelector("[data-ref='filter']");
+    if (filterEl) {
+      filterEl.addEventListener("change", (e) => {
+        state.catalogFilter = e.target.value;
+        loadCatalog();
+      });
+    }
+  }
+  function onRootClick(e) {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const charId = btn.dataset.char;
+    if (action === "bind") {
+      onBind(charId);
+      return;
+    }
+    if (action === "unbind") {
+      onUnbind();
+      return;
+    }
+    if (action === "confirm-delete") {
+      onDelete(state.deleteTarget.id, state.deleteMode);
+      return;
+    }
+    if (action === "cancel-delete") {
+      state.deleteTarget = null;
+      state.deleteMode = "";
+      render();
+      return;
+    }
+  }
+  render();
+  return () => {
+    root2.removeEventListener("click", onRootClick);
+    if (typeof _unsubPlayerChanges === "function") _unsubPlayerChanges();
+  };
+}
+
 // gm-extension/main.js
 var runtime = createOdysseyRuntime();
 var tokenRealtimeSync = createTokenRealtimeSync({ runtime });
@@ -26585,25 +27030,66 @@ var root = document.getElementById("app");
 if (!(root instanceof HTMLElement)) {
   throw new Error("Unable to mount Odyssey GM Tools Shell.");
 }
+root.innerHTML = `
+  <nav class="app-nav">
+    <button class="app-tab active" type="button" data-view="shell">GM Tools Shell</button>
+    <button class="app-tab" type="button" data-view="placement">Placement</button>
+  </nav>
+  <div class="app-view" data-view-host="shell"></div>
+  <div class="app-view hidden" data-view-host="placement"></div>
+`;
+var hosts = {
+  shell: root.querySelector('[data-view-host="shell"]'),
+  placement: root.querySelector('[data-view-host="placement"]')
+};
+var views = {
+  shell: {
+    mounted: false,
+    mount() {
+      void mountBridgeShell({
+        root: hosts.shell,
+        title: "Odyssey GM Tools Shell",
+        subtitle: "GM token placement, Supabase room settings, and token metadata reconciliation live here. Combat state remains server-authoritative.",
+        runtime,
+        globalName: "OdysseyGmToolsBridge",
+        features: {},
+        tokenRealtimeSync
+      }).catch((error) => {
+        hosts.shell.innerHTML = `
+          <section class="panel">
+            <div class="panel-title">Odyssey GM Tools Shell</div>
+            <p class="status error">Failed to initialize shell: ${String(error?.message ?? error)}</p>
+          </section>
+        `;
+        throw error;
+      });
+    }
+  },
+  placement: {
+    mounted: false,
+    mount() {
+      mountPlacementScreen({ root: hosts.placement, runtime });
+    }
+  }
+};
+function show(view) {
+  for (const key of Object.keys(hosts)) {
+    hosts[key].classList.toggle("hidden", key !== view);
+    root.querySelector(`[data-view="${key}"]`)?.classList.toggle("active", key === view);
+  }
+  const target = views[view];
+  if (target && !target.mounted) {
+    target.mounted = true;
+    target.mount();
+  }
+  hosts[view]?.dispatchEvent(new CustomEvent("odyssey:tabshow", { bubbles: false }));
+}
+root.querySelectorAll("[data-view]").forEach((btn) => {
+  btn.addEventListener("click", () => show(btn.dataset.view));
+});
 void tokenRealtimeSync.start().catch(() => {
 });
-void mountBridgeShell({
-  root,
-  title: "Odyssey GM Tools Shell",
-  subtitle: "GM token placement, Supabase room settings, and token metadata reconciliation live here. Combat state remains server-authoritative.",
-  runtime,
-  globalName: "OdysseyGmToolsBridge",
-  features: {},
-  tokenRealtimeSync
-}).catch((error) => {
-  root.innerHTML = `
-    <section class="panel">
-      <div class="panel-title">Odyssey GM Tools Shell</div>
-      <p class="status error">Failed to initialize shell: ${String(error?.message ?? error)}</p>
-    </section>
-  `;
-  throw error;
-});
+show("shell");
 globalThis.addEventListener("beforeunload", () => {
   tokenRealtimeSync.stop();
 });

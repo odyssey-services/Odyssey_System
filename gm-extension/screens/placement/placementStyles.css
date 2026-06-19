@@ -1,0 +1,66 @@
+/* Placement Screen — scoped styles (.pl- prefix). Reuses shell design tokens. */
+.pl-screen { display: flex; flex-direction: column; gap: 14px; }
+.pl-screen-nogm { align-items: center; justify-content: center; padding: 40px 0; }
+.pl-header { display: flex; align-items: center; gap: 8px; }
+.pl-title { font-size: 14px; font-weight: 700; }
+.pl-muted { color: var(--muted); font-size: 12px; }
+.pl-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }
+.pl-section { display: flex; flex-direction: column; gap: 8px; }
+.pl-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+/* banners */
+.pl-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }
+.pl-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }
+.pl-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }
+.pl-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }
+.pl-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }
+
+/* token panel */
+.pl-token-panel { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.pl-token-row { display: flex; align-items: center; gap: 8px; }
+.pl-token-name { font-weight: 600; font-size: 13px; }
+.pl-token-layer { font-size: 10px; }
+.pl-link-row { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }
+.pl-link-state { font-size: 11px; color: var(--muted); }
+.pl-actions-row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* badges */
+.pl-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }
+.pl-badge-player { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }
+.pl-badge-template { border-color: rgba(255,194,75,.4); color: #ffe6b3; background: rgba(255,194,75,.10); }
+.pl-badge-active { border-color: rgba(62,210,130,.4); color: #b3ffd9; background: rgba(62,210,130,.10); }
+.pl-badge-on-scene { border-color: rgba(62,210,130,.5); color: #b3ffd9; background: rgba(62,210,130,.14); font-weight: 700; }
+
+/* catalog */
+.pl-catalog { display: flex; flex-direction: column; gap: 8px; }
+.pl-catalog-head { display: flex; gap: 6px; }
+.pl-search { flex: 1; font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; }
+.pl-filter { font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; }
+.pl-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }
+
+/* catalog items */
+.pl-item { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.pl-item-linked { border-color: rgba(62,210,130,.35); background: rgba(62,210,130,.06); }
+.pl-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pl-item-name { font-size: 13px; font-weight: 600; flex: 1; }
+.pl-item-status { font-size: 11px; }
+.pl-item-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* buttons */
+.pl-btn { font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; transition: background .12s, border-color .12s; }
+.pl-btn:disabled { opacity: .5; cursor: not-allowed; }
+.pl-btn-primary { background: rgba(62,166,255,.18); border-color: rgba(62,166,255,.5); color: #d8eeff; }
+.pl-btn-primary:not(:disabled):hover { background: rgba(62,166,255,.28); }
+.pl-btn-secondary { background: var(--panel-soft); border-color: var(--line); color: var(--text); }
+.pl-btn-secondary:not(:disabled):hover { border-color: var(--accent); }
+.pl-btn-danger { background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.45); color: #ffd9de; }
+.pl-btn-danger:not(:disabled):hover { background: rgba(201,75,88,.26); }
+.pl-btn-ghost { background: none; border-color: var(--line); color: var(--muted); }
+.pl-btn-ghost:not(:disabled):hover { color: var(--text); border-color: var(--accent); }
+
+/* delete confirm dialog */
+.pl-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.65); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+.pl-dialog { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.pl-dialog h3 { margin: 0; font-size: 14px; }
+.pl-dialog p { margin: 0; font-size: 12px; line-height: 1.5; }
+.pl-dialog-actions { display: flex; gap: 8px; }
