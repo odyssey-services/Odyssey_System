@@ -3995,23 +3995,8 @@ async function deactivateTokenLinkRecord(roomId, sceneId, tokenId, settings) {
 }
 
 // shell/appShell.js
-function safeArray(value) {
-  return Array.isArray(value) ? value : [];
-}
 function describeRole(role) {
   return role === "GM" ? "GM" : "Player";
-}
-function describeBucket(bucket) {
-  switch (String(bucket ?? "").trim()) {
-    case "player":
-      return "Player";
-    case "npc_template":
-      return "NPC Template";
-    case "npc_active":
-      return "NPC Active";
-    default:
-      return "Unknown";
-  }
 }
 function formatTimestamp(value) {
   if (!value) return "";
@@ -4019,7 +4004,7 @@ function formatTimestamp(value) {
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleTimeString();
 }
-function createShellMarkup(title, subtitle, { showTokenPlacementPanel = false } = {}) {
+function createShellMarkup(title, subtitle) {
   return `
     <header class="shell-header">
       <div>
@@ -4072,43 +4057,6 @@ function createShellMarkup(title, subtitle, { showTokenPlacementPanel = false } 
       </div>
       <p class="muted" data-field="connectionHint">Room-level Supabase settings are not configured yet.</p>
     </section>
-
-    ${showTokenPlacementPanel ? `
-      <section class="panel">
-        <div class="panel-title">Load Character To Selected Token</div>
-        <div class="field-grid">
-          <label class="field-stack">
-            <span>Search Catalog</span>
-            <input data-field="placementSearch" type="text" placeholder="Filter by name, key, or owner" autocomplete="off" spellcheck="false">
-          </label>
-          <label class="field-stack">
-            <span>Character Catalog</span>
-            <select data-field="placementCharacterSelect"></select>
-          </label>
-        </div>
-        <div class="field-grid">
-          <label class="field-stack">
-            <span>Instance Name (Templates)</span>
-            <input data-field="placementInstanceName" type="text" placeholder="Bandit 1" autocomplete="off" spellcheck="false">
-          </label>
-          <label class="toggle-stack">
-            <span>Catalog Mode</span>
-            <label class="toggle-inline">
-              <input data-field="includeActiveNpc" type="checkbox">
-              <span>Reattach existing active NPC</span>
-            </label>
-          </label>
-        </div>
-        <div class="list" data-field="placementSelectedToken"></div>
-        <div class="list" data-field="placementSelectionInfo"></div>
-        <div class="button-row">
-          <button data-action="refreshPlacement" type="button" class="secondary">Refresh Placement Data</button>
-          <button data-action="loadCharacterToToken" type="button">Load Into Selected Token</button>
-          <button data-action="retryMetadataSync" type="button" class="secondary">Retry Metadata Sync</button>
-        </div>
-        <p class="muted" data-field="placementHint">GM-only token placement panel is initializing.</p>
-      </section>
-    ` : ""}
 
     <section class="panel">
       <div class="panel-title">Owlbear Context</div>
@@ -4191,154 +4139,6 @@ function buildDiagnosticsRows(entries2) {
       </div>
     `).join("");
 }
-function normalizeCatalogEntries(response) {
-  return safeArray(response?.characters);
-}
-function getFilteredPlacementCatalog(state) {
-  const search = state.placement.search.trim().toLowerCase();
-  if (!search) return state.placement.catalog.slice();
-  return state.placement.catalog.filter((entry) => {
-    const haystack = [
-      entry?.name,
-      entry?.character_key,
-      entry?.owner_player_name,
-      entry?.status_summary
-    ].map((value) => String(value ?? "").toLowerCase()).join(" ");
-    return haystack.includes(search);
-  });
-}
-function syncPlacementSelection(state) {
-  const filtered = getFilteredPlacementCatalog(state);
-  if (!filtered.length) {
-    state.placement.selectedCharacterId = "";
-    return filtered;
-  }
-  if (!filtered.some((entry) => entry.id === state.placement.selectedCharacterId)) {
-    state.placement.selectedCharacterId = String(filtered[0]?.id ?? "");
-  }
-  return filtered;
-}
-function getSelectedCatalogCharacter(state) {
-  return state.placement.catalog.find((entry) => entry.id === state.placement.selectedCharacterId) ?? null;
-}
-function getPlacementAction(character) {
-  const bucket = String(character?.character_bucket ?? "").trim();
-  switch (bucket) {
-    case "player":
-      return {
-        label: "Bind Player",
-        requestedAction: "bind_player"
-      };
-    case "npc_template":
-      return {
-        label: "Spawn NPC",
-        requestedAction: "spawn_npc"
-      };
-    case "npc_active":
-      return {
-        label: "Reattach Active NPC",
-        requestedAction: "reattach_active_npc"
-      };
-    default:
-      return {
-        label: "Load Into Selected Token",
-        requestedAction: ""
-      };
-  }
-}
-function getTokenLinkSnapshot(tokenRealtimeSync2) {
-  return safeArray(tokenRealtimeSync2?.getSnapshot?.()?.tokenLinks);
-}
-function buildPlacementTokenRows(state, tokenRealtimeSync2) {
-  if (state.selectedTokens.length !== 1) {
-    const message = state.selectedTokens.length > 1 ? "Select exactly one Owlbear token before loading a character." : "Select one existing Owlbear token on the scene first.";
-    return `<div class="list-item"><div class="list-item-title">Selected Token</div><div class="muted">${escapeHtml(message)}</div></div>`;
-  }
-  const token = state.selectedTokens[0];
-  const localLink = getTokenCharacterLink(token);
-  const serverLink = getTokenLinkSnapshot(tokenRealtimeSync2).find(
-    (entry) => String(entry?.token_id ?? "").trim() === String(token?.id ?? "").trim()
-  );
-  const rows = [
-    `id: ${String(token?.id ?? "").trim() || "unknown"}`,
-    `local: ${localLink.characterId || "not linked"} / v${localLink.stateVersion || 0}`,
-    `server: ${serverLink?.character_id || "not linked"} / v${Number(serverLink?.state_version ?? 0) || 0}`
-  ];
-  return `
-    <div class="list-item">
-      <div class="list-item-title">${escapeHtml(token?.name ? String(token.name) : "Selected token")}</div>
-      <div class="muted">${escapeHtml(rows.join(" | "))}</div>
-    </div>
-  `;
-}
-function buildPlacementSelectionRows(state, tokenRealtimeSync2) {
-  const selected = getSelectedCatalogCharacter(state);
-  if (!selected) {
-    return '<div class="list-item"><div class="list-item-title">Catalog Selection</div><div class="muted">Refresh the catalog and choose a character to continue.</div></div>';
-  }
-  const action = getPlacementAction(selected);
-  const linkedState = selected.linked_token_id ? `Linked token: ${selected.linked_token_name || selected.linked_token_id}` : "Not linked in this scene";
-  const replaceHint = state.placement.replaceExistingTokenLink ? "Replacement confirmation is armed for the next load attempt." : "No replacement confirmation is armed.";
-  const syncState = tokenRealtimeSync2?.getSnapshot?.();
-  return `
-    <div class="list-item">
-      <div class="list-item-title">${escapeHtml(selected.name || selected.character_key || "Character")}</div>
-      <div class="muted">${escapeHtml([
-    `bucket: ${describeBucket(selected.character_bucket)}`,
-    `key: ${selected.character_key || "unknown"}`,
-    `status: ${selected.status_summary || "none"}`,
-    linkedState,
-    syncState?.contextKey ? `sync: ${syncState.contextKey}` : "sync: idle",
-    replaceHint
-  ].join(" | "))}</div>
-      <div class="tag-list" style="margin-top:8px">
-        <span class="tag">${escapeHtml(action.label)}</span>
-      </div>
-    </div>
-  `;
-}
-function buildPlacementOptions(state) {
-  const filtered = syncPlacementSelection(state);
-  if (!filtered.length) {
-    return '<option value="">No characters available</option>';
-  }
-  return filtered.map((entry) => `
-      <option value="${escapeHtml(entry.id)}">
-        ${escapeHtml(`${entry.name || entry.character_key} [${describeBucket(entry.character_bucket)}]`)}
-      </option>
-    `).join("");
-}
-function buildPlacementHint(state, canManageRoomSettings, configured) {
-  if (!canManageRoomSettings) {
-    return "Only the GM can place or bind characters to Owlbear tokens.";
-  }
-  if (!configured) {
-    return "Save the room Supabase URL and key first, then refresh the placement data.";
-  }
-  if (state.selectedTokens.length !== 1) {
-    return "Select exactly one existing Owlbear token before loading a character.";
-  }
-  if (state.placement.loadingCatalog) {
-    return "Refreshing the character catalog and current room token links.";
-  }
-  if (state.placement.pendingMetadataSync) {
-    return "The Supabase RPC succeeded, but writing Owlbear token metadata failed. Use Retry Metadata Sync or refresh the scene state.";
-  }
-  if (state.placement.resultMessage) {
-    return state.placement.resultMessage;
-  }
-  if (!state.placement.catalog.length) {
-    return "Refresh the placement data to load Players, NPC Templates, and optional active NPC reattach targets.";
-  }
-  return state.placement.replaceExistingTokenLink ? "The next placement attempt will move/replace an existing link if the server requires confirmation." : "Choose a catalog character, then bind or spawn it into the selected Owlbear token.";
-}
-function buildMetadataFieldsFromResult(result) {
-  return {
-    stateVersion: Math.max(0, Number(result?.state?.state_version ?? 0) || 0),
-    statusSummary: String(result?.state?.status_summary ?? "").trim(),
-    updatedAt: String(result?.state?.updated_at ?? "").trim() || (/* @__PURE__ */ new Date()).toISOString()
-  };
-}
 async function mountBridgeShell({
   root: root2,
   title,
@@ -4351,9 +4151,8 @@ async function mountBridgeShell({
   if (!(root2 instanceof HTMLElement)) {
     throw new Error("Shell root element is missing.");
   }
-  const showTokenPlacementPanel = features?.tokenPlacement === true;
   await waitForObrReady();
-  root2.innerHTML = createShellMarkup(title, subtitle, { showTokenPlacementPanel });
+  root2.innerHTML = createShellMarkup(title, subtitle);
   const refs = {
     owlbearStatus: root2.querySelector('[data-field="owlbearStatus"]'),
     playerRole: root2.querySelector('[data-field="playerRole"]'),
@@ -4379,10 +4178,7 @@ async function mountBridgeShell({
     clearSettings: root2.querySelector('[data-action="clearSettings"]'),
     testConnection: root2.querySelector('[data-action="testConnection"]'),
     refreshShell: root2.querySelector('[data-action="refreshShell"]'),
-    clearDiagnostics: root2.querySelector('[data-action="clearDiagnostics"]'),
-    refreshPlacement: root2.querySelector('[data-action="refreshPlacement"]'),
-    loadCharacterToToken: root2.querySelector('[data-action="loadCharacterToToken"]'),
-    retryMetadataSync: root2.querySelector('[data-action="retryMetadataSync"]')
+    clearDiagnostics: root2.querySelector('[data-action="clearDiagnostics"]')
   };
   const state = {
     ready: true,
@@ -4390,19 +4186,7 @@ async function mountBridgeShell({
     roomContext: await getRoomSceneContext(),
     settings: await loadRoomSupabaseSettings(),
     selectedTokens: await getSelectedOwlbearTokens(),
-    connectionTest: null,
-    placement: {
-      search: "",
-      includeActiveNpc: false,
-      instanceName: "",
-      catalog: [],
-      selectedCharacterId: "",
-      loadingCatalog: false,
-      actionBusy: false,
-      replaceExistingTokenLink: false,
-      pendingMetadataSync: null,
-      resultMessage: ""
-    }
+    connectionTest: null
   };
   function setPlacementMessage(message = "") {
     state.placement.resultMessage = String(message ?? "").trim();
@@ -4498,179 +4282,6 @@ async function mountBridgeShell({
     state.selectedTokens = await getSelectedOwlbearTokens();
     syncSettingsInputs();
     render();
-  }
-  async function refreshPlacementCatalog({ silent = false } = {}) {
-    if (!showTokenPlacementPanel) return;
-    if (state.player.role !== "GM") {
-      state.placement.catalog = [];
-      state.placement.selectedCharacterId = "";
-      render();
-      return;
-    }
-    if (!hasSupabaseSettings(state.settings)) {
-      state.placement.catalog = [];
-      state.placement.selectedCharacterId = "";
-      render();
-      return;
-    }
-    state.placement.loadingCatalog = true;
-    render();
-    try {
-      const response = await runtime2.api.placement.getCharacterSpawnCatalog(
-        {
-          campaign_id: state.roomContext.campaignId,
-          room_id: state.roomContext.roomId,
-          scene_id: state.roomContext.sceneId,
-          include_active_npc: state.placement.includeActiveNpc
-        },
-        state.settings
-      );
-      state.placement.catalog = normalizeCatalogEntries(response);
-      syncPlacementSelection(state);
-      if (!silent) {
-        addDiagnosticEntry(
-          "info",
-          "Placement catalog refreshed",
-          `Rows loaded: ${state.placement.catalog.length}`
-        );
-      }
-    } catch (error) {
-      const normalized = normalizeError(error, "Unable to load the placement catalog.");
-      state.placement.catalog = [];
-      state.placement.selectedCharacterId = "";
-      addDiagnosticEntry("error", "Placement catalog failed", normalized.message);
-    } finally {
-      state.placement.loadingCatalog = false;
-      render();
-    }
-  }
-  async function refreshPlacementData({ reason = "manual", silent = false } = {}) {
-    await refreshSnapshot();
-    if (tokenRealtimeSync2?.reconcileNow) {
-      await tokenRealtimeSync2.reconcileNow(`placement:${reason}`);
-    }
-    await refreshPlacementCatalog({ silent });
-    await refreshSnapshot();
-  }
-  async function retryPendingMetadataSync() {
-    const pending = state.placement.pendingMetadataSync;
-    if (!pending) return;
-    state.placement.actionBusy = true;
-    render();
-    try {
-      await setTokenCharacterLink(pending.tokenId, pending.characterId, pending.fields);
-      state.placement.pendingMetadataSync = null;
-      setPlacementMessage("Owlbear token metadata was restored successfully.");
-      if (tokenRealtimeSync2?.reconcileNow) {
-        await tokenRealtimeSync2.reconcileNow("retry-metadata-sync");
-      }
-      await refreshSnapshot();
-    } catch (error) {
-      const normalized = normalizeError(error, "Unable to retry token metadata synchronization.");
-      setPlacementMessage(normalized.message);
-      addDiagnosticEntry("error", "Retry metadata sync failed", normalized.message);
-    } finally {
-      state.placement.actionBusy = false;
-      render();
-    }
-  }
-  async function loadCharacterToSelectedToken() {
-    if (state.player.role !== "GM") {
-      addDiagnosticEntry("warn", "Token placement is GM-only", "Only the GM can bind or spawn characters into tokens.");
-      return;
-    }
-    if (state.selectedTokens.length !== 1) {
-      setPlacementMessage("Select exactly one Owlbear token before loading a character.");
-      render();
-      return;
-    }
-    const selectedCharacter = getSelectedCatalogCharacter(state);
-    if (!selectedCharacter) {
-      setPlacementMessage("Choose a catalog character first.");
-      render();
-      return;
-    }
-    const action = getPlacementAction(selectedCharacter);
-    if (!action.requestedAction) {
-      setPlacementMessage("The selected catalog entry cannot be loaded.");
-      render();
-      return;
-    }
-    const token = state.selectedTokens[0];
-    state.placement.actionBusy = true;
-    setPlacementMessage("");
-    render();
-    try {
-      const result = await runtime2.api.character.loadCharacterToToken(
-        {
-          source_character_id: selectedCharacter.id,
-          token_id: token.id,
-          token_name: token.name ?? "",
-          token_layer: token.layer ?? "CHARACTER",
-          campaign_id: state.roomContext.campaignId,
-          room_id: state.roomContext.roomId,
-          scene_id: state.roomContext.sceneId,
-          instance_name: state.placement.instanceName,
-          requested_action: action.requestedAction,
-          replace_existing_token_link: state.placement.replaceExistingTokenLink,
-          allow_rebind_active_npc: action.requestedAction === "reattach_active_npc"
-        },
-        state.settings
-      );
-      if (result?.ok === false) {
-        const retryableErrors = /* @__PURE__ */ new Set([
-          "TOKEN_ALREADY_LINKED",
-          "CHARACTER_ALREADY_LINKED_IN_SCENE",
-          "TOKEN_CONTEXT_MISMATCH"
-        ]);
-        if (retryableErrors.has(String(result?.error ?? "").trim())) {
-          state.placement.replaceExistingTokenLink = true;
-          setPlacementMessage(`${result.message || result.error}. Repeat the action to confirm moving/replacing the existing link.`);
-          addDiagnosticEntry("warn", "Placement confirmation required", result.message || result.error || "Server requested an explicit replace confirmation.");
-        } else {
-          state.placement.replaceExistingTokenLink = false;
-          setPlacementMessage(result.message || result.error || "Unable to load the selected character into the token.");
-          addDiagnosticEntry("error", "Character load failed", result.message || result.error || "Unknown load error.");
-        }
-        return;
-      }
-      const metadataFields = buildMetadataFieldsFromResult(result);
-      state.placement.replaceExistingTokenLink = false;
-      state.placement.pendingMetadataSync = null;
-      try {
-        await setTokenCharacterLink(token.id, result?.character?.id, metadataFields);
-      } catch (error) {
-        state.placement.pendingMetadataSync = {
-          tokenId: token.id,
-          characterId: result?.character?.id,
-          fields: metadataFields
-        };
-        const normalized = normalizeError(error, "Supabase link was created, but Owlbear token metadata could not be written.");
-        setPlacementMessage(normalized.message);
-        addDiagnosticEntry("error", "Token metadata write failed", normalized.message);
-      }
-      if (!state.placement.pendingMetadataSync) {
-        setPlacementMessage(`${action.label} completed for ${result?.character?.name || result?.character?.character_key || "character"}.`);
-      }
-      if (tokenRealtimeSync2?.reconcileNow) {
-        await tokenRealtimeSync2.reconcileNow("load-character-success");
-      }
-      await refreshPlacementCatalog({ silent: true });
-      await refreshSnapshot();
-      addDiagnosticEntry(
-        "info",
-        "Character loaded into token",
-        `${action.label}: ${result?.character?.character_key || result?.character?.id || "unknown character"}`
-      );
-    } catch (error) {
-      const normalized = normalizeError(error, "Unable to load the selected character into the Owlbear token.");
-      state.placement.replaceExistingTokenLink = false;
-      setPlacementMessage(normalized.message);
-      addDiagnosticEntry("error", "Load character to token failed", normalized.message);
-    } finally {
-      state.placement.actionBusy = false;
-      render();
-    }
   }
   buttons.saveSettings.addEventListener("click", async () => {
     if (state.player.role !== "GM") {
@@ -26547,7 +26158,7 @@ function getRealtimeClient(settings) {
 
 // bridge/tokenRealtimeSync.js
 var RECONCILE_DEBOUNCE_MS = 300;
-function safeArray2(value) {
+function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 function buildContextKey(context) {
@@ -26641,7 +26252,7 @@ function createTokenRealtimeSync({ runtime: runtime2 }) {
   }
   function updateLinkMaps(links) {
     resetLinkMaps();
-    for (const link of safeArray2(links)) {
+    for (const link of safeArray(links)) {
       const tokenId = String(link?.token_id ?? "").trim();
       const characterId = String(link?.character_id ?? "").trim();
       if (!tokenId || !characterId) continue;
@@ -26661,10 +26272,10 @@ function createTokenRealtimeSync({ runtime: runtime2 }) {
   }
   async function syncTokenMetadata(sceneItems, links) {
     const sceneById = new Map(
-      safeArray2(sceneItems).map((item) => [String(item?.id ?? "").trim(), item])
+      safeArray(sceneItems).map((item) => [String(item?.id ?? "").trim(), item])
     );
     let updateCount = 0;
-    for (const link of safeArray2(links)) {
+    for (const link of safeArray(links)) {
       const tokenId = String(link?.token_id ?? "").trim();
       if (!tokenId) continue;
       const token = sceneById.get(tokenId);
@@ -26687,10 +26298,10 @@ function createTokenRealtimeSync({ runtime: runtime2 }) {
   }
   async function clearOrphanedTokenMetadata(sceneItems, links) {
     const validTokenIds = new Set(
-      safeArray2(links).map((link) => String(link?.token_id ?? "").trim()).filter(Boolean)
+      safeArray(links).map((link) => String(link?.token_id ?? "").trim()).filter(Boolean)
     );
     let clearedCount = 0;
-    for (const item of safeArray2(sceneItems)) {
+    for (const item of safeArray(sceneItems)) {
       const tokenId = String(item?.id ?? "").trim();
       if (!tokenId || validTokenIds.has(tokenId)) continue;
       const current2 = tokenBridge.getTokenCharacterLink(item);
@@ -26710,7 +26321,7 @@ function createTokenRealtimeSync({ runtime: runtime2 }) {
     return clearedCount;
   }
   async function deactivateMissingSceneLinks(links, sceneItemIds, context, settings) {
-    const staleLinks = safeArray2(links).filter((link) => {
+    const staleLinks = safeArray(links).filter((link) => {
       const tokenId = String(link?.token_id ?? "").trim();
       return tokenId && !sceneItemIds.has(tokenId);
     });
@@ -26817,7 +26428,7 @@ function createTokenRealtimeSync({ runtime: runtime2 }) {
             }
             const sceneItems = await obrBridge.getSceneItems();
             const sceneById = new Map(
-              safeArray2(sceneItems).map((item) => [String(item?.id ?? "").trim(), item])
+              safeArray(sceneItems).map((item) => [String(item?.id ?? "").trim(), item])
             );
             for (const link of nextLinkedTokens) {
               const token = sceneById.get(String(link?.token_id ?? "").trim());
@@ -26874,11 +26485,11 @@ function createTokenRealtimeSync({ runtime: runtime2 }) {
         )
       ]);
       const sceneItemIds = new Set(
-        safeArray2(sceneItems).map((item) => String(item?.id ?? "").trim()).filter(Boolean)
+        safeArray(sceneItems).map((item) => String(item?.id ?? "").trim()).filter(Boolean)
       );
-      const activeLinks = safeArray2(tokenLinksResponse?.links).filter((link) => link?.is_active !== false);
+      const activeLinks = safeArray(tokenLinksResponse?.links).filter((link) => link?.is_active !== false);
       const staleCount = await deactivateMissingSceneLinks(activeLinks, sceneItemIds, context, settings);
-      const validLinks = staleCount ? safeArray2(
+      const validLinks = staleCount ? safeArray(
         (await characterApi.getRoomTokenLinks(
           {
             room_id: context.roomId,
@@ -26982,9 +26593,7 @@ void mountBridgeShell({
   subtitle: "GM token placement, Supabase room settings, and token metadata reconciliation live here. Combat state remains server-authoritative.",
   runtime,
   globalName: "OdysseyGmToolsBridge",
-  features: {
-    tokenPlacement: true
-  },
+  features: {},
   tokenRealtimeSync
 }).catch((error) => {
   root.innerHTML = `

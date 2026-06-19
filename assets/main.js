@@ -334,10 +334,10 @@ var require_events = __commonJS({
     EventEmitter2.prototype.eventNames = function eventNames() {
       return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
     };
-    function arrayClone(arr4, n) {
+    function arrayClone(arr3, n) {
       var copy = new Array(n);
       for (var i = 0; i < n; ++i)
-        copy[i] = arr4[i];
+        copy[i] = arr3[i];
       return copy;
     }
     function spliceOne(list, index) {
@@ -345,10 +345,10 @@ var require_events = __commonJS({
         list[index] = list[index + 1];
       list.pop();
     }
-    function unwrapListeners(arr4) {
-      var ret = new Array(arr4.length);
+    function unwrapListeners(arr3) {
+      var ret = new Array(arr3.length);
       for (var i = 0; i < ret.length; ++i) {
-        ret[i] = arr4[i].listener || arr4[i];
+        ret[i] = arr3[i].listener || arr3[i];
       }
       return ret;
     }
@@ -766,8 +766,8 @@ var byteToHex = [];
 for (let i = 0; i < 256; ++i) {
   byteToHex.push((i + 256).toString(16).slice(1));
 }
-function unsafeStringify(arr4, offset = 0) {
-  return byteToHex[arr4[offset + 0]] + byteToHex[arr4[offset + 1]] + byteToHex[arr4[offset + 2]] + byteToHex[arr4[offset + 3]] + "-" + byteToHex[arr4[offset + 4]] + byteToHex[arr4[offset + 5]] + "-" + byteToHex[arr4[offset + 6]] + byteToHex[arr4[offset + 7]] + "-" + byteToHex[arr4[offset + 8]] + byteToHex[arr4[offset + 9]] + "-" + byteToHex[arr4[offset + 10]] + byteToHex[arr4[offset + 11]] + byteToHex[arr4[offset + 12]] + byteToHex[arr4[offset + 13]] + byteToHex[arr4[offset + 14]] + byteToHex[arr4[offset + 15]];
+function unsafeStringify(arr3, offset = 0) {
+  return byteToHex[arr3[offset + 0]] + byteToHex[arr3[offset + 1]] + byteToHex[arr3[offset + 2]] + byteToHex[arr3[offset + 3]] + "-" + byteToHex[arr3[offset + 4]] + byteToHex[arr3[offset + 5]] + "-" + byteToHex[arr3[offset + 6]] + byteToHex[arr3[offset + 7]] + "-" + byteToHex[arr3[offset + 8]] + byteToHex[arr3[offset + 9]] + "-" + byteToHex[arr3[offset + 10]] + byteToHex[arr3[offset + 11]] + byteToHex[arr3[offset + 12]] + byteToHex[arr3[offset + 13]] + byteToHex[arr3[offset + 14]] + byteToHex[arr3[offset + 15]];
 }
 
 // node_modules/uuid/dist/esm-browser/native.js
@@ -4002,23 +4002,8 @@ async function deactivateTokenLinkRecord(roomId, sceneId, tokenId, settings) {
 }
 
 // shell/appShell.js
-function safeArray(value) {
-  return Array.isArray(value) ? value : [];
-}
 function describeRole(role) {
   return role === "GM" ? "GM" : "Player";
-}
-function describeBucket(bucket) {
-  switch (String(bucket ?? "").trim()) {
-    case "player":
-      return "Player";
-    case "npc_template":
-      return "NPC Template";
-    case "npc_active":
-      return "NPC Active";
-    default:
-      return "Unknown";
-  }
 }
 function formatTimestamp(value) {
   if (!value) return "";
@@ -4026,7 +4011,7 @@ function formatTimestamp(value) {
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleTimeString();
 }
-function createShellMarkup(title, subtitle, { showTokenPlacementPanel = false } = {}) {
+function createShellMarkup(title, subtitle) {
   return `
     <header class="shell-header">
       <div>
@@ -4079,43 +4064,6 @@ function createShellMarkup(title, subtitle, { showTokenPlacementPanel = false } 
       </div>
       <p class="muted" data-field="connectionHint">Room-level Supabase settings are not configured yet.</p>
     </section>
-
-    ${showTokenPlacementPanel ? `
-      <section class="panel">
-        <div class="panel-title">Load Character To Selected Token</div>
-        <div class="field-grid">
-          <label class="field-stack">
-            <span>Search Catalog</span>
-            <input data-field="placementSearch" type="text" placeholder="Filter by name, key, or owner" autocomplete="off" spellcheck="false">
-          </label>
-          <label class="field-stack">
-            <span>Character Catalog</span>
-            <select data-field="placementCharacterSelect"></select>
-          </label>
-        </div>
-        <div class="field-grid">
-          <label class="field-stack">
-            <span>Instance Name (Templates)</span>
-            <input data-field="placementInstanceName" type="text" placeholder="Bandit 1" autocomplete="off" spellcheck="false">
-          </label>
-          <label class="toggle-stack">
-            <span>Catalog Mode</span>
-            <label class="toggle-inline">
-              <input data-field="includeActiveNpc" type="checkbox">
-              <span>Reattach existing active NPC</span>
-            </label>
-          </label>
-        </div>
-        <div class="list" data-field="placementSelectedToken"></div>
-        <div class="list" data-field="placementSelectionInfo"></div>
-        <div class="button-row">
-          <button data-action="refreshPlacement" type="button" class="secondary">Refresh Placement Data</button>
-          <button data-action="loadCharacterToToken" type="button">Load Into Selected Token</button>
-          <button data-action="retryMetadataSync" type="button" class="secondary">Retry Metadata Sync</button>
-        </div>
-        <p class="muted" data-field="placementHint">GM-only token placement panel is initializing.</p>
-      </section>
-    ` : ""}
 
     <section class="panel">
       <div class="panel-title">Owlbear Context</div>
@@ -4198,154 +4146,6 @@ function buildDiagnosticsRows(entries2) {
       </div>
     `).join("");
 }
-function normalizeCatalogEntries(response) {
-  return safeArray(response?.characters);
-}
-function getFilteredPlacementCatalog(state) {
-  const search = state.placement.search.trim().toLowerCase();
-  if (!search) return state.placement.catalog.slice();
-  return state.placement.catalog.filter((entry) => {
-    const haystack = [
-      entry?.name,
-      entry?.character_key,
-      entry?.owner_player_name,
-      entry?.status_summary
-    ].map((value) => String(value ?? "").toLowerCase()).join(" ");
-    return haystack.includes(search);
-  });
-}
-function syncPlacementSelection(state) {
-  const filtered = getFilteredPlacementCatalog(state);
-  if (!filtered.length) {
-    state.placement.selectedCharacterId = "";
-    return filtered;
-  }
-  if (!filtered.some((entry) => entry.id === state.placement.selectedCharacterId)) {
-    state.placement.selectedCharacterId = String(filtered[0]?.id ?? "");
-  }
-  return filtered;
-}
-function getSelectedCatalogCharacter(state) {
-  return state.placement.catalog.find((entry) => entry.id === state.placement.selectedCharacterId) ?? null;
-}
-function getPlacementAction(character) {
-  const bucket = String(character?.character_bucket ?? "").trim();
-  switch (bucket) {
-    case "player":
-      return {
-        label: "Bind Player",
-        requestedAction: "bind_player"
-      };
-    case "npc_template":
-      return {
-        label: "Spawn NPC",
-        requestedAction: "spawn_npc"
-      };
-    case "npc_active":
-      return {
-        label: "Reattach Active NPC",
-        requestedAction: "reattach_active_npc"
-      };
-    default:
-      return {
-        label: "Load Into Selected Token",
-        requestedAction: ""
-      };
-  }
-}
-function getTokenLinkSnapshot(tokenRealtimeSync) {
-  return safeArray(tokenRealtimeSync?.getSnapshot?.()?.tokenLinks);
-}
-function buildPlacementTokenRows(state, tokenRealtimeSync) {
-  if (state.selectedTokens.length !== 1) {
-    const message = state.selectedTokens.length > 1 ? "Select exactly one Owlbear token before loading a character." : "Select one existing Owlbear token on the scene first.";
-    return `<div class="list-item"><div class="list-item-title">Selected Token</div><div class="muted">${escapeHtml(message)}</div></div>`;
-  }
-  const token = state.selectedTokens[0];
-  const localLink = getTokenCharacterLink(token);
-  const serverLink = getTokenLinkSnapshot(tokenRealtimeSync).find(
-    (entry) => String(entry?.token_id ?? "").trim() === String(token?.id ?? "").trim()
-  );
-  const rows = [
-    `id: ${String(token?.id ?? "").trim() || "unknown"}`,
-    `local: ${localLink.characterId || "not linked"} / v${localLink.stateVersion || 0}`,
-    `server: ${serverLink?.character_id || "not linked"} / v${Number(serverLink?.state_version ?? 0) || 0}`
-  ];
-  return `
-    <div class="list-item">
-      <div class="list-item-title">${escapeHtml(token?.name ? String(token.name) : "Selected token")}</div>
-      <div class="muted">${escapeHtml(rows.join(" | "))}</div>
-    </div>
-  `;
-}
-function buildPlacementSelectionRows(state, tokenRealtimeSync) {
-  const selected = getSelectedCatalogCharacter(state);
-  if (!selected) {
-    return '<div class="list-item"><div class="list-item-title">Catalog Selection</div><div class="muted">Refresh the catalog and choose a character to continue.</div></div>';
-  }
-  const action = getPlacementAction(selected);
-  const linkedState = selected.linked_token_id ? `Linked token: ${selected.linked_token_name || selected.linked_token_id}` : "Not linked in this scene";
-  const replaceHint = state.placement.replaceExistingTokenLink ? "Replacement confirmation is armed for the next load attempt." : "No replacement confirmation is armed.";
-  const syncState = tokenRealtimeSync?.getSnapshot?.();
-  return `
-    <div class="list-item">
-      <div class="list-item-title">${escapeHtml(selected.name || selected.character_key || "Character")}</div>
-      <div class="muted">${escapeHtml([
-    `bucket: ${describeBucket(selected.character_bucket)}`,
-    `key: ${selected.character_key || "unknown"}`,
-    `status: ${selected.status_summary || "none"}`,
-    linkedState,
-    syncState?.contextKey ? `sync: ${syncState.contextKey}` : "sync: idle",
-    replaceHint
-  ].join(" | "))}</div>
-      <div class="tag-list" style="margin-top:8px">
-        <span class="tag">${escapeHtml(action.label)}</span>
-      </div>
-    </div>
-  `;
-}
-function buildPlacementOptions(state) {
-  const filtered = syncPlacementSelection(state);
-  if (!filtered.length) {
-    return '<option value="">No characters available</option>';
-  }
-  return filtered.map((entry) => `
-      <option value="${escapeHtml(entry.id)}">
-        ${escapeHtml(`${entry.name || entry.character_key} [${describeBucket(entry.character_bucket)}]`)}
-      </option>
-    `).join("");
-}
-function buildPlacementHint(state, canManageRoomSettings, configured) {
-  if (!canManageRoomSettings) {
-    return "Only the GM can place or bind characters to Owlbear tokens.";
-  }
-  if (!configured) {
-    return "Save the room Supabase URL and key first, then refresh the placement data.";
-  }
-  if (state.selectedTokens.length !== 1) {
-    return "Select exactly one existing Owlbear token before loading a character.";
-  }
-  if (state.placement.loadingCatalog) {
-    return "Refreshing the character catalog and current room token links.";
-  }
-  if (state.placement.pendingMetadataSync) {
-    return "The Supabase RPC succeeded, but writing Owlbear token metadata failed. Use Retry Metadata Sync or refresh the scene state.";
-  }
-  if (state.placement.resultMessage) {
-    return state.placement.resultMessage;
-  }
-  if (!state.placement.catalog.length) {
-    return "Refresh the placement data to load Players, NPC Templates, and optional active NPC reattach targets.";
-  }
-  return state.placement.replaceExistingTokenLink ? "The next placement attempt will move/replace an existing link if the server requires confirmation." : "Choose a catalog character, then bind or spawn it into the selected Owlbear token.";
-}
-function buildMetadataFieldsFromResult(result) {
-  return {
-    stateVersion: Math.max(0, Number(result?.state?.state_version ?? 0) || 0),
-    statusSummary: String(result?.state?.status_summary ?? "").trim(),
-    updatedAt: String(result?.state?.updated_at ?? "").trim() || (/* @__PURE__ */ new Date()).toISOString()
-  };
-}
 async function mountBridgeShell({
   root: root2,
   title,
@@ -4358,9 +4158,8 @@ async function mountBridgeShell({
   if (!(root2 instanceof HTMLElement)) {
     throw new Error("Shell root element is missing.");
   }
-  const showTokenPlacementPanel = features?.tokenPlacement === true;
   await waitForObrReady();
-  root2.innerHTML = createShellMarkup(title, subtitle, { showTokenPlacementPanel });
+  root2.innerHTML = createShellMarkup(title, subtitle);
   const refs = {
     owlbearStatus: root2.querySelector('[data-field="owlbearStatus"]'),
     playerRole: root2.querySelector('[data-field="playerRole"]'),
@@ -4386,10 +4185,7 @@ async function mountBridgeShell({
     clearSettings: root2.querySelector('[data-action="clearSettings"]'),
     testConnection: root2.querySelector('[data-action="testConnection"]'),
     refreshShell: root2.querySelector('[data-action="refreshShell"]'),
-    clearDiagnostics: root2.querySelector('[data-action="clearDiagnostics"]'),
-    refreshPlacement: root2.querySelector('[data-action="refreshPlacement"]'),
-    loadCharacterToToken: root2.querySelector('[data-action="loadCharacterToToken"]'),
-    retryMetadataSync: root2.querySelector('[data-action="retryMetadataSync"]')
+    clearDiagnostics: root2.querySelector('[data-action="clearDiagnostics"]')
   };
   const state = {
     ready: true,
@@ -4397,19 +4193,7 @@ async function mountBridgeShell({
     roomContext: await getRoomSceneContext(),
     settings: await loadRoomSupabaseSettings(),
     selectedTokens: await getSelectedOwlbearTokens(),
-    connectionTest: null,
-    placement: {
-      search: "",
-      includeActiveNpc: false,
-      instanceName: "",
-      catalog: [],
-      selectedCharacterId: "",
-      loadingCatalog: false,
-      actionBusy: false,
-      replaceExistingTokenLink: false,
-      pendingMetadataSync: null,
-      resultMessage: ""
-    }
+    connectionTest: null
   };
   function setPlacementMessage(message = "") {
     state.placement.resultMessage = String(message ?? "").trim();
@@ -4505,179 +4289,6 @@ async function mountBridgeShell({
     state.selectedTokens = await getSelectedOwlbearTokens();
     syncSettingsInputs();
     render();
-  }
-  async function refreshPlacementCatalog({ silent = false } = {}) {
-    if (!showTokenPlacementPanel) return;
-    if (state.player.role !== "GM") {
-      state.placement.catalog = [];
-      state.placement.selectedCharacterId = "";
-      render();
-      return;
-    }
-    if (!hasSupabaseSettings(state.settings)) {
-      state.placement.catalog = [];
-      state.placement.selectedCharacterId = "";
-      render();
-      return;
-    }
-    state.placement.loadingCatalog = true;
-    render();
-    try {
-      const response = await runtime2.api.placement.getCharacterSpawnCatalog(
-        {
-          campaign_id: state.roomContext.campaignId,
-          room_id: state.roomContext.roomId,
-          scene_id: state.roomContext.sceneId,
-          include_active_npc: state.placement.includeActiveNpc
-        },
-        state.settings
-      );
-      state.placement.catalog = normalizeCatalogEntries(response);
-      syncPlacementSelection(state);
-      if (!silent) {
-        addDiagnosticEntry(
-          "info",
-          "Placement catalog refreshed",
-          `Rows loaded: ${state.placement.catalog.length}`
-        );
-      }
-    } catch (error) {
-      const normalized = normalizeError(error, "Unable to load the placement catalog.");
-      state.placement.catalog = [];
-      state.placement.selectedCharacterId = "";
-      addDiagnosticEntry("error", "Placement catalog failed", normalized.message);
-    } finally {
-      state.placement.loadingCatalog = false;
-      render();
-    }
-  }
-  async function refreshPlacementData({ reason = "manual", silent = false } = {}) {
-    await refreshSnapshot();
-    if (tokenRealtimeSync?.reconcileNow) {
-      await tokenRealtimeSync.reconcileNow(`placement:${reason}`);
-    }
-    await refreshPlacementCatalog({ silent });
-    await refreshSnapshot();
-  }
-  async function retryPendingMetadataSync() {
-    const pending = state.placement.pendingMetadataSync;
-    if (!pending) return;
-    state.placement.actionBusy = true;
-    render();
-    try {
-      await setTokenCharacterLink(pending.tokenId, pending.characterId, pending.fields);
-      state.placement.pendingMetadataSync = null;
-      setPlacementMessage("Owlbear token metadata was restored successfully.");
-      if (tokenRealtimeSync?.reconcileNow) {
-        await tokenRealtimeSync.reconcileNow("retry-metadata-sync");
-      }
-      await refreshSnapshot();
-    } catch (error) {
-      const normalized = normalizeError(error, "Unable to retry token metadata synchronization.");
-      setPlacementMessage(normalized.message);
-      addDiagnosticEntry("error", "Retry metadata sync failed", normalized.message);
-    } finally {
-      state.placement.actionBusy = false;
-      render();
-    }
-  }
-  async function loadCharacterToSelectedToken() {
-    if (state.player.role !== "GM") {
-      addDiagnosticEntry("warn", "Token placement is GM-only", "Only the GM can bind or spawn characters into tokens.");
-      return;
-    }
-    if (state.selectedTokens.length !== 1) {
-      setPlacementMessage("Select exactly one Owlbear token before loading a character.");
-      render();
-      return;
-    }
-    const selectedCharacter = getSelectedCatalogCharacter(state);
-    if (!selectedCharacter) {
-      setPlacementMessage("Choose a catalog character first.");
-      render();
-      return;
-    }
-    const action = getPlacementAction(selectedCharacter);
-    if (!action.requestedAction) {
-      setPlacementMessage("The selected catalog entry cannot be loaded.");
-      render();
-      return;
-    }
-    const token = state.selectedTokens[0];
-    state.placement.actionBusy = true;
-    setPlacementMessage("");
-    render();
-    try {
-      const result = await runtime2.api.character.loadCharacterToToken(
-        {
-          source_character_id: selectedCharacter.id,
-          token_id: token.id,
-          token_name: token.name ?? "",
-          token_layer: token.layer ?? "CHARACTER",
-          campaign_id: state.roomContext.campaignId,
-          room_id: state.roomContext.roomId,
-          scene_id: state.roomContext.sceneId,
-          instance_name: state.placement.instanceName,
-          requested_action: action.requestedAction,
-          replace_existing_token_link: state.placement.replaceExistingTokenLink,
-          allow_rebind_active_npc: action.requestedAction === "reattach_active_npc"
-        },
-        state.settings
-      );
-      if (result?.ok === false) {
-        const retryableErrors = /* @__PURE__ */ new Set([
-          "TOKEN_ALREADY_LINKED",
-          "CHARACTER_ALREADY_LINKED_IN_SCENE",
-          "TOKEN_CONTEXT_MISMATCH"
-        ]);
-        if (retryableErrors.has(String(result?.error ?? "").trim())) {
-          state.placement.replaceExistingTokenLink = true;
-          setPlacementMessage(`${result.message || result.error}. Repeat the action to confirm moving/replacing the existing link.`);
-          addDiagnosticEntry("warn", "Placement confirmation required", result.message || result.error || "Server requested an explicit replace confirmation.");
-        } else {
-          state.placement.replaceExistingTokenLink = false;
-          setPlacementMessage(result.message || result.error || "Unable to load the selected character into the token.");
-          addDiagnosticEntry("error", "Character load failed", result.message || result.error || "Unknown load error.");
-        }
-        return;
-      }
-      const metadataFields = buildMetadataFieldsFromResult(result);
-      state.placement.replaceExistingTokenLink = false;
-      state.placement.pendingMetadataSync = null;
-      try {
-        await setTokenCharacterLink(token.id, result?.character?.id, metadataFields);
-      } catch (error) {
-        state.placement.pendingMetadataSync = {
-          tokenId: token.id,
-          characterId: result?.character?.id,
-          fields: metadataFields
-        };
-        const normalized = normalizeError(error, "Supabase link was created, but Owlbear token metadata could not be written.");
-        setPlacementMessage(normalized.message);
-        addDiagnosticEntry("error", "Token metadata write failed", normalized.message);
-      }
-      if (!state.placement.pendingMetadataSync) {
-        setPlacementMessage(`${action.label} completed for ${result?.character?.name || result?.character?.character_key || "character"}.`);
-      }
-      if (tokenRealtimeSync?.reconcileNow) {
-        await tokenRealtimeSync.reconcileNow("load-character-success");
-      }
-      await refreshPlacementCatalog({ silent: true });
-      await refreshSnapshot();
-      addDiagnosticEntry(
-        "info",
-        "Character loaded into token",
-        `${action.label}: ${result?.character?.character_key || result?.character?.id || "unknown character"}`
-      );
-    } catch (error) {
-      const normalized = normalizeError(error, "Unable to load the selected character into the Owlbear token.");
-      state.placement.replaceExistingTokenLink = false;
-      setPlacementMessage(normalized.message);
-      addDiagnosticEntry("error", "Load character to token failed", normalized.message);
-    } finally {
-      state.placement.actionBusy = false;
-      render();
-    }
   }
   buttons.saveSettings.addEventListener("click", async () => {
     if (state.player.role !== "GM") {
@@ -11548,14 +11159,14 @@ var toArray = (value, type) => {
   const closeBrace = value[lastIdx];
   const openBrace = value[0];
   if (openBrace === "{" && closeBrace === "}") {
-    let arr4;
+    let arr3;
     const valTrim = value.slice(1, lastIdx);
     try {
-      arr4 = JSON.parse("[" + valTrim + "]");
+      arr3 = JSON.parse("[" + valTrim + "]");
     } catch (_) {
-      arr4 = valTrim ? valTrim.split(",") : [];
+      arr3 = valTrim ? valTrim.split(",") : [];
     }
-    return arr4.map((val) => convertCell(type, val));
+    return arr3.map((val) => convertCell(type, val));
   }
   return value;
 };
@@ -29058,421 +28669,6 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   };
 }
 
-// screens/placement/placementStyles.css
-var placementStyles_default = "/* Placement Screen \u2014 scoped styles (.pl- prefix). Reuses shell design tokens. */\n.pl-screen { display: flex; flex-direction: column; gap: 14px; }\n.pl-screen-nogm { align-items: center; justify-content: center; padding: 40px 0; }\n.pl-header { display: flex; align-items: center; gap: 8px; }\n.pl-title { font-size: 14px; font-weight: 700; }\n.pl-muted { color: var(--muted); font-size: 12px; }\n.pl-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\n.pl-section { display: flex; flex-direction: column; gap: 8px; }\n.pl-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n\n/* banners */\n.pl-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\n.pl-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\n.pl-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\n.pl-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\n.pl-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\n\n/* token panel */\n.pl-token-panel { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }\n.pl-token-row { display: flex; align-items: center; gap: 8px; }\n.pl-token-name { font-weight: 600; font-size: 13px; }\n.pl-token-layer { font-size: 10px; }\n.pl-link-row { display: flex; align-items: center; gap: 6px; font-size: 12px; flex-wrap: wrap; }\n.pl-link-state { font-size: 11px; color: var(--muted); }\n.pl-actions-row { display: flex; gap: 6px; flex-wrap: wrap; }\n\n/* badges */\n.pl-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\n.pl-badge-player { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\n.pl-badge-template { border-color: rgba(255,194,75,.4); color: #ffe6b3; background: rgba(255,194,75,.10); }\n.pl-badge-active { border-color: rgba(62,210,130,.4); color: #b3ffd9; background: rgba(62,210,130,.10); }\n.pl-badge-on-scene { border-color: rgba(62,210,130,.5); color: #b3ffd9; background: rgba(62,210,130,.14); font-weight: 700; }\n\n/* catalog */\n.pl-catalog { display: flex; flex-direction: column; gap: 8px; }\n.pl-catalog-head { display: flex; gap: 6px; }\n.pl-search { flex: 1; font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; }\n.pl-filter { font: inherit; background: rgba(8,17,28,.9); border: 1px solid rgba(61,92,129,.9); border-radius: 10px; color: var(--text); padding: 7px 10px; font-size: 12px; }\n.pl-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow-y: auto; }\n\n/* catalog items */\n.pl-item { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }\n.pl-item-linked { border-color: rgba(62,210,130,.35); background: rgba(62,210,130,.06); }\n.pl-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }\n.pl-item-name { font-size: 13px; font-weight: 600; flex: 1; }\n.pl-item-status { font-size: 11px; }\n.pl-item-actions { display: flex; gap: 6px; flex-wrap: wrap; }\n\n/* buttons */\n.pl-btn { font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 10px; border: 1px solid transparent; cursor: pointer; transition: background .12s, border-color .12s; }\n.pl-btn:disabled { opacity: .5; cursor: not-allowed; }\n.pl-btn-primary { background: rgba(62,166,255,.18); border-color: rgba(62,166,255,.5); color: #d8eeff; }\n.pl-btn-primary:not(:disabled):hover { background: rgba(62,166,255,.28); }\n.pl-btn-secondary { background: var(--panel-soft); border-color: var(--line); color: var(--text); }\n.pl-btn-secondary:not(:disabled):hover { border-color: var(--accent); }\n.pl-btn-danger { background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.45); color: #ffd9de; }\n.pl-btn-danger:not(:disabled):hover { background: rgba(201,75,88,.26); }\n.pl-btn-ghost { background: none; border-color: var(--line); color: var(--muted); }\n.pl-btn-ghost:not(:disabled):hover { color: var(--text); border-color: var(--accent); }\n\n/* delete confirm dialog */\n.pl-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.65); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\n.pl-dialog { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }\n.pl-dialog h3 { margin: 0; font-size: 14px; }\n.pl-dialog p { margin: 0; font-size: 12px; line-height: 1.5; }\n.pl-dialog-actions { display: flex; gap: 8px; }\n";
-
-// screens/placement/placementScreen.js
-var esc3 = (v) => escapeHtml(v);
-var arr3 = (v) => Array.isArray(v) ? v : [];
-var OBR_TIMEOUT2 = 1500;
-function withTimeout4(promise, ms, fallback) {
-  return Promise.race([
-    Promise.resolve().then(() => promise).catch(() => fallback),
-    new Promise((r) => setTimeout(() => r(fallback), ms))
-  ]);
-}
-function injectStylesOnce3() {
-  if (document.getElementById("pl-screen-styles")) return;
-  const s = document.createElement("style");
-  s.id = "pl-screen-styles";
-  s.textContent = placementStyles_default;
-  document.head.appendChild(s);
-}
-function mountPlacementScreen({ root: root2, runtime: runtime2 }) {
-  injectStylesOnce3();
-  const api = runtime2?.api ?? {};
-  const bridges = runtime2?.bridges ?? {};
-  const state = {
-    settings: loadDevSettings(),
-    role: "PLAYER",
-    obr: { roomId: "", sceneId: "", campaignId: "" },
-    // selected OBR token
-    selectedToken: null,
-    // { id, name, layer }
-    existingLink: null,
-    // current scene link for selected token
-    // catalog
-    catalog: [],
-    catalogFilter: "all",
-    // "all" | "player" | "npc_template" | "npc_active"
-    catalogSearch: "",
-    catalogLoading: false,
-    // preview
-    previewCharacter: null,
-    // { id, display_name, character_bucket, summary }
-    // delete confirm
-    deleteTarget: null,
-    // { id, display_name } pending confirmation
-    deleteMode: "",
-    // "archive" | "hard_delete"
-    // ui state
-    busy: false,
-    notice: "",
-    noticeKind: "info",
-    sceneLinksLoading: false
-  };
-  const settings = () => state.settings;
-  const isGM = () => state.role === "GM";
-  (async () => {
-    const dev = loadDevSettings();
-    if (hasUsableSettings(dev)) {
-      state.settings = dev;
-    } else {
-      const resolved = await resolveEffectiveSettings();
-      state.settings = resolved.settings;
-    }
-    const player = await withTimeout4(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT2, null);
-    if (player?.role) state.role = String(player.role).toUpperCase() === "GM" ? "GM" : "PLAYER";
-    const ctx = await withTimeout4(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT2, null);
-    if (ctx) {
-      state.obr.roomId = ctx.roomId || "";
-      state.obr.sceneId = ctx.sceneId || "";
-      state.obr.campaignId = ctx.campaignId || "";
-    }
-    render();
-    if (isGM()) {
-      loadCatalog();
-      await subscribeObrSelection();
-    }
-    root2.addEventListener("click", onRootClick);
-  })();
-  let _unsubPlayerChanges = null;
-  async function syncSelectedToken(selectedIds) {
-    const id = arr3(selectedIds)[0] || null;
-    if (!id) {
-      state.selectedToken = null;
-      state.existingLink = null;
-      state.previewCharacter = null;
-      render();
-      return;
-    }
-    const sceneItems = await withTimeout4(bridges.obr?.getSceneItems?.(), OBR_TIMEOUT2, []);
-    const token = arr3(sceneItems).find((t) => t.id === id);
-    state.selectedToken = token ? { id: token.id, name: token.name || token.id, layer: token.layer || "CHARACTER" } : { id, name: id, layer: "CHARACTER" };
-    state.existingLink = null;
-    state.previewCharacter = null;
-    render();
-    if (isGM() && state.obr.roomId && state.obr.sceneId) {
-      await loadSceneLink(id);
-    }
-  }
-  async function subscribeObrSelection() {
-    const selectedIds = await withTimeout4(bridges.obr?.getSelectedTokenIds?.(), OBR_TIMEOUT2, []);
-    await syncSelectedToken(selectedIds);
-    if (!bridges.obr?.subscribePlayerChanges) return;
-    _unsubPlayerChanges = bridges.obr.subscribePlayerChanges((player) => {
-      syncSelectedToken(player.selection);
-    });
-  }
-  async function loadSceneLink(tokenId) {
-    state.sceneLinksLoading = true;
-    render();
-    try {
-      const res = await api.placement.getSceneTokenLinks({
-        room_id: state.obr.roomId,
-        scene_id: state.obr.sceneId,
-        token_id: tokenId
-      }, settings());
-      const link = arr3(res?.links).find((l) => l.token_id === tokenId && l.is_active !== false);
-      state.existingLink = link || null;
-    } catch {
-      state.existingLink = null;
-    }
-    state.sceneLinksLoading = false;
-    render();
-  }
-  async function loadCatalog() {
-    state.catalogLoading = true;
-    render();
-    try {
-      const buckets = state.catalogFilter === "all" ? ["player", "npc_template"] : [state.catalogFilter];
-      const includeActive = state.catalogFilter === "npc_active" || state.catalogFilter === "all";
-      const res = await api.placement.getCharacterSpawnCatalog({
-        campaign_id: state.obr.campaignId || void 0,
-        room_id: state.obr.roomId || void 0,
-        scene_id: state.obr.sceneId || void 0,
-        search: state.catalogSearch || void 0,
-        buckets,
-        include_active_npc: includeActive,
-        limit: 100
-      }, settings());
-      state.catalog = arr3(res?.items);
-    } catch (e) {
-      setNotice("err", `Catalog error: ${esc3(e.message)}`);
-      state.catalog = [];
-    }
-    state.catalogLoading = false;
-    render();
-  }
-  function setNotice(kind, msg) {
-    state.noticeKind = kind;
-    state.notice = msg;
-  }
-  async function onBind(sourceCharacterId) {
-    if (!state.selectedToken) {
-      setNotice("warn", "Select a token first.");
-      render();
-      return;
-    }
-    if (state.selectedToken.layer !== "CHARACTER") {
-      setNotice("warn", `Tokens on the "${esc3(state.selectedToken.layer)}" layer cannot be bound. Only CHARACTER layer is supported.`);
-      render();
-      return;
-    }
-    if (state.busy) return;
-    state.busy = true;
-    setNotice("info", "Binding\u2026");
-    render();
-    try {
-      const selectedChar = arr3(state.catalog).find((c) => c.id === sourceCharacterId);
-      const bucket = selectedChar?.character_bucket || "unknown";
-      const params = {
-        source_character_id: sourceCharacterId,
-        token_id: state.selectedToken.id,
-        token_name: state.selectedToken.name,
-        token_layer: state.selectedToken.layer || "CHARACTER",
-        character_bucket: bucket,
-        campaign_id: state.obr.campaignId || void 0,
-        room_id: state.obr.roomId,
-        scene_id: state.obr.sceneId,
-        replace_existing_token_link: !!state.existingLink
-      };
-      if (bucket === "npc_active") {
-        params.allow_rebind_active_npc = true;
-      }
-      const res = await api.placement.loadCharacterToToken(params, settings());
-      if (res?.ok === false) {
-        setNotice("err", res.message || "Bind failed.");
-      } else {
-        const action = res?.action ?? "linked";
-        setNotice("ok", actionLabel(action, res?.character?.display_name));
-        await loadSceneLink(state.selectedToken.id);
-        await loadCatalog();
-      }
-    } catch (e) {
-      setNotice("err", e.message || "Bind failed.");
-    }
-    state.busy = false;
-    render();
-  }
-  async function onUnbind() {
-    if (!state.selectedToken || !state.existingLink) return;
-    if (state.busy) return;
-    state.busy = true;
-    setNotice("info", "Unbinding\u2026");
-    render();
-    try {
-      const res = await api.placement.unbindTokenCharacter({
-        room_id: state.obr.roomId,
-        scene_id: state.obr.sceneId,
-        token_id: state.selectedToken.id
-      }, settings());
-      if (res?.ok === false) {
-        setNotice("err", res.message || "Unbind failed.");
-      } else {
-        setNotice("ok", `Unbound: ${esc3(res?.character?.display_name || state.existingLink.character?.display_name || "")}`);
-        state.existingLink = null;
-        await loadCatalog();
-      }
-    } catch (e) {
-      setNotice("err", e.message || "Unbind failed.");
-    }
-    state.busy = false;
-    render();
-  }
-  async function onDelete(characterId, mode) {
-    if (state.busy) return;
-    state.busy = true;
-    setNotice("info", mode === "hard_delete" ? "Deleting permanently\u2026" : "Archiving\u2026");
-    render();
-    try {
-      const res = await api.placement.purgeActiveNpcs({ character_id: characterId, mode }, settings());
-      if (res?.ok === false) {
-        setNotice("err", res.message || "Delete failed.");
-      } else {
-        setNotice("ok", mode === "hard_delete" ? "NPC permanently deleted." : "NPC archived.");
-        state.deleteTarget = null;
-        state.deleteMode = "";
-        if (state.existingLink?.character?.id === characterId) state.existingLink = null;
-        await loadCatalog();
-      }
-    } catch (e) {
-      setNotice("err", e.message || "Delete failed.");
-    }
-    state.busy = false;
-    render();
-  }
-  function actionLabel(action, name) {
-    const n = name ? ` "${esc3(name)}"` : "";
-    if (action === "spawned_npc") return `NPC${n} spawned and bound to token.`;
-    if (action === "linked_player") return `Player${n} bound to token.`;
-    if (action === "relinked_active_npc") return `NPC${n} rebound to token.`;
-    return `Bound${n}.`;
-  }
-  function bucketLabel(b) {
-    if (b === "player") return "Player";
-    if (b === "npc_template") return "NPC Template";
-    if (b === "npc_active") return "NPC Active";
-    return b || "\u2014";
-  }
-  function bucketBadge(b) {
-    const cls = b === "player" ? "pl-badge-player" : b === "npc_template" ? "pl-badge-template" : "pl-badge-active";
-    return `<span class="pl-badge ${cls}">${bucketLabel(b)}</span>`;
-  }
-  function renderNotice() {
-    if (!state.notice) return "";
-    return `<div class="pl-banner ${state.noticeKind}">${esc3(state.notice)}</div>`;
-  }
-  function renderTokenPanel() {
-    const t = state.selectedToken;
-    if (!t) return `<div class="pl-empty">No token selected \u2014 click a token on the scene.</div>`;
-    const link = state.existingLink;
-    const loading = state.sceneLinksLoading;
-    return `
-      <div class="pl-token-panel">
-        <div class="pl-token-row">
-          <span class="pl-token-name">${esc3(t.name)}</span>
-          <span class="pl-token-layer pl-badge">${esc3(t.layer || "CHARACTER")}</span>
-        </div>
-        ${loading ? `<div class="pl-muted">Checking link\u2026</div>` : link ? `
-          <div class="pl-link-row">
-            <span class="pl-muted">Linked to:</span>
-            <strong>${esc3(link.character?.display_name || link.character?.character_key || link.character_id || "\u2014")}</strong>
-            ${bucketBadge(link.character?.character_bucket)}
-          </div>
-          <div class="pl-link-state">${esc3(link.state?.status_summary || "")}</div>
-          <div class="pl-actions-row">
-            <button class="pl-btn pl-btn-danger" data-action="unbind" ${state.busy ? "disabled" : ""}>Unbind</button>
-          </div>` : `<div class="pl-muted">No active link \u2014 select a character below to bind.</div>`}
-      </div>`;
-  }
-  function renderCatalog() {
-    const items = state.catalog;
-    const loading = state.catalogLoading;
-    return `
-      <div class="pl-catalog">
-        <div class="pl-catalog-head">
-          <input class="pl-search" type="text" placeholder="Search\u2026" value="${esc3(state.catalogSearch)}" data-ref="search">
-          <select class="pl-filter" data-ref="filter">
-            <option value="all" ${state.catalogFilter === "all" ? "selected" : ""}>All</option>
-            <option value="player" ${state.catalogFilter === "player" ? "selected" : ""}>Player</option>
-            <option value="npc_template" ${state.catalogFilter === "npc_template" ? "selected" : ""}>NPC Template</option>
-            <option value="npc_active" ${state.catalogFilter === "npc_active" ? "selected" : ""}>NPC Active</option>
-          </select>
-        </div>
-        ${loading ? `<div class="pl-muted">Loading\u2026</div>` : !items.length ? `<div class="pl-empty">No characters found.</div>` : `
-          <div class="pl-list">
-            ${items.map(renderCatalogItem).join("")}
-          </div>`}
-      </div>`;
-  }
-  function renderCatalogItem(c) {
-    const isActive = c.character_bucket === "npc_active";
-    const isTemplate = c.character_bucket === "npc_template";
-    const isLinked = c.scene_link?.is_active;
-    const canBind = !!state.selectedToken && !state.busy;
-    const btnLabel = c.character_bucket === "player" ? "Bind Player" : c.character_bucket === "npc_template" ? "Spawn NPC" : "Rebind NPC";
-    return `
-      <div class="pl-item ${isLinked ? "pl-item-linked" : ""}">
-        <div class="pl-item-head">
-          <span class="pl-item-name">${esc3(c.display_name || c.character_key)}</span>
-          ${bucketBadge(c.character_bucket)}
-          ${isLinked ? `<span class="pl-badge pl-badge-on-scene">On scene</span>` : ""}
-        </div>
-        ${c.summary?.status_summary ? `<div class="pl-item-status pl-muted">${esc3(c.summary.status_summary)}</div>` : ""}
-        <div class="pl-item-actions">
-          <button class="pl-btn pl-btn-primary" data-action="bind" data-char="${esc3(c.id)}" ${canBind ? "" : "disabled"}>${btnLabel}</button>
-        </div>
-      </div>`;
-  }
-  function renderDeleteConfirm() {
-    if (!state.deleteTarget) return "";
-    const hard = state.deleteMode === "hard_delete";
-    return `
-      <div class="pl-overlay">
-        <div class="pl-dialog">
-          <h3>${hard ? "Permanently delete NPC?" : "Archive NPC?"}</h3>
-          <p class="pl-muted">${hard ? `<strong>${esc3(state.deleteTarget.display_name)}</strong> and all associated logs, links, and initiative entries will be <strong>permanently removed</strong>. This cannot be undone.` : `<strong>${esc3(state.deleteTarget.display_name)}</strong> will be hidden from the scene. History is preserved and the NPC can be restored.`}</p>
-          <div class="pl-dialog-actions">
-            <button class="pl-btn ${hard ? "pl-btn-danger" : "pl-btn-secondary"}" data-action="confirm-delete">
-              ${hard ? "Delete permanently" : "Archive"}
-            </button>
-            <button class="pl-btn pl-btn-ghost" data-action="cancel-delete">Cancel</button>
-          </div>
-        </div>
-      </div>`;
-  }
-  function render() {
-    if (!isGM()) {
-      root2.innerHTML = `<div class="pl-screen pl-screen-nogm"><p class="pl-muted">Placement tools are available to GMs only.</p></div>`;
-      return;
-    }
-    root2.innerHTML = `
-      <div class="pl-screen">
-        <div class="pl-header">
-          <span class="pl-title">Token Placement</span>
-        </div>
-        ${renderNotice()}
-        <section class="pl-section">
-          <div class="pl-section-title">Selected Token</div>
-          ${renderTokenPanel()}
-        </section>
-        <section class="pl-section">
-          <div class="pl-section-title">Character Catalog</div>
-          ${renderCatalog()}
-        </section>
-        ${renderDeleteConfirm()}
-      </div>`;
-    bindEvents();
-  }
-  function bindEvents() {
-    const searchEl = root2.querySelector("[data-ref='search']");
-    if (searchEl) {
-      searchEl.addEventListener("input", (e) => {
-        state.catalogSearch = e.target.value;
-        clearTimeout(state._searchTimer);
-        state._searchTimer = setTimeout(() => loadCatalog(), 300);
-      });
-    }
-    const filterEl = root2.querySelector("[data-ref='filter']");
-    if (filterEl) {
-      filterEl.addEventListener("change", (e) => {
-        state.catalogFilter = e.target.value;
-        loadCatalog();
-      });
-    }
-  }
-  function onRootClick(e) {
-    const btn = e.target.closest("[data-action]");
-    if (!btn) return;
-    const action = btn.dataset.action;
-    const charId = btn.dataset.char;
-    if (action === "bind") {
-      onBind(charId);
-      return;
-    }
-    if (action === "unbind") {
-      onUnbind();
-      return;
-    }
-    if (action === "confirm-delete") {
-      onDelete(state.deleteTarget.id, state.deleteMode);
-      return;
-    }
-    if (action === "cancel-delete") {
-      state.deleteTarget = null;
-      state.deleteMode = "";
-      render();
-      return;
-    }
-  }
-  render();
-  return () => {
-    root2.removeEventListener("click", onRootClick);
-    if (typeof _unsubPlayerChanges === "function") _unsubPlayerChanges();
-  };
-}
-
 // main.js
 var runtime = createOdysseyRuntime();
 globalThis.OdysseyBridge = runtime;
@@ -29484,18 +28680,15 @@ root.innerHTML = `
   <nav class="app-nav">
     <button class="app-tab active" type="button" data-view="resolve">Combat \xB7 Resolve Attack</button>
     <button class="app-tab" type="button" data-view="character">Character</button>
-    <button class="app-tab" type="button" data-view="placement">Placement</button>
     <button class="app-tab" type="button" data-view="shell">Bridge Shell</button>
   </nav>
   <div class="app-view" data-view-host="resolve"></div>
   <div class="app-view hidden" data-view-host="character"></div>
-  <div class="app-view hidden" data-view-host="placement"></div>
   <div class="app-view hidden" data-view-host="shell"></div>
 `;
 var hosts = {
   resolve: root.querySelector('[data-view-host="resolve"]'),
   character: root.querySelector('[data-view-host="character"]'),
-  placement: root.querySelector('[data-view-host="placement"]'),
   shell: root.querySelector('[data-view-host="shell"]')
 };
 var views = {
@@ -29509,12 +28702,6 @@ var views = {
     mounted: false,
     mount() {
       mountCharacterScreen({ root: hosts.character, runtime });
-    }
-  },
-  placement: {
-    mounted: false,
-    mount() {
-      mountPlacementScreen({ root: hosts.placement, runtime });
     }
   },
   shell: {

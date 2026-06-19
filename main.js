@@ -2,7 +2,6 @@ import { mountBridgeShell } from "./shell/appShell.js";
 import { createOdysseyRuntime } from "./runtime/createRuntime.js";
 import { mountResolveAttackScreen } from "./screens/resolveAttack/resolveAttackScreen.js";
 import { mountCharacterScreen } from "./screens/character/characterScreen.js";
-import { mountPlacementScreen } from "./screens/placement/placementScreen.js";
 
 const runtime = createOdysseyRuntime();
 globalThis.OdysseyBridge = runtime;
@@ -21,19 +20,16 @@ root.innerHTML = `
   <nav class="app-nav">
     <button class="app-tab active" type="button" data-view="resolve">Combat · Resolve Attack</button>
     <button class="app-tab" type="button" data-view="character">Character</button>
-    <button class="app-tab" type="button" data-view="placement">Placement</button>
     <button class="app-tab" type="button" data-view="shell">Bridge Shell</button>
   </nav>
   <div class="app-view" data-view-host="resolve"></div>
   <div class="app-view hidden" data-view-host="character"></div>
-  <div class="app-view hidden" data-view-host="placement"></div>
   <div class="app-view hidden" data-view-host="shell"></div>
 `;
 
 const hosts = {
   resolve: root.querySelector('[data-view-host="resolve"]'),
   character: root.querySelector('[data-view-host="character"]'),
-  placement: root.querySelector('[data-view-host="placement"]'),
   shell: root.querySelector('[data-view-host="shell"]'),
 };
 
@@ -48,12 +44,6 @@ const views = {
     mounted: false,
     mount() {
       mountCharacterScreen({ root: hosts.character, runtime });
-    },
-  },
-  placement: {
-    mounted: false,
-    mount() {
-      mountPlacementScreen({ root: hosts.placement, runtime });
     },
   },
   shell: {

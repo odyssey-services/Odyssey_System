@@ -22,9 +22,7 @@ void mountBridgeShell({
     "GM token placement, Supabase room settings, and token metadata reconciliation live here. Combat state remains server-authoritative.",
   runtime,
   globalName: "OdysseyGmToolsBridge",
-  features: {
-    tokenPlacement: true,
-  },
+  features: {},
   tokenRealtimeSync,
 }).catch((error) => {
   root.innerHTML = `
