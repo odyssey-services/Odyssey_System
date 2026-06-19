@@ -40,14 +40,6 @@ export function listCharacters(settings, { includeDeleted = false } = {}) {
   );
 }
 
-export function getCharacterSpawnCatalog(payload, settings) {
-  return callSupabaseRpc(
-    CHARACTER_RPC_NAMES.getCharacterSpawnCatalog,
-    payload ?? {},
-    settings,
-  );
-}
-
 export function getRoomTokenLinks(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_RPC_NAMES.getRoomTokenLinks,

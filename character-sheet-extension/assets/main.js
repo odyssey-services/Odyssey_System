@@ -4516,11 +4516,12 @@ async function mountBridgeShell({
     state.placement.loadingCatalog = true;
     render();
     try {
-      const response = await runtime2.api.character.getCharacterSpawnCatalog(
+      const response = await runtime2.api.placement.getCharacterSpawnCatalog(
         {
+          campaign_id: state.roomContext.campaignId,
           room_id: state.roomContext.roomId,
           scene_id: state.roomContext.sceneId,
-          include_active_npc: state.placement.includeActiveNpc
+          include_active_npcs: state.placement.includeActiveNpc
         },
         state.settings
       );
@@ -4929,7 +4930,6 @@ var characterApi_exports = {};
 __export(characterApi_exports, {
   deactivateTokenLink: () => deactivateTokenLink,
   getCharacterRuleSheet: () => getCharacterRuleSheet,
-  getCharacterSpawnCatalog: () => getCharacterSpawnCatalog,
   getRoomTokenLinks: () => getRoomTokenLinks,
   initializeCharacterCombatDefaults: () => initializeCharacterCombatDefaults,
   initializeCharacterRuleDefaults: () => initializeCharacterRuleDefaults,
@@ -4969,13 +4969,6 @@ function listCharacters(settings, { includeDeleted = false } = {}) {
     `odyssey_characters?${query.join("&")}`,
     settings,
     "Unable to load character catalog."
-  );
-}
-function getCharacterSpawnCatalog(payload, settings) {
-  return callSupabaseRpc(
-    CHARACTER_RPC_NAMES.getCharacterSpawnCatalog,
-    payload ?? {},
-    settings
   );
 }
 function getRoomTokenLinks(payload, settings) {
@@ -5382,13 +5375,13 @@ function getCombatLogEntries({ roomId = "", encounterId = "", limit = 50 } = {},
 var characterPlacementApi_exports = {};
 __export(characterPlacementApi_exports, {
   getCharacterRuntimeBundle: () => getCharacterRuntimeBundle,
-  getCharacterSpawnCatalog: () => getCharacterSpawnCatalog2,
+  getCharacterSpawnCatalog: () => getCharacterSpawnCatalog,
   getSceneTokenLinks: () => getSceneTokenLinks,
   loadCharacterToToken: () => loadCharacterToToken2,
   purgeActiveNpcs: () => purgeActiveNpcs,
   unbindTokenCharacter: () => unbindTokenCharacter
 });
-function getCharacterSpawnCatalog2(payload, settings) {
+function getCharacterSpawnCatalog(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.getCharacterSpawnCatalog,
     { p_payload: payload ?? {} },
