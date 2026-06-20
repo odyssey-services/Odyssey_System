@@ -225,10 +225,12 @@ function buildSkillAutoTags(draft, references) {
 
 function buildEquipmentAutoTags(draft) {
   const tags = new Set();
+  const allowedCodes = getEffectiveAllowedBodyPartCodes(draft);
+  const primaryBodyPartCode = getPrimaryBodyPartCode(allowedCodes, draft.defaultBodyPartCode);
   if (draft.itemType) tags.add(String(draft.itemType).trim());
-  if (draft.defaultBodyPartCode) tags.add(String(draft.defaultBodyPartCode).trim());
+  if (primaryBodyPartCode) tags.add(primaryBodyPartCode);
   tags.add("equipable");
-  if (shouldEquipToBodyPart(draft.itemType, draft.defaultBodyPartCode)) tags.add("body_part");
+  if (shouldEquipToBodyPart(draft.itemType, allowedCodes, draft.defaultBodyPartCode)) tags.add("body_part");
   return Array.from(tags);
 }
 
@@ -260,13 +262,40 @@ function suggestAllowedBodyPartCodes(defaultBodyPartCode) {
   }
 }
 
-function shouldEquipToBodyPart(itemType, defaultBodyPartCode) {
+function getPrimaryBodyPartCode(allowedBodyPartCodes, fallbackCode = "") {
+  const normalized = normalizeBodyPartCodeArray(allowedBodyPartCodes);
+  const fallback = String(fallbackCode ?? "").trim().toLowerCase();
+  if (fallback && normalized.includes(fallback)) {
+    return fallback;
+  }
+  const preferredOrder = ["head", "torso", "l_arm", "r_arm", "l_leg", "r_leg", "special", "extra_l_arm", "extra_r_arm"];
+  for (const code of preferredOrder) {
+    if (normalized.includes(code)) {
+      return code;
+    }
+  }
+  return normalized[0] ?? "";
+}
+
+function getEffectiveAllowedBodyPartCodes(draft) {
+  const selectedCodes = normalizeBodyPartCodeArray(draft?.allowedBodyPartCodes);
+  return selectedCodes.length
+    ? selectedCodes
+    : suggestAllowedBodyPartCodes(draft?.defaultBodyPartCode);
+}
+
+function shouldShowProtectionSlots(itemType) {
+  const type = String(itemType ?? "").trim();
+  return type !== "exoskeleton" && type !== "closed_suit";
+}
+
+function shouldEquipToBodyPart(itemType, allowedBodyPartCodes = [], defaultBodyPartCode = "") {
   const type = String(itemType ?? "").trim();
   if (type === "armor" || type === "shield") {
     return true;
   }
   if (type === "implant" || type === "prosthetic") {
-    return Boolean(String(defaultBodyPartCode ?? "").trim());
+    return normalizeBodyPartCodeArray(allowedBodyPartCodes).length > 0 || Boolean(String(defaultBodyPartCode ?? "").trim());
   }
   return false;
 }
@@ -474,13 +503,16 @@ function buildSkillPayload(draft, auto) {
 }
 
 function buildEquipmentPayload(draft, auto) {
-  const canEquipToBodyPart = shouldEquipToBodyPart(draft.itemType, draft.defaultBodyPartCode);
-  const flags = toPlainObject(cloneJson(draft.flagsExtraData));
-  const effectData = toPlainObject(cloneJson(draft.effectDataExtraData));
+  const showProtectionSlots = shouldShowProtectionSlots(draft.itemType);
   const selectedAllowedCodes = normalizeBodyPartCodeArray(draft.allowedBodyPartCodes);
   const suggestedAllowedCodes = suggestAllowedBodyPartCodes(draft.defaultBodyPartCode);
+  const effectiveAllowedCodes = selectedAllowedCodes.length ? selectedAllowedCodes : suggestedAllowedCodes;
+  const canEquipToBodyPart = shouldEquipToBodyPart(draft.itemType, effectiveAllowedCodes, draft.defaultBodyPartCode);
+  const primaryBodyPartCode = showProtectionSlots ? getPrimaryBodyPartCode(effectiveAllowedCodes, draft.defaultBodyPartCode) : "";
+  const flags = toPlainObject(cloneJson(draft.flagsExtraData));
+  const effectData = toPlainObject(cloneJson(draft.effectDataExtraData));
   const finalAllowedCodes = canEquipToBodyPart
-    ? (selectedAllowedCodes.length ? selectedAllowedCodes : suggestedAllowedCodes)
+    ? effectiveAllowedCodes
     : [];
   if (canEquipToBodyPart && finalAllowedCodes.length) {
     flags.allowed_body_part_codes = finalAllowedCodes;
@@ -520,7 +552,7 @@ function buildEquipmentPayload(draft, auto) {
     armor_max_minor: 0,
     armor_max_serious: 0,
     armor_max_critical: coerceInteger(draft.armorMaxCritical, 0),
-    default_body_part_code: String(draft.defaultBodyPartCode ?? "").trim() || null,
+    default_body_part_code: primaryBodyPartCode || null,
     can_equip: true,
     can_equip_to_body_part: canEquipToBodyPart,
     sort_order: auto.sortOrder,
@@ -683,17 +715,6 @@ function buildAttributeOptions(references, selectedValue) {
   for (const attribute of attributes) {
     options.push(
       `<option value="${escapeHtml(attribute.id)}"${selectedValue === attribute.id ? " selected" : ""}>${escapeHtml(attribute.name || attribute.code || attribute.id)}</option>`,
-    );
-  }
-  return options.join("");
-}
-
-function buildBodyPartOptions(references, selectedValue) {
-  const bodyParts = Array.isArray(references?.body_part_definitions) ? references.body_part_definitions : [];
-  const options = ['<option value="">None</option>'];
-  for (const part of bodyParts) {
-    options.push(
-      `<option value="${escapeHtml(part.code)}"${selectedValue === part.code ? " selected" : ""}>${escapeHtml(part.name || part.code)}</option>`,
     );
   }
   return options.join("");
@@ -1041,10 +1062,8 @@ function buildAbilityLinksEditorMarkup(draft, references) {
 function buildEquipmentEditorMarkup(state, references) {
   const draft = state.drafts.equipment;
   const types = getEquipmentUiTypes(references);
-  const canEquipToBodyPart = shouldEquipToBodyPart(draft.itemType, draft.defaultBodyPartCode);
-  const allowedBodyPartCodes = draft.allowedBodyPartCodes?.length
-    ? draft.allowedBodyPartCodes
-    : suggestAllowedBodyPartCodes(draft.defaultBodyPartCode);
+  const showProtectionSlots = shouldShowProtectionSlots(draft.itemType);
+  const allowedBodyPartCodes = getEffectiveAllowedBodyPartCodes(draft);
   const advancedFlagsCount = Object.keys(toPlainObject(draft.flagsExtraData)).length;
   const advancedEffectDataCount = Object.keys(toPlainObject(draft.effectDataExtraData)).length;
   const payloadCollapsed = Boolean(state.collapsed.equipmentPayload);
@@ -1098,29 +1117,24 @@ function buildEquipmentEditorMarkup(state, references) {
         <span>Description</span>
         <textarea data-creator-input="description" rows="4" placeholder="Short GM-facing description">${escapeHtml(draft.description)}</textarea>
       </label>
+      ${showProtectionSlots ? `
       <div class="creator-section-card">
         <div class="creator-section-head">
-          <strong>Flags & Rules</strong>
+          <strong>Protection Slots</strong>
           <span class="muted">Structured creator fields instead of raw JSON.</span>
         </div>
         <div class="field-grid creator-grid-2">
-          <label class="field-stack">
-            <span>Default Body Part</span>
-            <select data-creator-input="defaultBodyPartCode">${buildBodyPartOptions(references, draft.defaultBodyPartCode)}</select>
-          </label>
           <label class="toggle-inline creator-toggle-card">
             <input data-creator-input="protectsHelplessExecution" type="checkbox"${draft.protectsHelplessExecution ? " checked" : ""}>
             <span>Protects helpless execution</span>
           </label>
         </div>
-        ${canEquipToBodyPart ? `
-          <div class="field-stack">
-            <span>Allowed Body Parts</span>
-            <div class="creator-check-grid">
-              ${buildBodyPartCheckboxMarkup(references, allowedBodyPartCodes)}
-            </div>
+        <div class="field-stack">
+          <span>Allowed Body Parts</span>
+          <div class="creator-check-grid">
+            ${buildBodyPartCheckboxMarkup(references, allowedBodyPartCodes)}
           </div>
-        ` : ""}
+        </div>
         ${(advancedFlagsCount || advancedEffectDataCount) ? `
           <div class="creator-auto-meta creator-small-meta">
             ${advancedFlagsCount ? `<div><strong>Preserved extra flags:</strong> ${escapeHtml(String(advancedFlagsCount))}</div>` : ""}
@@ -1128,6 +1142,7 @@ function buildEquipmentEditorMarkup(state, references) {
           </div>
         ` : ""}
       </div>
+      ` : ""}
       ${buildDisclosureSection({
         title: "Data & Modifiers",
         collapsed: dataModifiersCollapsed,
@@ -1302,7 +1317,7 @@ function readEquipmentDraftFromDom(root, fallbackDraft = createEmptyEquipmentDra
     description: String(query("description")?.value ?? ""),
     armorValue: String(query("armorValue")?.value ?? "0"),
     armorMaxCritical: String(query("armorMaxCritical")?.value ?? "0"),
-    defaultBodyPartCode: String(query("defaultBodyPartCode")?.value ?? fallbackDraft.defaultBodyPartCode ?? ""),
+    defaultBodyPartCode: getPrimaryBodyPartCode(bodyPartCodes, fallbackDraft.defaultBodyPartCode ?? ""),
     allowedBodyPartCodes: bodyPartCodes.length ? bodyPartCodes : cloneJson(fallbackDraft.allowedBodyPartCodes ?? []),
     protectsHelplessExecution: query("protectsHelplessExecution")
       ? Boolean(query("protectsHelplessExecution")?.checked)
@@ -1406,7 +1421,7 @@ export function mountCreatorMenu({
             )
             || (
               target.hasAttribute("data-creator-input")
-              && ["itemType", "defaultBodyPartCode"].includes(String(target.getAttribute("data-creator-input")))
+              && ["itemType"].includes(String(target.getAttribute("data-creator-input")))
             )
             || target.hasAttribute("data-creator-modifier-input")
           )
