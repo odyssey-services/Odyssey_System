@@ -65,7 +65,6 @@ function createEmptyEquipmentDraft() {
     armorMaxCritical: "0",
     defaultBodyPartCode: "",
     allowedBodyPartCodes: [],
-    protectsHelplessExecution: false,
     reservedForFuture: false,
     notes: "",
     modifiers: [],
@@ -348,7 +347,6 @@ function normalizeEquipmentDraft(bundle) {
   const effectData = toPlainObject(model.effect_data);
   const {
     allowed_body_part_codes: allowedBodyPartCodesRaw,
-    protects_helpless_execution: protectsHelplessExecutionRaw,
     ...flagsExtraData
   } = flags;
   const {
@@ -369,7 +367,6 @@ function normalizeEquipmentDraft(bundle) {
     allowedBodyPartCodes: normalizedAllowedBodyPartCodes.length
       ? normalizedAllowedBodyPartCodes
       : suggestAllowedBodyPartCodes(model.default_body_part_code),
-    protectsHelplessExecution: Boolean(protectsHelplessExecutionRaw),
     reservedForFuture: Boolean(reservedForFutureRaw),
     notes: String(notesRaw ?? ""),
     modifiers: Array.isArray(modifiersRaw)
@@ -519,11 +516,7 @@ function buildEquipmentPayload(draft, auto) {
   } else {
     delete flags.allowed_body_part_codes;
   }
-  if (draft.protectsHelplessExecution) {
-    flags.protects_helpless_execution = true;
-  } else {
-    delete flags.protects_helpless_execution;
-  }
+  delete flags.protects_helpless_execution;
   if (draft.reservedForFuture) {
     effectData.reserved_for_future = true;
   } else {
@@ -1061,6 +1054,7 @@ function buildAbilityLinksEditorMarkup(draft, references) {
 
 function buildEquipmentEditorMarkup(state, references) {
   const draft = state.drafts.equipment;
+  const auto = generatedEquipmentPreview(draft, state);
   const types = getEquipmentUiTypes(references);
   const showProtectionSlots = shouldShowProtectionSlots(draft.itemType);
   const allowedBodyPartCodes = getEffectiveAllowedBodyPartCodes(draft);
@@ -1122,12 +1116,6 @@ function buildEquipmentEditorMarkup(state, references) {
         <div class="creator-section-head">
           <strong>Protection Slots</strong>
           <span class="muted">Structured creator fields instead of raw JSON.</span>
-        </div>
-        <div class="field-grid creator-grid-2">
-          <label class="toggle-inline creator-toggle-card">
-            <input data-creator-input="protectsHelplessExecution" type="checkbox"${draft.protectsHelplessExecution ? " checked" : ""}>
-            <span>Protects helpless execution</span>
-          </label>
         </div>
         <div class="field-stack">
           <span>Allowed Body Parts</span>
@@ -1319,9 +1307,6 @@ function readEquipmentDraftFromDom(root, fallbackDraft = createEmptyEquipmentDra
     armorMaxCritical: String(query("armorMaxCritical")?.value ?? "0"),
     defaultBodyPartCode: getPrimaryBodyPartCode(bodyPartCodes, fallbackDraft.defaultBodyPartCode ?? ""),
     allowedBodyPartCodes: bodyPartCodes.length ? bodyPartCodes : cloneJson(fallbackDraft.allowedBodyPartCodes ?? []),
-    protectsHelplessExecution: query("protectsHelplessExecution")
-      ? Boolean(query("protectsHelplessExecution")?.checked)
-      : Boolean(fallbackDraft.protectsHelplessExecution),
     reservedForFuture: query("reservedForFuture")
       ? Boolean(query("reservedForFuture")?.checked)
       : Boolean(fallbackDraft.reservedForFuture),

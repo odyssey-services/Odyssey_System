@@ -3847,7 +3847,6 @@ function createEmptyEquipmentDraft() {
     armorMaxCritical: "0",
     defaultBodyPartCode: "",
     allowedBodyPartCodes: [],
-    protectsHelplessExecution: false,
     reservedForFuture: false,
     notes: "",
     modifiers: [],
@@ -4073,7 +4072,6 @@ function normalizeEquipmentDraft(bundle) {
   const effectData = toPlainObject(model.effect_data);
   const {
     allowed_body_part_codes: allowedBodyPartCodesRaw,
-    protects_helpless_execution: protectsHelplessExecutionRaw,
     ...flagsExtraData
   } = flags;
   const {
@@ -4092,7 +4090,6 @@ function normalizeEquipmentDraft(bundle) {
     armorMaxCritical: String(model.armor_max_critical ?? 0),
     defaultBodyPartCode: String(model.default_body_part_code ?? ""),
     allowedBodyPartCodes: normalizedAllowedBodyPartCodes.length ? normalizedAllowedBodyPartCodes : suggestAllowedBodyPartCodes(model.default_body_part_code),
-    protectsHelplessExecution: Boolean(protectsHelplessExecutionRaw),
     reservedForFuture: Boolean(reservedForFutureRaw),
     notes: String(notesRaw ?? ""),
     modifiers: Array.isArray(modifiersRaw) ? modifiersRaw.map(normalizeModifierDraft) : [],
@@ -4144,6 +4141,14 @@ function generatedSkillPreview(draft, references, state) {
   const sortOrder = draft.id ? Number.parseInt(String(state?.bundles?.skills?.skill?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list);
   return { code, tags, sortOrder };
 }
+function generatedEquipmentPreview(draft, state) {
+  const list = Array.isArray(state?.lists?.equipment) ? state.lists.equipment : [];
+  const existingCodes = list.map((item) => item?.code);
+  const code = uniqueGeneratedCode(slugifyName(draft.name), existingCodes);
+  const tags = buildEquipmentAutoTags(draft);
+  const sortOrder = draft.id ? Number.parseInt(String(state?.bundles?.equipment?.equipment_model?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list);
+  return { code, tags, sortOrder };
+}
 function buildAbilityLinkPayload(link, index) {
   const grantMode = String(link.grantMode ?? "activated").trim() || "activated";
   const isPassive = grantMode === "passive";
@@ -4181,21 +4186,21 @@ function buildAbilityLinkPayload(link, index) {
     data
   };
 }
-function buildSkillPayload(draft, auto2) {
+function buildSkillPayload(draft, auto) {
   return {
     id: draft.id || void 0,
-    code: String(auto2.code ?? "").trim(),
+    code: String(auto.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
     category: String(draft.category ?? "combat").trim() || "combat",
     max_level: coerceInteger(draft.maxLevel, 5),
     main_attribute_id: String(draft.mainAttributeId ?? "").trim() || null,
     secondary_attribute_id: String(draft.secondaryAttributeId ?? "").trim() || null,
-    sort_order: auto2.sortOrder,
+    sort_order: auto.sortOrder,
     description: String(draft.description ?? ""),
-    tags: auto2.tags
+    tags: auto.tags
   };
 }
-function buildEquipmentPayload(draft, auto2) {
+function buildEquipmentPayload(draft, auto) {
   const showProtectionSlots = shouldShowProtectionSlots(draft.itemType);
   const selectedAllowedCodes = normalizeBodyPartCodeArray(draft.allowedBodyPartCodes);
   const suggestedAllowedCodes = suggestAllowedBodyPartCodes(draft.defaultBodyPartCode);
@@ -4210,11 +4215,7 @@ function buildEquipmentPayload(draft, auto2) {
   } else {
     delete flags.allowed_body_part_codes;
   }
-  if (draft.protectsHelplessExecution) {
-    flags.protects_helpless_execution = true;
-  } else {
-    delete flags.protects_helpless_execution;
-  }
+  delete flags.protects_helpless_execution;
   if (draft.reservedForFuture) {
     effectData.reserved_for_future = true;
   } else {
@@ -4233,7 +4234,7 @@ function buildEquipmentPayload(draft, auto2) {
   }
   return {
     id: draft.id || void 0,
-    code: String(auto2.code ?? "").trim(),
+    code: String(auto.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
     item_type: String(draft.itemType ?? "armor").trim() || "armor",
     description: String(draft.description ?? ""),
@@ -4244,8 +4245,8 @@ function buildEquipmentPayload(draft, auto2) {
     default_body_part_code: primaryBodyPartCode || null,
     can_equip: true,
     can_equip_to_body_part: canEquipToBodyPart,
-    sort_order: auto2.sortOrder,
-    tags: auto2.tags,
+    sort_order: auto.sortOrder,
+    tags: auto.tags,
     flags,
     effect_data: effectData,
     ability_links: (Array.isArray(draft.abilityLinks) ? draft.abilityLinks : []).filter((entry) => String(entry?.abilityDefId ?? "").trim()).map((entry, index) => buildAbilityLinkPayload(entry, index))
@@ -4558,7 +4559,7 @@ function buildModifierEditorMarkup(draft, references) {
 function buildSkillEditorMarkup(state, references) {
   const draft = state.drafts.skills;
   const bundle = state.bundles.skills;
-  const auto2 = generatedSkillPreview(draft, references, state);
+  const auto = generatedSkillPreview(draft, references, state);
   const categories = Array.isArray(references?.skill_categories) ? references.skill_categories : [];
   const categoryOptions = categories.map((category) => `<option value="${escapeHtml(category)}"${draft.category === category ? " selected" : ""}>${escapeHtml(category)}</option>`).join("");
   const levelPreview = bundle?.level_requirements?.length ? prettyJson(bundle.level_requirements) : "[]";
@@ -4609,9 +4610,9 @@ function buildSkillEditorMarkup(state, references) {
         <textarea data-creator-input="description" rows="4" placeholder="Short GM-facing description">${escapeHtml(draft.description)}</textarea>
       </label>
       <div class="creator-auto-meta">
-        <div><strong>Auto code:</strong> ${escapeHtml(auto2.code || "will be generated from name")}</div>
-        <div><strong>Auto sort:</strong> ${escapeHtml(String(auto2.sortOrder))}</div>
-        <div><strong>Auto tags:</strong> ${escapeHtml(auto2.tags.join(", ") || "none")}</div>
+        <div><strong>Auto code:</strong> ${escapeHtml(auto.code || "will be generated from name")}</div>
+        <div><strong>Auto sort:</strong> ${escapeHtml(String(auto.sortOrder))}</div>
+        <div><strong>Auto tags:</strong> ${escapeHtml(auto.tags.join(", ") || "none")}</div>
       </div>
       <label class="field-stack">
         <span>Level Requirements Preview</span>
@@ -4624,7 +4625,7 @@ function buildSkillEditorMarkup(state, references) {
     action: "toggleSkillsPayload",
     bodyMarkup: `
           <label class="field-stack">
-            <textarea rows="10" readonly>${escapeHtml(prettyJson(buildSkillPayload(draft, auto2)))}</textarea>
+            <textarea rows="10" readonly>${escapeHtml(prettyJson(buildSkillPayload(draft, auto)))}</textarea>
           </label>
         `
   })}
@@ -4707,6 +4708,7 @@ function buildAbilityLinksEditorMarkup(draft, references) {
 }
 function buildEquipmentEditorMarkup(state, references) {
   const draft = state.drafts.equipment;
+  const auto = generatedEquipmentPreview(draft, state);
   const types = getEquipmentUiTypes(references);
   const showProtectionSlots = shouldShowProtectionSlots(draft.itemType);
   const allowedBodyPartCodes = getEffectiveAllowedBodyPartCodes(draft);
@@ -4765,12 +4767,6 @@ function buildEquipmentEditorMarkup(state, references) {
         <div class="creator-section-head">
           <strong>Protection Slots</strong>
           <span class="muted">Structured creator fields instead of raw JSON.</span>
-        </div>
-        <div class="field-grid creator-grid-2">
-          <label class="toggle-inline creator-toggle-card">
-            <input data-creator-input="protectsHelplessExecution" type="checkbox"${draft.protectsHelplessExecution ? " checked" : ""}>
-            <span>Protects helpless execution</span>
-          </label>
         </div>
         <div class="field-stack">
           <span>Allowed Body Parts</span>
@@ -4938,7 +4934,6 @@ function readEquipmentDraftFromDom(root2, fallbackDraft = createEmptyEquipmentDr
     armorMaxCritical: String(query("armorMaxCritical")?.value ?? "0"),
     defaultBodyPartCode: getPrimaryBodyPartCode(bodyPartCodes, fallbackDraft.defaultBodyPartCode ?? ""),
     allowedBodyPartCodes: bodyPartCodes.length ? bodyPartCodes : cloneJson(fallbackDraft.allowedBodyPartCodes ?? []),
-    protectsHelplessExecution: query("protectsHelplessExecution") ? Boolean(query("protectsHelplessExecution")?.checked) : Boolean(fallbackDraft.protectsHelplessExecution),
     reservedForFuture: query("reservedForFuture") ? Boolean(query("reservedForFuture")?.checked) : Boolean(fallbackDraft.reservedForFuture),
     notes: String(query("notes")?.value ?? fallbackDraft.notes ?? ""),
     modifiers,
@@ -5341,12 +5336,12 @@ function mountCreatorMenu({
       const referenceScope = state.references ?? {};
       const list2 = Array.isArray(allSkills.items) ? allSkills.items : [];
       const existingCodes2 = list2.filter((item) => item.id !== draft.id).map((item) => item.code);
-      const auto3 = {
+      const auto2 = {
         code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes2),
         sortOrder: draft.id ? Number.parseInt(String(state.bundles.skills?.skill?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list2),
         tags: buildSkillAutoTags(draft, referenceScope)
       };
-      return buildSkillPayload(draft, auto3);
+      return buildSkillPayload(draft, auto2);
     }
     const allEquipment = await runtime2.api.creator.listEquipmentModels({ search: null, itemTypes: [] }, settings);
     if (!allEquipment?.ok) {
@@ -5354,12 +5349,12 @@ function mountCreatorMenu({
     }
     const list = Array.isArray(allEquipment.items) ? allEquipment.items : [];
     const existingCodes = list.filter((item) => item.id !== draft.id).map((item) => item.code);
-    const auto2 = {
+    const auto = {
       code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes),
       sortOrder: draft.id ? Number.parseInt(String(state.bundles.equipment?.equipment_model?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list),
       tags: buildEquipmentAutoTags(draft)
     };
-    return buildEquipmentPayload(draft, auto2);
+    return buildEquipmentPayload(draft, auto);
   }
   async function saveDraft() {
     const access = getAccess();
