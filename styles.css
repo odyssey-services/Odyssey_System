@@ -495,6 +495,49 @@ pre {
   min-height: 100%;
 }
 
+.creator-auto-meta {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(8, 17, 28, 0.78);
+  border: 1px solid rgba(61, 92, 129, 0.7);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.creator-links-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.creator-links-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.creator-link-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(8, 17, 28, 0.78);
+  border: 1px solid rgba(61, 92, 129, 0.7);
+}
+
+.creator-link-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
 @media (max-width: 640px) {
   html,
   body {

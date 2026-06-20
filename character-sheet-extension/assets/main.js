@@ -3793,24 +3793,37 @@ var CREATOR_TABS = Object.freeze([
   { id: "skills", label: "Skills" },
   { id: "equipment", label: "Equipment Models" }
 ]);
+var RELOAD_MODES = Object.freeze([
+  { value: "", label: "No reload item" },
+  { value: "reset", label: "Reset" },
+  { value: "per_charge", label: "Per Charge" }
+]);
 function createEmptySkillDraft() {
   return {
     id: "",
-    code: "",
     name: "",
     category: "combat",
     maxLevel: "5",
     mainAttributeId: "",
     secondaryAttributeId: "",
-    sortOrder: "0",
-    description: "",
-    tagsText: ""
+    description: ""
+  };
+}
+function createEmptyAbilityLinkDraft() {
+  return {
+    abilityDefId: "",
+    grantMode: "available",
+    enabled: true,
+    durationRounds: "",
+    charges: "",
+    cooldownRounds: "",
+    reloadMode: "",
+    reloadItemCode: ""
   };
 }
 function createEmptyEquipmentDraft() {
   return {
     id: "",
-    code: "",
     name: "",
     itemType: "armor",
     description: "",
@@ -3821,11 +3834,9 @@ function createEmptyEquipmentDraft() {
     defaultBodyPartCode: "",
     canEquip: true,
     canEquipToBodyPart: true,
-    sortOrder: "0",
-    tagsText: "",
     flagsText: "{}",
     effectDataText: "{}",
-    abilityLinksText: "[]"
+    abilityLinks: []
   };
 }
 function createInitialState() {
@@ -3877,76 +3888,9 @@ function createInitialState() {
 function cloneJson(value) {
   return safeJsonParse(JSON.stringify(value), value);
 }
-function normalizeTagsText(tags) {
-  if (!Array.isArray(tags)) return "";
-  return tags.map((value) => String(value ?? "").trim()).filter(Boolean).join(", ");
-}
-function parseTagsText(value) {
-  return String(value ?? "").split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
-}
-function normalizeSkillDraft(bundle) {
-  const skill = bundle?.skill ?? {};
-  return {
-    id: String(skill.id ?? ""),
-    code: String(skill.code ?? ""),
-    name: String(skill.name ?? ""),
-    category: String(skill.category ?? "combat"),
-    maxLevel: String(skill.max_level ?? 5),
-    mainAttributeId: String(skill.main_attribute_id ?? ""),
-    secondaryAttributeId: String(skill.secondary_attribute_id ?? ""),
-    sortOrder: String(skill.sort_order ?? 0),
-    description: String(skill.description ?? ""),
-    tagsText: normalizeTagsText(skill.tags)
-  };
-}
-function normalizeEquipmentDraft(bundle) {
-  const model = bundle?.equipment_model ?? {};
-  return {
-    id: String(model.id ?? ""),
-    code: String(model.code ?? ""),
-    name: String(model.name ?? ""),
-    itemType: String(model.item_type ?? "armor"),
-    description: String(model.description ?? ""),
-    armorValue: String(model.armor_value ?? 0),
-    armorMaxMinor: String(model.armor_max_minor ?? 0),
-    armorMaxSerious: String(model.armor_max_serious ?? 0),
-    armorMaxCritical: String(model.armor_max_critical ?? 0),
-    defaultBodyPartCode: String(model.default_body_part_code ?? ""),
-    canEquip: Boolean(model.can_equip ?? true),
-    canEquipToBodyPart: Boolean(model.can_equip_to_body_part ?? true),
-    sortOrder: String(model.sort_order ?? 0),
-    tagsText: normalizeTagsText(model.tags),
-    flagsText: prettyJson(model.flags ?? {}),
-    effectDataText: prettyJson(model.effect_data ?? {}),
-    abilityLinksText: prettyJson(bundle?.ability_links ?? [])
-  };
-}
-function makeSkillDuplicateDraft(source) {
-  const code = String(source.code ?? "").trim();
-  const name = String(source.name ?? "").trim();
-  return {
-    ...cloneJson(source),
-    id: "",
-    code: code ? `${code}_copy` : "",
-    name: name ? `${name} Copy` : ""
-  };
-}
-function makeEquipmentDuplicateDraft(source) {
-  const code = String(source.code ?? "").trim();
-  const name = String(source.name ?? "").trim();
-  const abilityLinks = safeJsonParse(String(source.abilityLinksText ?? "[]"), []);
-  const normalizedLinks = Array.isArray(abilityLinks) ? abilityLinks.map((entry) => {
-    const next = { ...entry && typeof entry === "object" ? entry : {} };
-    delete next.id;
-    return next;
-  }) : [];
-  return {
-    ...cloneJson(source),
-    id: "",
-    code: code ? `${code}_copy` : "",
-    name: name ? `${name} Copy` : "",
-    abilityLinksText: prettyJson(normalizedLinks)
-  };
+function coerceInteger(value, fallback = 0) {
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 function parseJsonField(text, label, expectedType) {
   const parsed = safeJsonParse(String(text ?? "").trim(), void 0);
@@ -3961,10 +3905,6 @@ function parseJsonField(text, label, expectedType) {
   }
   return parsed;
 }
-function coerceInteger(value, fallback = 0) {
-  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 function formatCreatorError(result, fallback) {
   if (!result || result.ok !== false) {
     return fallback;
@@ -3973,24 +3913,182 @@ function formatCreatorError(result, fallback) {
   const message = String(result.message ?? result.error ?? fallback).trim() || fallback;
   return details2.length ? `${message} ${details2.join(" | ")}` : message;
 }
-function buildSkillPayload(draft) {
+function slugifyName(value) {
+  return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/_{2,}/g, "_");
+}
+function uniqueGeneratedCode(baseCode, existingCodes) {
+  const safeBase = baseCode || "entity";
+  const used = new Set((existingCodes ?? []).map((value) => String(value ?? "").trim()).filter(Boolean));
+  if (!used.has(safeBase)) {
+    return safeBase;
+  }
+  let index = 2;
+  while (used.has(`${safeBase}_${index}`)) {
+    index += 1;
+  }
+  return `${safeBase}_${index}`;
+}
+function nextFreeSortOrder(items) {
+  const used = new Set(
+    (items ?? []).map((item) => Number.parseInt(String(item?.sort_order ?? item?.sortOrder ?? ""), 10)).filter((value2) => Number.isFinite(value2) && value2 >= 0)
+  );
+  let value = 0;
+  while (used.has(value)) {
+    value += 1;
+  }
+  return value;
+}
+function buildSkillAutoTags(draft, references) {
+  const tags = /* @__PURE__ */ new Set();
+  if (draft.category) tags.add(String(draft.category).trim());
+  const attributes = Array.isArray(references?.attributes) ? references.attributes : [];
+  const main = attributes.find((entry) => entry.id === draft.mainAttributeId);
+  const secondary = attributes.find((entry) => entry.id === draft.secondaryAttributeId);
+  if (main?.code) tags.add(String(main.code));
+  if (secondary?.code) tags.add(String(secondary.code));
+  return Array.from(tags);
+}
+function buildEquipmentAutoTags(draft) {
+  const tags = /* @__PURE__ */ new Set();
+  if (draft.itemType) tags.add(String(draft.itemType).trim());
+  if (draft.defaultBodyPartCode) tags.add(String(draft.defaultBodyPartCode).trim());
+  if (draft.canEquip) tags.add("equipable");
+  if (draft.canEquipToBodyPart) tags.add("body_part");
+  return Array.from(tags);
+}
+function normalizeSkillDraft(bundle) {
+  const skill = bundle?.skill ?? {};
+  return {
+    id: String(skill.id ?? ""),
+    name: String(skill.name ?? ""),
+    category: String(skill.category ?? "combat"),
+    maxLevel: String(skill.max_level ?? 5),
+    mainAttributeId: String(skill.main_attribute_id ?? ""),
+    secondaryAttributeId: String(skill.secondary_attribute_id ?? ""),
+    description: String(skill.description ?? "")
+  };
+}
+function normalizeAbilityLinkDraft(entry) {
+  const data = entry?.data && typeof entry.data === "object" && !Array.isArray(entry.data) ? entry.data : {};
+  const reload = data?.reload && typeof data.reload === "object" && !Array.isArray(data.reload) ? data.reload : {};
+  const charges = data.default_max_charges ?? data.default_current_charges ?? data.max_charges ?? data.current_charges ?? "";
+  return {
+    abilityDefId: String(entry?.ability_def_id ?? ""),
+    grantMode: String(entry?.grant_mode ?? "available"),
+    enabled: entry?.grant_mode === "passive" ? true : Boolean(entry?.is_enabled ?? true),
+    durationRounds: String(data.duration_rounds ?? ""),
+    charges: charges === null || charges === void 0 ? "" : String(charges),
+    cooldownRounds: String(data.cooldown_rounds ?? data.default_cooldown_rounds ?? ""),
+    reloadMode: String(reload.mode ?? data.reload_mode ?? ""),
+    reloadItemCode: String(reload.item_code ?? data.reload_item_code ?? data.requires_reload_item_code ?? "")
+  };
+}
+function normalizeEquipmentDraft(bundle) {
+  const model = bundle?.equipment_model ?? {};
+  return {
+    id: String(model.id ?? ""),
+    name: String(model.name ?? ""),
+    itemType: String(model.item_type ?? "armor"),
+    description: String(model.description ?? ""),
+    armorValue: String(model.armor_value ?? 0),
+    armorMaxMinor: String(model.armor_max_minor ?? 0),
+    armorMaxSerious: String(model.armor_max_serious ?? 0),
+    armorMaxCritical: String(model.armor_max_critical ?? 0),
+    defaultBodyPartCode: String(model.default_body_part_code ?? ""),
+    canEquip: Boolean(model.can_equip ?? true),
+    canEquipToBodyPart: Boolean(model.can_equip_to_body_part ?? true),
+    flagsText: prettyJson(model.flags ?? {}),
+    effectDataText: prettyJson(model.effect_data ?? {}),
+    abilityLinks: Array.isArray(bundle?.ability_links) ? bundle.ability_links.map(normalizeAbilityLinkDraft) : []
+  };
+}
+function makeSkillDuplicateDraft(source) {
+  const name = String(source.name ?? "").trim();
+  return {
+    ...cloneJson(source),
+    id: "",
+    name: name ? `${name} Copy` : ""
+  };
+}
+function makeEquipmentDuplicateDraft(source) {
+  const name = String(source.name ?? "").trim();
+  return {
+    ...cloneJson(source),
+    id: "",
+    name: name ? `${name} Copy` : "",
+    abilityLinks: Array.isArray(source.abilityLinks) ? source.abilityLinks.map((entry) => ({
+      ...cloneJson(entry)
+    })) : []
+  };
+}
+function generatedSkillPreview(draft, references, state) {
+  const list = Array.isArray(state?.lists?.skills) ? state.lists.skills : [];
+  const existingCodes = list.map((item) => item?.code);
+  const code = uniqueGeneratedCode(slugifyName(draft.name), existingCodes);
+  const tags = buildSkillAutoTags(draft, references);
+  const sortOrder = draft.id ? Number.parseInt(String(state?.bundles?.skills?.skill?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list);
+  return { code, tags, sortOrder };
+}
+function generatedEquipmentPreview(draft, state) {
+  const list = Array.isArray(state?.lists?.equipment) ? state.lists.equipment : [];
+  const existingCodes = list.map((item) => item?.code);
+  const code = uniqueGeneratedCode(slugifyName(draft.name), existingCodes);
+  const tags = buildEquipmentAutoTags(draft);
+  const sortOrder = draft.id ? Number.parseInt(String(state?.bundles?.equipment?.equipment_model?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list);
+  return { code, tags, sortOrder };
+}
+function buildAbilityLinkPayload(link, index) {
+  const grantMode = String(link.grantMode ?? "available").trim() || "available";
+  const isPassive = grantMode === "passive";
+  const charges = String(link.charges ?? "").trim();
+  const cooldown = String(link.cooldownRounds ?? "").trim();
+  const duration = String(link.durationRounds ?? "").trim();
+  const reloadMode = String(link.reloadMode ?? "").trim();
+  const reloadItemCode = String(link.reloadItemCode ?? "").trim();
+  const data = {};
+  if (duration !== "") {
+    data.duration_rounds = coerceInteger(duration, 0);
+  }
+  if (charges !== "") {
+    const value = coerceInteger(charges, 0);
+    data.default_current_charges = value;
+    data.default_max_charges = value;
+  }
+  if (cooldown !== "") {
+    data.cooldown_rounds = coerceInteger(cooldown, 0);
+  }
+  if (reloadMode) {
+    data.reload = { mode: reloadMode };
+    if (reloadItemCode) {
+      data.reload.item_code = reloadItemCode;
+    }
+  }
+  return {
+    ability_def_id: String(link.abilityDefId ?? "").trim(),
+    grant_mode: grantMode,
+    is_enabled: isPassive ? true : Boolean(link.enabled),
+    sort_order: index,
+    data
+  };
+}
+function buildSkillPayload(draft, auto) {
   return {
     id: draft.id || void 0,
-    code: String(draft.code ?? "").trim(),
+    code: String(auto.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
     category: String(draft.category ?? "combat").trim() || "combat",
     max_level: coerceInteger(draft.maxLevel, 5),
     main_attribute_id: String(draft.mainAttributeId ?? "").trim() || null,
     secondary_attribute_id: String(draft.secondaryAttributeId ?? "").trim() || null,
-    sort_order: coerceInteger(draft.sortOrder, 0),
+    sort_order: auto.sortOrder,
     description: String(draft.description ?? ""),
-    tags: parseTagsText(draft.tagsText)
+    tags: auto.tags
   };
 }
-function buildEquipmentPayload(draft) {
+function buildEquipmentPayload(draft, auto) {
   return {
     id: draft.id || void 0,
-    code: String(draft.code ?? "").trim(),
+    code: String(auto.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
     item_type: String(draft.itemType ?? "armor").trim() || "armor",
     description: String(draft.description ?? ""),
@@ -4001,11 +4099,11 @@ function buildEquipmentPayload(draft) {
     default_body_part_code: String(draft.defaultBodyPartCode ?? "").trim() || null,
     can_equip: Boolean(draft.canEquip),
     can_equip_to_body_part: Boolean(draft.canEquipToBodyPart),
-    sort_order: coerceInteger(draft.sortOrder, 0),
-    tags: parseTagsText(draft.tagsText),
+    sort_order: auto.sortOrder,
+    tags: auto.tags,
     flags: parseJsonField(draft.flagsText, "Flags", "object"),
     effect_data: parseJsonField(draft.effectDataText, "Data / effect_data", "object"),
-    ability_links: parseJsonField(draft.abilityLinksText, "Ability links", "array")
+    ability_links: (Array.isArray(draft.abilityLinks) ? draft.abilityLinks : []).filter((entry) => String(entry?.abilityDefId ?? "").trim()).map((entry, index) => buildAbilityLinkPayload(entry, index))
   };
 }
 function extractEntityBundle(result) {
@@ -4107,7 +4205,7 @@ function buildListMarkup(kind, items, selectedId) {
         >
           <span class="creator-list-title">${escapeHtml(item.name || item.code || "Unnamed")}</span>
           <span class="creator-list-code">${escapeHtml(item.code || "")}</span>
-          <span class="creator-list-meta">${escapeHtml(meta.join(" \u2022 "))}</span>
+          <span class="creator-list-meta">${escapeHtml(meta.join(" | "))}</span>
         </button>
       `;
   }).join("");
@@ -4132,9 +4230,32 @@ function buildBodyPartOptions(references, selectedValue) {
   }
   return options.join("");
 }
+function buildAbilityOptions(references, selectedValue, selectedIds = []) {
+  const abilities = Array.isArray(references?.abilities) ? references.abilities : [];
+  const selectedSet = new Set((selectedIds ?? []).filter(Boolean));
+  const options = ['<option value="">Select ability</option>'];
+  for (const ability of abilities) {
+    const disabled = selectedSet.has(ability.id) && selectedValue !== ability.id;
+    options.push(
+      `<option value="${escapeHtml(ability.id)}"${selectedValue === ability.id ? " selected" : ""}${disabled ? " disabled" : ""}>${escapeHtml(ability.name || ability.code)}${ability.ability_kind ? ` | ${escapeHtml(ability.ability_kind)}` : ""}</option>`
+    );
+  }
+  return options.join("");
+}
+function buildItemOptions(references, selectedValue) {
+  const items = Array.isArray(references?.itemDefinitions) ? references.itemDefinitions : [];
+  const options = ['<option value="">No reload item</option>'];
+  for (const item of items) {
+    options.push(
+      `<option value="${escapeHtml(item.code)}"${selectedValue === item.code ? " selected" : ""}>${escapeHtml(item.name || item.code)}${item.item_type ? ` | ${escapeHtml(item.item_type)}` : ""}</option>`
+    );
+  }
+  return options.join("");
+}
 function buildSkillEditorMarkup(state, references) {
   const draft = state.drafts.skills;
   const bundle = state.bundles.skills;
+  const auto = generatedSkillPreview(draft, references, state);
   const categories = Array.isArray(references?.skill_categories) ? references.skill_categories : [];
   const categoryOptions = categories.map((category) => `<option value="${escapeHtml(category)}"${draft.category === category ? " selected" : ""}>${escapeHtml(category)}</option>`).join("");
   const levelPreview = bundle?.level_requirements?.length ? prettyJson(bundle.level_requirements) : "[]";
@@ -4142,7 +4263,7 @@ function buildSkillEditorMarkup(state, references) {
     <div class="creator-editor-head">
       <div>
         <div class="creator-editor-title">${escapeHtml(draft.name || "New Skill Draft")}</div>
-        <div class="muted">${draft.id ? `Editing ${escapeHtml(draft.code || draft.id)}` : "Draft is local until Save."}</div>
+        <div class="muted">${draft.id ? "Editing saved definition." : "Draft is local until Save."}</div>
       </div>
       <div class="creator-pill${state.dirty.skills ? " dirty" : ""}" data-creator-dirty-pill="skills">${state.dirty.skills ? "Unsaved" : "Saved / clean"}</div>
     </div>
@@ -4154,16 +4275,10 @@ function buildSkillEditorMarkup(state, references) {
       <button type="button" class="secondary" data-creator-action="deleteSelected"${draft.id ? "" : " disabled"}>Delete</button>
     </div>
     <form class="creator-form" data-creator-form="skills">
-      <div class="field-grid creator-grid-2">
-        <label class="field-stack">
-          <span>Code</span>
-          <input data-creator-input="code" type="text" value="${escapeHtml(draft.code)}" placeholder="frontier_melee">
-        </label>
-        <label class="field-stack">
-          <span>Name</span>
-          <input data-creator-input="name" type="text" value="${escapeHtml(draft.name)}" placeholder="Frontier Melee">
-        </label>
-      </div>
+      <label class="field-stack">
+        <span>Name</span>
+        <input data-creator-input="name" type="text" value="${escapeHtml(draft.name)}" placeholder="Frontier Melee">
+      </label>
       <div class="field-grid creator-grid-4">
         <label class="field-stack">
           <span>Category</span>
@@ -4186,52 +4301,111 @@ function buildSkillEditorMarkup(state, references) {
           <select data-creator-input="secondaryAttributeId">${buildAttributeOptions(references, draft.secondaryAttributeId)}</select>
         </label>
       </div>
-      <div class="field-grid creator-grid-2">
-        <label class="field-stack">
-          <span>Sort Order</span>
-          <input data-creator-input="sortOrder" type="number" value="${escapeHtml(draft.sortOrder)}">
-        </label>
-        <label class="field-stack">
-          <span>Tags (comma-separated)</span>
-          <input data-creator-input="tagsText" type="text" value="${escapeHtml(draft.tagsText)}" placeholder="combat, melee, starter">
-        </label>
-      </div>
       <label class="field-stack">
         <span>Description</span>
         <textarea data-creator-input="description" rows="4" placeholder="Short GM-facing description">${escapeHtml(draft.description)}</textarea>
       </label>
+      <div class="creator-auto-meta">
+        <div><strong>Auto code:</strong> ${escapeHtml(auto.code || "will be generated from name")}</div>
+        <div><strong>Auto sort:</strong> ${escapeHtml(String(auto.sortOrder))}</div>
+        <div><strong>Auto tags:</strong> ${escapeHtml(auto.tags.join(", ") || "none")}</div>
+      </div>
       <label class="field-stack">
         <span>Level Requirements Preview</span>
         <textarea rows="8" readonly>${escapeHtml(levelPreview)}</textarea>
       </label>
-      <p class="muted">Skill level requirements are currently preview-only in this V1 creator UI because the active backend upsert path does not persist edits for that nested block yet.</p>
+      <p class="muted">Skill level requirements are preview-only in this V1 UI because the current backend upsert path does not persist edits for that nested block yet.</p>
       <label class="field-stack">
         <span>Payload Preview</span>
-        <textarea rows="10" readonly>${escapeHtml(prettyJson(buildSkillPayload(draft)))}</textarea>
+        <textarea rows="10" readonly>${escapeHtml(prettyJson(buildSkillPayload(draft, auto)))}</textarea>
       </label>
     </form>
   `;
 }
+function buildAbilityLinksEditorMarkup(draft, references) {
+  const links = Array.isArray(draft.abilityLinks) ? draft.abilityLinks : [];
+  const selectedIds = links.map((entry) => entry.abilityDefId).filter(Boolean);
+  if (!links.length) {
+    return `<div class="creator-empty">No ability links yet. Add one to connect an existing ability to this equipment model.</div>`;
+  }
+  return links.map((link, index) => {
+    const passive = link.grantMode === "passive";
+    const reloadMode = String(link.reloadMode ?? "");
+    return `
+        <div class="creator-link-card" data-creator-link-row="${index}">
+          <div class="creator-link-head">
+            <strong>Ability Link ${index + 1}</strong>
+            <button type="button" class="secondary" data-creator-link-remove="${index}">Remove</button>
+          </div>
+          <div class="field-grid creator-grid-2">
+            <label class="field-stack">
+              <span>Ability</span>
+              <select data-creator-link-input="abilityDefId" data-link-index="${index}">
+                ${buildAbilityOptions(references, link.abilityDefId, selectedIds)}
+              </select>
+            </label>
+            <label class="field-stack">
+              <span>Grant Mode</span>
+              <select data-creator-link-input="grantMode" data-link-index="${index}">
+                <option value="available"${link.grantMode === "available" ? " selected" : ""}>Available</option>
+                <option value="activated"${link.grantMode === "activated" ? " selected" : ""}>Activated</option>
+                <option value="passive"${passive ? " selected" : ""}>Passive</option>
+              </select>
+            </label>
+          </div>
+          <div class="field-grid creator-grid-4">
+            <label class="field-stack">
+              <span>Enabled</span>
+              <input data-creator-link-input="enabled" data-link-index="${index}" type="checkbox"${passive || link.enabled ? " checked" : ""}${passive ? " disabled" : ""}>
+            </label>
+            <label class="field-stack">
+              <span>Duration Rounds</span>
+              <input data-creator-link-input="durationRounds" data-link-index="${index}" type="number" min="0" value="${escapeHtml(link.durationRounds)}">
+            </label>
+            <label class="field-stack">
+              <span>Charges</span>
+              <input data-creator-link-input="charges" data-link-index="${index}" type="number" min="0" value="${escapeHtml(link.charges)}">
+            </label>
+            <label class="field-stack">
+              <span>Cooldown</span>
+              <input data-creator-link-input="cooldownRounds" data-link-index="${index}" type="number" min="0" value="${escapeHtml(link.cooldownRounds)}">
+            </label>
+          </div>
+          <div class="field-grid creator-grid-2">
+            <label class="field-stack">
+              <span>Reload Mode</span>
+              <select data-creator-link-input="reloadMode" data-link-index="${index}">
+                ${RELOAD_MODES.map((mode) => `<option value="${escapeHtml(mode.value)}"${reloadMode === mode.value ? " selected" : ""}>${escapeHtml(mode.label)}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field-stack">
+              <span>Reload Item</span>
+              <select data-creator-link-input="reloadItemCode" data-link-index="${index}"${reloadMode ? "" : " disabled"}>
+                ${buildItemOptions(references, link.reloadItemCode)}
+              </select>
+            </label>
+          </div>
+        </div>
+      `;
+  }).join("");
+}
 function buildEquipmentEditorMarkup(state, references) {
   const draft = state.drafts.equipment;
+  const auto = generatedEquipmentPreview(draft, state);
   const types = Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : [];
   const typeOptions = types.map((itemType) => `<option value="${escapeHtml(itemType)}"${draft.itemType === itemType ? " selected" : ""}>${escapeHtml(itemType)}</option>`).join("");
   const payloadPreview = (() => {
     try {
-      return prettyJson(buildEquipmentPayload(draft));
+      return prettyJson(buildEquipmentPayload(draft, auto));
     } catch (_error) {
-      return prettyJson({
-        draft: {
-          ...draft
-        }
-      });
+      return prettyJson({ draft });
     }
   })();
   return `
     <div class="creator-editor-head">
       <div>
         <div class="creator-editor-title">${escapeHtml(draft.name || "New Equipment Draft")}</div>
-        <div class="muted">${draft.id ? `Editing ${escapeHtml(draft.code || draft.id)}` : "Draft is local until Save."}</div>
+        <div class="muted">${draft.id ? "Editing saved definition." : "Draft is local until Save."}</div>
       </div>
       <div class="creator-pill${state.dirty.equipment ? " dirty" : ""}" data-creator-dirty-pill="equipment">${state.dirty.equipment ? "Unsaved" : "Saved / clean"}</div>
     </div>
@@ -4243,16 +4417,10 @@ function buildEquipmentEditorMarkup(state, references) {
       <button type="button" class="secondary" data-creator-action="deleteSelected"${draft.id ? "" : " disabled"}>Delete</button>
     </div>
     <form class="creator-form" data-creator-form="equipment">
-      <div class="field-grid creator-grid-2">
-        <label class="field-stack">
-          <span>Code</span>
-          <input data-creator-input="code" type="text" value="${escapeHtml(draft.code)}" placeholder="frontier_plate">
-        </label>
-        <label class="field-stack">
-          <span>Name</span>
-          <input data-creator-input="name" type="text" value="${escapeHtml(draft.name)}" placeholder="Frontier Plate">
-        </label>
-      </div>
+      <label class="field-stack">
+        <span>Name</span>
+        <input data-creator-input="name" type="text" value="${escapeHtml(draft.name)}" placeholder="Frontier Plate">
+      </label>
       <div class="field-grid creator-grid-4">
         <label class="field-stack">
           <span>Item Type</span>
@@ -4261,10 +4429,6 @@ function buildEquipmentEditorMarkup(state, references) {
         <label class="field-stack">
           <span>Default Body Part</span>
           <select data-creator-input="defaultBodyPartCode">${buildBodyPartOptions(references, draft.defaultBodyPartCode)}</select>
-        </label>
-        <label class="field-stack">
-          <span>Sort Order</span>
-          <input data-creator-input="sortOrder" type="number" value="${escapeHtml(draft.sortOrder)}">
         </label>
         <div class="creator-check-stack">
           <label class="toggle-inline">
@@ -4299,10 +4463,11 @@ function buildEquipmentEditorMarkup(state, references) {
         <span>Description</span>
         <textarea data-creator-input="description" rows="4" placeholder="Short GM-facing description">${escapeHtml(draft.description)}</textarea>
       </label>
-      <label class="field-stack">
-        <span>Tags (comma-separated)</span>
-        <input data-creator-input="tagsText" type="text" value="${escapeHtml(draft.tagsText)}" placeholder="armor, torso, medium">
-      </label>
+      <div class="creator-auto-meta">
+        <div><strong>Auto code:</strong> ${escapeHtml(auto.code || "will be generated from name")}</div>
+        <div><strong>Auto sort:</strong> ${escapeHtml(String(auto.sortOrder))}</div>
+        <div><strong>Auto tags:</strong> ${escapeHtml(auto.tags.join(", ") || "none")}</div>
+      </div>
       <label class="field-stack">
         <span>Flags JSON</span>
         <textarea data-creator-input="flagsText" rows="8" spellcheck="false">${escapeHtml(draft.flagsText)}</textarea>
@@ -4311,10 +4476,13 @@ function buildEquipmentEditorMarkup(state, references) {
         <span>Data / effect_data JSON</span>
         <textarea data-creator-input="effectDataText" rows="8" spellcheck="false">${escapeHtml(draft.effectDataText)}</textarea>
       </label>
-      <label class="field-stack">
-        <span>Ability Links JSON</span>
-        <textarea data-creator-input="abilityLinksText" rows="10" spellcheck="false">${escapeHtml(draft.abilityLinksText)}</textarea>
-      </label>
+      <div class="creator-links-block">
+        <div class="creator-links-head">
+          <span>Ability Links</span>
+          <button type="button" data-creator-action="addAbilityLink">Add Ability Link</button>
+        </div>
+        ${buildAbilityLinksEditorMarkup(draft, references)}
+      </div>
       <label class="field-stack">
         <span>Payload Preview</span>
         <textarea rows="12" readonly>${escapeHtml(payloadPreview)}</textarea>
@@ -4346,12 +4514,12 @@ function buildPanelMarkup(state, access) {
   return `
     <section class="panel creator-panel">
       <div class="panel-title">Creator Menu</div>
-      <p class="panel-note">Drafts stay local in the UI until you press Save. Duplicate makes a copy-as-new draft and keeps nested link payloads where the active backend supports them.</p>
+      <p class="panel-note">Drafts stay local in the UI until you press Save. Code, tags, and sort order are generated automatically to keep catalog work fast for the GM.</p>
       <nav class="creator-tabs">${buildTabButtons(state.activeTab)}</nav>
       ${filtersMarkup}
       ${state.error ? `<div class="creator-banner error">${escapeHtml(state.error)}</div>` : ""}
       ${state.info ? `<div class="creator-banner info">${escapeHtml(state.info)}</div>` : ""}
-      ${state.loading ? `<div class="creator-banner info">Loading: ${escapeHtml(state.loadingLabel || "working\u2026")}</div>` : ""}
+      ${state.loading ? `<div class="creator-banner info">Loading: ${escapeHtml(state.loadingLabel || "working...")}</div>` : ""}
       <div class="creator-layout">
         <aside class="creator-sidebar">
           <div class="creator-sidebar-head">
@@ -4375,15 +4543,12 @@ function readSkillDraftFromDom(root2) {
   const query = (field) => form.querySelector(`[data-creator-input="${field}"]`);
   return {
     id: String(form.dataset.creatorEntityId ?? ""),
-    code: String(query("code")?.value ?? ""),
     name: String(query("name")?.value ?? ""),
     category: String(query("category")?.value ?? "combat"),
     maxLevel: String(query("maxLevel")?.value ?? "5"),
     mainAttributeId: String(query("mainAttributeId")?.value ?? ""),
     secondaryAttributeId: String(query("secondaryAttributeId")?.value ?? ""),
-    sortOrder: String(query("sortOrder")?.value ?? "0"),
-    description: String(query("description")?.value ?? ""),
-    tagsText: String(query("tagsText")?.value ?? "")
+    description: String(query("description")?.value ?? "")
   };
 }
 function readEquipmentDraftFromDom(root2) {
@@ -4392,9 +4557,23 @@ function readEquipmentDraftFromDom(root2) {
     return createEmptyEquipmentDraft();
   }
   const query = (field) => form.querySelector(`[data-creator-input="${field}"]`);
+  const abilityLinks = Array.from(form.querySelectorAll("[data-creator-link-row]")).map((row) => {
+    const index = String(row.getAttribute("data-creator-link-row") ?? "");
+    const linkQuery = (field) => form.querySelector(`[data-creator-link-input="${field}"][data-link-index="${index}"]`);
+    const grantMode = String(linkQuery("grantMode")?.value ?? "available");
+    return {
+      abilityDefId: String(linkQuery("abilityDefId")?.value ?? ""),
+      grantMode,
+      enabled: grantMode === "passive" ? true : Boolean(linkQuery("enabled")?.checked),
+      durationRounds: String(linkQuery("durationRounds")?.value ?? ""),
+      charges: String(linkQuery("charges")?.value ?? ""),
+      cooldownRounds: String(linkQuery("cooldownRounds")?.value ?? ""),
+      reloadMode: String(linkQuery("reloadMode")?.value ?? ""),
+      reloadItemCode: String(linkQuery("reloadItemCode")?.value ?? "")
+    };
+  });
   return {
     id: String(form.dataset.creatorEntityId ?? ""),
-    code: String(query("code")?.value ?? ""),
     name: String(query("name")?.value ?? ""),
     itemType: String(query("itemType")?.value ?? "armor"),
     description: String(query("description")?.value ?? ""),
@@ -4405,11 +4584,9 @@ function readEquipmentDraftFromDom(root2) {
     defaultBodyPartCode: String(query("defaultBodyPartCode")?.value ?? ""),
     canEquip: Boolean(query("canEquip")?.checked),
     canEquipToBodyPart: Boolean(query("canEquipToBodyPart")?.checked),
-    sortOrder: String(query("sortOrder")?.value ?? "0"),
-    tagsText: String(query("tagsText")?.value ?? ""),
     flagsText: String(query("flagsText")?.value ?? "{}"),
     effectDataText: String(query("effectDataText")?.value ?? "{}"),
-    abilityLinksText: String(query("abilityLinksText")?.value ?? "[]")
+    abilityLinks
   };
 }
 function updateDirtyPill(root2, kind, isDirty) {
@@ -4477,11 +4654,15 @@ function mountCreatorMenu({
         clearMessages();
         updateDirtyPill(root2, state.activeTab, true);
       });
-      form.addEventListener("change", () => {
+      form.addEventListener("change", (event) => {
         captureActiveDraft();
         state.dirty[state.activeTab] = true;
         clearMessages();
         updateDirtyPill(root2, state.activeTab, true);
+        const target = event.target;
+        if (target instanceof HTMLElement && target.hasAttribute("data-creator-link-input") && ["grantMode", "reloadMode"].includes(String(target.getAttribute("data-creator-link-input")))) {
+          render();
+        }
       });
     }
     root2.querySelectorAll("[data-creator-tab]").forEach((button) => {
@@ -4499,6 +4680,17 @@ function mountCreatorMenu({
         if (!kind || !id) return;
         captureActiveDraft();
         void openRecord(kind, id);
+      });
+    });
+    root2.querySelectorAll("[data-creator-link-remove]").forEach((button) => {
+      button.addEventListener("click", () => {
+        captureActiveDraft();
+        const index = Number.parseInt(String(button.dataset.creatorLinkRemove ?? ""), 10);
+        if (!Number.isFinite(index)) return;
+        state.drafts.equipment.abilityLinks.splice(index, 1);
+        state.dirty.equipment = true;
+        clearMessages();
+        render();
       });
     });
     root2.querySelectorAll("[data-creator-action]").forEach((button) => {
@@ -4534,6 +4726,13 @@ function mountCreatorMenu({
             captureActiveDraft();
             void deleteSelected();
             break;
+          case "addAbilityLink":
+            captureActiveDraft();
+            state.drafts.equipment.abilityLinks.push(createEmptyAbilityLinkDraft());
+            state.dirty.equipment = true;
+            clearMessages();
+            render();
+            break;
           default:
             break;
         }
@@ -4552,6 +4751,23 @@ function mountCreatorMenu({
       state.filters.equipment.search = String(search?.value ?? "").trim();
       state.filters.equipment.itemType = String(itemType?.value ?? "").trim();
     }
+  }
+  async function loadReferenceData(settings) {
+    const [referenceResult, itemDefinitions] = await Promise.all([
+      runtime2.api.creator.getCreatorReferenceData(settings),
+      runtime2.bridges.supabase.fetchSupabaseRows(
+        "odyssey_item_defs?select=id,code,name,item_type&order=name.asc",
+        settings,
+        "Unable to load item definition reference data."
+      ).catch(() => [])
+    ]);
+    if (!referenceResult?.ok) {
+      throw new Error(formatCreatorError(referenceResult, "Unable to load creator reference data."));
+    }
+    return {
+      ...referenceResult,
+      itemDefinitions: Array.isArray(itemDefinitions) ? itemDefinitions : []
+    };
   }
   async function ensureReadyForActiveTab({ forceRefs = false } = {}) {
     const access = getAccess();
@@ -4573,12 +4789,8 @@ function mountCreatorMenu({
     render();
     try {
       if (shouldLoadRefs) {
-        const referenceResult = await runtime2.api.creator.getCreatorReferenceData(access.settings);
+        state.references = await loadReferenceData(access.settings);
         if (requestId !== state.requestNonce) return;
-        if (!referenceResult?.ok) {
-          throw new Error(formatCreatorError(referenceResult, "Unable to load creator reference data."));
-        }
-        state.references = referenceResult;
         state.lastLoadedSettingsKey = access.settingsKey;
       }
       await loadListForTab(state.activeTab, access.settings, requestId);
@@ -4639,11 +4851,7 @@ function mountCreatorMenu({
     render();
     try {
       if (forceRefs) {
-        const referenceResult = await runtime2.api.creator.getCreatorReferenceData(access.settings);
-        if (!referenceResult?.ok) {
-          throw new Error(formatCreatorError(referenceResult, "Unable to refresh creator reference data."));
-        }
-        state.references = referenceResult;
+        state.references = await loadReferenceData(access.settings);
         state.lastLoadedSettingsKey = access.settingsKey;
       }
       await loadListForTab(state.activeTab, access.settings, requestId);
@@ -4722,6 +4930,35 @@ function mountCreatorMenu({
     }
     render();
   }
+  async function buildSavePayload(kind, draft, settings) {
+    if (kind === "skills") {
+      const allSkills = await runtime2.api.creator.listSkills({ search: null, categories: [] }, settings);
+      if (!allSkills?.ok) {
+        throw new Error(formatCreatorError(allSkills, "Unable to calculate automatic skill fields."));
+      }
+      const referenceScope = state.references ?? {};
+      const list2 = Array.isArray(allSkills.items) ? allSkills.items : [];
+      const existingCodes2 = list2.filter((item) => item.id !== draft.id).map((item) => item.code);
+      const auto2 = {
+        code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes2),
+        sortOrder: draft.id ? Number.parseInt(String(state.bundles.skills?.skill?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list2),
+        tags: buildSkillAutoTags(draft, referenceScope)
+      };
+      return buildSkillPayload(draft, auto2);
+    }
+    const allEquipment = await runtime2.api.creator.listEquipmentModels({ search: null, itemTypes: [] }, settings);
+    if (!allEquipment?.ok) {
+      throw new Error(formatCreatorError(allEquipment, "Unable to calculate automatic equipment fields."));
+    }
+    const list = Array.isArray(allEquipment.items) ? allEquipment.items : [];
+    const existingCodes = list.filter((item) => item.id !== draft.id).map((item) => item.code);
+    const auto = {
+      code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes),
+      sortOrder: draft.id ? Number.parseInt(String(state.bundles.equipment?.equipment_model?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list),
+      tags: buildEquipmentAutoTags(draft)
+    };
+    return buildEquipmentPayload(draft, auto);
+  }
   async function saveDraft() {
     const access = getAccess();
     if (!access.isGm || !access.configured) {
@@ -4733,7 +4970,8 @@ function mountCreatorMenu({
     render();
     try {
       const draft = state.activeTab === "skills" ? state.drafts.skills : state.drafts.equipment;
-      const result = state.activeTab === "skills" ? await runtime2.api.creator.upsertSkill(buildSkillPayload(draft), access.settings) : await runtime2.api.creator.upsertEquipmentModel(buildEquipmentPayload(draft), access.settings);
+      const payload = await buildSavePayload(state.activeTab, draft, access.settings);
+      const result = state.activeTab === "skills" ? await runtime2.api.creator.upsertSkill(payload, access.settings) : await runtime2.api.creator.upsertEquipmentModel(payload, access.settings);
       if (!result?.ok) {
         throw new Error(formatCreatorError(result, "Unable to save draft."));
       }

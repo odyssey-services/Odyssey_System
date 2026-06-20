@@ -2,6 +2,7 @@ import { mountBridgeShell } from "../shell/appShell.js";
 import { createOdysseyRuntime } from "../runtime/createRuntime.js";
 import { createTokenRealtimeSync } from "../bridge/tokenRealtimeSync.js";
 import { mountPlacementScreen } from "../screens/placement/placementScreen.js";
+import { mountCreatorScreen } from "./screens/creator/creatorScreen.js";
 
 const runtime = createOdysseyRuntime();
 const tokenRealtimeSync = createTokenRealtimeSync({ runtime });
@@ -18,14 +19,17 @@ if (!(root instanceof HTMLElement)) {
 root.innerHTML = `
   <nav class="app-nav">
     <button class="app-tab active" type="button" data-view="shell">GM Tools Shell</button>
+    <button class="app-tab" type="button" data-view="creator">Creator</button>
     <button class="app-tab" type="button" data-view="placement">Placement</button>
   </nav>
   <div class="app-view" data-view-host="shell"></div>
+  <div class="app-view hidden" data-view-host="creator"></div>
   <div class="app-view hidden" data-view-host="placement"></div>
 `;
 
 const hosts = {
   shell: root.querySelector('[data-view-host="shell"]'),
+  creator: root.querySelector('[data-view-host="creator"]'),
   placement: root.querySelector('[data-view-host="placement"]'),
 };
 
@@ -40,15 +44,27 @@ const views = {
           "GM token placement, Supabase room settings, and token metadata reconciliation live here. Combat state remains server-authoritative.",
         runtime,
         globalName: "OdysseyGmToolsBridge",
-        features: {
-          creatorTools: true,
-        },
+        features: {},
         tokenRealtimeSync,
       }).catch((error) => {
         hosts.shell.innerHTML = `
           <section class="panel">
             <div class="panel-title">Odyssey GM Tools Shell</div>
             <p class="status error">Failed to initialize shell: ${String(error?.message ?? error)}</p>
+          </section>
+        `;
+        throw error;
+      });
+    },
+  },
+  creator: {
+    mounted: false,
+    mount() {
+      void mountCreatorScreen({ root: hosts.creator, runtime }).catch((error) => {
+        hosts.creator.innerHTML = `
+          <section class="panel">
+            <div class="panel-title">Creator</div>
+            <p class="status error">Failed to initialize creator screen: ${String(error?.message ?? error)}</p>
           </section>
         `;
         throw error;
