@@ -3909,8 +3909,11 @@ function createInitialState() {
       equipment: false
     },
     collapsed: {
-      skillsCatalog: false,
-      equipmentCatalog: false
+      skillsCatalog: true,
+      equipmentCatalog: true,
+      skillsPayload: true,
+      equipmentPayload: true,
+      equipmentDataModifiers: true
     },
     requestNonce: 0
   };
@@ -4117,14 +4120,6 @@ function generatedSkillPreview(draft, references, state) {
   const sortOrder = draft.id ? Number.parseInt(String(state?.bundles?.skills?.skill?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list);
   return { code, tags, sortOrder };
 }
-function generatedEquipmentPreview(draft, state) {
-  const list = Array.isArray(state?.lists?.equipment) ? state.lists.equipment : [];
-  const existingCodes = list.map((item) => item?.code);
-  const code = uniqueGeneratedCode(slugifyName(draft.name), existingCodes);
-  const tags = buildEquipmentAutoTags(draft);
-  const sortOrder = draft.id ? Number.parseInt(String(state?.bundles?.equipment?.equipment_model?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list);
-  return { code, tags, sortOrder };
-}
 function buildAbilityLinkPayload(link, index) {
   const grantMode = String(link.grantMode ?? "activated").trim() || "activated";
   const isPassive = grantMode === "passive";
@@ -4162,21 +4157,21 @@ function buildAbilityLinkPayload(link, index) {
     data
   };
 }
-function buildSkillPayload(draft, auto) {
+function buildSkillPayload(draft, auto2) {
   return {
     id: draft.id || void 0,
-    code: String(auto.code ?? "").trim(),
+    code: String(auto2.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
     category: String(draft.category ?? "combat").trim() || "combat",
     max_level: coerceInteger(draft.maxLevel, 5),
     main_attribute_id: String(draft.mainAttributeId ?? "").trim() || null,
     secondary_attribute_id: String(draft.secondaryAttributeId ?? "").trim() || null,
-    sort_order: auto.sortOrder,
+    sort_order: auto2.sortOrder,
     description: String(draft.description ?? ""),
-    tags: auto.tags
+    tags: auto2.tags
   };
 }
-function buildEquipmentPayload(draft, auto) {
+function buildEquipmentPayload(draft, auto2) {
   const canEquipToBodyPart = shouldEquipToBodyPart(draft.itemType, draft.defaultBodyPartCode);
   const flags = toPlainObject(cloneJson(draft.flagsExtraData));
   const effectData = toPlainObject(cloneJson(draft.effectDataExtraData));
@@ -4211,7 +4206,7 @@ function buildEquipmentPayload(draft, auto) {
   }
   return {
     id: draft.id || void 0,
-    code: String(auto.code ?? "").trim(),
+    code: String(auto2.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
     item_type: String(draft.itemType ?? "armor").trim() || "armor",
     description: String(draft.description ?? ""),
@@ -4222,8 +4217,8 @@ function buildEquipmentPayload(draft, auto) {
     default_body_part_code: String(draft.defaultBodyPartCode ?? "").trim() || null,
     can_equip: true,
     can_equip_to_body_part: canEquipToBodyPart,
-    sort_order: auto.sortOrder,
-    tags: auto.tags,
+    sort_order: auto2.sortOrder,
+    tags: auto2.tags,
     flags,
     effect_data: effectData,
     ability_links: (Array.isArray(draft.abilityLinks) ? draft.abilityLinks : []).filter((entry) => String(entry?.abilityDefId ?? "").trim()).map((entry, index) => buildAbilityLinkPayload(entry, index))
@@ -4447,6 +4442,28 @@ function buildCatalogSection({
     </aside>
   `;
 }
+function buildDisclosureSection({
+  title,
+  collapsed,
+  action,
+  summary = "",
+  actionsMarkup = "",
+  bodyMarkup = ""
+}) {
+  return `
+    <div class="creator-section-card">
+      <div class="creator-section-head">
+        <button type="button" class="creator-section-toggle" data-creator-action="${escapeHtml(action)}" aria-expanded="${collapsed ? "false" : "true"}">
+          <span>${escapeHtml(title)}</span>
+          ${summary ? `<span class="muted">${escapeHtml(summary)}</span>` : ""}
+          <span class="creator-collapse-icon">${collapsed ? "+" : "-"}</span>
+        </button>
+        ${actionsMarkup}
+      </div>
+      ${collapsed ? "" : bodyMarkup}
+    </div>
+  `;
+}
 function buildOptionalNumberField({
   label,
   field,
@@ -4524,7 +4541,7 @@ function buildModifierEditorMarkup(draft, references) {
 function buildSkillEditorMarkup(state, references) {
   const draft = state.drafts.skills;
   const bundle = state.bundles.skills;
-  const auto = generatedSkillPreview(draft, references, state);
+  const auto2 = generatedSkillPreview(draft, references, state);
   const categories = Array.isArray(references?.skill_categories) ? references.skill_categories : [];
   const categoryOptions = categories.map((category) => `<option value="${escapeHtml(category)}"${draft.category === category ? " selected" : ""}>${escapeHtml(category)}</option>`).join("");
   const levelPreview = bundle?.level_requirements?.length ? prettyJson(bundle.level_requirements) : "[]";
@@ -4575,19 +4592,25 @@ function buildSkillEditorMarkup(state, references) {
         <textarea data-creator-input="description" rows="4" placeholder="Short GM-facing description">${escapeHtml(draft.description)}</textarea>
       </label>
       <div class="creator-auto-meta">
-        <div><strong>Auto code:</strong> ${escapeHtml(auto.code || "will be generated from name")}</div>
-        <div><strong>Auto sort:</strong> ${escapeHtml(String(auto.sortOrder))}</div>
-        <div><strong>Auto tags:</strong> ${escapeHtml(auto.tags.join(", ") || "none")}</div>
+        <div><strong>Auto code:</strong> ${escapeHtml(auto2.code || "will be generated from name")}</div>
+        <div><strong>Auto sort:</strong> ${escapeHtml(String(auto2.sortOrder))}</div>
+        <div><strong>Auto tags:</strong> ${escapeHtml(auto2.tags.join(", ") || "none")}</div>
       </div>
       <label class="field-stack">
         <span>Level Requirements Preview</span>
         <textarea rows="8" readonly>${escapeHtml(levelPreview)}</textarea>
       </label>
       <p class="muted">Skill level requirements are preview-only in this V1 UI because the current backend upsert path does not persist edits for that nested block yet.</p>
-      <label class="field-stack">
-        <span>Payload Preview</span>
-        <textarea rows="10" readonly>${escapeHtml(prettyJson(buildSkillPayload(draft, auto)))}</textarea>
-      </label>
+      ${buildDisclosureSection({
+    title: "Payload Preview",
+    collapsed: Boolean(state.collapsed.skillsPayload),
+    action: "toggleSkillsPayload",
+    bodyMarkup: `
+          <label class="field-stack">
+            <textarea rows="10" readonly>${escapeHtml(prettyJson(buildSkillPayload(draft, auto2)))}</textarea>
+          </label>
+        `
+  })}
     </form>
   `;
 }
@@ -4621,55 +4644,59 @@ function buildAbilityLinksEditorMarkup(draft, references) {
               </select>
             </label>
           </div>
-          <div class="field-grid creator-grid-3">
-            ${buildOptionalNumberField({
-      label: "Duration Rounds",
+          ${passive ? `
+            <div class="creator-auto-meta creator-small-meta">
+              <div><strong>Passive:</strong> always active while the equipment is equipped.</div>
+            </div>
+          ` : `
+            <div class="field-grid creator-grid-2">
+              ${buildOptionalNumberField({
+      label: "Duration",
       field: "durationRounds",
       index,
       value: link.durationRounds,
       mode: link.durationRoundsMode
     })}
-            ${buildOptionalNumberField({
+              ${buildOptionalNumberField({
       label: "Charges",
       field: "charges",
       index,
       value: link.charges,
       mode: link.chargesMode
     })}
-            ${buildOptionalNumberField({
+              ${buildOptionalNumberField({
       label: "Cooldown",
       field: "cooldownRounds",
       index,
       value: link.cooldownRounds,
       mode: link.cooldownRoundsMode
     })}
-          </div>
-          <div class="field-grid creator-grid-2">
-            <label class="field-stack">
-              <span>Reload Mode</span>
-              <select data-creator-link-input="reloadMode" data-link-index="${index}">
-                ${RELOAD_MODES.map((mode) => `<option value="${escapeHtml(mode.value)}"${reloadMode === mode.value ? " selected" : ""}>${escapeHtml(mode.label)}</option>`).join("")}
-              </select>
-            </label>
-            <label class="field-stack">
-              <span>Reload Item</span>
-              <select data-creator-link-input="reloadItemCode" data-link-index="${index}"${reloadMode ? "" : " disabled"}>
-                ${buildItemOptions(references, link.reloadItemCode)}
-              </select>
-            </label>
-          </div>
+              <div class="creator-small-stack">
+                <span>Reload</span>
+                <div class="creator-mini-grid creator-mini-grid-wide">
+                  <select data-creator-link-input="reloadMode" data-link-index="${index}">
+                    ${RELOAD_MODES.map((mode) => `<option value="${escapeHtml(mode.value)}"${reloadMode === mode.value ? " selected" : ""}>${escapeHtml(mode.label)}</option>`).join("")}
+                  </select>
+                  <select data-creator-link-input="reloadItemCode" data-link-index="${index}"${reloadMode ? "" : " disabled"}>
+                    ${buildItemOptions(references, link.reloadItemCode)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          `}
         </div>
       `;
   }).join("");
 }
 function buildEquipmentEditorMarkup(state, references) {
   const draft = state.drafts.equipment;
-  const auto = generatedEquipmentPreview(draft, state);
   const types = getEquipmentUiTypes(references);
   const canEquipToBodyPart = shouldEquipToBodyPart(draft.itemType, draft.defaultBodyPartCode);
   const allowedBodyPartCodes = draft.allowedBodyPartCodes?.length ? draft.allowedBodyPartCodes : suggestAllowedBodyPartCodes(draft.defaultBodyPartCode);
   const advancedFlagsCount = Object.keys(toPlainObject(draft.flagsExtraData)).length;
   const advancedEffectDataCount = Object.keys(toPlainObject(draft.effectDataExtraData)).length;
+  const payloadCollapsed = Boolean(state.collapsed.equipmentPayload);
+  const dataModifiersCollapsed = Boolean(state.collapsed.equipmentDataModifiers);
   const typeOptions = types.map((itemType) => `<option value="${escapeHtml(itemType)}"${draft.itemType === itemType ? " selected" : ""}>${escapeHtml(itemType)}</option>`).join("");
   const payloadPreview = (() => {
     try {
@@ -4698,21 +4725,11 @@ function buildEquipmentEditorMarkup(state, references) {
         <span>Name</span>
         <input data-creator-input="name" type="text" value="${escapeHtml(draft.name)}" placeholder="Frontier Plate">
       </label>
-      <div class="field-grid creator-grid-4">
+      <div class="field-grid creator-grid-3">
         <label class="field-stack">
           <span>Item Type</span>
           <select data-creator-input="itemType">${typeOptions}</select>
         </label>
-        <label class="field-stack">
-          <span>Default Body Part</span>
-          <select data-creator-input="defaultBodyPartCode">${buildBodyPartOptions(references, draft.defaultBodyPartCode)}</select>
-        </label>
-        <div class="creator-auto-meta creator-small-meta">
-          <div><strong>Can equip:</strong> true</div>
-          <div><strong>Equip to body part:</strong> ${canEquipToBodyPart ? "true" : "false"}</div>
-        </div>
-      </div>
-      <div class="field-grid creator-grid-2">
         <label class="field-stack">
           <span>Armor Value</span>
           <input data-creator-input="armorValue" type="number" value="${escapeHtml(draft.armorValue)}">
@@ -4726,15 +4743,20 @@ function buildEquipmentEditorMarkup(state, references) {
         <span>Description</span>
         <textarea data-creator-input="description" rows="4" placeholder="Short GM-facing description">${escapeHtml(draft.description)}</textarea>
       </label>
-      <div class="creator-auto-meta">
-        <div><strong>Auto code:</strong> ${escapeHtml(auto.code || "will be generated from name")}</div>
-        <div><strong>Auto sort:</strong> ${escapeHtml(String(auto.sortOrder))}</div>
-        <div><strong>Auto tags:</strong> ${escapeHtml(auto.tags.join(", ") || "none")}</div>
-      </div>
       <div class="creator-section-card">
         <div class="creator-section-head">
           <strong>Flags & Rules</strong>
           <span class="muted">Structured creator fields instead of raw JSON.</span>
+        </div>
+        <div class="field-grid creator-grid-2">
+          <label class="field-stack">
+            <span>Default Body Part</span>
+            <select data-creator-input="defaultBodyPartCode">${buildBodyPartOptions(references, draft.defaultBodyPartCode)}</select>
+          </label>
+          <label class="toggle-inline creator-toggle-card">
+            <input data-creator-input="protectsHelplessExecution" type="checkbox"${draft.protectsHelplessExecution ? " checked" : ""}>
+            <span>Protects helpless execution</span>
+          </label>
         </div>
         ${canEquipToBodyPart ? `
           <div class="field-stack">
@@ -4743,17 +4765,7 @@ function buildEquipmentEditorMarkup(state, references) {
               ${buildBodyPartCheckboxMarkup(references, allowedBodyPartCodes)}
             </div>
           </div>
-        ` : `
-          <div class="creator-auto-meta creator-small-meta">
-            <div><strong>Allowed Body Parts:</strong> not used for this item type</div>
-          </div>
-        `}
-        <div class="field-grid creator-grid-2">
-          <label class="toggle-inline">
-            <input data-creator-input="protectsHelplessExecution" type="checkbox"${draft.protectsHelplessExecution ? " checked" : ""}>
-            <span>Protects helpless execution</span>
-          </label>
-        </div>
+        ` : ""}
         ${advancedFlagsCount || advancedEffectDataCount ? `
           <div class="creator-auto-meta creator-small-meta">
             ${advancedFlagsCount ? `<div><strong>Preserved extra flags:</strong> ${escapeHtml(String(advancedFlagsCount))}</div>` : ""}
@@ -4761,29 +4773,28 @@ function buildEquipmentEditorMarkup(state, references) {
           </div>
         ` : ""}
       </div>
-      <div class="creator-section-card">
-        <div class="creator-section-head">
-          <strong>Data & Modifiers</strong>
-          <span class="muted">Notes, reserved markers, and numeric effect rows.</span>
-        </div>
-        <div class="field-grid creator-grid-2">
-          <label class="toggle-inline">
-            <input data-creator-input="reservedForFuture" type="checkbox"${draft.reservedForFuture ? " checked" : ""}>
-            <span>Reserved for future logic</span>
-          </label>
-        </div>
-        <label class="field-stack">
-          <span>Notes</span>
-          <textarea data-creator-input="notes" rows="4" placeholder="Optional backend note for GM / future implementation">${escapeHtml(draft.notes)}</textarea>
-        </label>
-        <div class="creator-links-block">
-          <div class="creator-links-head">
-            <span>Modifiers</span>
-            <button type="button" data-creator-action="addModifier">Add Modifier</button>
+      ${buildDisclosureSection({
+    title: "Data & Modifiers",
+    collapsed: dataModifiersCollapsed,
+    action: "toggleEquipmentDataModifiers",
+    summary: draft.modifiers?.length ? `${draft.modifiers.length} modifier(s)` : draft.notes || draft.reservedForFuture ? "configured" : "",
+    actionsMarkup: `<button type="button" data-creator-action="addModifier">Add Modifier</button>`,
+    bodyMarkup: `
+          <div class="field-grid creator-grid-2">
+            <label class="toggle-inline creator-toggle-card">
+              <input data-creator-input="reservedForFuture" type="checkbox"${draft.reservedForFuture ? " checked" : ""}>
+              <span>Reserved for future logic</span>
+            </label>
           </div>
-          ${buildModifierEditorMarkup(draft, references)}
-        </div>
-      </div>
+          <label class="field-stack">
+            <span>Notes</span>
+            <textarea data-creator-input="notes" rows="4" placeholder="Optional backend note for GM / future implementation">${escapeHtml(draft.notes)}</textarea>
+          </label>
+          <div class="creator-links-block">
+            ${buildModifierEditorMarkup(draft, references)}
+          </div>
+        `
+  })}
       <div class="creator-links-block">
         <div class="creator-links-head">
           <span>Ability Links</span>
@@ -4791,10 +4802,16 @@ function buildEquipmentEditorMarkup(state, references) {
         </div>
         ${buildAbilityLinksEditorMarkup(draft, references)}
       </div>
-      <label class="field-stack">
-        <span>Payload Preview</span>
-        <textarea rows="12" readonly>${escapeHtml(payloadPreview)}</textarea>
-      </label>
+      ${buildDisclosureSection({
+    title: "Payload Preview",
+    collapsed: payloadCollapsed,
+    action: "toggleEquipmentPayload",
+    bodyMarkup: `
+          <label class="field-stack">
+            <textarea rows="12" readonly>${escapeHtml(payloadPreview)}</textarea>
+          </label>
+        `
+  })}
     </form>
   `;
 }
@@ -4870,32 +4887,35 @@ function readEquipmentDraftFromDom(root2, fallbackDraft = createEmptyEquipmentDr
   const bodyPartCodes = Array.from(form.querySelectorAll("[data-creator-body-part-code]:checked")).map((entry) => String(entry.getAttribute("data-creator-body-part-code") ?? "").trim()).filter(Boolean);
   const abilityLinks = Array.from(form.querySelectorAll("[data-creator-link-row]")).map((row) => {
     const index = String(row.getAttribute("data-creator-link-row") ?? "");
+    const fallbackLink = Array.isArray(fallbackDraft.abilityLinks) ? fallbackDraft.abilityLinks[Number.parseInt(index, 10)] ?? createEmptyAbilityLinkDraft() : createEmptyAbilityLinkDraft();
     const linkQuery = (field) => form.querySelector(`[data-creator-link-input="${field}"][data-link-index="${index}"]`);
     const grantMode = String(linkQuery("grantMode")?.value ?? "activated");
     return {
       abilityDefId: String(linkQuery("abilityDefId")?.value ?? ""),
       grantMode,
-      durationRoundsMode: String(linkQuery("durationRoundsMode")?.value ?? "none"),
-      durationRounds: String(linkQuery("durationRounds")?.value ?? ""),
-      chargesMode: String(linkQuery("chargesMode")?.value ?? "none"),
-      charges: String(linkQuery("charges")?.value ?? ""),
-      cooldownRoundsMode: String(linkQuery("cooldownRoundsMode")?.value ?? "none"),
-      cooldownRounds: String(linkQuery("cooldownRounds")?.value ?? ""),
-      reloadMode: String(linkQuery("reloadMode")?.value ?? ""),
-      reloadItemCode: String(linkQuery("reloadItemCode")?.value ?? "")
+      durationRoundsMode: String(linkQuery("durationRoundsMode")?.value ?? fallbackLink.durationRoundsMode ?? "none"),
+      durationRounds: String(linkQuery("durationRounds")?.value ?? fallbackLink.durationRounds ?? ""),
+      chargesMode: String(linkQuery("chargesMode")?.value ?? fallbackLink.chargesMode ?? "none"),
+      charges: String(linkQuery("charges")?.value ?? fallbackLink.charges ?? ""),
+      cooldownRoundsMode: String(linkQuery("cooldownRoundsMode")?.value ?? fallbackLink.cooldownRoundsMode ?? "none"),
+      cooldownRounds: String(linkQuery("cooldownRounds")?.value ?? fallbackLink.cooldownRounds ?? ""),
+      reloadMode: String(linkQuery("reloadMode")?.value ?? fallbackLink.reloadMode ?? ""),
+      reloadItemCode: String(linkQuery("reloadItemCode")?.value ?? fallbackLink.reloadItemCode ?? "")
     };
   });
-  const modifiers = Array.from(form.querySelectorAll("[data-creator-modifier-row]")).map((row) => {
+  const modifierRows = Array.from(form.querySelectorAll("[data-creator-modifier-row]"));
+  const modifiers = modifierRows.length ? modifierRows.map((row) => {
     const index = String(row.getAttribute("data-creator-modifier-row") ?? "");
+    const fallbackModifier = Array.isArray(fallbackDraft.modifiers) ? fallbackDraft.modifiers[Number.parseInt(index, 10)] ?? createEmptyModifierDraft() : createEmptyModifierDraft();
     const modifierQuery = (field) => form.querySelector(`[data-creator-modifier-input="${field}"][data-modifier-index="${index}"]`);
     return {
-      target: String(modifierQuery("target")?.value ?? "attack_accuracy"),
-      customTarget: String(modifierQuery("customTarget")?.value ?? ""),
-      attributeCode: String(modifierQuery("attributeCode")?.value ?? ""),
-      skillCode: String(modifierQuery("skillCode")?.value ?? ""),
-      value: String(modifierQuery("value")?.value ?? "0")
+      target: String(modifierQuery("target")?.value ?? fallbackModifier.target ?? "attack_accuracy"),
+      customTarget: String(modifierQuery("customTarget")?.value ?? fallbackModifier.customTarget ?? ""),
+      attributeCode: String(modifierQuery("attributeCode")?.value ?? fallbackModifier.attributeCode ?? ""),
+      skillCode: String(modifierQuery("skillCode")?.value ?? fallbackModifier.skillCode ?? ""),
+      value: String(modifierQuery("value")?.value ?? fallbackModifier.value ?? "0")
     };
-  });
+  }) : cloneJson(fallbackDraft.modifiers ?? []);
   return {
     id: String(form.dataset.creatorEntityId ?? ""),
     name: String(query("name")?.value ?? ""),
@@ -4903,11 +4923,11 @@ function readEquipmentDraftFromDom(root2, fallbackDraft = createEmptyEquipmentDr
     description: String(query("description")?.value ?? ""),
     armorValue: String(query("armorValue")?.value ?? "0"),
     armorMaxCritical: String(query("armorMaxCritical")?.value ?? "0"),
-    defaultBodyPartCode: String(query("defaultBodyPartCode")?.value ?? ""),
-    allowedBodyPartCodes: bodyPartCodes,
-    protectsHelplessExecution: Boolean(query("protectsHelplessExecution")?.checked),
-    reservedForFuture: Boolean(query("reservedForFuture")?.checked),
-    notes: String(query("notes")?.value ?? ""),
+    defaultBodyPartCode: String(query("defaultBodyPartCode")?.value ?? fallbackDraft.defaultBodyPartCode ?? ""),
+    allowedBodyPartCodes: bodyPartCodes.length ? bodyPartCodes : cloneJson(fallbackDraft.allowedBodyPartCodes ?? []),
+    protectsHelplessExecution: query("protectsHelplessExecution") ? Boolean(query("protectsHelplessExecution")?.checked) : Boolean(fallbackDraft.protectsHelplessExecution),
+    reservedForFuture: query("reservedForFuture") ? Boolean(query("reservedForFuture")?.checked) : Boolean(fallbackDraft.reservedForFuture),
+    notes: String(query("notes")?.value ?? fallbackDraft.notes ?? ""),
     modifiers,
     flagsExtraData: cloneJson(fallbackDraft.flagsExtraData ?? {}),
     effectDataExtraData: cloneJson(fallbackDraft.effectDataExtraData ?? {}),
@@ -5052,6 +5072,21 @@ function mountCreatorMenu({
             state.collapsed.equipmentCatalog = !state.collapsed.equipmentCatalog;
             render();
             break;
+          case "toggleSkillsPayload":
+            captureActiveDraft();
+            state.collapsed.skillsPayload = !state.collapsed.skillsPayload;
+            render();
+            break;
+          case "toggleEquipmentPayload":
+            captureActiveDraft();
+            state.collapsed.equipmentPayload = !state.collapsed.equipmentPayload;
+            render();
+            break;
+          case "toggleEquipmentDataModifiers":
+            captureActiveDraft();
+            state.collapsed.equipmentDataModifiers = !state.collapsed.equipmentDataModifiers;
+            render();
+            break;
           case "newDraft":
             captureActiveDraft();
             createNewDraft();
@@ -5083,6 +5118,7 @@ function mountCreatorMenu({
             captureActiveDraft();
             state.drafts.equipment.modifiers.push(createEmptyModifierDraft());
             state.dirty.equipment = true;
+            state.collapsed.equipmentDataModifiers = false;
             clearMessages();
             render();
             break;
@@ -5292,12 +5328,12 @@ function mountCreatorMenu({
       const referenceScope = state.references ?? {};
       const list2 = Array.isArray(allSkills.items) ? allSkills.items : [];
       const existingCodes2 = list2.filter((item) => item.id !== draft.id).map((item) => item.code);
-      const auto2 = {
+      const auto3 = {
         code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes2),
         sortOrder: draft.id ? Number.parseInt(String(state.bundles.skills?.skill?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list2),
         tags: buildSkillAutoTags(draft, referenceScope)
       };
-      return buildSkillPayload(draft, auto2);
+      return buildSkillPayload(draft, auto3);
     }
     const allEquipment = await runtime2.api.creator.listEquipmentModels({ search: null, itemTypes: [] }, settings);
     if (!allEquipment?.ok) {
@@ -5305,12 +5341,12 @@ function mountCreatorMenu({
     }
     const list = Array.isArray(allEquipment.items) ? allEquipment.items : [];
     const existingCodes = list.filter((item) => item.id !== draft.id).map((item) => item.code);
-    const auto = {
+    const auto2 = {
       code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes),
       sortOrder: draft.id ? Number.parseInt(String(state.bundles.equipment?.equipment_model?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list),
       tags: buildEquipmentAutoTags(draft)
     };
-    return buildEquipmentPayload(draft, auto);
+    return buildEquipmentPayload(draft, auto2);
   }
   async function saveDraft() {
     const access = getAccess();
