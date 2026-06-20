@@ -20895,6 +20895,7 @@ declare
   v_missing_rounds integer := 0;
   v_stock_quantity_before integer := 0;
   v_stock_quantity_after integer := 0;
+  v_effective_stock_caliber_id uuid := null;
 begin
   if coalesce(jsonb_typeof(p_payload), 'null') <> 'object' then
     return jsonb_build_object(
@@ -21012,7 +21013,16 @@ begin
     );
   end if;
 
-  if v_stock.caliber_id <> v_stock.ammo_caliber_id or v_magazine.magazine_caliber_id <> v_stock.caliber_id then
+  v_effective_stock_caliber_id := v_stock.ammo_caliber_id;
+
+  if v_stock.caliber_id is distinct from v_stock.ammo_caliber_id then
+    update public.odyssey_character_ammo_stock
+    set caliber_id = v_stock.ammo_caliber_id
+    where id = v_stock.id;
+    v_stock.caliber_id := v_stock.ammo_caliber_id;
+  end if;
+
+  if v_magazine.magazine_caliber_id <> v_effective_stock_caliber_id then
     return jsonb_build_object(
       'ok', false,
       'error', 'CALIBER_MISMATCH',

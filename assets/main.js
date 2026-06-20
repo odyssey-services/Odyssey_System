@@ -27531,15 +27531,15 @@ var characterStyles_default = '/* Character Panel \u2014 scoped styles (prefix .
 
 // screens/character/characterScreen.js
 var ATTR_RU = {
-  strength: "\u0421\u0438\u043B\u0430",
-  agility: "\u041B\u043E\u0432\u043A\u043E\u0441\u0442\u044C",
-  reaction: "\u0420\u0435\u0430\u043A\u0446\u0438\u044F",
-  endurance: "\u0412\u044B\u043D\u043E\u0441\u043B\u0438\u0432\u043E\u0441\u0442\u044C",
-  psionics: "\u041F\u0441\u0438\u043E\u043D\u0438\u043A\u0430",
-  intelligence: "\u0418\u043D\u0442\u0435\u043B\u043B\u0435\u043A\u0442",
-  charisma: "\u0425\u0430\u0440\u0438\u0437\u043C\u0430",
-  willpower: "\u0421\u0438\u043B\u0430 \u0432\u043E\u043B\u0438",
-  perception: "\u0412\u043E\u0441\u043F\u0440\u0438\u044F\u0442\u0438\u0435"
+  strength: "\u0420\u040E\u0420\u0451\u0420\xBB\u0420\xB0",
+  agility: "\u0420\u203A\u0420\u0455\u0420\u0406\u0420\u0454\u0420\u0455\u0421\u0403\u0421\u201A\u0421\u040A",
+  reaction: "\u0420\xA0\u0420\xB5\u0420\xB0\u0420\u0454\u0421\u2020\u0420\u0451\u0421\u040F",
+  endurance: "\u0420\u2019\u0421\u2039\u0420\u0405\u0420\u0455\u0421\u0403\u0420\xBB\u0420\u0451\u0420\u0406\u0420\u0455\u0421\u0403\u0421\u201A\u0421\u040A",
+  psionics: "\u0420\u045F\u0421\u0403\u0420\u0451\u0420\u0455\u0420\u0405\u0420\u0451\u0420\u0454\u0420\xB0",
+  intelligence: "\u0420\x98\u0420\u0405\u0421\u201A\u0420\xB5\u0420\xBB\u0420\xBB\u0420\xB5\u0420\u0454\u0421\u201A",
+  charisma: "\u0420\u0490\u0420\xB0\u0421\u0402\u0420\u0451\u0420\xB7\u0420\u0458\u0420\xB0",
+  willpower: "\u0420\u040E\u0420\u0451\u0420\xBB\u0420\xB0 \u0420\u0406\u0420\u0455\u0420\xBB\u0420\u0451",
+  perception: "\u0420\u2019\u0420\u0455\u0421\u0403\u0420\u0457\u0421\u0402\u0420\u0451\u0421\u040F\u0421\u201A\u0420\u0451\u0420\xB5"
 };
 var BASE_ATTR_CODES = Object.keys(ATTR_RU);
 var PART_GEOMETRY2 = {
@@ -27557,7 +27557,7 @@ var ARMOR_TYPES = /* @__PURE__ */ new Set(["armor", "shield", "special_protectio
 var IMPLANT_TYPES = /* @__PURE__ */ new Set(["implant", "prosthetic", "device"]);
 var esc2 = (v) => escapeHtml(v);
 var arr2 = (v) => Array.isArray(v) ? v : [];
-var dash2 = (v) => v === null || v === void 0 || v === "" ? "\u2014" : v;
+var dash2 = (v) => v === null || v === void 0 || v === "" ? "\u0432\u0402\u201D" : v;
 var normPart = (p) => {
   const c = String(p?.code || p?.part_key || "").toLowerCase();
   return PART_ALIASES2[c] || c;
@@ -27829,7 +27829,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   async function runMutation(label, fn, after) {
     if (state.busy) return;
     state.busy = true;
-    state.notice = `${label}\u2026`;
+    state.notice = `${label}\u0432\u0402\xA6`;
     render();
     try {
       let result;
@@ -27870,7 +27870,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     bindStaticEvents();
   }
   function topBar() {
-    const cfgWarn = hasUsableSettings(loadDevSettings()) ? "" : `<div class="cp-banner warn" style="margin-top:6px">Supabase not configured \u2014 open the <b>Resolve Attack</b> tab and save URL/key, then load a character here.</div>`;
+    const cfgWarn = hasUsableSettings(loadDevSettings()) ? "" : `<div class="cp-banner warn" style="margin-top:6px">Supabase not configured \u0432\u0402\u201D open the <b>Resolve Attack</b> tab and save URL/key, then load a character here.</div>`;
     return `
       <section class="panel">
         <div class="panel-title">Character</div>
@@ -27926,7 +27926,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         const cur = p.current_value ?? 0;
         const max = p.max_value ?? 0;
         return `<span class="cp-chip cp-pool-gm">
-            <button class="cp-pool-adj" data-pool-adjust="-1" data-pool-code="${esc2(p.code)}" ${cur <= 0 ? "disabled" : ""} aria-label="Decrease ${esc2(p.name || p.code)}">\u2212</button>
+            <button class="cp-pool-adj" data-pool-adjust="-1" data-pool-code="${esc2(p.code)}" ${cur <= 0 ? "disabled" : ""} aria-label="Decrease ${esc2(p.name || p.code)}">\u0432\u20AC\u2019</button>
             <span>${esc2(p.name || p.code)} <span class="cp-mono">${dash2(cur)}/${dash2(max)}</span></span>
             <button class="cp-pool-adj" data-pool-adjust="1" data-pool-code="${esc2(p.code)}" ${cur >= max ? "disabled" : ""} aria-label="Increase ${esc2(p.name || p.code)}">+</button>
           </span>`;
@@ -27937,7 +27937,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <div class="cp-avatar">${portrait ? `<img src="${esc2(portrait)}" alt="">` : esc2((ch.name || "?").slice(0, 1).toUpperCase())}</div>
       <div style="flex:1;min-width:120px">
         <div class="cp-name">${esc2(ch.name || ch.character_key || "Character")}</div>
-        <div class="cp-muted">${meta.join(" \xB7 ") || "&nbsp;"}</div>
+        <div class="cp-muted">${meta.join(" \u0412\xB7 ") || "&nbsp;"}</div>
       </div>
       ${isGM() ? `<span class="cp-pill good">GM</span>` : `<span class="cp-pill">Player</span>`}
     </div>
@@ -27991,12 +27991,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function attrCard(a) {
     const label = a.name || a.code;
     const pending = state.rollingAttr === a.code;
-    const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc2(a.code)}" aria-label="Edit ${esc2(label)} (GM)" title="Edit (GM)">\u270E</button>` : "";
+    const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc2(a.code)}" aria-label="Edit ${esc2(label)} (GM)" title="Edit (GM)">\u0432\u045A\u040B</button>` : "";
     return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc2(a.code)}" aria-label="Roll ${esc2(label)}" aria-disabled="${pending}" title="Roll ${esc2(label)}">
       ${editBtn}
       <div class="cp-attr-val">${dash2(a.value)}</div>
       <div class="cp-attr-code">${esc2(a.code)}</div>
-      ${pending ? `<div class="cp-attr-pending">Rolling\u2026</div>` : ""}
+      ${pending ? `<div class="cp-attr-pending">Rolling\u0432\u0402\xA6</div>` : ""}
     </div>`;
   }
   function partColorClass(p) {
@@ -28039,7 +28039,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     return `<div class="cp-section-title">Additional body parts / modules</div><div class="cp-list">${additional.map((p) => {
       const [bs, bcls] = bodyStatusText(p);
       return `<div class="cp-card cp-rowitem" tabindex="0" role="button" data-part="${esc2(p.id)}" aria-label="${esc2(p.name)}">
-        <span>${esc2(p.name)}</span><span class="cp-statebadge ${bcls}">${bs} \xB7 crit ${dash2(p.critical)}/${dash2(p.max_critical)}</span></div>`;
+        <span>${esc2(p.name)}</span><span class="cp-statebadge ${bcls}">${bs} \u0412\xB7 crit ${dash2(p.critical)}/${dash2(p.max_critical)}</span></div>`;
     }).join("")}</div>`;
   }
   function partTipHtml(p) {
@@ -28073,7 +28073,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const eff = s.effective_level ?? s.level ?? 0;
     const purchased = s.purchased_level;
     const pips = Array.from({ length: max }).map((_, i) => `<span class="cp-pip ${i < eff ? "on" : ""}"></span>`).join("");
-    const attrs = [s.main_attribute, s.secondary_attribute].filter(Boolean).join(" \xB7 ");
+    const attrs = [s.main_attribute, s.secondary_attribute].filter(Boolean).join(" \u0412\xB7 ");
     const perks = arr2(s.perks).map((p) => `<span class="cp-pill good">${esc2(p.name || p.code || p)}</span>`).join("");
     const locked = s.locked || s.is_locked;
     const passive = s.is_passive || s.category === "passive";
@@ -28117,7 +28117,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <span class="cp-pill ${passive ? "" : "good"}">${passive ? "passive" : cd ? "cooldown" : "active"}</span></div>
       <div class="cp-row" style="gap:6px;margin-top:6px">
         ${a.effective_level != null ? `<span class="cp-chip">lvl ${dash2(a.effective_level)}</span>` : ""}
-        ${cost != null ? `<span class="cp-chip">cost \u043A:${esc2(cost)}</span>` : ""}
+        ${cost != null ? `<span class="cp-chip">cost \u0420\u0454:${esc2(cost)}</span>` : ""}
         ${cd ? `<span class="cp-chip bad">cooldown ${esc2(cd)}</span>` : ""}
         ${a.attack_type && a.attack_type !== "none" ? `<span class="cp-chip">attack: ${esc2(a.attack_type)}</span>` : ""}
       </div>
@@ -28137,7 +28137,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <div class="cp-section-title">Magazines</div>
       <div class="cp-list">${mags.length ? mags.map(magCard).join("") : `<div class="cp-empty">No magazines.</div>`}</div>
       <div class="cp-section-title">Ammo stock</div>
-      <div class="cp-list">${ammo.length ? ammo.map((a) => `<div class="cp-card cp-rowitem"><span>${esc2(a.display_name)}</span><span class="cp-mono">${esc2(getAmmoStockTypeName(a))} \xB7 ${esc2(getAmmoStockCaliberName(a))} \xB7 x${dash2(a.quantity)}</span></div>`).join("") : `<div class="cp-empty">No ammo.</div>`}</div>
+      <div class="cp-list">${ammo.length ? ammo.map((a) => `<div class="cp-card"><div class="cp-rowitem"><span>${esc2(a.display_name)}</span><span class="cp-mono">${esc2(getAmmoStockTypeName(a))} \xB7 ${esc2(getAmmoStockCaliberName(a))} \xB7 x${dash2(a.quantity)}</span></div>${isGM() ? `<div class="cp-row" style="gap:6px;margin-top:6px;align-items:center"><input data-gmammoqty="${esc2(a.id)}" type="number" min="1" max="${a.quantity}" value="1" class="cp-mono" style="width:46px;padding:3px 4px;font-size:11px"><button class="cp-btn-sm secondary" data-gmammo="removeqty" data-ammo="${esc2(a.id)}" type="button">GM -N</button><button class="cp-btn-sm secondary" data-gmammo="removeall" data-ammo="${esc2(a.id)}" data-maxqty="${a.quantity}" type="button">GM -all</button></div>` : ""}</div>`).join("") : `<div class="cp-empty">No ammo.</div>`}</div>
       <div class="cp-section-title">Active items</div>
       <div class="cp-list">${items.length ? items.map(itemCard).join("") : `<div class="cp-empty">No items.</div>`}</div>
       ${isGM() ? gmInventoryBlock() : ""}`;
@@ -28159,13 +28159,13 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function getAmmoStockCaliberCode(row) {
     const ammoDef = findAmmoDefForRow(row);
     return String(
-      row?.caliber_code || row?.caliber?.code || ammoDef?.caliber_code || ammoDef?.caliber?.code || ""
+      ammoDef?.caliber_code || ammoDef?.caliber?.code || row?.caliber_code || row?.caliber?.code || ""
     ).trim().toLowerCase();
   }
   function getAmmoStockCaliberName(row) {
     const ammoDef = findAmmoDefForRow(row);
     return String(
-      row?.caliber_name || row?.caliber?.name || ammoDef?.caliber_name || ammoDef?.caliber?.name || ""
+      ammoDef?.caliber_name || ammoDef?.caliber?.name || row?.caliber_name || row?.caliber?.name || ""
     ).trim();
   }
   function getAmmoStockTypeCode(row) {
@@ -28198,14 +28198,14 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const profiles = arr2(w.profiles);
     const fireModes = arr2(w.available_fire_modes?.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
     const compatMags = arr2(state.armory?.magazines).filter((m) => !w.model?.caliber || (m.magazine_def?.caliber || m.caliber) === w.model.caliber);
-    const ammoChips = isMelee ? `<span class="cp-chip">melee</span>` : mag ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash2(mag.current_rounds)}/${dash2(mag.capacity || mag.magazine_def?.capacity)} \xB7 ${esc2(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>` : `<span class="cp-chip bad">no magazine</span>`;
+    const ammoChips = isMelee ? `<span class="cp-chip">melee</span>` : mag ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash2(mag.current_rounds)}/${dash2(mag.capacity || mag.magazine_def?.capacity)} \u0412\xB7 ${esc2(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>` : `<span class="cp-chip bad">no magazine</span>`;
     return `<div class="cp-card" data-weapon="${esc2(w.id)}">
       <div class="cp-rowitem"><span><b>${esc2(w.name)}</b> <span class="cp-pill">${esc2(w.model?.weapon_class_name || w.model?.weapon_class || "")}</span></span>
         <span class="cp-row" style="gap:6px">${w.model?.caliber_name ? `<span class="cp-chip">${esc2(w.model.caliber_name)}</span>` : ""}${ammoChips}</span></div>
       <div class="cp-row" style="gap:8px;margin-top:8px">
         ${profiles.length > 1 ? `<label class="cp-field" style="min-width:130px"><span>Profile</span><select data-wact="profile" data-weapon="${esc2(w.id)}">${profiles.map((p) => `<option value="${esc2(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc2(p.name || p.code)}</option>`).join("")}</select></label>` : ""}
         ${fireModes.length && !isMelee ? `<label class="cp-field" style="min-width:130px"><span>Fire mode</span><select data-wact="firemode" data-weapon="${esc2(w.id)}">${fireModes.map((f) => `<option value="${esc2(f.id)}" ${f.id === fm?.id ? "selected" : ""}>${esc2(f.name || f.code)}</option>`).join("")}</select></label>` : ""}
-        ${!isMelee ? `<label class="cp-field" style="min-width:150px"><span>Insert magazine</span><select data-wact="reloadmag" data-weapon="${esc2(w.id)}">${compatMags.length ? compatMags.map((m) => `<option value="${esc2(m.id)}">${esc2(m.name)} \xB7 ${dash2(m.current_rounds)}/${dash2(m.magazine_def?.capacity ?? m.capacity)}</option>`).join("") : `<option value="">\u2014 none \u2014</option>`}</select></label>` : ""}
+        ${!isMelee ? `<label class="cp-field" style="min-width:150px"><span>Insert magazine</span><select data-wact="reloadmag" data-weapon="${esc2(w.id)}">${compatMags.length ? compatMags.map((m) => `<option value="${esc2(m.id)}">${esc2(m.name)} \u0412\xB7 ${dash2(m.current_rounds)}/${dash2(m.magazine_def?.capacity ?? m.capacity)}</option>`).join("") : `<option value="">\u0432\u0402\u201D none \u0432\u0402\u201D</option>`}</select></label>` : ""}
       </div>
       ${!isMelee ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="reload" data-weapon="${esc2(w.id)}" type="button" ${compatMags.length ? "" : "disabled"}>Reload (insert magazine)</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button>` : ""}</div>${compatMags.length ? "" : `<div class="cp-muted">No compatible magazine to insert.</div>`}` : `${isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button></div>` : ""}`}
     </div>`;
@@ -28226,9 +28226,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const empty = (m.current_rounds ?? 0) <= 0;
     return `<div class="cp-card" data-mag="${esc2(m.id)}">
       <div class="cp-rowitem"><span><b>${esc2(m.name)}</b> ${inW ? `<span class="cp-pill good">Inserted in ${esc2(inW.name)}</span>` : `<span class="cp-pill">not inserted</span>`}</span>
-        <span class="cp-mono">${dash2(m.current_rounds)}/${dash2(cap)} \xB7 ${esc2(ammoName)}</span></div>
+        <span class="cp-mono">${dash2(m.current_rounds)}/${dash2(cap)} \u0412\xB7 ${esc2(ammoName)}</span></div>
       <div class="cp-row" style="gap:8px;margin-top:8px">
-        <label class="cp-field" style="min-width:150px"><span>Ammo to load</span><select data-mact="ammo" data-mag="${esc2(m.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc2(a.id)}">${esc2(a.display_name)} \xB7 ${esc2(getAmmoStockTypeName(a))} \xB7 x${dash2(a.quantity)}</option>`).join("") : `<option value="">\u2014 no compatible ammo \u2014</option>`}</select></label>
+        <label class="cp-field" style="min-width:150px"><span>Ammo to load</span><select data-mact="ammo" data-mag="${esc2(m.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc2(a.id)}">${esc2(a.display_name)} \u0412\xB7 ${esc2(getAmmoStockTypeName(a))} \u0412\xB7 x${dash2(a.quantity)}</option>`).join("") : `<option value="">\u0432\u0402\u201D no compatible ammo \u0432\u0402\u201D</option>`}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end">
           <button class="cp-btn-sm" data-mbtn="load" data-mag="${esc2(m.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load / Top up</button>
           <button class="cp-btn-sm secondary" data-mbtn="unload" data-mag="${esc2(m.id)}" type="button" ${empty ? "disabled" : ""}>Unload all</button>
@@ -28248,41 +28248,41 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       </div>` : ""}
       ${isGM() ? `<div class="cp-row" style="gap:6px;margin-top:6px;align-items:center">
         <input data-gmqty="${esc2(i.id)}" type="number" min="1" max="${i.quantity}" value="1" class="cp-mono" style="width:46px;padding:3px 4px;font-size:11px">
-        <button class="cp-btn-sm secondary" data-gmitem="removeqty" data-item="${esc2(i.id)}" data-code="${esc2(i.code || "")}" type="button">GM \u2212N</button>
-        <button class="cp-btn-sm secondary" data-gmitem="removeall" data-item="${esc2(i.id)}" data-code="${esc2(i.code || "")}" data-maxqty="${i.quantity}" type="button">GM \u2212all</button>
+        <button class="cp-btn-sm secondary" data-gmitem="removeqty" data-item="${esc2(i.id)}" data-code="${esc2(i.code || "")}" type="button">GM \u0432\u20AC\u2019N</button>
+        <button class="cp-btn-sm secondary" data-gmitem="removeall" data-item="${esc2(i.id)}" data-code="${esc2(i.code || "")}" data-maxqty="${i.quantity}" type="button">GM \u0432\u20AC\u2019all</button>
       </div>` : ""}
     </div>`;
   }
   function gmInventoryBlock() {
-    const itemOpts = state.itemDefs.length ? state.itemDefs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)}${d.item_type ? ` \xB7 ${esc2(d.item_type)}` : ""}</option>`).join("") : `<option value="">\u2014 no item defs \u2014</option>`;
-    const weaponOpts = state.weaponDefs.length ? state.weaponDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)}</option>`).join("") : `<option value="">\u2014 no weapon models \u2014</option>`;
+    const itemOpts = state.itemDefs.length ? state.itemDefs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)}${d.item_type ? ` \u0412\xB7 ${esc2(d.item_type)}` : ""}</option>`).join("") : `<option value="">\u0432\u0402\u201D no item defs \u0432\u0402\u201D</option>`;
+    const weaponOpts = state.weaponDefs.length ? state.weaponDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)}</option>`).join("") : `<option value="">\u0432\u0402\u201D no weapon models \u0432\u0402\u201D</option>`;
     const curMagId = root2?.querySelector('[data-ref="gmMagDef"]')?.value || state.magazineDefs[0]?.id || "";
     const curMag = state.magazineDefs.find((d) => d.id === curMagId);
     const magAmmoOpts = (() => {
       const compatible = curMag ? state.ammoDefs.filter((a) => a.caliber_id === curMag.caliber_id) : state.ammoDefs;
-      return compatible.length ? compatible.map((a) => `<option value="${esc2(a.id)}">${esc2(a.name)}</option>`).join("") : `<option value="">\u2014 no compatible ammo \u2014</option>`;
+      return compatible.length ? compatible.map((a) => `<option value="${esc2(a.id)}">${esc2(a.name)}</option>`).join("") : `<option value="">\u0432\u0402\u201D no compatible ammo \u0432\u0402\u201D</option>`;
     })();
-    const magOpts = state.magazineDefs.length ? state.magazineDefs.map((d) => `<option value="${esc2(d.id)}" ${d.id === curMagId ? "selected" : ""}>${esc2(d.name)} (\xD7${esc2(d.capacity)})</option>`).join("") : `<option value="">\u2014 no magazine defs \u2014</option>`;
-    const ammoOpts = state.ammoDefs.length ? state.ammoDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)}${d.caliber?.name ? ` \xB7 ${esc2(d.caliber.name)}` : ""}</option>`).join("") : `<option value="">\u2014 no ammo types \u2014</option>`;
+    const magOpts = state.magazineDefs.length ? state.magazineDefs.map((d) => `<option value="${esc2(d.id)}" ${d.id === curMagId ? "selected" : ""}>${esc2(d.name)} (\u0413\u2014${esc2(d.capacity)})</option>`).join("") : `<option value="">\u0432\u0402\u201D no magazine defs \u0432\u0402\u201D</option>`;
+    const ammoOpts = state.ammoDefs.length ? state.ammoDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)}${d.caliber?.name ? ` \u0412\xB7 ${esc2(d.caliber.name)}` : ""}</option>`).join("") : `<option value="">\u0432\u0402\u201D no ammo types \u0432\u0402\u201D</option>`;
     return `
-      <div class="cp-section-title">GM \xB7 add weapon</div>
+      <div class="cp-section-title">GM \u0412\xB7 add weapon</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Model</span><select data-ref="gmWeaponDef">${weaponOpts}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="addweapon" type="button" ${state.weaponDefs.length ? "" : "disabled"}>Add weapon</button></div>
       </div></div>
-      <div class="cp-section-title">GM \xB7 add magazine</div>
+      <div class="cp-section-title">GM \u0412\xB7 add magazine</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px;flex-wrap:wrap">
         <label class="cp-field"><span>Magazine</span><select data-ref="gmMagDef" data-gmmag="1">${magOpts}</select></label>
         <label class="cp-field"><span>Ammo type (initial)</span><select data-ref="gmMagAmmo">${magAmmoOpts}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="addmag" type="button" ${state.magazineDefs.length ? "" : "disabled"}>Add magazine</button></div>
       </div></div>
-      <div class="cp-section-title">GM \xB7 add ammo</div>
+      <div class="cp-section-title">GM \u0412\xB7 add ammo</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Ammo type</span><select data-ref="gmAmmoDef">${ammoOpts}</select></label>
         <label class="cp-field" style="max-width:90px"><span>qty</span><input data-ref="gmAmmoQty" type="number" min="1" value="10" class="cp-mono"></label>
         <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="addammo" type="button" ${state.ammoDefs.length ? "" : "disabled"}>Add ammo</button></div>
       </div></div>
-      <div class="cp-section-title">GM \xB7 add item</div>
+      <div class="cp-section-title">GM \u0412\xB7 add item</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Item</span><select data-ref="gmAddCode">${itemOpts}</select></label>
         <label class="cp-field" style="max-width:90px"><span>qty</span><input data-ref="gmAddQty" type="number" min="1" value="1" class="cp-mono"></label>
@@ -28290,8 +28290,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       </div></div>`;
   }
   function gmSkillsBlock() {
-    const opts = state.skillDefs.length ? state.skillDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)} \xB7 ${esc2(d.category)}</option>`).join("") : `<option value="">\u2014 no skill defs \u2014</option>`;
-    return `<div class="cp-section-title">GM \xB7 add skill</div>
+    const opts = state.skillDefs.length ? state.skillDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)} \u0412\xB7 ${esc2(d.category)}</option>`).join("") : `<option value="">\u0432\u0402\u201D no skill defs \u0432\u0402\u201D</option>`;
+    return `<div class="cp-section-title">GM \u0412\xB7 add skill</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Skill</span><select data-ref="gmSkillDef">${opts}</select></label>
         <label class="cp-field" style="max-width:80px"><span>Level</span><input data-ref="gmSkillLevel" type="number" min="1" max="10" value="1" class="cp-mono"></label>
@@ -28300,8 +28300,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function gmArmorBlock() {
     const defs = state.equipmentDefs.filter((d) => ARMOR_TYPES.has(d.item_type));
-    const opts = defs.length ? defs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)} \xB7 ${esc2(d.item_type)}</option>`).join("") : `<option value="">\u2014 no armor models \u2014</option>`;
-    return `<div class="cp-section-title">GM \xB7 add armor</div>
+    const opts = defs.length ? defs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)} \u0412\xB7 ${esc2(d.item_type)}</option>`).join("") : `<option value="">\u0432\u0402\u201D no armor models \u0432\u0402\u201D</option>`;
+    return `<div class="cp-section-title">GM \u0412\xB7 add armor</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Model</span><select data-ref="gmArmorDef">${opts}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="addarmor" type="button" ${defs.length ? "" : "disabled"}>Add armor</button></div>
@@ -28309,15 +28309,15 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function gmImplantsBlock() {
     const defs = state.equipmentDefs.filter((d) => IMPLANT_TYPES.has(d.item_type));
-    const opts = defs.length ? defs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)} \xB7 ${esc2(d.item_type)}</option>`).join("") : `<option value="">\u2014 no implant models \u2014</option>`;
-    return `<div class="cp-section-title">GM \xB7 add implant</div>
+    const opts = defs.length ? defs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)} \u0412\xB7 ${esc2(d.item_type)}</option>`).join("") : `<option value="">\u0432\u0402\u201D no implant models \u0432\u0402\u201D</option>`;
+    return `<div class="cp-section-title">GM \u0412\xB7 add implant</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Model</span><select data-ref="gmImplantDef">${opts}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="addimplant" type="button" ${defs.length ? "" : "disabled"}>Add implant</button></div>
       </div></div>`;
   }
   function gmToolsBlock() {
-    return `<div class="cp-section-title">GM \xB7 character tools</div>
+    return `<div class="cp-section-title">GM \u0412\xB7 character tools</div>
       <div class="button-row"><button class="cp-btn-sm" data-gmbtn="heal" type="button">Heal (full)</button>
       <button class="cp-btn-sm secondary" data-gmbtn="repair" type="button">Repair armor</button></div>`;
   }
@@ -28337,12 +28337,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const hasSerious = (it.armor_serious || 0) > 0;
     const hasMinor = (it.armor_minor || 0) > 0;
     const status = dest ? ["Destroyed", "bad"] : hasCrit ? ["Damaged", ""] : hasSerious ? ["Damaged", ""] : hasMinor ? ["Minor damage", ""] : ["OK", "good"];
-    const slot = it.body_part?.name || it.model?.default_body_part_code || "\u2014";
+    const slot = it.body_part?.name || it.model?.default_body_part_code || "\u0432\u0402\u201D";
     return `<div class="cp-card" data-equip="${esc2(it.id)}">
       <div class="cp-rowitem"><span><b>${esc2(it.name)}</b> <span class="cp-pill">${esc2(it.model?.item_type || "armor")}</span></span>
       <span class="cp-pill ${status[1]}">${status[0]}</span></div>
       <div class="cp-row" style="gap:6px;margin-top:6px">
-        <span class="cp-chip">${it.is_equipped ? `Equipped \xB7 ${esc2(slot)}` : "Unequipped"}</span>
+        <span class="cp-chip">${it.is_equipped ? `Equipped \u0412\xB7 ${esc2(slot)}` : "Unequipped"}</span>
         <span class="cp-chip">AV ${dash2(it.armor_value)}</span>
         <span class="cp-chip${(it.armor_minor || 0) > 0 ? " warn" : ""}">Minor ${dash2(it.armor_minor)}/${dash2(it.armor_max_minor)}</span>
         <span class="cp-chip${(it.armor_serious || 0) > 0 ? " warn" : ""}">Serious ${dash2(it.armor_serious)}/${dash2(it.armor_max_serious)}</span>
@@ -28549,6 +28549,17 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       }
       return;
     }
+    const gmAmmo = t.closest("[data-gmammo]");
+    if (gmAmmo) {
+      const { ammo: ammoStockId, maxqty } = gmAmmo.dataset;
+      if (gmAmmo.dataset.gmammo === "removeall") {
+        onGmRemoveAmmo(ammoStockId, maxqty);
+      } else {
+        const qty = root2.querySelector(`[data-gmammoqty="${CSS.escape(ammoStockId)}"]`)?.value ?? 1;
+        onGmRemoveAmmo(ammoStockId, qty);
+      }
+      return;
+    }
     const gmDel = t.closest("[data-gmdel]");
     if (gmDel) {
       onGmDelete(gmDel.dataset.gmdel, gmDel.dataset.id);
@@ -28589,9 +28600,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function rollResultText(r) {
     const a = r.attribute || {}, roll = r.roll || {}, res = r.result || {};
-    const crit = res.is_critical_success ? " \xB7 CRIT SUCCESS" : res.is_critical_failure ? " \xB7 CRIT FAIL" : "";
+    const crit = res.is_critical_success ? " \u0412\xB7 CRIT SUCCESS" : res.is_critical_failure ? " \u0412\xB7 CRIT FAIL" : "";
     const name = ATTR_RU[a.code] || a.name || a.code;
-    return `${esc2(name)} check \u2014 d20 <span class="cp-mono">${dash2(roll.natural_roll)} \u2264 ${dash2(roll.target_value)}</span> \u2192 <b>${res.success ? "SUCCESS" : "FAILURE"}</b>${crit}`;
+    return `${esc2(name)} check \u0432\u0402\u201D d20 <span class="cp-mono">${dash2(roll.natural_roll)} \u0432\u2030\xA4 ${dash2(roll.target_value)}</span> \u0432\u2020\u2019 <b>${res.success ? "SUCCESS" : "FAILURE"}</b>${crit}`;
   }
   async function onRollSkill(code) {
     if (state.busy || state.rollingAttr) return;
@@ -28602,7 +28613,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       if (!r || r.ok === false) setNotice("err", esc2(describeError(r?.error, r?.message || "Skill check failed.")));
       else {
         const res = r.result || {};
-        setNotice(res.success ? "ok" : "warn", `Skill check \u2014 ${esc2(code)} \u2192 <b>${esc2(res.outcome || (res.success ? "success" : "failure"))}</b>`);
+        setNotice(res.success ? "ok" : "warn", `Skill check \u0432\u0402\u201D ${esc2(code)} \u0432\u2020\u2019 <b>${esc2(res.outcome || (res.success ? "success" : "failure"))}</b>`);
       }
     } catch (e) {
       setNotice("err", `Skill check error: ${esc2(e.message)}`);
@@ -28641,7 +28652,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const name = a.name || code;
     openForm({
       title: `Edit ${name} (GM)`,
-      note: a.default_value != null || a.max_value != null ? `Allowed: ${dash2(a.default_value)} \u2013 ${dash2(a.max_value)}` : "",
+      note: a.default_value != null || a.max_value != null ? `Allowed: ${dash2(a.default_value)} \u0432\u0402\u201C ${dash2(a.max_value)}` : "",
       current: a.value,
       min: a.default_value,
       max: a.max_value,
@@ -28690,7 +28701,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
       return;
     }
-    setNotice("info", `Ability activation: ${esc2(ability.name)} \u2014 ready to use (no RPC yet).`);
+    setNotice("info", `Ability activation: ${esc2(ability.name)} \u0432\u0402\u201D ready to use (no RPC yet).`);
     render();
   }
   function onUseItem(itemId) {
@@ -28713,7 +28724,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         return codes.some((c) => allowed.includes(c));
       });
     }
-    if (!parts.length) return `<option value="">\u2014 no compatible body parts \u2014</option>`;
+    if (!parts.length) return `<option value="">\u0432\u0402\u201D no compatible body parts \u0432\u0402\u201D</option>`;
     const selected = parts.find((b) => b.id === lastId) || parts.find((b) => {
       const codes = [b.code, b.part_key].map((x) => String(x || "").toLowerCase());
       return def && codes.includes(def);
@@ -28745,6 +28756,15 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
     const n = Math.max(1, Number(qty) || 1);
     runMutation("Remove item", () => api.inventory.removeCharacterItemQuantity(state.characterId, code, n, settings()), () => refresh());
+  }
+  function onGmRemoveAmmo(ammoStockId, qty) {
+    if (!ammoStockId) {
+      setNotice("err", "Ammo stack ID is missing.");
+      render();
+      return;
+    }
+    const n = Math.max(1, Number(qty) || 1);
+    runMutation("Remove ammo", () => api.inventory.removeCharacterAmmoStock(ammoStockId, n, settings()), () => refresh({ sheet: false, armory: false, equipment: false, abilities: false }));
   }
   function onGmAddItem() {
     const code = root2.querySelector('[data-ref="gmAddCode"]')?.value.trim();
@@ -28905,7 +28925,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const tokenId = String(token?.id ?? "");
     let characterId = bridges.token.getTokenCharacterLink(token).characterId;
     if (!characterId && hasUsableSettings(settings())) {
-      setNotice("info", "Looking up character by token_id\u2026");
+      setNotice("info", "Looking up character by token_id\u0432\u0402\xA6");
       render();
       const ctx = await withTimeout3(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null);
       if (ctx?.roomId) {
@@ -28926,7 +28946,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       }
     }
     if (!characterId) {
-      setNotice("warn", "Token is not linked to a character. Bind it first in GM Tools \u2192 Placement.");
+      setNotice("warn", "Token is not linked to a character. Bind it first in GM Tools \u0432\u2020\u2019 Placement.");
       render();
       return;
     }
@@ -28941,7 +28961,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <h3>${esc2(title)}</h3>
       ${note ? `<div class="cp-muted" style="font-size:11px;margin-bottom:8px">${esc2(note)}</div>` : ""}
       <div class="cp-dlg-stepper">
-        <button data-dlg-dec type="button" class="secondary cp-dlg-step">\u2212</button>
+        <button data-dlg-dec type="button" class="secondary cp-dlg-step">\u0432\u20AC\u2019</button>
         <input data-dlg-input type="text" inputmode="numeric" value="${esc2(current2 ?? "")}" class="cp-mono cp-dlg-input">
         <button data-dlg-inc type="button" class="secondary cp-dlg-step">+</button>
       </div>
