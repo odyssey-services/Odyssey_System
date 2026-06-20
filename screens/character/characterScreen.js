@@ -116,27 +116,33 @@ export function mountCharacterScreen({ root, runtime }) {
     return arr(rows);
   }
 
-  // Maps bundle response into state. Only updates fields present in the returned sections.
+  // Maps bundle response into state. Merges into existing sheet so partial refreshes
+  // (abilities-only, equipment-only, etc.) never wipe fields that weren't requested.
   function applyBundle(bundle) {
     if (!bundle || bundle.ok === false || !bundle.character) return false;
     const s = bundle.sections ?? {};
-
-    // Always update character identity and top-level state
     const combat = s.combat && typeof s.combat === "object" ? s.combat : null;
-    state.sheet = {
-      character: bundle.character,
-      attributes: arr(s.attributes),
-      // body_parts come from combat section: each part has minor/serious/critical/disabled/destroyed/armor_value/armor_critical
-      body_parts: arr(combat?.body_parts),
-      skills: arr(s.skills),
-      resource_pools: arr(s.abilities?.resource_pools),
-      // combat state — no HP, damage tracked per body part
-      is_alive: combat?.is_alive ?? bundle.state?.is_alive ?? true,
-      is_conscious: combat?.is_conscious ?? bundle.state?.is_conscious ?? true,
-      status_summary: bundle.state?.status_summary ?? "",
-      armor_summary: combat?.armor_summary ?? null,
-      combat_flags: combat?.combat_flags ?? {},
-    };
+
+    // Build only the patch for sections that were actually returned
+    const patch = { character: bundle.character };
+    if (s.attributes !== undefined)           patch.attributes    = arr(s.attributes);
+    if (combat !== null) {
+      patch.body_parts    = arr(combat.body_parts);
+      patch.is_alive      = combat.is_alive ?? true;
+      patch.is_conscious  = combat.is_conscious ?? true;
+      patch.armor_summary = combat.armor_summary ?? null;
+      patch.combat_flags  = combat.combat_flags ?? {};
+    }
+    if (s.skills !== undefined)               patch.skills        = arr(s.skills);
+    if (s.abilities?.resource_pools !== undefined) patch.resource_pools = arr(s.abilities.resource_pools);
+    if (bundle.state?.status_summary !== undefined) patch.status_summary = bundle.state.status_summary;
+
+    // Merge into existing sheet; initialise defaults on first load
+    state.sheet = state.sheet
+      ? { ...state.sheet, ...patch }
+      : { attributes: [], body_parts: [], skills: [], resource_pools: [],
+          is_alive: true, is_conscious: true, status_summary: "",
+          armor_summary: null, combat_flags: {}, ...patch };
 
     if (s.abilities) {
       state.abilities = arr(s.abilities.abilities);
@@ -204,6 +210,7 @@ export function mountCharacterScreen({ root, runtime }) {
     if (!sections.length) return;
     const bundle = await loadBundle(id, sections).catch(() => null);
     if (bundle) applyBundle(bundle);
+    render();
   }
 
   /* ---- Real-Time subscriptions for live updates ---- */
@@ -882,7 +889,7 @@ export function mountCharacterScreen({ root, runtime }) {
         settings(),
         { method: "PATCH", prefer: "return=minimal" },
       );
-      await refresh({ armory: false, equipment: false, inventory: false });
+      await refresh({ sheet: false, armory: false, equipment: false, inventory: false, abilities: true });
     } catch (e) {
       setNotice("err", `Pool update failed: ${esc(e.message)}`); render();
     } finally {
