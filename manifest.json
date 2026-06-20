@@ -1,15 +1,15 @@
 {
   "name": "Odyssey System",
-  "version": "1.7.9d",
+  "version": "1.7.10",
   "manifest_version": 1,
   "description": "Odyssey Bridge Shell foundation for the Supabase-backed system.",
   "author": "Codex",
-  "icon": "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.7.9",
-  "background_url": "https://odyssey-services.github.io/Odyssey_System/background.html?v=1.7.9",
+  "icon": "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.7.10",
+  "background_url": "https://odyssey-services.github.io/Odyssey_System/background.html?v=1.7.10",
   "action": {
     "title": "Odyssey System",
-    "icon": "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.7.9",
-    "popover": "https://odyssey-services.github.io/Odyssey_System/index.html?v=1.7.9",
+    "icon": "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.7.10",
+    "popover": "https://odyssey-services.github.io/Odyssey_System/index.html?v=1.7.10",
     "height": 860,
     "width": 560
   }

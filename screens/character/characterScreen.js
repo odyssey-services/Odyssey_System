@@ -121,20 +121,26 @@ export function mountCharacterScreen({ root, runtime }) {
     return arr(rows);
   }
 
-  // Fetch all GM grant defs (skills, weapons, magazines, ammo, equipment models).
+  async function fetchAmmoAndMagazineDefs() {
+    const safe = (p) => p.catch(() => []);
+    const [magazines, ammo] = await Promise.all([
+      safe(bridges.supabase.fetchSupabaseRows("odyssey_magazine_defs?select=id,code,name,capacity,caliber_id,caliber:caliber_id(id,code,name)&order=name", settings(), "")),
+      safe(bridges.supabase.fetchSupabaseRows("odyssey_ammo_type_defs?select=id,code,name,caliber_id,caliber:caliber_id(id,code,name)&order=name", settings(), "")),
+    ]);
+    state.magazineDefs = arr(magazines);
+    state.ammoDefs = arr(ammo);
+  }
+
+  // Fetch GM-only grant defs (skills, weapon models, equipment models).
   async function fetchGmDefs() {
     const safe = (p) => p.catch(() => []);
-    const [skills, weapons, magazines, ammo, equipment] = await Promise.all([
+    const [skills, weapons, equipment] = await Promise.all([
       safe(bridges.supabase.fetchSupabaseRows("odyssey_skill_defs?select=id,code,name,category,max_level&order=name", settings(), "")),
       safe(bridges.supabase.fetchSupabaseRows("odyssey_weapon_model_defs?select=id,code,name&order=name", settings(), "")),
-      safe(bridges.supabase.fetchSupabaseRows("odyssey_magazine_defs?select=id,code,name,capacity,caliber_id&order=name", settings(), "")),
-      safe(bridges.supabase.fetchSupabaseRows("odyssey_ammo_type_defs?select=id,code,name,caliber_id,caliber:caliber_id(id,code)&order=name", settings(), "")),
       safe(bridges.supabase.fetchSupabaseRows("odyssey_equipment_model_defs?select=id,code,name,item_type&order=name", settings(), "")),
     ]);
     state.skillDefs = arr(skills);
     state.weaponDefs = arr(weapons);
-    state.magazineDefs = arr(magazines);
-    state.ammoDefs = arr(ammo);
     state.equipmentDefs = arr(equipment);
   }
 
@@ -215,7 +221,12 @@ export function mountCharacterScreen({ root, runtime }) {
         gmMode && !state.itemDefs.length ? fetchItemDefs().catch(() => []) : Promise.resolve(state.itemDefs),
         api.weapon.getCharacterArmory(id, settings()).catch(() => null),
       ]);
-      if (gmMode && !state.skillDefs.length) fetchGmDefs(); // fire-and-forget; renders on completion
+      if (!state.ammoDefs.length || !state.magazineDefs.length) {
+        await fetchAmmoAndMagazineDefs().catch(() => {});
+      }
+      if (gmMode && (!state.skillDefs.length || !state.weaponDefs.length || !state.equipmentDefs.length)) {
+        fetchGmDefs().then(() => render()).catch(() => {});
+      }
       if (!bundle || bundle.ok === false || !bundle.character) throw new Error("Character not found: check character_id.");
       state.characterId = id;
       state.itemDefs = arr(itemDefs);
@@ -635,10 +646,92 @@ export function mountCharacterScreen({ root, runtime }) {
       <div class="cp-section-title">Magazines</div>
       <div class="cp-list">${mags.length ? mags.map(magCard).join("") : `<div class="cp-empty">No magazines.</div>`}</div>
       <div class="cp-section-title">Ammo stock</div>
-      <div class="cp-list">${ammo.length ? ammo.map((a) => `<div class="cp-card cp-rowitem"><span>${esc(a.display_name)}</span><span class="cp-mono">${esc(a.ammo_type_name || "")} · ${esc(a.caliber_name || "")} · x${dash(a.quantity)}</span></div>`).join("") : `<div class="cp-empty">No ammo.</div>`}</div>
+      <div class="cp-list">${ammo.length ? ammo.map((a) => `<div class="cp-card cp-rowitem"><span>${esc(a.display_name)}</span><span class="cp-mono">${esc(getAmmoStockTypeName(a))} · ${esc(getAmmoStockCaliberName(a))} · x${dash(a.quantity)}</span></div>`).join("") : `<div class="cp-empty">No ammo.</div>`}</div>
       <div class="cp-section-title">Active items</div>
       <div class="cp-list">${items.length ? items.map(itemCard).join("") : `<div class="cp-empty">No items.</div>`}</div>
       ${isGM() ? gmInventoryBlock() : ""}`;
+  }
+
+  function findAmmoDefForRow(row) {
+    const ammoTypeId = String(row?.ammo_type_id ?? "").trim();
+    const ammoCode = String(row?.ammo_type_code ?? row?.ammo_code ?? "").trim().toLowerCase();
+    return state.ammoDefs.find((def) =>
+      (ammoTypeId && String(def?.id ?? "").trim() === ammoTypeId) ||
+      (ammoCode && String(def?.code ?? "").trim().toLowerCase() === ammoCode)
+    ) || null;
+  }
+
+  function findMagazineDefForRow(row) {
+    const magazineDefId = String(row?.magazine_def?.id ?? row?.magazine_def_id ?? "").trim();
+    const magazineCode = String(row?.magazine_def?.code ?? row?.code ?? "").trim().toLowerCase();
+    return state.magazineDefs.find((def) =>
+      (magazineDefId && String(def?.id ?? "").trim() === magazineDefId) ||
+      (magazineCode && String(def?.code ?? "").trim().toLowerCase() === magazineCode)
+    ) || null;
+  }
+
+  function getAmmoStockCaliberCode(row) {
+    const ammoDef = findAmmoDefForRow(row);
+    return String(
+      row?.caliber_code ||
+      row?.caliber?.code ||
+      ammoDef?.caliber_code ||
+      ammoDef?.caliber?.code ||
+      ""
+    ).trim().toLowerCase();
+  }
+
+  function getAmmoStockCaliberName(row) {
+    const ammoDef = findAmmoDefForRow(row);
+    return String(
+      row?.caliber_name ||
+      row?.caliber?.name ||
+      ammoDef?.caliber_name ||
+      ammoDef?.caliber?.name ||
+      ""
+    ).trim();
+  }
+
+  function getAmmoStockTypeCode(row) {
+    const ammoDef = findAmmoDefForRow(row);
+    return String(
+      row?.ammo_type_code ||
+      row?.ammo_code ||
+      ammoDef?.code ||
+      ""
+    ).trim().toLowerCase();
+  }
+
+  function getAmmoStockTypeName(row) {
+    const ammoDef = findAmmoDefForRow(row);
+    return String(
+      row?.ammo_type_name ||
+      row?.ammo_name ||
+      ammoDef?.name ||
+      ""
+    ).trim();
+  }
+
+  function getMagazineCaliberCode(row) {
+    const magazineDef = findMagazineDefForRow(row);
+    return String(
+      row?.magazine_def?.caliber_code ||
+      row?.magazine_def?.caliber ||
+      row?.caliber_code ||
+      row?.caliber?.code ||
+      magazineDef?.caliber_code ||
+      magazineDef?.caliber?.code ||
+      ""
+    ).trim().toLowerCase();
+  }
+
+  function getMagazineCurrentAmmoTypeCode(row) {
+    return String(
+      row?.ammo_type?.code ||
+      row?.ammo_type_code ||
+      row?.ammo_code ||
+      ""
+    ).trim().toLowerCase();
   }
 
   function weaponCard(w) {
@@ -669,14 +762,21 @@ export function mountCharacterScreen({ root, runtime }) {
     const inW = arr(state.armory?.weapons).find((w) => (w.loaded_magazine?.id || w.active_profile?.loaded_magazine?.id) === m.id);
     const cap = m.magazine_def?.capacity ?? m.capacity;
     const ammoName = m.ammo_type?.name || m.ammo_type_name || "empty";
-    const cal = m.magazine_def?.caliber || m.caliber;
-    const compatAmmo = arr(state.inv.ammoStock).filter((a) => !cal || (a.caliber_code || a.caliber) === cal);
+    const caliberCode = getMagazineCaliberCode(m);
+    const currentAmmoTypeCode = getMagazineCurrentAmmoTypeCode(m);
+    const compatAmmo = arr(state.inv.ammoStock).filter((a) => {
+      const ammoCaliberCode = getAmmoStockCaliberCode(a);
+      const ammoTypeCode = getAmmoStockTypeCode(a);
+      if (caliberCode && ammoCaliberCode !== caliberCode) return false;
+      if ((m.current_rounds ?? 0) > 0 && currentAmmoTypeCode && ammoTypeCode !== currentAmmoTypeCode) return false;
+      return true;
+    });
     const empty = (m.current_rounds ?? 0) <= 0;
     return `<div class="cp-card" data-mag="${esc(m.id)}">
       <div class="cp-rowitem"><span><b>${esc(m.name)}</b> ${inW ? `<span class="cp-pill good">Inserted in ${esc(inW.name)}</span>` : `<span class="cp-pill">not inserted</span>`}</span>
         <span class="cp-mono">${dash(m.current_rounds)}/${dash(cap)} · ${esc(ammoName)}</span></div>
       <div class="cp-row" style="gap:8px;margin-top:8px">
-        <label class="cp-field" style="min-width:150px"><span>Ammo to load</span><select data-mact="ammo" data-mag="${esc(m.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc(a.id)}">${esc(a.display_name)} · ${esc(a.ammo_type_name || "")} · x${dash(a.quantity)}</option>`).join("") : `<option value="">— no compatible ammo —</option>`}</select></label>
+        <label class="cp-field" style="min-width:150px"><span>Ammo to load</span><select data-mact="ammo" data-mag="${esc(m.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc(a.id)}">${esc(a.display_name)} · ${esc(getAmmoStockTypeName(a))} · x${dash(a.quantity)}</option>`).join("") : `<option value="">— no compatible ammo —</option>`}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end">
           <button class="cp-btn-sm" data-mbtn="load" data-mag="${esc(m.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load / Top up</button>
           <button class="cp-btn-sm secondary" data-mbtn="unload" data-mag="${esc(m.id)}" type="button" ${empty ? "disabled" : ""}>Unload all</button>
@@ -719,12 +819,12 @@ export function mountCharacterScreen({ root, runtime }) {
         ? compatible.map((a) => `<option value="${esc(a.id)}">${esc(a.name)}</option>`).join("")
         : `<option value="">— no compatible ammo —</option>`;
     })();
-    const magOpts = state.magazineDefs.length
-      ? state.magazineDefs.map((d) => `<option value="${esc(d.id)}" ${d.id === curMagId ? "selected" : ""}>${esc(d.name)} (×${esc(d.capacity)})</option>`).join("")
-      : `<option value="">— no magazine defs —</option>`;
-    const ammoOpts = state.ammoDefs.length
-      ? state.ammoDefs.map((d) => `<option value="${esc(d.code)}">${esc(d.name)}</option>`).join("")
-      : `<option value="">— no ammo types —</option>`;
+      const magOpts = state.magazineDefs.length
+        ? state.magazineDefs.map((d) => `<option value="${esc(d.id)}" ${d.id === curMagId ? "selected" : ""}>${esc(d.name)} (×${esc(d.capacity)})</option>`).join("")
+        : `<option value="">— no magazine defs —</option>`;
+      const ammoOpts = state.ammoDefs.length
+        ? state.ammoDefs.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}${d.caliber?.name ? ` · ${esc(d.caliber.name)}` : ""}</option>`).join("")
+        : `<option value="">— no ammo types —</option>`;
     return `
       <div class="cp-section-title">GM · add weapon</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
@@ -1174,16 +1274,13 @@ export function mountCharacterScreen({ root, runtime }) {
     ), () => refresh({ sheet: false, equipment: false, abilities: false }));
   }
   function onGmAddAmmo() {
-    const code = root.querySelector('[data-ref="gmAmmoDef"]')?.value;
+    const ammoTypeId = root.querySelector('[data-ref="gmAmmoDef"]')?.value;
     const qty = Math.max(1, Number(root.querySelector('[data-ref="gmAmmoQty"]')?.value) || 1);
-    if (!code) { setNotice("err", "Select an ammo type."); render(); return; }
-    const ammoDef = state.ammoDefs.find((d) => d.code === code);
+    if (!ammoTypeId) { setNotice("err", "Select an ammo type."); render(); return; }
+    const ammoDef = state.ammoDefs.find((d) => String(d?.id ?? "") === ammoTypeId);
     if (!ammoDef) { setNotice("err", "Ammo type definition not found."); render(); return; }
-    // add_character_ammo_stock requires both ammo_type_code AND caliber_code
-    const caliberCode = ammoDef.caliber_code || ammoDef.caliber?.code || null;
-    if (!caliberCode) { setNotice("err", "Ammo def is missing caliber — reload defs and retry."); render(); return; }
     runMutation("Add ammo", () => api.inventory.addCharacterAmmoStock(
-      { character_id: state.characterId, ammo_type_code: code, caliber_code: caliberCode, quantity: qty }, settings()
+      { character_id: state.characterId, ammo_type_id: ammoTypeId, quantity: qty }, settings()
     ), () => refresh({ sheet: false, equipment: false, abilities: false }));
   }
   function onGmDelete(type, id) {

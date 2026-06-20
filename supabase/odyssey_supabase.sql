@@ -20543,7 +20543,9 @@ returns jsonb
 language plpgsql
 as $$
 declare
-  v_character_id uuid := nullif(trim(coalesce(p_payload->>'character_id', '')), '')::uuid;
+  v_character_id uuid := public.odyssey_try_parse_uuid(p_payload->>'character_id');
+  v_ammo_type_id uuid := public.odyssey_try_parse_uuid(p_payload->>'ammo_type_id');
+  v_caliber_id uuid := public.odyssey_try_parse_uuid(p_payload->>'caliber_id');
   v_display_name_input text := nullif(trim(coalesce(p_payload->>'display_name', '')), '');
   v_caliber_code text := lower(trim(coalesce(p_payload->>'caliber_code', '')));
   v_ammo_type_code text := lower(trim(coalesce(p_payload->>'ammo_type_code', '')));
@@ -20592,29 +20594,50 @@ begin
     );
   end if;
 
-  select *
-  into v_caliber
-  from public.odyssey_caliber_defs c
-  where c.code = v_caliber_code;
-
-  if not found then
-    return jsonb_build_object(
-      'ok', false,
-      'error', 'CALIBER_NOT_FOUND',
-      'caliber_code', v_caliber_code
-    );
+  if v_ammo_type_id is not null then
+    select *
+    into v_ammo_type
+    from public.odyssey_ammo_type_defs a
+    where a.id = v_ammo_type_id;
+  else
+    select *
+    into v_ammo_type
+    from public.odyssey_ammo_type_defs a
+    where a.code = v_ammo_type_code;
   end if;
-
-  select *
-  into v_ammo_type
-  from public.odyssey_ammo_type_defs a
-  where a.code = v_ammo_type_code;
 
   if not found then
     return jsonb_build_object(
       'ok', false,
       'error', 'AMMO_TYPE_NOT_FOUND',
+      'ammo_type_id', v_ammo_type_id,
       'ammo_type_code', v_ammo_type_code
+    );
+  end if;
+
+  if v_caliber_id is not null then
+    select *
+    into v_caliber
+    from public.odyssey_caliber_defs c
+    where c.id = v_caliber_id;
+  elsif v_caliber_code <> '' then
+    select *
+    into v_caliber
+    from public.odyssey_caliber_defs c
+    where c.code = v_caliber_code;
+  else
+    select *
+    into v_caliber
+    from public.odyssey_caliber_defs c
+    where c.id = v_ammo_type.caliber_id;
+  end if;
+
+  if not found then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'CALIBER_NOT_FOUND',
+      'caliber_id', v_caliber_id,
+      'caliber_code', v_caliber_code
     );
   end if;
 
@@ -20622,8 +20645,10 @@ begin
     return jsonb_build_object(
       'ok', false,
       'error', 'CALIBER_MISMATCH',
-      'caliber_code', v_caliber_code,
-      'ammo_type_code', v_ammo_type_code
+      'caliber_id', v_caliber.id,
+      'caliber_code', v_caliber.code,
+      'ammo_type_id', v_ammo_type.id,
+      'ammo_type_code', v_ammo_type.code
     );
   end if;
 

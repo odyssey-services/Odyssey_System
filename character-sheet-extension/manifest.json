@@ -1,14 +1,14 @@
 {
   "name": "Odyssey Character Sheet",
-  "version": "1.2.35",
+  "version": "1.2.36",
   "manifest_version": 1,
   "description": "Minimal character-sheet bridge shell for future Odyssey UI slices.",
   "author": "Codex",
-  "icon": "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.2.35",
+  "icon": "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.2.36",
   "action": {
     "title": "Odyssey Character Sheet",
-    "icon": "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.2.35",
-    "popover": "https://odyssey-services.github.io/Odyssey_System/character-sheet-extension/index.html?v=1.2.35",
+    "icon": "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.2.36",
+    "popover": "https://odyssey-services.github.io/Odyssey_System/character-sheet-extension/index.html?v=1.2.36",
     "height": 920,
     "width": 640
   }

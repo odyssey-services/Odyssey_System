@@ -27631,19 +27631,24 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     );
     return arr2(rows);
   }
+  async function fetchAmmoAndMagazineDefs() {
+    const safe = (p) => p.catch(() => []);
+    const [magazines, ammo] = await Promise.all([
+      safe(bridges.supabase.fetchSupabaseRows("odyssey_magazine_defs?select=id,code,name,capacity,caliber_id,caliber:caliber_id(id,code,name)&order=name", settings(), "")),
+      safe(bridges.supabase.fetchSupabaseRows("odyssey_ammo_type_defs?select=id,code,name,caliber_id,caliber:caliber_id(id,code,name)&order=name", settings(), ""))
+    ]);
+    state.magazineDefs = arr2(magazines);
+    state.ammoDefs = arr2(ammo);
+  }
   async function fetchGmDefs() {
     const safe = (p) => p.catch(() => []);
-    const [skills, weapons, magazines, ammo, equipment] = await Promise.all([
+    const [skills, weapons, equipment] = await Promise.all([
       safe(bridges.supabase.fetchSupabaseRows("odyssey_skill_defs?select=id,code,name,category,max_level&order=name", settings(), "")),
       safe(bridges.supabase.fetchSupabaseRows("odyssey_weapon_model_defs?select=id,code,name&order=name", settings(), "")),
-      safe(bridges.supabase.fetchSupabaseRows("odyssey_magazine_defs?select=id,code,name,capacity,caliber_id&order=name", settings(), "")),
-      safe(bridges.supabase.fetchSupabaseRows("odyssey_ammo_type_defs?select=id,code,name,caliber_id,caliber:caliber_id(id,code)&order=name", settings(), "")),
       safe(bridges.supabase.fetchSupabaseRows("odyssey_equipment_model_defs?select=id,code,name,item_type&order=name", settings(), ""))
     ]);
     state.skillDefs = arr2(skills);
     state.weaponDefs = arr2(weapons);
-    state.magazineDefs = arr2(magazines);
-    state.ammoDefs = arr2(ammo);
     state.equipmentDefs = arr2(equipment);
   }
   function applyBundle(bundle) {
@@ -27723,7 +27728,14 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         gmMode && !state.itemDefs.length ? fetchItemDefs().catch(() => []) : Promise.resolve(state.itemDefs),
         api.weapon.getCharacterArmory(id, settings()).catch(() => null)
       ]);
-      if (gmMode && !state.skillDefs.length) fetchGmDefs();
+      if (!state.ammoDefs.length || !state.magazineDefs.length) {
+        await fetchAmmoAndMagazineDefs().catch(() => {
+        });
+      }
+      if (gmMode && (!state.skillDefs.length || !state.weaponDefs.length || !state.equipmentDefs.length)) {
+        fetchGmDefs().then(() => render()).catch(() => {
+        });
+      }
       if (!bundle || bundle.ok === false || !bundle.character) throw new Error("Character not found: check character_id.");
       state.characterId = id;
       state.itemDefs = arr2(itemDefs);
@@ -28125,10 +28137,59 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <div class="cp-section-title">Magazines</div>
       <div class="cp-list">${mags.length ? mags.map(magCard).join("") : `<div class="cp-empty">No magazines.</div>`}</div>
       <div class="cp-section-title">Ammo stock</div>
-      <div class="cp-list">${ammo.length ? ammo.map((a) => `<div class="cp-card cp-rowitem"><span>${esc2(a.display_name)}</span><span class="cp-mono">${esc2(a.ammo_type_name || "")} \xB7 ${esc2(a.caliber_name || "")} \xB7 x${dash2(a.quantity)}</span></div>`).join("") : `<div class="cp-empty">No ammo.</div>`}</div>
+      <div class="cp-list">${ammo.length ? ammo.map((a) => `<div class="cp-card cp-rowitem"><span>${esc2(a.display_name)}</span><span class="cp-mono">${esc2(getAmmoStockTypeName(a))} \xB7 ${esc2(getAmmoStockCaliberName(a))} \xB7 x${dash2(a.quantity)}</span></div>`).join("") : `<div class="cp-empty">No ammo.</div>`}</div>
       <div class="cp-section-title">Active items</div>
       <div class="cp-list">${items.length ? items.map(itemCard).join("") : `<div class="cp-empty">No items.</div>`}</div>
       ${isGM() ? gmInventoryBlock() : ""}`;
+  }
+  function findAmmoDefForRow(row) {
+    const ammoTypeId = String(row?.ammo_type_id ?? "").trim();
+    const ammoCode = String(row?.ammo_type_code ?? row?.ammo_code ?? "").trim().toLowerCase();
+    return state.ammoDefs.find(
+      (def) => ammoTypeId && String(def?.id ?? "").trim() === ammoTypeId || ammoCode && String(def?.code ?? "").trim().toLowerCase() === ammoCode
+    ) || null;
+  }
+  function findMagazineDefForRow(row) {
+    const magazineDefId = String(row?.magazine_def?.id ?? row?.magazine_def_id ?? "").trim();
+    const magazineCode = String(row?.magazine_def?.code ?? row?.code ?? "").trim().toLowerCase();
+    return state.magazineDefs.find(
+      (def) => magazineDefId && String(def?.id ?? "").trim() === magazineDefId || magazineCode && String(def?.code ?? "").trim().toLowerCase() === magazineCode
+    ) || null;
+  }
+  function getAmmoStockCaliberCode(row) {
+    const ammoDef = findAmmoDefForRow(row);
+    return String(
+      row?.caliber_code || row?.caliber?.code || ammoDef?.caliber_code || ammoDef?.caliber?.code || ""
+    ).trim().toLowerCase();
+  }
+  function getAmmoStockCaliberName(row) {
+    const ammoDef = findAmmoDefForRow(row);
+    return String(
+      row?.caliber_name || row?.caliber?.name || ammoDef?.caliber_name || ammoDef?.caliber?.name || ""
+    ).trim();
+  }
+  function getAmmoStockTypeCode(row) {
+    const ammoDef = findAmmoDefForRow(row);
+    return String(
+      row?.ammo_type_code || row?.ammo_code || ammoDef?.code || ""
+    ).trim().toLowerCase();
+  }
+  function getAmmoStockTypeName(row) {
+    const ammoDef = findAmmoDefForRow(row);
+    return String(
+      row?.ammo_type_name || row?.ammo_name || ammoDef?.name || ""
+    ).trim();
+  }
+  function getMagazineCaliberCode(row) {
+    const magazineDef = findMagazineDefForRow(row);
+    return String(
+      row?.magazine_def?.caliber_code || row?.magazine_def?.caliber || row?.caliber_code || row?.caliber?.code || magazineDef?.caliber_code || magazineDef?.caliber?.code || ""
+    ).trim().toLowerCase();
+  }
+  function getMagazineCurrentAmmoTypeCode(row) {
+    return String(
+      row?.ammo_type?.code || row?.ammo_type_code || row?.ammo_code || ""
+    ).trim().toLowerCase();
   }
   function weaponCard(w) {
     const isMelee = !w.model?.caliber;
@@ -28153,14 +28214,21 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const inW = arr2(state.armory?.weapons).find((w) => (w.loaded_magazine?.id || w.active_profile?.loaded_magazine?.id) === m.id);
     const cap = m.magazine_def?.capacity ?? m.capacity;
     const ammoName = m.ammo_type?.name || m.ammo_type_name || "empty";
-    const cal = m.magazine_def?.caliber || m.caliber;
-    const compatAmmo = arr2(state.inv.ammoStock).filter((a) => !cal || (a.caliber_code || a.caliber) === cal);
+    const caliberCode = getMagazineCaliberCode(m);
+    const currentAmmoTypeCode = getMagazineCurrentAmmoTypeCode(m);
+    const compatAmmo = arr2(state.inv.ammoStock).filter((a) => {
+      const ammoCaliberCode = getAmmoStockCaliberCode(a);
+      const ammoTypeCode = getAmmoStockTypeCode(a);
+      if (caliberCode && ammoCaliberCode !== caliberCode) return false;
+      if ((m.current_rounds ?? 0) > 0 && currentAmmoTypeCode && ammoTypeCode !== currentAmmoTypeCode) return false;
+      return true;
+    });
     const empty = (m.current_rounds ?? 0) <= 0;
     return `<div class="cp-card" data-mag="${esc2(m.id)}">
       <div class="cp-rowitem"><span><b>${esc2(m.name)}</b> ${inW ? `<span class="cp-pill good">Inserted in ${esc2(inW.name)}</span>` : `<span class="cp-pill">not inserted</span>`}</span>
         <span class="cp-mono">${dash2(m.current_rounds)}/${dash2(cap)} \xB7 ${esc2(ammoName)}</span></div>
       <div class="cp-row" style="gap:8px;margin-top:8px">
-        <label class="cp-field" style="min-width:150px"><span>Ammo to load</span><select data-mact="ammo" data-mag="${esc2(m.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc2(a.id)}">${esc2(a.display_name)} \xB7 ${esc2(a.ammo_type_name || "")} \xB7 x${dash2(a.quantity)}</option>`).join("") : `<option value="">\u2014 no compatible ammo \u2014</option>`}</select></label>
+        <label class="cp-field" style="min-width:150px"><span>Ammo to load</span><select data-mact="ammo" data-mag="${esc2(m.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc2(a.id)}">${esc2(a.display_name)} \xB7 ${esc2(getAmmoStockTypeName(a))} \xB7 x${dash2(a.quantity)}</option>`).join("") : `<option value="">\u2014 no compatible ammo \u2014</option>`}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end">
           <button class="cp-btn-sm" data-mbtn="load" data-mag="${esc2(m.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load / Top up</button>
           <button class="cp-btn-sm secondary" data-mbtn="unload" data-mag="${esc2(m.id)}" type="button" ${empty ? "disabled" : ""}>Unload all</button>
@@ -28195,7 +28263,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       return compatible.length ? compatible.map((a) => `<option value="${esc2(a.id)}">${esc2(a.name)}</option>`).join("") : `<option value="">\u2014 no compatible ammo \u2014</option>`;
     })();
     const magOpts = state.magazineDefs.length ? state.magazineDefs.map((d) => `<option value="${esc2(d.id)}" ${d.id === curMagId ? "selected" : ""}>${esc2(d.name)} (\xD7${esc2(d.capacity)})</option>`).join("") : `<option value="">\u2014 no magazine defs \u2014</option>`;
-    const ammoOpts = state.ammoDefs.length ? state.ammoDefs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)}</option>`).join("") : `<option value="">\u2014 no ammo types \u2014</option>`;
+    const ammoOpts = state.ammoDefs.length ? state.ammoDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)}${d.caliber?.name ? ` \xB7 ${esc2(d.caliber.name)}` : ""}</option>`).join("") : `<option value="">\u2014 no ammo types \u2014</option>`;
     return `
       <div class="cp-section-title">GM \xB7 add weapon</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
@@ -28738,27 +28806,21 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     ), () => refresh({ sheet: false, equipment: false, abilities: false }));
   }
   function onGmAddAmmo() {
-    const code = root2.querySelector('[data-ref="gmAmmoDef"]')?.value;
+    const ammoTypeId = root2.querySelector('[data-ref="gmAmmoDef"]')?.value;
     const qty = Math.max(1, Number(root2.querySelector('[data-ref="gmAmmoQty"]')?.value) || 1);
-    if (!code) {
+    if (!ammoTypeId) {
       setNotice("err", "Select an ammo type.");
       render();
       return;
     }
-    const ammoDef = state.ammoDefs.find((d) => d.code === code);
+    const ammoDef = state.ammoDefs.find((d) => String(d?.id ?? "") === ammoTypeId);
     if (!ammoDef) {
       setNotice("err", "Ammo type definition not found.");
       render();
       return;
     }
-    const caliberCode = ammoDef.caliber_code || ammoDef.caliber?.code || null;
-    if (!caliberCode) {
-      setNotice("err", "Ammo def is missing caliber \u2014 reload defs and retry.");
-      render();
-      return;
-    }
     runMutation("Add ammo", () => api.inventory.addCharacterAmmoStock(
-      { character_id: state.characterId, ammo_type_code: code, caliber_code: caliberCode, quantity: qty },
+      { character_id: state.characterId, ammo_type_id: ammoTypeId, quantity: qty },
       settings()
     ), () => refresh({ sheet: false, equipment: false, abilities: false }));
   }
