@@ -3798,6 +3798,20 @@ var RELOAD_MODES = Object.freeze([
   { value: "reset", label: "Reset" },
   { value: "per_charge", label: "Per Charge" }
 ]);
+var MODIFIER_TARGET_OPTIONS = Object.freeze([
+  { value: "attack_accuracy", label: "Attack Accuracy" },
+  { value: "defense", label: "Defense" },
+  { value: "damage", label: "Damage" },
+  { value: "armor", label: "Armor" },
+  { value: "action_count", label: "Action Count" },
+  { value: "concentration_slots", label: "Concentration Slots" },
+  { value: "movement_m", label: "Movement (m)" },
+  { value: "aim_difficulty", label: "Aim Difficulty" },
+  { value: "range", label: "Range" },
+  { value: "attribute", label: "Attribute" },
+  { value: "skill", label: "Skill" },
+  { value: "custom", label: "Custom Target" }
+]);
 function createEmptySkillDraft() {
   return {
     id: "",
@@ -3812,10 +3826,12 @@ function createEmptySkillDraft() {
 function createEmptyAbilityLinkDraft() {
   return {
     abilityDefId: "",
-    grantMode: "available",
-    enabled: true,
+    grantMode: "activated",
+    durationRoundsMode: "none",
     durationRounds: "",
+    chargesMode: "none",
     charges: "",
+    cooldownRoundsMode: "none",
     cooldownRounds: "",
     reloadMode: "",
     reloadItemCode: ""
@@ -3828,15 +3844,25 @@ function createEmptyEquipmentDraft() {
     itemType: "armor",
     description: "",
     armorValue: "0",
-    armorMaxMinor: "0",
-    armorMaxSerious: "0",
     armorMaxCritical: "0",
     defaultBodyPartCode: "",
-    canEquip: true,
-    canEquipToBodyPart: true,
-    flagsText: "{}",
-    effectDataText: "{}",
+    allowedBodyPartCodes: [],
+    protectsHelplessExecution: false,
+    reservedForFuture: false,
+    notes: "",
+    modifiers: [],
+    flagsExtraData: {},
+    effectDataExtraData: {},
     abilityLinks: []
+  };
+}
+function createEmptyModifierDraft() {
+  return {
+    target: "attack_accuracy",
+    customTarget: "",
+    attributeCode: "",
+    skillCode: "",
+    value: "0"
   };
 }
 function createInitialState() {
@@ -3882,6 +3908,10 @@ function createInitialState() {
       skills: false,
       equipment: false
     },
+    collapsed: {
+      skillsCatalog: false,
+      equipmentCatalog: false
+    },
     requestNonce: 0
   };
 }
@@ -3891,19 +3921,6 @@ function cloneJson(value) {
 function coerceInteger(value, fallback = 0) {
   const parsed = Number.parseInt(String(value ?? "").trim(), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-function parseJsonField(text, label, expectedType) {
-  const parsed = safeJsonParse(String(text ?? "").trim(), void 0);
-  if (parsed === void 0) {
-    throw new Error(`${label} must contain valid JSON.`);
-  }
-  if (expectedType === "array" && !Array.isArray(parsed)) {
-    throw new Error(`${label} must be a JSON array.`);
-  }
-  if (expectedType === "object" && (!parsed || typeof parsed !== "object" || Array.isArray(parsed))) {
-    throw new Error(`${label} must be a JSON object.`);
-  }
-  return parsed;
 }
 function formatCreatorError(result, fallback) {
   if (!result || result.ok !== false) {
@@ -3952,9 +3969,45 @@ function buildEquipmentAutoTags(draft) {
   const tags = /* @__PURE__ */ new Set();
   if (draft.itemType) tags.add(String(draft.itemType).trim());
   if (draft.defaultBodyPartCode) tags.add(String(draft.defaultBodyPartCode).trim());
-  if (draft.canEquip) tags.add("equipable");
-  if (draft.canEquipToBodyPart) tags.add("body_part");
+  tags.add("equipable");
+  if (shouldEquipToBodyPart(draft.itemType, draft.defaultBodyPartCode)) tags.add("body_part");
   return Array.from(tags);
+}
+function toPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+function normalizeBodyPartCodeArray(value) {
+  return Array.isArray(value) ? Array.from(new Set(value.map((entry) => String(entry ?? "").trim()).filter(Boolean))) : [];
+}
+function suggestAllowedBodyPartCodes(defaultBodyPartCode) {
+  const code = String(defaultBodyPartCode ?? "").trim().toLowerCase();
+  switch (code) {
+    case "head":
+    case "torso":
+    case "special":
+      return code ? [code] : [];
+    case "l_arm":
+    case "r_arm":
+      return ["l_arm", "r_arm", "extra_l_arm", "extra_r_arm"];
+    case "l_leg":
+    case "r_leg":
+      return ["l_leg", "r_leg"];
+    default:
+      return code ? [code] : [];
+  }
+}
+function shouldEquipToBodyPart(itemType, defaultBodyPartCode) {
+  const type = String(itemType ?? "").trim();
+  if (type === "armor" || type === "shield") {
+    return true;
+  }
+  if (type === "implant" || type === "prosthetic") {
+    return Boolean(String(defaultBodyPartCode ?? "").trim());
+  }
+  return false;
+}
+function getEquipmentUiTypes(references) {
+  return (Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : []).filter((itemType) => String(itemType ?? "") !== "device");
 }
 function normalizeSkillDraft(bundle) {
   const skill = bundle?.skill ?? {};
@@ -3972,34 +4025,64 @@ function normalizeAbilityLinkDraft(entry) {
   const data = entry?.data && typeof entry.data === "object" && !Array.isArray(entry.data) ? entry.data : {};
   const reload = data?.reload && typeof data.reload === "object" && !Array.isArray(data.reload) ? data.reload : {};
   const charges = data.default_max_charges ?? data.default_current_charges ?? data.max_charges ?? data.current_charges ?? "";
+  const durationValue = data.duration_rounds;
+  const cooldownValue = data.cooldown_rounds ?? data.default_cooldown_rounds;
   return {
     abilityDefId: String(entry?.ability_def_id ?? ""),
-    grantMode: String(entry?.grant_mode ?? "available"),
-    enabled: entry?.grant_mode === "passive" ? true : Boolean(entry?.is_enabled ?? true),
-    durationRounds: String(data.duration_rounds ?? ""),
+    grantMode: String(entry?.grant_mode ?? "activated"),
+    durationRoundsMode: durationValue === null || durationValue === void 0 || durationValue === "" ? "none" : "set",
+    durationRounds: String(durationValue ?? ""),
+    chargesMode: charges === null || charges === void 0 || charges === "" ? "none" : "set",
     charges: charges === null || charges === void 0 ? "" : String(charges),
-    cooldownRounds: String(data.cooldown_rounds ?? data.default_cooldown_rounds ?? ""),
+    cooldownRoundsMode: cooldownValue === null || cooldownValue === void 0 || cooldownValue === "" ? "none" : "set",
+    cooldownRounds: String(cooldownValue ?? ""),
     reloadMode: String(reload.mode ?? data.reload_mode ?? ""),
     reloadItemCode: String(reload.item_code ?? data.reload_item_code ?? data.requires_reload_item_code ?? "")
   };
 }
 function normalizeEquipmentDraft(bundle) {
   const model = bundle?.equipment_model ?? {};
+  const flags = toPlainObject(model.flags);
+  const effectData = toPlainObject(model.effect_data);
+  const {
+    allowed_body_part_codes: allowedBodyPartCodesRaw,
+    protects_helpless_execution: protectsHelplessExecutionRaw,
+    ...flagsExtraData
+  } = flags;
+  const {
+    reserved_for_future: reservedForFutureRaw,
+    notes: notesRaw,
+    modifiers: modifiersRaw,
+    ...effectDataExtraData
+  } = effectData;
+  const normalizedAllowedBodyPartCodes = normalizeBodyPartCodeArray(allowedBodyPartCodesRaw);
   return {
     id: String(model.id ?? ""),
     name: String(model.name ?? ""),
     itemType: String(model.item_type ?? "armor"),
     description: String(model.description ?? ""),
     armorValue: String(model.armor_value ?? 0),
-    armorMaxMinor: String(model.armor_max_minor ?? 0),
-    armorMaxSerious: String(model.armor_max_serious ?? 0),
     armorMaxCritical: String(model.armor_max_critical ?? 0),
     defaultBodyPartCode: String(model.default_body_part_code ?? ""),
-    canEquip: Boolean(model.can_equip ?? true),
-    canEquipToBodyPart: Boolean(model.can_equip_to_body_part ?? true),
-    flagsText: prettyJson(model.flags ?? {}),
-    effectDataText: prettyJson(model.effect_data ?? {}),
+    allowedBodyPartCodes: normalizedAllowedBodyPartCodes.length ? normalizedAllowedBodyPartCodes : suggestAllowedBodyPartCodes(model.default_body_part_code),
+    protectsHelplessExecution: Boolean(protectsHelplessExecutionRaw),
+    reservedForFuture: Boolean(reservedForFutureRaw),
+    notes: String(notesRaw ?? ""),
+    modifiers: Array.isArray(modifiersRaw) ? modifiersRaw.map(normalizeModifierDraft) : [],
+    flagsExtraData,
+    effectDataExtraData,
     abilityLinks: Array.isArray(bundle?.ability_links) ? bundle.ability_links.map(normalizeAbilityLinkDraft) : []
+  };
+}
+function normalizeModifierDraft(entry) {
+  const rawTarget = String(entry?.target ?? "").trim();
+  const knownTarget = MODIFIER_TARGET_OPTIONS.some((option) => option.value === rawTarget && option.value !== "custom") ? rawTarget : "custom";
+  return {
+    target: knownTarget,
+    customTarget: knownTarget === "custom" ? rawTarget : "",
+    attributeCode: String(entry?.attribute ?? ""),
+    skillCode: String(entry?.skill_code ?? ""),
+    value: String(entry?.value ?? 0)
   };
 }
 function makeSkillDuplicateDraft(source) {
@@ -4016,6 +4099,11 @@ function makeEquipmentDuplicateDraft(source) {
     ...cloneJson(source),
     id: "",
     name: name ? `${name} Copy` : "",
+    flagsExtraData: cloneJson(source.flagsExtraData ?? {}),
+    effectDataExtraData: cloneJson(source.effectDataExtraData ?? {}),
+    modifiers: Array.isArray(source.modifiers) ? source.modifiers.map((entry) => ({
+      ...cloneJson(entry)
+    })) : [],
     abilityLinks: Array.isArray(source.abilityLinks) ? source.abilityLinks.map((entry) => ({
       ...cloneJson(entry)
     })) : []
@@ -4038,23 +4126,26 @@ function generatedEquipmentPreview(draft, state) {
   return { code, tags, sortOrder };
 }
 function buildAbilityLinkPayload(link, index) {
-  const grantMode = String(link.grantMode ?? "available").trim() || "available";
+  const grantMode = String(link.grantMode ?? "activated").trim() || "activated";
   const isPassive = grantMode === "passive";
+  const durationMode = String(link.durationRoundsMode ?? "").trim() || "none";
+  const chargesMode = String(link.chargesMode ?? "").trim() || "none";
+  const cooldownMode = String(link.cooldownRoundsMode ?? "").trim() || "none";
   const charges = String(link.charges ?? "").trim();
   const cooldown = String(link.cooldownRounds ?? "").trim();
   const duration = String(link.durationRounds ?? "").trim();
   const reloadMode = String(link.reloadMode ?? "").trim();
   const reloadItemCode = String(link.reloadItemCode ?? "").trim();
   const data = {};
-  if (duration !== "") {
+  if (durationMode === "set" && duration !== "") {
     data.duration_rounds = coerceInteger(duration, 0);
   }
-  if (charges !== "") {
+  if (chargesMode === "set" && charges !== "") {
     const value = coerceInteger(charges, 0);
     data.default_current_charges = value;
     data.default_max_charges = value;
   }
-  if (cooldown !== "") {
+  if (cooldownMode === "set" && cooldown !== "") {
     data.cooldown_rounds = coerceInteger(cooldown, 0);
   }
   if (reloadMode) {
@@ -4066,7 +4157,7 @@ function buildAbilityLinkPayload(link, index) {
   return {
     ability_def_id: String(link.abilityDefId ?? "").trim(),
     grant_mode: grantMode,
-    is_enabled: isPassive ? true : Boolean(link.enabled),
+    is_enabled: isPassive,
     sort_order: index,
     data
   };
@@ -4086,6 +4177,38 @@ function buildSkillPayload(draft, auto) {
   };
 }
 function buildEquipmentPayload(draft, auto) {
+  const canEquipToBodyPart = shouldEquipToBodyPart(draft.itemType, draft.defaultBodyPartCode);
+  const flags = toPlainObject(cloneJson(draft.flagsExtraData));
+  const effectData = toPlainObject(cloneJson(draft.effectDataExtraData));
+  const selectedAllowedCodes = normalizeBodyPartCodeArray(draft.allowedBodyPartCodes);
+  const suggestedAllowedCodes = suggestAllowedBodyPartCodes(draft.defaultBodyPartCode);
+  const finalAllowedCodes = canEquipToBodyPart ? selectedAllowedCodes.length ? selectedAllowedCodes : suggestedAllowedCodes : [];
+  if (canEquipToBodyPart && finalAllowedCodes.length) {
+    flags.allowed_body_part_codes = finalAllowedCodes;
+  } else {
+    delete flags.allowed_body_part_codes;
+  }
+  if (draft.protectsHelplessExecution) {
+    flags.protects_helpless_execution = true;
+  } else {
+    delete flags.protects_helpless_execution;
+  }
+  if (draft.reservedForFuture) {
+    effectData.reserved_for_future = true;
+  } else {
+    delete effectData.reserved_for_future;
+  }
+  if (String(draft.notes ?? "").trim()) {
+    effectData.notes = String(draft.notes ?? "").trim();
+  } else {
+    delete effectData.notes;
+  }
+  const modifiers = (Array.isArray(draft.modifiers) ? draft.modifiers : []).map(buildModifierPayload).filter(Boolean);
+  if (modifiers.length) {
+    effectData.modifiers = modifiers;
+  } else {
+    delete effectData.modifiers;
+  }
   return {
     id: draft.id || void 0,
     code: String(auto.code ?? "").trim(),
@@ -4093,18 +4216,44 @@ function buildEquipmentPayload(draft, auto) {
     item_type: String(draft.itemType ?? "armor").trim() || "armor",
     description: String(draft.description ?? ""),
     armor_value: coerceInteger(draft.armorValue, 0),
-    armor_max_minor: coerceInteger(draft.armorMaxMinor, 0),
-    armor_max_serious: coerceInteger(draft.armorMaxSerious, 0),
+    armor_max_minor: 0,
+    armor_max_serious: 0,
     armor_max_critical: coerceInteger(draft.armorMaxCritical, 0),
     default_body_part_code: String(draft.defaultBodyPartCode ?? "").trim() || null,
-    can_equip: Boolean(draft.canEquip),
-    can_equip_to_body_part: Boolean(draft.canEquipToBodyPart),
+    can_equip: true,
+    can_equip_to_body_part: canEquipToBodyPart,
     sort_order: auto.sortOrder,
     tags: auto.tags,
-    flags: parseJsonField(draft.flagsText, "Flags", "object"),
-    effect_data: parseJsonField(draft.effectDataText, "Data / effect_data", "object"),
+    flags,
+    effect_data: effectData,
     ability_links: (Array.isArray(draft.abilityLinks) ? draft.abilityLinks : []).filter((entry) => String(entry?.abilityDefId ?? "").trim()).map((entry, index) => buildAbilityLinkPayload(entry, index))
   };
+}
+function buildModifierPayload(entry) {
+  const target = String(entry?.target ?? "").trim() || "attack_accuracy";
+  const resolvedTarget = target === "custom" ? String(entry?.customTarget ?? "").trim() : target;
+  if (!resolvedTarget) {
+    return null;
+  }
+  const payload = {
+    target: resolvedTarget,
+    value: coerceInteger(entry?.value, 0)
+  };
+  if (resolvedTarget === "attribute") {
+    const attributeCode = String(entry?.attributeCode ?? "").trim();
+    if (!attributeCode) {
+      return null;
+    }
+    payload.attribute = attributeCode;
+  }
+  if (resolvedTarget === "skill") {
+    const skillCode = String(entry?.skillCode ?? "").trim();
+    if (!skillCode) {
+      return null;
+    }
+    payload.skill_code = skillCode;
+  }
+  return payload;
 }
 function extractEntityBundle(result) {
   if (result?.entity?.ok) {
@@ -4156,7 +4305,7 @@ function buildSkillFilterMarkup(state, references) {
 }
 function buildEquipmentFilterMarkup(state, references) {
   const selected = state.filters.equipment.itemType;
-  const types = Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : [];
+  const types = getEquipmentUiTypes(references);
   const options = [
     '<option value="">All item types</option>',
     ...types.map(
@@ -4230,6 +4379,19 @@ function buildBodyPartOptions(references, selectedValue) {
   }
   return options.join("");
 }
+function buildBodyPartCheckboxMarkup(references, selectedCodes) {
+  const selectedSet = new Set(normalizeBodyPartCodeArray(selectedCodes));
+  const bodyParts = Array.isArray(references?.body_part_definitions) ? references.body_part_definitions : [];
+  if (!bodyParts.length) {
+    return `<div class="creator-empty">No body part definitions found.</div>`;
+  }
+  return bodyParts.map((part) => `
+      <label class="creator-check-pill">
+        <input data-creator-body-part-code="${escapeHtml(part.code)}" type="checkbox"${selectedSet.has(part.code) ? " checked" : ""}>
+        <span>${escapeHtml(part.name || part.code)}</span>
+      </label>
+    `).join("");
+}
 function buildAbilityOptions(references, selectedValue, selectedIds = []) {
   const abilities = Array.isArray(references?.abilities) ? references.abilities : [];
   const selectedSet = new Set((selectedIds ?? []).filter(Boolean));
@@ -4251,6 +4413,113 @@ function buildItemOptions(references, selectedValue) {
     );
   }
   return options.join("");
+}
+function buildModifierTargetOptions(selectedValue) {
+  return MODIFIER_TARGET_OPTIONS.map((option) => `<option value="${escapeHtml(option.value)}"${selectedValue === option.value ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+}
+function buildSkillCodeOptions(references, selectedValue) {
+  const skills = Array.isArray(references?.skills) ? references.skills : [];
+  const options = ['<option value="">Select skill</option>'];
+  for (const skill of skills) {
+    options.push(
+      `<option value="${escapeHtml(skill.code)}"${selectedValue === skill.code ? " selected" : ""}>${escapeHtml(skill.name || skill.code)}${skill.category ? ` | ${escapeHtml(skill.category)}` : ""}</option>`
+    );
+  }
+  return options.join("");
+}
+function buildCatalogSection({
+  title,
+  count,
+  collapsed,
+  action,
+  bodyMarkup
+}) {
+  return `
+    <aside class="creator-sidebar">
+      <button type="button" class="creator-collapse-toggle" data-creator-action="${escapeHtml(action)}" aria-expanded="${collapsed ? "false" : "true"}">
+        <span>${escapeHtml(title)}</span>
+        <span class="creator-inline-compact">
+          <span class="creator-count">${escapeHtml(String(count))}</span>
+          <span class="creator-collapse-icon">${collapsed ? "+" : "-"}</span>
+        </span>
+      </button>
+      ${collapsed ? "" : `<div class="creator-list">${bodyMarkup}</div>`}
+    </aside>
+  `;
+}
+function buildOptionalNumberField({
+  label,
+  field,
+  index,
+  value,
+  mode
+}) {
+  const selectedMode = String(mode ?? "").trim() || "none";
+  return `
+    <div class="creator-small-stack">
+      <span>${escapeHtml(label)}</span>
+      <div class="creator-mini-grid">
+        <select data-creator-link-input="${field}Mode" data-link-index="${index}">
+          <option value="none"${selectedMode === "none" ? " selected" : ""}>None</option>
+          <option value="set"${selectedMode === "set" ? " selected" : ""}>Set</option>
+        </select>
+        <input data-creator-link-input="${field}" data-link-index="${index}" type="number" min="0" value="${escapeHtml(value)}"${selectedMode === "set" ? "" : " disabled"}>
+      </div>
+    </div>
+  `;
+}
+function buildModifierEditorMarkup(draft, references) {
+  const modifiers = Array.isArray(draft.modifiers) ? draft.modifiers : [];
+  if (!modifiers.length) {
+    return `<div class="creator-empty">No modifiers yet. Add one if this model should grant a passive or active numeric effect.</div>`;
+  }
+  return modifiers.map((modifier, index) => {
+    const resolvedTarget = String(modifier.target ?? "attack_accuracy");
+    return `
+        <div class="creator-link-card" data-creator-modifier-row="${index}">
+          <div class="creator-link-head">
+            <strong>Modifier ${index + 1}</strong>
+            <button type="button" class="secondary" data-creator-modifier-remove="${index}">Remove</button>
+          </div>
+          <div class="field-grid creator-grid-3">
+            <label class="field-stack">
+              <span>Target</span>
+              <select data-creator-modifier-input="target" data-modifier-index="${index}">
+                ${buildModifierTargetOptions(resolvedTarget)}
+              </select>
+            </label>
+            ${resolvedTarget === "attribute" ? `
+              <label class="field-stack">
+                <span>Attribute</span>
+                <select data-creator-modifier-input="attributeCode" data-modifier-index="${index}">
+                  ${buildAttributeOptions(references, modifier.attributeCode)}
+                </select>
+              </label>
+            ` : resolvedTarget === "skill" ? `
+              <label class="field-stack">
+                <span>Skill</span>
+                <select data-creator-modifier-input="skillCode" data-modifier-index="${index}">
+                  ${buildSkillCodeOptions(references, modifier.skillCode)}
+                </select>
+              </label>
+            ` : resolvedTarget === "custom" ? `
+              <label class="field-stack">
+                <span>Custom Target</span>
+                <input data-creator-modifier-input="customTarget" data-modifier-index="${index}" type="text" value="${escapeHtml(modifier.customTarget)}" placeholder="custom_target">
+              </label>
+            ` : `
+              <div class="creator-auto-meta creator-small-meta">
+                <div><strong>Resolved Target:</strong> ${escapeHtml(resolvedTarget)}</div>
+              </div>
+            `}
+            <label class="field-stack">
+              <span>Value</span>
+              <input data-creator-modifier-input="value" data-modifier-index="${index}" type="number" value="${escapeHtml(modifier.value)}">
+            </label>
+          </div>
+        </div>
+      `;
+  }).join("");
 }
 function buildSkillEditorMarkup(state, references) {
   const draft = state.drafts.skills;
@@ -4347,29 +4616,33 @@ function buildAbilityLinksEditorMarkup(draft, references) {
             <label class="field-stack">
               <span>Grant Mode</span>
               <select data-creator-link-input="grantMode" data-link-index="${index}">
-                <option value="available"${link.grantMode === "available" ? " selected" : ""}>Available</option>
-                <option value="activated"${link.grantMode === "activated" ? " selected" : ""}>Activated</option>
+                <option value="activated"${link.grantMode === "activated" ? " selected" : ""}>Active</option>
                 <option value="passive"${passive ? " selected" : ""}>Passive</option>
               </select>
             </label>
           </div>
-          <div class="field-grid creator-grid-4">
-            <label class="field-stack">
-              <span>Enabled</span>
-              <input data-creator-link-input="enabled" data-link-index="${index}" type="checkbox"${passive || link.enabled ? " checked" : ""}${passive ? " disabled" : ""}>
-            </label>
-            <label class="field-stack">
-              <span>Duration Rounds</span>
-              <input data-creator-link-input="durationRounds" data-link-index="${index}" type="number" min="0" value="${escapeHtml(link.durationRounds)}">
-            </label>
-            <label class="field-stack">
-              <span>Charges</span>
-              <input data-creator-link-input="charges" data-link-index="${index}" type="number" min="0" value="${escapeHtml(link.charges)}">
-            </label>
-            <label class="field-stack">
-              <span>Cooldown</span>
-              <input data-creator-link-input="cooldownRounds" data-link-index="${index}" type="number" min="0" value="${escapeHtml(link.cooldownRounds)}">
-            </label>
+          <div class="field-grid creator-grid-3">
+            ${buildOptionalNumberField({
+      label: "Duration Rounds",
+      field: "durationRounds",
+      index,
+      value: link.durationRounds,
+      mode: link.durationRoundsMode
+    })}
+            ${buildOptionalNumberField({
+      label: "Charges",
+      field: "charges",
+      index,
+      value: link.charges,
+      mode: link.chargesMode
+    })}
+            ${buildOptionalNumberField({
+      label: "Cooldown",
+      field: "cooldownRounds",
+      index,
+      value: link.cooldownRounds,
+      mode: link.cooldownRoundsMode
+    })}
           </div>
           <div class="field-grid creator-grid-2">
             <label class="field-stack">
@@ -4392,7 +4665,11 @@ function buildAbilityLinksEditorMarkup(draft, references) {
 function buildEquipmentEditorMarkup(state, references) {
   const draft = state.drafts.equipment;
   const auto = generatedEquipmentPreview(draft, state);
-  const types = Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : [];
+  const types = getEquipmentUiTypes(references);
+  const canEquipToBodyPart = shouldEquipToBodyPart(draft.itemType, draft.defaultBodyPartCode);
+  const allowedBodyPartCodes = draft.allowedBodyPartCodes?.length ? draft.allowedBodyPartCodes : suggestAllowedBodyPartCodes(draft.defaultBodyPartCode);
+  const advancedFlagsCount = Object.keys(toPlainObject(draft.flagsExtraData)).length;
+  const advancedEffectDataCount = Object.keys(toPlainObject(draft.effectDataExtraData)).length;
   const typeOptions = types.map((itemType) => `<option value="${escapeHtml(itemType)}"${draft.itemType === itemType ? " selected" : ""}>${escapeHtml(itemType)}</option>`).join("");
   const payloadPreview = (() => {
     try {
@@ -4430,29 +4707,15 @@ function buildEquipmentEditorMarkup(state, references) {
           <span>Default Body Part</span>
           <select data-creator-input="defaultBodyPartCode">${buildBodyPartOptions(references, draft.defaultBodyPartCode)}</select>
         </label>
-        <div class="creator-check-stack">
-          <label class="toggle-inline">
-            <input data-creator-input="canEquip" type="checkbox"${draft.canEquip ? " checked" : ""}>
-            <span>Can equip</span>
-          </label>
-          <label class="toggle-inline">
-            <input data-creator-input="canEquipToBodyPart" type="checkbox"${draft.canEquipToBodyPart ? " checked" : ""}>
-            <span>Can equip to body part</span>
-          </label>
+        <div class="creator-auto-meta creator-small-meta">
+          <div><strong>Can equip:</strong> true</div>
+          <div><strong>Equip to body part:</strong> ${canEquipToBodyPart ? "true" : "false"}</div>
         </div>
       </div>
-      <div class="field-grid creator-grid-4">
+      <div class="field-grid creator-grid-2">
         <label class="field-stack">
           <span>Armor Value</span>
           <input data-creator-input="armorValue" type="number" value="${escapeHtml(draft.armorValue)}">
-        </label>
-        <label class="field-stack">
-          <span>Armor Max Minor</span>
-          <input data-creator-input="armorMaxMinor" type="number" value="${escapeHtml(draft.armorMaxMinor)}">
-        </label>
-        <label class="field-stack">
-          <span>Armor Max Serious</span>
-          <input data-creator-input="armorMaxSerious" type="number" value="${escapeHtml(draft.armorMaxSerious)}">
         </label>
         <label class="field-stack">
           <span>Armor Max Critical</span>
@@ -4468,14 +4731,59 @@ function buildEquipmentEditorMarkup(state, references) {
         <div><strong>Auto sort:</strong> ${escapeHtml(String(auto.sortOrder))}</div>
         <div><strong>Auto tags:</strong> ${escapeHtml(auto.tags.join(", ") || "none")}</div>
       </div>
-      <label class="field-stack">
-        <span>Flags JSON</span>
-        <textarea data-creator-input="flagsText" rows="8" spellcheck="false">${escapeHtml(draft.flagsText)}</textarea>
-      </label>
-      <label class="field-stack">
-        <span>Data / effect_data JSON</span>
-        <textarea data-creator-input="effectDataText" rows="8" spellcheck="false">${escapeHtml(draft.effectDataText)}</textarea>
-      </label>
+      <div class="creator-section-card">
+        <div class="creator-section-head">
+          <strong>Flags & Rules</strong>
+          <span class="muted">Structured creator fields instead of raw JSON.</span>
+        </div>
+        ${canEquipToBodyPart ? `
+          <div class="field-stack">
+            <span>Allowed Body Parts</span>
+            <div class="creator-check-grid">
+              ${buildBodyPartCheckboxMarkup(references, allowedBodyPartCodes)}
+            </div>
+          </div>
+        ` : `
+          <div class="creator-auto-meta creator-small-meta">
+            <div><strong>Allowed Body Parts:</strong> not used for this item type</div>
+          </div>
+        `}
+        <div class="field-grid creator-grid-2">
+          <label class="toggle-inline">
+            <input data-creator-input="protectsHelplessExecution" type="checkbox"${draft.protectsHelplessExecution ? " checked" : ""}>
+            <span>Protects helpless execution</span>
+          </label>
+        </div>
+        ${advancedFlagsCount || advancedEffectDataCount ? `
+          <div class="creator-auto-meta creator-small-meta">
+            ${advancedFlagsCount ? `<div><strong>Preserved extra flags:</strong> ${escapeHtml(String(advancedFlagsCount))}</div>` : ""}
+            ${advancedEffectDataCount ? `<div><strong>Preserved extra data keys:</strong> ${escapeHtml(String(advancedEffectDataCount))}</div>` : ""}
+          </div>
+        ` : ""}
+      </div>
+      <div class="creator-section-card">
+        <div class="creator-section-head">
+          <strong>Data & Modifiers</strong>
+          <span class="muted">Notes, reserved markers, and numeric effect rows.</span>
+        </div>
+        <div class="field-grid creator-grid-2">
+          <label class="toggle-inline">
+            <input data-creator-input="reservedForFuture" type="checkbox"${draft.reservedForFuture ? " checked" : ""}>
+            <span>Reserved for future logic</span>
+          </label>
+        </div>
+        <label class="field-stack">
+          <span>Notes</span>
+          <textarea data-creator-input="notes" rows="4" placeholder="Optional backend note for GM / future implementation">${escapeHtml(draft.notes)}</textarea>
+        </label>
+        <div class="creator-links-block">
+          <div class="creator-links-head">
+            <span>Modifiers</span>
+            <button type="button" data-creator-action="addModifier">Add Modifier</button>
+          </div>
+          ${buildModifierEditorMarkup(draft, references)}
+        </div>
+      </div>
       <div class="creator-links-block">
         <div class="creator-links-head">
           <span>Ability Links</span>
@@ -4511,6 +4819,14 @@ function buildPanelMarkup(state, access) {
   const listMarkup = state.activeTab === "skills" ? buildListMarkup("skills", state.lists.skills, state.selectedIds.skills) : buildListMarkup("equipment", state.lists.equipment, state.selectedIds.equipment);
   const filtersMarkup = state.activeTab === "skills" ? buildSkillFilterMarkup(state, references) : buildEquipmentFilterMarkup(state, references);
   const editorMarkup = state.activeTab === "skills" ? buildSkillEditorMarkup(state, references) : buildEquipmentEditorMarkup(state, references);
+  const catalogCollapsed = state.activeTab === "skills" ? Boolean(state.collapsed.skillsCatalog) : Boolean(state.collapsed.equipmentCatalog);
+  const catalogMarkup = buildCatalogSection({
+    title: state.activeTab === "skills" ? "Skill Catalog" : "Equipment Catalog",
+    count: state.activeTab === "skills" ? state.lists.skills.length : state.lists.equipment.length,
+    collapsed: catalogCollapsed,
+    action: state.activeTab === "skills" ? "toggleSkillsCatalog" : "toggleEquipmentCatalog",
+    bodyMarkup: listMarkup
+  });
   return `
     <section class="panel creator-panel">
       <div class="panel-title">Creator Menu</div>
@@ -4521,13 +4837,7 @@ function buildPanelMarkup(state, access) {
       ${state.info ? `<div class="creator-banner info">${escapeHtml(state.info)}</div>` : ""}
       ${state.loading ? `<div class="creator-banner info">Loading: ${escapeHtml(state.loadingLabel || "working...")}</div>` : ""}
       <div class="creator-layout">
-        <aside class="creator-sidebar">
-          <div class="creator-sidebar-head">
-            <span>${state.activeTab === "skills" ? "Skill Catalog" : "Equipment Catalog"}</span>
-            <span class="creator-count">${state.activeTab === "skills" ? state.lists.skills.length : state.lists.equipment.length}</span>
-          </div>
-          <div class="creator-list">${listMarkup}</div>
-        </aside>
+        ${catalogMarkup}
         <div class="creator-editor">
           ${editorMarkup}
         </div>
@@ -4551,25 +4861,39 @@ function readSkillDraftFromDom(root2) {
     description: String(query("description")?.value ?? "")
   };
 }
-function readEquipmentDraftFromDom(root2) {
+function readEquipmentDraftFromDom(root2, fallbackDraft = createEmptyEquipmentDraft()) {
   const form = root2.querySelector('[data-creator-form="equipment"]');
   if (!(form instanceof HTMLElement)) {
-    return createEmptyEquipmentDraft();
+    return cloneJson(fallbackDraft);
   }
   const query = (field) => form.querySelector(`[data-creator-input="${field}"]`);
+  const bodyPartCodes = Array.from(form.querySelectorAll("[data-creator-body-part-code]:checked")).map((entry) => String(entry.getAttribute("data-creator-body-part-code") ?? "").trim()).filter(Boolean);
   const abilityLinks = Array.from(form.querySelectorAll("[data-creator-link-row]")).map((row) => {
     const index = String(row.getAttribute("data-creator-link-row") ?? "");
     const linkQuery = (field) => form.querySelector(`[data-creator-link-input="${field}"][data-link-index="${index}"]`);
-    const grantMode = String(linkQuery("grantMode")?.value ?? "available");
+    const grantMode = String(linkQuery("grantMode")?.value ?? "activated");
     return {
       abilityDefId: String(linkQuery("abilityDefId")?.value ?? ""),
       grantMode,
-      enabled: grantMode === "passive" ? true : Boolean(linkQuery("enabled")?.checked),
+      durationRoundsMode: String(linkQuery("durationRoundsMode")?.value ?? "none"),
       durationRounds: String(linkQuery("durationRounds")?.value ?? ""),
+      chargesMode: String(linkQuery("chargesMode")?.value ?? "none"),
       charges: String(linkQuery("charges")?.value ?? ""),
+      cooldownRoundsMode: String(linkQuery("cooldownRoundsMode")?.value ?? "none"),
       cooldownRounds: String(linkQuery("cooldownRounds")?.value ?? ""),
       reloadMode: String(linkQuery("reloadMode")?.value ?? ""),
       reloadItemCode: String(linkQuery("reloadItemCode")?.value ?? "")
+    };
+  });
+  const modifiers = Array.from(form.querySelectorAll("[data-creator-modifier-row]")).map((row) => {
+    const index = String(row.getAttribute("data-creator-modifier-row") ?? "");
+    const modifierQuery = (field) => form.querySelector(`[data-creator-modifier-input="${field}"][data-modifier-index="${index}"]`);
+    return {
+      target: String(modifierQuery("target")?.value ?? "attack_accuracy"),
+      customTarget: String(modifierQuery("customTarget")?.value ?? ""),
+      attributeCode: String(modifierQuery("attributeCode")?.value ?? ""),
+      skillCode: String(modifierQuery("skillCode")?.value ?? ""),
+      value: String(modifierQuery("value")?.value ?? "0")
     };
   });
   return {
@@ -4578,14 +4902,15 @@ function readEquipmentDraftFromDom(root2) {
     itemType: String(query("itemType")?.value ?? "armor"),
     description: String(query("description")?.value ?? ""),
     armorValue: String(query("armorValue")?.value ?? "0"),
-    armorMaxMinor: String(query("armorMaxMinor")?.value ?? "0"),
-    armorMaxSerious: String(query("armorMaxSerious")?.value ?? "0"),
     armorMaxCritical: String(query("armorMaxCritical")?.value ?? "0"),
     defaultBodyPartCode: String(query("defaultBodyPartCode")?.value ?? ""),
-    canEquip: Boolean(query("canEquip")?.checked),
-    canEquipToBodyPart: Boolean(query("canEquipToBodyPart")?.checked),
-    flagsText: String(query("flagsText")?.value ?? "{}"),
-    effectDataText: String(query("effectDataText")?.value ?? "{}"),
+    allowedBodyPartCodes: bodyPartCodes,
+    protectsHelplessExecution: Boolean(query("protectsHelplessExecution")?.checked),
+    reservedForFuture: Boolean(query("reservedForFuture")?.checked),
+    notes: String(query("notes")?.value ?? ""),
+    modifiers,
+    flagsExtraData: cloneJson(fallbackDraft.flagsExtraData ?? {}),
+    effectDataExtraData: cloneJson(fallbackDraft.effectDataExtraData ?? {}),
     abilityLinks
   };
 }
@@ -4621,7 +4946,7 @@ function mountCreatorMenu({
     if (state.activeTab === "skills") {
       state.drafts.skills = readSkillDraftFromDom(root2);
     } else {
-      state.drafts.equipment = readEquipmentDraftFromDom(root2);
+      state.drafts.equipment = readEquipmentDraftFromDom(root2, state.drafts.equipment);
     }
   }
   function clearMessages() {
@@ -4660,7 +4985,7 @@ function mountCreatorMenu({
         clearMessages();
         updateDirtyPill(root2, state.activeTab, true);
         const target = event.target;
-        if (target instanceof HTMLElement && target.hasAttribute("data-creator-link-input") && ["grantMode", "reloadMode"].includes(String(target.getAttribute("data-creator-link-input")))) {
+        if (target instanceof HTMLElement && (target.hasAttribute("data-creator-link-input") && ["grantMode", "reloadMode", "durationRoundsMode", "chargesMode", "cooldownRoundsMode"].includes(String(target.getAttribute("data-creator-link-input"))) || target.hasAttribute("data-creator-input") && ["itemType", "defaultBodyPartCode"].includes(String(target.getAttribute("data-creator-input"))) || target.hasAttribute("data-creator-modifier-input"))) {
           render();
         }
       });
@@ -4693,6 +5018,17 @@ function mountCreatorMenu({
         render();
       });
     });
+    root2.querySelectorAll("[data-creator-modifier-remove]").forEach((button) => {
+      button.addEventListener("click", () => {
+        captureActiveDraft();
+        const index = Number.parseInt(String(button.dataset.creatorModifierRemove ?? ""), 10);
+        if (!Number.isFinite(index)) return;
+        state.drafts.equipment.modifiers.splice(index, 1);
+        state.dirty.equipment = true;
+        clearMessages();
+        render();
+      });
+    });
     root2.querySelectorAll("[data-creator-action]").forEach((button) => {
       button.addEventListener("click", () => {
         const action = button.dataset.creatorAction;
@@ -4705,6 +5041,16 @@ function mountCreatorMenu({
           case "refreshList":
             captureActiveDraft();
             void refreshActiveList({ forceRefs: true });
+            break;
+          case "toggleSkillsCatalog":
+            captureActiveDraft();
+            state.collapsed.skillsCatalog = !state.collapsed.skillsCatalog;
+            render();
+            break;
+          case "toggleEquipmentCatalog":
+            captureActiveDraft();
+            state.collapsed.equipmentCatalog = !state.collapsed.equipmentCatalog;
+            render();
             break;
           case "newDraft":
             captureActiveDraft();
@@ -4729,6 +5075,13 @@ function mountCreatorMenu({
           case "addAbilityLink":
             captureActiveDraft();
             state.drafts.equipment.abilityLinks.push(createEmptyAbilityLinkDraft());
+            state.dirty.equipment = true;
+            clearMessages();
+            render();
+            break;
+          case "addModifier":
+            captureActiveDraft();
+            state.drafts.equipment.modifiers.push(createEmptyModifierDraft());
             state.dirty.equipment = true;
             clearMessages();
             render();
@@ -4830,7 +5183,7 @@ function mountCreatorMenu({
     if (!result?.ok) {
       throw new Error(formatCreatorError(result, "Unable to load catalog list."));
     }
-    state.lists[kind] = Array.isArray(result.items) ? result.items : [];
+    state.lists[kind] = kind === "equipment" ? (Array.isArray(result.items) ? result.items : []).filter((item) => String(item?.item_type ?? "") !== "device") : Array.isArray(result.items) ? result.items : [];
     state.loadedTabs[kind] = true;
     if (state.selectedIds[kind] && !state.lists[kind].some((item) => item.id === state.selectedIds[kind])) {
       state.selectedIds[kind] = "";

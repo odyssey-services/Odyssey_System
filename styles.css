@@ -377,12 +377,35 @@ pre {
   max-height: 920px;
 }
 
-.creator-sidebar-head {
+.creator-collapse-toggle {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  background: rgba(8, 17, 28, 0.72);
+  border: 1px solid rgba(61, 92, 129, 0.75);
+  text-align: left;
   font-size: 12px;
+  font-weight: 700;
+}
+
+.creator-inline-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.creator-collapse-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(62, 166, 255, 0.12);
+  border: 1px solid rgba(62, 166, 255, 0.28);
+  color: #d8eeff;
   font-weight: 700;
 }
 
@@ -487,6 +510,10 @@ pre {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.creator-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .creator-check-stack {
   display: flex;
   flex-direction: column;
@@ -504,6 +531,51 @@ pre {
   border: 1px solid rgba(61, 92, 129, 0.7);
   font-size: 12px;
   color: var(--muted);
+}
+
+.creator-small-meta {
+  align-self: stretch;
+}
+
+.creator-section-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(8, 17, 28, 0.66);
+  border: 1px solid rgba(61, 92, 129, 0.65);
+}
+
+.creator-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.creator-check-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.creator-check-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(16, 27, 44, 0.88);
+  border: 1px solid rgba(61, 92, 129, 0.75);
+  font-size: 12px;
+}
+
+.creator-check-pill input {
+  width: auto;
+  margin: 0;
 }
 
 .creator-links-block {
@@ -538,6 +610,20 @@ pre {
   gap: 10px;
 }
 
+.creator-small-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.creator-mini-grid {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
 @media (max-width: 640px) {
   html,
   body {
@@ -556,7 +642,12 @@ pre {
   .creator-toolbar,
   .creator-layout,
   .creator-grid-2,
+  .creator-grid-3,
   .creator-grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .creator-mini-grid {
     grid-template-columns: 1fr;
   }
 }
