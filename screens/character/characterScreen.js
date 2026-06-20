@@ -657,7 +657,7 @@ export function mountCharacterScreen({ root, runtime }) {
     const ammoCode = String(row?.ammo_type_code ?? row?.ammo_code ?? "").trim().toLowerCase();
     return state.ammoDefs.find((def) =>
       (ammoTypeId && String(def?.id ?? "").trim() === ammoTypeId) ||
-      (ammoCode && String(def?.code ?? "").trim().toLowerCase() === ammoCode)
+      (!ammoTypeId && ammoCode && String(def?.code ?? "").trim().toLowerCase() === ammoCode)
     ) || null;
   }
 
@@ -673,10 +673,10 @@ export function mountCharacterScreen({ root, runtime }) {
   function getAmmoStockCaliberCode(row) {
     const ammoDef = findAmmoDefForRow(row);
     return String(
-      ammoDef?.caliber_code ||
-      ammoDef?.caliber?.code ||
       row?.caliber_code ||
       row?.caliber?.code ||
+      ammoDef?.caliber_code ||
+      ammoDef?.caliber?.code ||
       ""
     ).trim().toLowerCase();
   }
@@ -684,10 +684,10 @@ export function mountCharacterScreen({ root, runtime }) {
   function getAmmoStockCaliberName(row) {
     const ammoDef = findAmmoDefForRow(row);
     return String(
-      ammoDef?.caliber_name ||
-      ammoDef?.caliber?.name ||
       row?.caliber_name ||
       row?.caliber?.name ||
+      ammoDef?.caliber_name ||
+      ammoDef?.caliber?.name ||
       ""
     ).trim();
   }

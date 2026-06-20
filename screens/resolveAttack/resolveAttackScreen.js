@@ -168,7 +168,7 @@ export function mountResolveAttackScreen({ root, runtime }) {
   async function fetchAmmoStockDirect(id) {
     const rows = await bridges.supabase.fetchSupabaseRows(
       `odyssey_character_ammo_stock?character_id=eq.${encodeURIComponent(id)}` +
-        `&select=id,character_id,display_name,quantity,caliber:odyssey_caliber_defs(code,name),ammo_type:odyssey_ammo_type_defs(code,name)`,
+        `&select=id,character_id,display_name,quantity,caliber_id,ammo_type_id,caliber:odyssey_caliber_defs(id,code,name),ammo_type:odyssey_ammo_type_defs(id,code,name)`,
       settings(),
       "Unable to read ammo stock.",
     );
@@ -177,8 +177,10 @@ export function mountResolveAttackScreen({ root, runtime }) {
       character_id: r.character_id,
       display_name: r.display_name,
       quantity: r.quantity,
+      caliber_id: r.caliber_id || r.caliber?.id || null,
       caliber_code: r.caliber?.code || null,
       caliber_name: r.caliber?.name || null,
+      ammo_type_id: r.ammo_type_id || r.ammo_type?.id || null,
       ammo_type_code: r.ammo_type?.code || null,
       ammo_type_name: r.ammo_type?.name || null,
     }));

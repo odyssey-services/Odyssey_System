@@ -26427,7 +26427,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
   const rpcGmRepair = (id) => api.gm.gmRepairCharacterArmor(id, settings());
   async function fetchAmmoStockDirect(id) {
     const rows = await bridges.supabase.fetchSupabaseRows(
-      `odyssey_character_ammo_stock?character_id=eq.${encodeURIComponent(id)}&select=id,character_id,display_name,quantity,caliber:odyssey_caliber_defs(code,name),ammo_type:odyssey_ammo_type_defs(code,name)`,
+      `odyssey_character_ammo_stock?character_id=eq.${encodeURIComponent(id)}&select=id,character_id,display_name,quantity,caliber_id,ammo_type_id,caliber:odyssey_caliber_defs(id,code,name),ammo_type:odyssey_ammo_type_defs(id,code,name)`,
       settings(),
       "Unable to read ammo stock."
     );
@@ -26436,8 +26436,10 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       character_id: r.character_id,
       display_name: r.display_name,
       quantity: r.quantity,
+      caliber_id: r.caliber_id || r.caliber?.id || null,
       caliber_code: r.caliber?.code || null,
       caliber_name: r.caliber?.name || null,
+      ammo_type_id: r.ammo_type_id || r.ammo_type?.id || null,
       ammo_type_code: r.ammo_type?.code || null,
       ammo_type_name: r.ammo_type?.name || null
     }));
@@ -28146,7 +28148,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const ammoTypeId = String(row?.ammo_type_id ?? "").trim();
     const ammoCode = String(row?.ammo_type_code ?? row?.ammo_code ?? "").trim().toLowerCase();
     return state.ammoDefs.find(
-      (def) => ammoTypeId && String(def?.id ?? "").trim() === ammoTypeId || ammoCode && String(def?.code ?? "").trim().toLowerCase() === ammoCode
+      (def) => ammoTypeId && String(def?.id ?? "").trim() === ammoTypeId || !ammoTypeId && ammoCode && String(def?.code ?? "").trim().toLowerCase() === ammoCode
     ) || null;
   }
   function findMagazineDefForRow(row) {
@@ -28159,13 +28161,13 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function getAmmoStockCaliberCode(row) {
     const ammoDef = findAmmoDefForRow(row);
     return String(
-      ammoDef?.caliber_code || ammoDef?.caliber?.code || row?.caliber_code || row?.caliber?.code || ""
+      row?.caliber_code || row?.caliber?.code || ammoDef?.caliber_code || ammoDef?.caliber?.code || ""
     ).trim().toLowerCase();
   }
   function getAmmoStockCaliberName(row) {
     const ammoDef = findAmmoDefForRow(row);
     return String(
-      ammoDef?.caliber_name || ammoDef?.caliber?.name || row?.caliber_name || row?.caliber?.name || ""
+      row?.caliber_name || row?.caliber?.name || ammoDef?.caliber_name || ammoDef?.caliber?.name || ""
     ).trim();
   }
   function getAmmoStockTypeCode(row) {
