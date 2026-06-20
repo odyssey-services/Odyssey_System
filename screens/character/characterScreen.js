@@ -877,7 +877,7 @@ export function mountCharacterScreen({ root, runtime }) {
     state.busy = true; render();
     try {
       await bridges.supabase.mutateSupabaseRows(
-        `odyssey_character_resource_pools?character_id=eq.${encodeURIComponent(state.characterId)}&code=eq.${encodeURIComponent(code)}`,
+        `odyssey_character_resource_pools?id=eq.${encodeURIComponent(pool.id)}`,
         { current_value: newVal },
         settings(),
         { method: "PATCH", prefer: "return=minimal" },

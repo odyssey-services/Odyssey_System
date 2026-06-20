@@ -40,18 +40,18 @@ select, .cp-screen input { font: inherit; }
 .cp-card[role="button"]:active { background: rgba(62,166,255,.16); }
 .cp-card[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* 3x3 characteristics — compact squares (no Russian label) */
-.cp-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
-.cp-attr { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 8px; padding: 3px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; }
+/* 3x3 characteristics — compact fixed-size squares */
+.cp-attrs { display: grid; grid-template-columns: repeat(3, 42px); gap: 4px; width: fit-content; }
+.cp-attr { position: relative; width: 42px; height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 6px; padding: 2px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; box-sizing: border-box; }
 .cp-attr:hover { border-color: var(--accent); }
 .cp-attr:active { background: rgba(62,166,255,.1); }
 .cp-attr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .cp-attr[aria-disabled="true"] { opacity: .6; cursor: progress; }
-.cp-attr .cp-attr-val { font-size: 15px; font-weight: 700; font-family: "JetBrains Mono", ui-monospace, monospace; line-height: 1; margin: 0 0 2px; }
-.cp-attr .cp-attr-code { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-.cp-attr .cp-attr-edit { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; padding: 0; }
+.cp-attr .cp-attr-val { font-size: 13px; font-weight: 700; font-family: "JetBrains Mono", ui-monospace, monospace; line-height: 1; margin: 0 0 1px; }
+.cp-attr .cp-attr-code { font-size: 7px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cp-attr .cp-attr-edit { position: absolute; top: 1px; right: 1px; width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; padding: 0; }
 .cp-attr .cp-attr-edit:hover { color: #d8eeff; border-color: var(--accent); }
-.cp-attr .cp-attr-pending { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 8px; color: var(--accent); }
+.cp-attr .cp-attr-pending { position: absolute; bottom: 1px; left: 0; right: 0; font-size: 7px; color: var(--accent); }
 
 /* doll */
 .cp-doll-wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
@@ -122,6 +122,6 @@ select, .cp-screen input { font: inherit; }
 .cp-pool-adj:disabled { opacity: .4; cursor: default; }
 
 /* edit dialog stepper */
-.cp-dlg-stepper { display: flex; gap: 6px; align-items: center; margin-bottom: 2px; }
-.cp-dlg-input { flex: 1; text-align: center; border: 1px solid var(--line); background: rgba(8,17,28,.9); color: var(--text); border-radius: 8px; padding: 7px 10px; font-size: 15px; }
+.cp-dlg-stepper { display: flex; gap: 6px; align-items: center; justify-content: center; margin-bottom: 2px; }
+.cp-dlg-input { width: 64px; flex: none; text-align: center; border: 1px solid var(--line); background: rgba(8,17,28,.9); color: var(--text); border-radius: 8px; padding: 7px 6px; font-size: 15px; }
 .cp-dlg-step { width: 36px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; border-radius: 8px; }
