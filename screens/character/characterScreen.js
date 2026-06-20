@@ -824,6 +824,8 @@ export function mountCharacterScreen({ root, runtime }) {
     const wbtn = t.closest("[data-wbtn]"); if (wbtn) { onReloadWeapon(wbtn.dataset.weapon); return; }
     const mbtn = t.closest("[data-mbtn]"); if (mbtn) { mbtn.dataset.mbtn === "load" ? onLoadRounds(mbtn.dataset.mag) : onUnloadRounds(mbtn.dataset.mag); return; }
     const ibtn = t.closest("[data-ibtn]"); if (ibtn) { onUseItem(ibtn.dataset.item); return; }
+    // inventory items — click on card to use
+    const itemCard = t.closest("[data-item]"); if (itemCard && !t.closest("select,button,[data-gmitem]")) { onUseItem(itemCard.dataset.item); return; }
     const armorBtn = t.closest("[data-armorbtn]"); if (armorBtn) { armorBtn.dataset.armorbtn === "equip" ? onEquip(armorBtn.dataset.equip) : onUnequip(armorBtn.dataset.equip); return; }
     const gmItem = t.closest("[data-gmitem]"); if (gmItem) { onGmRemoveItem(gmItem.dataset.code); return; }
     const gmBtn = t.closest("[data-gmbtn]"); if (gmBtn) { onGmTool(gmBtn.dataset.gmbtn); return; }
