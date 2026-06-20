@@ -73,37 +73,17 @@ export async function setRoomMetadata(patch) {
   return getRoomMetadata();
 }
 
-// OBR SDK v3 does not expose scene.id — we store a stable ID in scene metadata.
-const ODYSSEY_SCENE_ID_KEY = "odyssey-system/scene-id";
-
-function genSceneId() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
+// OBR SDK v3.1 does not expose OBR.scene.id. We use room_id as a stable
+// proxy for scene_id — each room has one active scene at a time, so
+// scoping by room is equivalent to scoping by scene. This avoids async
+// scene-metadata reads that can fail if the scene is not ready at startup.
 export async function getRoomSceneContext() {
   await waitForObrReady();
   const roomId = String(OBR.room?.id ?? "").trim();
-
-  let sceneId = "";
-  try {
-    const sceneReady = await OBR.scene.isReady();
-    if (sceneReady) {
-      const meta = await OBR.scene.getMetadata();
-      sceneId = String(meta?.[ODYSSEY_SCENE_ID_KEY] ?? "").trim();
-      if (!sceneId) {
-        sceneId = genSceneId();
-        await OBR.scene.setMetadata({ [ODYSSEY_SCENE_ID_KEY]: sceneId });
-      }
-    }
-  } catch {
-    // Scene not available — return empty; caller should handle
-  }
-
   return {
     campaignId: roomId,
     roomId,
-    sceneId,
+    sceneId: roomId,
   };
 }
 
