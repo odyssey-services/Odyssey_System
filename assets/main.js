@@ -27527,7 +27527,7 @@ function queryRefs(root2) {
 }
 
 // screens/character/characterStyles.css
-var characterStyles_default = '/* Character Panel \u2014 scoped styles (prefix .cp-). Reuses shell design tokens. */\r\n.cp-screen { display: flex; flex-direction: column; gap: 14px; }\r\n.cp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\r\n.cp-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }\r\n.cp-field > span { font-size: 11px; color: var(--muted); }\r\n.cp-mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }\r\n.cp-muted { color: var(--muted); font-size: 12px; }\r\n.cp-hidden { display: none !important; }\r\n.cp-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 2px; }\r\nselect, .cp-screen input { font: inherit; }\r\n.cp-screen select { width: 100%; border-radius: 10px; border: 1px solid rgba(61,92,129,.9); background: rgba(8,17,28,.9); color: var(--text); padding: 9px 11px; }\r\n\r\n/* banners */\r\n.cp-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\r\n.cp-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\r\n.cp-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\r\n.cp-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\r\n.cp-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\r\n\r\n/* header */\r\n.cp-head { display: flex; gap: 12px; align-items: center; }\r\n.cp-avatar { width: 46px; height: 46px; border-radius: 10px; background: var(--panel-soft); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; flex: none; overflow: hidden; }\r\n.cp-avatar img { width: 100%; height: 100%; object-fit: cover; }\r\n.cp-name { font-size: 15px; font-weight: 700; }\r\n\r\n/* sub-nav */\r\n.cp-nav { display: flex; gap: 6px; flex-wrap: wrap; }\r\n.cp-tab { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--text); cursor: pointer; font-size: 12px; }\r\n.cp-tab.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; font-weight: 700; }\r\n.cp-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* overview layout: doll left, characteristics right (same level) */\r\n.cp-overview { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }\r\n.cp-doll-col { flex: none; }\r\n.cp-attrs-col { flex: 1; min-width: 190px; }\r\n\r\n/* clickable cards (skills, additional body parts) \u2014 clear button affordance */\r\n.cp-card[role="button"] { cursor: pointer; transition: border-color .12s, background .12s; }\r\n.cp-card[role="button"]:hover { border-color: var(--accent); background: rgba(62,166,255,.10); }\r\n.cp-card[role="button"]:active { background: rgba(62,166,255,.16); }\r\n.cp-card[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* 3x3 characteristics \u2014 equilateral squares */\r\n.cp-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }\r\n.cp-attr { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 12px; padding: 6px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; }\r\n.cp-attr:hover { border-color: var(--accent); }\r\n.cp-attr:active { background: rgba(62,166,255,.1); }\r\n.cp-attr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n.cp-attr[aria-disabled="true"] { opacity: .6; cursor: progress; }\r\n.cp-attr .cp-attr-name { font-size: 10px; color: var(--text); font-weight: 600; line-height: 1.15; }\r\n.cp-attr .cp-attr-val { font-size: 22px; font-weight: 700; font-family: "JetBrains Mono", ui-monospace, monospace; line-height: 1; margin: 4px 0 2px; }\r\n.cp-attr .cp-attr-code { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }\r\n.cp-attr .cp-attr-edit { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; padding: 0; }\r\n.cp-attr .cp-attr-edit:hover { color: #d8eeff; border-color: var(--accent); }\r\n.cp-attr .cp-attr-pending { position: absolute; bottom: 4px; left: 0; right: 0; font-size: 9px; color: var(--accent); }\r\n\r\n/* doll */\r\n.cp-doll-wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }\r\n.cp-doll { position: relative; flex: none; }\r\n.cp-doll .cp-part { position: absolute; cursor: pointer; border: 1px solid rgba(0,0,0,.4); }\r\n.cp-doll .cp-part:hover, .cp-doll .cp-part:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }\r\n.cp-doll .cp-part.pinned { outline: 2px solid #d8eeff; outline-offset: 2px; }\r\n.cp-doll .cp-base { position: absolute; border-radius: 50%; background: rgba(21,34,53,.9); border: 1px solid var(--line); }\r\n/* state colors */\r\n.cp-c-intact { background: #33425e; }\r\n.cp-c-warn { background: #b07e2a; }\r\n.cp-c-danger { background: #7a2a32; }\r\n\r\n/* tooltip */\r\n.cp-tip { position: absolute; z-index: 30; min-width: 180px; max-width: 240px; background: rgba(7,14,24,.98); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 11px; line-height: 1.5; pointer-events: none; box-shadow: 0 8px 30px rgba(0,0,0,.5); }\r\n.cp-tip b { font-size: 12px; }\r\n.cp-tip .cp-kv { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }\r\n.cp-tip .cp-kv span:last-child { color: var(--text); font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-statebadge { display: inline-block; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; }\r\n.cp-sb-intact { background: rgba(62,166,255,.16); color: #cfe6ff; }\r\n.cp-sb-warn { background: rgba(255,194,75,.18); color: #ffe6b3; }\r\n.cp-sb-danger { background: rgba(201,75,88,.2); color: #ffd2d8; }\r\n\r\n/* inspector */\r\n.cp-inspector { flex: 1; min-width: 200px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-inspector .cp-ins-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }\r\n.cp-inspector .cp-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(39,65,95,.4); }\r\n.cp-inspector .cp-kv span:last-child { font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-close { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; cursor: pointer; padding: 3px 8px; font-size: 12px; }\r\n\r\n/* cards / lists */\r\n.cp-card { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-list { display: flex; flex-direction: column; gap: 8px; }\r\n.cp-rowitem { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 12px; }\r\n.cp-pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\r\n.cp-pill.good { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\r\n.cp-pill.bad { border-color: rgba(201,75,88,.4); color: #ffd2d8; background: rgba(201,75,88,.12); }\r\n.cp-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(8,17,28,.7); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 11px; }\r\n.cp-chip.bad { border-color: rgba(201,75,88,.5); color: #ffd9de; }\r\n\r\n/* pips for skills */\r\n.cp-pips { display: inline-flex; gap: 3px; }\r\n.cp-pip { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }\r\n.cp-pip.on { background: var(--accent); }\r\n\r\n/* buttons reuse shell .button; small variant */\r\n.cp-btn-sm { padding: 6px 10px; font-size: 12px; }\r\n\r\n/* skeleton */\r\n.cp-skel { border-radius: 10px; background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 37%, rgba(255,255,255,.04) 63%); background-size: 400% 100%; animation: cp-shimmer 1.3s ease infinite; }\r\n@keyframes cp-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }\r\n.cp-skel-line { height: 12px; margin: 6px 0; }\r\n.cp-skel-card { height: 64px; margin: 6px 0; }\r\n@media (prefers-reduced-motion: reduce) { .cp-skel { animation: none; } }\r\n\r\n/* dialog/popover */\r\n.cp-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.6); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\r\n.cp-dialog { width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }\r\n.cp-dialog h3 { margin: 0 0 10px; font-size: 14px; }\r\n\r\n.cp-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\r\n.cp-additional { margin-top: 8px; }\r\n';
+var characterStyles_default = '/* Character Panel \u2014 scoped styles (prefix .cp-). Reuses shell design tokens. */\r\n.cp-screen { display: flex; flex-direction: column; gap: 14px; }\r\n.cp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\r\n.cp-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }\r\n.cp-field > span { font-size: 11px; color: var(--muted); }\r\n.cp-mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }\r\n.cp-muted { color: var(--muted); font-size: 12px; }\r\n.cp-hidden { display: none !important; }\r\n.cp-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 2px; }\r\nselect, .cp-screen input { font: inherit; }\r\n.cp-screen select { width: 100%; border-radius: 10px; border: 1px solid rgba(61,92,129,.9); background: rgba(8,17,28,.9); color: var(--text); padding: 9px 11px; }\r\n\r\n/* banners */\r\n.cp-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\r\n.cp-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\r\n.cp-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\r\n.cp-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\r\n.cp-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\r\n\r\n/* header */\r\n.cp-head { display: flex; gap: 12px; align-items: center; }\r\n.cp-avatar { width: 46px; height: 46px; border-radius: 10px; background: var(--panel-soft); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; flex: none; overflow: hidden; }\r\n.cp-avatar img { width: 100%; height: 100%; object-fit: cover; }\r\n.cp-name { font-size: 15px; font-weight: 700; }\r\n\r\n/* sub-nav */\r\n.cp-nav { display: flex; gap: 6px; flex-wrap: wrap; }\r\n.cp-tab { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--text); cursor: pointer; font-size: 12px; }\r\n.cp-tab.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; font-weight: 700; }\r\n.cp-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* overview layout: doll left, characteristics right (same level) */\r\n.cp-overview { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }\r\n.cp-doll-col { flex: none; }\r\n.cp-attrs-col { flex: 1; min-width: 150px; }\r\n\r\n/* clickable cards (skills, additional body parts) \u2014 clear button affordance */\r\n.cp-card[role="button"] { cursor: pointer; transition: border-color .12s, background .12s; }\r\n.cp-card[role="button"]:hover { border-color: var(--accent); background: rgba(62,166,255,.10); }\r\n.cp-card[role="button"]:active { background: rgba(62,166,255,.16); }\r\n.cp-card[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* 3x3 characteristics \u2014 compact squares (no Russian label) */\r\n.cp-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }\r\n.cp-attr { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 8px; padding: 3px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; }\r\n.cp-attr:hover { border-color: var(--accent); }\r\n.cp-attr:active { background: rgba(62,166,255,.1); }\r\n.cp-attr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n.cp-attr[aria-disabled="true"] { opacity: .6; cursor: progress; }\r\n.cp-attr .cp-attr-val { font-size: 15px; font-weight: 700; font-family: "JetBrains Mono", ui-monospace, monospace; line-height: 1; margin: 0 0 2px; }\r\n.cp-attr .cp-attr-code { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }\r\n.cp-attr .cp-attr-edit { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; padding: 0; }\r\n.cp-attr .cp-attr-edit:hover { color: #d8eeff; border-color: var(--accent); }\r\n.cp-attr .cp-attr-pending { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 8px; color: var(--accent); }\r\n\r\n/* doll */\r\n.cp-doll-wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }\r\n.cp-doll { position: relative; flex: none; }\r\n.cp-doll .cp-part { position: absolute; cursor: pointer; border: 1px solid rgba(0,0,0,.4); }\r\n.cp-doll .cp-part:hover, .cp-doll .cp-part:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }\r\n.cp-doll .cp-part.pinned { outline: 2px solid #d8eeff; outline-offset: 2px; }\r\n.cp-doll .cp-base { position: absolute; border-radius: 50%; background: rgba(21,34,53,.9); border: 1px solid var(--line); }\r\n/* state colors */\r\n.cp-c-intact { background: #33425e; }\r\n.cp-c-warn { background: #b07e2a; }\r\n.cp-c-danger { background: #7a2a32; }\r\n\r\n/* tooltip */\r\n.cp-tip { position: absolute; z-index: 30; min-width: 180px; max-width: 240px; background: rgba(7,14,24,.98); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 11px; line-height: 1.5; pointer-events: none; box-shadow: 0 8px 30px rgba(0,0,0,.5); }\r\n.cp-tip b { font-size: 12px; }\r\n.cp-tip .cp-kv { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }\r\n.cp-tip .cp-kv span:last-child { color: var(--text); font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-statebadge { display: inline-block; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; }\r\n.cp-sb-intact { background: rgba(62,166,255,.16); color: #cfe6ff; }\r\n.cp-sb-warn { background: rgba(255,194,75,.18); color: #ffe6b3; }\r\n.cp-sb-danger { background: rgba(201,75,88,.2); color: #ffd2d8; }\r\n\r\n/* inspector */\r\n.cp-inspector { flex: 1; min-width: 200px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-inspector .cp-ins-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }\r\n.cp-inspector .cp-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(39,65,95,.4); }\r\n.cp-inspector .cp-kv span:last-child { font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-close { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; cursor: pointer; padding: 3px 8px; font-size: 12px; }\r\n\r\n/* cards / lists */\r\n.cp-card { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-list { display: flex; flex-direction: column; gap: 8px; }\r\n.cp-rowitem { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 12px; }\r\n.cp-pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\r\n.cp-pill.good { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\r\n.cp-pill.bad { border-color: rgba(201,75,88,.4); color: #ffd2d8; background: rgba(201,75,88,.12); }\r\n.cp-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(8,17,28,.7); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 11px; }\r\n.cp-chip.bad { border-color: rgba(201,75,88,.5); color: #ffd9de; }\r\n\r\n/* pips for skills */\r\n.cp-pips { display: inline-flex; gap: 3px; }\r\n.cp-pip { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }\r\n.cp-pip.on { background: var(--accent); }\r\n\r\n/* buttons reuse shell .button; small variant */\r\n.cp-btn-sm { padding: 6px 10px; font-size: 12px; }\r\n\r\n/* skeleton */\r\n.cp-skel { border-radius: 10px; background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 37%, rgba(255,255,255,.04) 63%); background-size: 400% 100%; animation: cp-shimmer 1.3s ease infinite; }\r\n@keyframes cp-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }\r\n.cp-skel-line { height: 12px; margin: 6px 0; }\r\n.cp-skel-card { height: 64px; margin: 6px 0; }\r\n@media (prefers-reduced-motion: reduce) { .cp-skel { animation: none; } }\r\n\r\n/* dialog/popover */\r\n.cp-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.6); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\r\n.cp-dialog { width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }\r\n.cp-dialog h3 { margin: 0 0 10px; font-size: 14px; }\r\n\r\n.cp-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\r\n.cp-additional { margin-top: 8px; }\r\n\r\n/* pool chip with GM +/- buttons */\r\n.cp-chip.cp-pool-gm { padding: 2px 4px; gap: 3px; }\r\n.cp-pool-adj { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; cursor: pointer; width: 20px; height: 20px; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; }\r\n.cp-pool-adj:hover:not(:disabled) { color: #d8eeff; border-color: var(--accent); }\r\n.cp-pool-adj:disabled { opacity: .4; cursor: default; }\r\n\r\n/* edit dialog stepper */\r\n.cp-dlg-stepper { display: flex; gap: 6px; align-items: center; margin-bottom: 2px; }\r\n.cp-dlg-input { flex: 1; text-align: center; border: 1px solid var(--line); background: rgba(8,17,28,.9); color: var(--text); border-radius: 8px; padding: 7px 10px; font-size: 15px; }\r\n.cp-dlg-step { width: 36px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; border-radius: 8px; }\r\n';
 
 // screens/character/characterScreen.js
 var ATTR_RU = {
@@ -27535,11 +27535,11 @@ var ATTR_RU = {
   agility: "\u041B\u043E\u0432\u043A\u043E\u0441\u0442\u044C",
   reaction: "\u0420\u0435\u0430\u043A\u0446\u0438\u044F",
   endurance: "\u0412\u044B\u043D\u043E\u0441\u043B\u0438\u0432\u043E\u0441\u0442\u044C",
-  perception: "\u0412\u043E\u0441\u043F\u0440\u0438\u044F\u0442\u0438\u0435",
+  psionics: "\u041F\u0441\u0438\u043E\u043D\u0438\u043A\u0430",
   intelligence: "\u0418\u043D\u0442\u0435\u043B\u043B\u0435\u043A\u0442",
   charisma: "\u0425\u0430\u0440\u0438\u0437\u043C\u0430",
   willpower: "\u0421\u0438\u043B\u0430 \u0432\u043E\u043B\u0438",
-  psionics: "\u041F\u0441\u0438\u043E\u043D\u0438\u043A\u0430"
+  perception: "\u0412\u043E\u0441\u043F\u0440\u0438\u044F\u0442\u0438\u0435"
 };
 var BASE_ATTR_CODES = Object.keys(ATTR_RU);
 var PART_GEOMETRY2 = {
@@ -27867,7 +27867,18 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     if (res.faction) meta.push(`Faction: ${esc2(res.faction)}`);
     if (res.age) meta.push(`Age: ${esc2(res.age)}`);
     if (ch.character_bucket) meta.push(esc2(ch.character_bucket));
-    const poolChips = state.pools.filter((p) => p && (p.max_value ?? 0) > 0).map((p) => `<span class="cp-chip">${esc2(p.name || p.code)} <span class="cp-mono">${dash2(p.current_value)}/${dash2(p.max_value)}</span></span>`).join("");
+    const poolChips = state.pools.filter((p) => p && (p.max_value ?? 0) > 0).map((p) => {
+      if (isGM()) {
+        const cur = p.current_value ?? 0;
+        const max = p.max_value ?? 0;
+        return `<span class="cp-chip cp-pool-gm">
+            <button class="cp-pool-adj" data-pool-adjust="-1" data-pool-code="${esc2(p.code)}" ${cur <= 0 ? "disabled" : ""} aria-label="Decrease ${esc2(p.name || p.code)}">\u2212</button>
+            <span>${esc2(p.name || p.code)} <span class="cp-mono">${dash2(cur)}/${dash2(max)}</span></span>
+            <button class="cp-pool-adj" data-pool-adjust="1" data-pool-code="${esc2(p.code)}" ${cur >= max ? "disabled" : ""} aria-label="Increase ${esc2(p.name || p.code)}">+</button>
+          </span>`;
+      }
+      return `<span class="cp-chip">${esc2(p.name || p.code)} <span class="cp-mono">${dash2(p.current_value)}/${dash2(p.max_value)}</span></span>`;
+    }).join("");
     return `<div class="cp-head">
       <div class="cp-avatar">${portrait ? `<img src="${esc2(portrait)}" alt="">` : esc2((ch.name || "?").slice(0, 1).toUpperCase())}</div>
       <div style="flex:1;min-width:120px">
@@ -27909,7 +27920,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function renderOverview() {
     const attrs = arr2(state.sheet.attributes);
-    const base = BASE_ATTR_CODES.map((code) => attrs.find((a) => a.code === code)).filter(Boolean).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const base = BASE_ATTR_CODES.map((code) => attrs.find((a) => a.code === code)).filter(Boolean);
     const customs = attrs.filter((a) => !BASE_ATTR_CODES.includes(a.code));
     return `
       <div class="cp-overview">
@@ -27924,12 +27935,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       ${isGM() ? gmToolsBlock() : ""}`;
   }
   function attrCard(a) {
-    const name = ATTR_RU[a.code] || a.name || a.code;
+    const label = a.name || a.code;
     const pending = state.rollingAttr === a.code;
-    const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc2(a.code)}" aria-label="Edit ${esc2(name)} (GM)" title="Edit (GM)">\u270E</button>` : "";
-    return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc2(a.code)}" aria-label="Roll ${esc2(name)}" aria-disabled="${pending}" title="Roll ${esc2(name)}">
+    const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc2(a.code)}" aria-label="Edit ${esc2(label)} (GM)" title="Edit (GM)">\u270E</button>` : "";
+    return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc2(a.code)}" aria-label="Roll ${esc2(label)}" aria-disabled="${pending}" title="Roll ${esc2(label)}">
       ${editBtn}
-      <div class="cp-attr-name">${esc2(name)}</div>
       <div class="cp-attr-val">${dash2(a.value)}</div>
       <div class="cp-attr-code">${esc2(a.code)}</div>
       ${pending ? `<div class="cp-attr-pending">Rolling\u2026</div>` : ""}
@@ -28218,6 +28228,13 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       state.notice = "";
       render();
     }));
+    if (!root2._poolAdjBound) {
+      root2._poolAdjBound = true;
+      root2.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-pool-adjust]");
+        if (btn) onPoolAdjust(btn.dataset.poolCode, Number(btn.dataset.poolAdjust));
+      });
+    }
     const section = $("section");
     if (section) {
       section.addEventListener("click", onSectionClick);
@@ -28401,9 +28418,34 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
     }
   }
+  async function onPoolAdjust(code, delta) {
+    const pool = state.pools.find((p) => p.code === code);
+    if (!pool || state.busy) return;
+    const cur = pool.current_value ?? 0;
+    const max = pool.max_value ?? 0;
+    const newVal = Math.max(0, Math.min(max, cur + delta));
+    if (newVal === cur) return;
+    state.busy = true;
+    render();
+    try {
+      await bridges.supabase.mutateSupabaseRows(
+        `odyssey_character_resource_pools?character_id=eq.${encodeURIComponent(state.characterId)}&code=eq.${encodeURIComponent(code)}`,
+        { current_value: newVal },
+        settings(),
+        { method: "PATCH", prefer: "return=minimal" }
+      );
+      await refresh({ armory: false, equipment: false, inventory: false });
+    } catch (e) {
+      setNotice("err", `Pool update failed: ${esc2(e.message)}`);
+      render();
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
   function onAttrEdit(code) {
     const a = arr2(state.sheet.attributes).find((x) => x.code === code) || {};
-    const name = ATTR_RU[code] || a.name || code;
+    const name = a.name || code;
     openForm({
       title: `Edit ${name} (GM)`,
       note: a.default_value != null || a.max_value != null ? `Allowed: ${dash2(a.default_value)} \u2013 ${dash2(a.max_value)}` : "",
@@ -28575,9 +28617,13 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     overlay.className = "cp-overlay";
     overlay.innerHTML = `<div class="cp-dialog" role="dialog" aria-modal="true" aria-label="${esc2(title)}">
       <h3>${esc2(title)}</h3>
-      <label class="cp-field"><span>New value${note ? ` \xB7 ${esc2(note)}` : ""}</span>
-        <input data-dlg-input type="number" value="${esc2(current2 ?? "")}" ${min != null ? `min="${esc2(min)}"` : ""} ${max != null ? `max="${esc2(max)}"` : ""} class="cp-mono"></label>
-      <div class="button-row"><button data-dlg-save type="button">Save</button><button data-dlg-cancel type="button" class="secondary">Cancel</button></div>
+      ${note ? `<div class="cp-muted" style="font-size:11px;margin-bottom:8px">${esc2(note)}</div>` : ""}
+      <div class="cp-dlg-stepper">
+        <button data-dlg-dec type="button" class="secondary cp-dlg-step">\u2212</button>
+        <input data-dlg-input type="text" inputmode="numeric" value="${esc2(current2 ?? "")}" class="cp-mono cp-dlg-input">
+        <button data-dlg-inc type="button" class="secondary cp-dlg-step">+</button>
+      </div>
+      <div class="button-row" style="margin-top:8px"><button data-dlg-save type="button">Save</button><button data-dlg-cancel type="button" class="secondary">Cancel</button></div>
     </div>`;
     const input = overlay.querySelector("[data-dlg-input]");
     const close = () => {
@@ -28609,6 +28655,16 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       if (e.target === overlay || e.target.closest("[data-dlg-cancel]")) close();
     });
     overlay.querySelector("[data-dlg-save]").addEventListener("click", save);
+    overlay.querySelector("[data-dlg-dec]").addEventListener("click", () => {
+      let v = Number(input.value) - 1;
+      if (min != null) v = Math.max(v, Number(min));
+      input.value = v;
+    });
+    overlay.querySelector("[data-dlg-inc]").addEventListener("click", () => {
+      let v = Number(input.value) + 1;
+      if (max != null) v = Math.min(v, Number(max));
+      input.value = v;
+    });
     document.addEventListener("keydown", onKey);
     document.body.appendChild(overlay);
     input.focus();

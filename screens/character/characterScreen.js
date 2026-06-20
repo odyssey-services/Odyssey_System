@@ -12,17 +12,17 @@ import {
 } from "../resolveAttack/resolveAttackSettings.js";
 import { getRealtimeClient } from "../../bridge/realtimeClient.js";
 
-/* canonical attribute codes -> full Russian names (mapped by code, never by index) */
+/* canonical attribute codes in display order (psionics and perception swapped vs alphabetical) */
 const ATTR_RU = {
   strength: "Сила",
   agility: "Ловкость",
   reaction: "Реакция",
   endurance: "Выносливость",
-  perception: "Восприятие",
+  psionics: "Псионика",
   intelligence: "Интеллект",
   charisma: "Харизма",
   willpower: "Сила воли",
-  psionics: "Псионика",
+  perception: "Восприятие",
 };
 const BASE_ATTR_CODES = Object.keys(ATTR_RU);
 
@@ -366,7 +366,18 @@ export function mountCharacterScreen({ root, runtime }) {
     if (ch.character_bucket) meta.push(esc(ch.character_bucket));
     const poolChips = state.pools
       .filter((p) => p && (p.max_value ?? 0) > 0)
-      .map((p) => `<span class="cp-chip">${esc(p.name || p.code)} <span class="cp-mono">${dash(p.current_value)}/${dash(p.max_value)}</span></span>`)
+      .map((p) => {
+        if (isGM()) {
+          const cur = p.current_value ?? 0;
+          const max = p.max_value ?? 0;
+          return `<span class="cp-chip cp-pool-gm">
+            <button class="cp-pool-adj" data-pool-adjust="-1" data-pool-code="${esc(p.code)}" ${cur <= 0 ? "disabled" : ""} aria-label="Decrease ${esc(p.name || p.code)}">−</button>
+            <span>${esc(p.name || p.code)} <span class="cp-mono">${dash(cur)}/${dash(max)}</span></span>
+            <button class="cp-pool-adj" data-pool-adjust="1" data-pool-code="${esc(p.code)}" ${cur >= max ? "disabled" : ""} aria-label="Increase ${esc(p.name || p.code)}">+</button>
+          </span>`;
+        }
+        return `<span class="cp-chip">${esc(p.name || p.code)} <span class="cp-mono">${dash(p.current_value)}/${dash(p.max_value)}</span></span>`;
+      })
       .join("");
     return `<div class="cp-head">
       <div class="cp-avatar">${portrait ? `<img src="${esc(portrait)}" alt="">` : esc((ch.name || "?").slice(0, 1).toUpperCase())}</div>
@@ -405,8 +416,7 @@ export function mountCharacterScreen({ root, runtime }) {
     const attrs = arr(state.sheet.attributes);
     const base = BASE_ATTR_CODES
       .map((code) => attrs.find((a) => a.code === code))
-      .filter(Boolean)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      .filter(Boolean);
     const customs = attrs.filter((a) => !BASE_ATTR_CODES.includes(a.code));
     return `
       <div class="cp-overview">
@@ -422,14 +432,13 @@ export function mountCharacterScreen({ root, runtime }) {
   }
 
   function attrCard(a) {
-    const name = ATTR_RU[a.code] || a.name || a.code;
+    const label = a.name || a.code;
     const pending = state.rollingAttr === a.code;
     const editBtn = isGM()
-      ? `<button class="cp-attr-edit" data-attr-edit="${esc(a.code)}" aria-label="Edit ${esc(name)} (GM)" title="Edit (GM)">✎</button>`
+      ? `<button class="cp-attr-edit" data-attr-edit="${esc(a.code)}" aria-label="Edit ${esc(label)} (GM)" title="Edit (GM)">✎</button>`
       : "";
-    return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc(a.code)}" aria-label="Roll ${esc(name)}" aria-disabled="${pending}" title="Roll ${esc(name)}">
+    return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc(a.code)}" aria-label="Roll ${esc(label)}" aria-disabled="${pending}" title="Roll ${esc(label)}">
       ${editBtn}
-      <div class="cp-attr-name">${esc(name)}</div>
       <div class="cp-attr-val">${dash(a.value)}</div>
       <div class="cp-attr-code">${esc(a.code)}</div>
       ${pending ? `<div class="cp-attr-pending">Rolling…</div>` : ""}
@@ -738,6 +747,15 @@ export function mountCharacterScreen({ root, runtime }) {
     root.querySelectorAll("[data-section]").forEach((b) =>
       b.addEventListener("click", () => { state.section = b.dataset.section; state.notice = ""; render(); }));
 
+    // pool +/- buttons in header — registered once on root to survive re-renders
+    if (!root._poolAdjBound) {
+      root._poolAdjBound = true;
+      root.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-pool-adjust]");
+        if (btn) onPoolAdjust(btn.dataset.poolCode, Number(btn.dataset.poolAdjust));
+      });
+    }
+
     // delegated clicks/changes inside the panel
     const section = $("section");
     if (section) {
@@ -848,10 +866,34 @@ export function mountCharacterScreen({ root, runtime }) {
       state.rollingAttr = ""; render();
     }
   }
+  /* ---- GM pool adjust (+/-) ---- */
+  async function onPoolAdjust(code, delta) {
+    const pool = state.pools.find((p) => p.code === code);
+    if (!pool || state.busy) return;
+    const cur = pool.current_value ?? 0;
+    const max = pool.max_value ?? 0;
+    const newVal = Math.max(0, Math.min(max, cur + delta));
+    if (newVal === cur) return;
+    state.busy = true; render();
+    try {
+      await bridges.supabase.mutateSupabaseRows(
+        `odyssey_character_resource_pools?character_id=eq.${encodeURIComponent(state.characterId)}&code=eq.${encodeURIComponent(code)}`,
+        { current_value: newVal },
+        settings(),
+        { method: "PATCH", prefer: "return=minimal" },
+      );
+      await refresh({ armory: false, equipment: false, inventory: false });
+    } catch (e) {
+      setNotice("err", `Pool update failed: ${esc(e.message)}`); render();
+    } finally {
+      state.busy = false; render();
+    }
+  }
+
   /* ---- GM attribute edit (gm_update_character_attribute) ---- */
   function onAttrEdit(code) {
     const a = arr(state.sheet.attributes).find((x) => x.code === code) || {};
-    const name = ATTR_RU[code] || a.name || code;
+    const name = a.name || code;
     openForm({
       title: `Edit ${name} (GM)`,
       note: (a.default_value != null || a.max_value != null) ? `Allowed: ${dash(a.default_value)} – ${dash(a.max_value)}` : "",
@@ -1003,15 +1045,19 @@ export function mountCharacterScreen({ root, runtime }) {
     loadCharacter(characterId);
   }
 
-  /* ---- numeric edit dialog (Save/Cancel) ---- */
+  /* ---- numeric edit dialog with − / + stepper (Save/Cancel) ---- */
   function openForm({ title, note, current, min, max, onSave }) {
     const overlay = document.createElement("div");
     overlay.className = "cp-overlay";
     overlay.innerHTML = `<div class="cp-dialog" role="dialog" aria-modal="true" aria-label="${esc(title)}">
       <h3>${esc(title)}</h3>
-      <label class="cp-field"><span>New value${note ? ` · ${esc(note)}` : ""}</span>
-        <input data-dlg-input type="number" value="${esc(current ?? "")}" ${min != null ? `min="${esc(min)}"` : ""} ${max != null ? `max="${esc(max)}"` : ""} class="cp-mono"></label>
-      <div class="button-row"><button data-dlg-save type="button">Save</button><button data-dlg-cancel type="button" class="secondary">Cancel</button></div>
+      ${note ? `<div class="cp-muted" style="font-size:11px;margin-bottom:8px">${esc(note)}</div>` : ""}
+      <div class="cp-dlg-stepper">
+        <button data-dlg-dec type="button" class="secondary cp-dlg-step">−</button>
+        <input data-dlg-input type="text" inputmode="numeric" value="${esc(current ?? "")}" class="cp-mono cp-dlg-input">
+        <button data-dlg-inc type="button" class="secondary cp-dlg-step">+</button>
+      </div>
+      <div class="button-row" style="margin-top:8px"><button data-dlg-save type="button">Save</button><button data-dlg-cancel type="button" class="secondary">Cancel</button></div>
     </div>`;
     const input = overlay.querySelector("[data-dlg-input]");
     const close = () => { overlay.remove(); document.removeEventListener("keydown", onKey); };
@@ -1029,6 +1075,16 @@ export function mountCharacterScreen({ root, runtime }) {
     }
     overlay.addEventListener("click", (e) => { if (e.target === overlay || e.target.closest("[data-dlg-cancel]")) close(); });
     overlay.querySelector("[data-dlg-save]").addEventListener("click", save);
+    overlay.querySelector("[data-dlg-dec]").addEventListener("click", () => {
+      let v = Number(input.value) - 1;
+      if (min != null) v = Math.max(v, Number(min));
+      input.value = v;
+    });
+    overlay.querySelector("[data-dlg-inc]").addEventListener("click", () => {
+      let v = Number(input.value) + 1;
+      if (max != null) v = Math.min(v, Number(max));
+      input.value = v;
+    });
     document.addEventListener("keydown", onKey);
     document.body.appendChild(overlay);
     input.focus(); input.select();
