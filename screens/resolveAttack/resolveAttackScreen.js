@@ -242,23 +242,28 @@ export function mountResolveAttackScreen({ root, runtime }) {
     // Fast path: OBR token metadata (written by tokenRealtimeSync in GM Tools)
     let characterId = bridges.token.getTokenCharacterLink(token).characterId;
 
-    // Fallback: query DB directly — works regardless of tokenRealtimeSync state
+    // Fallback: use get_character_spawn_catalog (known to work) — find item by scene_link.token_id
     if (!characterId && hasUsableSettings(settings())) {
-      banner(statusEl, "info", "Metadata not cached — querying DB by token_id…");
+      banner(statusEl, "info", "Looking up character by token_id…");
       const ctx = await withTimeout(bridges.obr.getRoomSceneContext(), OBR_TIMEOUT_MS, null);
       if (ctx?.roomId) {
         state.obr.roomId = ctx.roomId;
         state.obr.sceneId = ctx.sceneId;
         state.obr.campaignId = ctx.campaignId;
-        const linksRes = await withTimeout(
-          api.character.getRoomTokenLinks({ room_id: ctx.roomId, scene_id: ctx.sceneId }, settings()),
+        const catalogRes = await withTimeout(
+          api.placement.getCharacterSpawnCatalog({
+            room_id: ctx.roomId,
+            scene_id: ctx.sceneId,
+            include_active_npcs: true,
+            limit: 200,
+          }, settings()),
           OBR_TIMEOUT_MS * 2,
           null,
         );
-        const match = (linksRes?.links ?? []).find(
-          (l) => String(l?.token_id ?? "") === tokenId && l?.is_active !== false,
+        const match = (catalogRes?.items ?? []).find(
+          (item) => String(item?.scene_link?.token_id ?? "") === tokenId,
         );
-        characterId = String(match?.character_id ?? "").trim();
+        characterId = String(match?.id ?? "").trim();
       }
     }
 

@@ -26491,21 +26491,26 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const tokenId = String(token?.id ?? "");
     let characterId = bridges.token.getTokenCharacterLink(token).characterId;
     if (!characterId && hasUsableSettings(settings())) {
-      banner(statusEl, "info", "Metadata not cached \u2014 querying DB by token_id\u2026");
+      banner(statusEl, "info", "Looking up character by token_id\u2026");
       const ctx = await withTimeout2(bridges.obr.getRoomSceneContext(), OBR_TIMEOUT_MS, null);
       if (ctx?.roomId) {
         state.obr.roomId = ctx.roomId;
         state.obr.sceneId = ctx.sceneId;
         state.obr.campaignId = ctx.campaignId;
-        const linksRes = await withTimeout2(
-          api.character.getRoomTokenLinks({ room_id: ctx.roomId, scene_id: ctx.sceneId }, settings()),
+        const catalogRes = await withTimeout2(
+          api.placement.getCharacterSpawnCatalog({
+            room_id: ctx.roomId,
+            scene_id: ctx.sceneId,
+            include_active_npcs: true,
+            limit: 200
+          }, settings()),
           OBR_TIMEOUT_MS * 2,
           null
         );
-        const match = (linksRes?.links ?? []).find(
-          (l) => String(l?.token_id ?? "") === tokenId && l?.is_active !== false
+        const match = (catalogRes?.items ?? []).find(
+          (item) => String(item?.scene_link?.token_id ?? "") === tokenId
         );
-        characterId = String(match?.character_id ?? "").trim();
+        characterId = String(match?.id ?? "").trim();
       }
     }
     if (!characterId) {
@@ -28536,19 +28541,24 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const tokenId = String(token?.id ?? "");
     let characterId = bridges.token.getTokenCharacterLink(token).characterId;
     if (!characterId && hasUsableSettings(settings())) {
-      setNotice("info", "Querying DB by token_id\u2026");
+      setNotice("info", "Looking up character by token_id\u2026");
       render();
       const ctx = await withTimeout3(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null);
       if (ctx?.roomId) {
-        const linksRes = await withTimeout3(
-          api.character.getRoomTokenLinks({ room_id: ctx.roomId, scene_id: ctx.sceneId }, settings()),
+        const catalogRes = await withTimeout3(
+          api.placement.getCharacterSpawnCatalog({
+            room_id: ctx.roomId,
+            scene_id: ctx.sceneId,
+            include_active_npcs: true,
+            limit: 200
+          }, settings()),
           OBR_TIMEOUT * 2,
           null
         );
-        const match = (linksRes?.links ?? []).find(
-          (l) => String(l?.token_id ?? "") === tokenId && l?.is_active !== false
+        const match = (catalogRes?.items ?? []).find(
+          (item) => String(item?.scene_link?.token_id ?? "") === tokenId
         );
-        characterId = String(match?.character_id ?? "").trim();
+        characterId = String(match?.id ?? "").trim();
       }
     }
     if (!characterId) {
