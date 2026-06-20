@@ -978,12 +978,13 @@ function buildModifierEditorMarkup(draft, references) {
 
 function buildSkillEditorMarkup(state, references) {
   const draft = state.drafts.skills;
+  const auto = generatedSkillPreview(draft, references, state);
   const groupOptions = SKILL_UI_GROUP_OPTIONS
     .map((group) => `<option value="${escapeHtml(group.value)}"${draft.skillGroup === group.value ? " selected" : ""}>${escapeHtml(group.label)}</option>`)
     .join("");
   const subcategoryOptions = SKILL_UI_GROUPS[draft.skillGroup]?.subcategories ?? SKILL_UI_GROUPS.combat.subcategories;
   const subcategoryMarkup = subcategoryOptions
-    .map((subcategory) => `<option value="${escapeHtml(subcategory.value)}"${draft.skillSubcategory === subcategory.value ? " selected" : ""}>${escapeHtml(`${subcategory.label} · max ${subcategory.maxLevel}`)}</option>`)
+    .map((subcategory) => `<option value="${escapeHtml(subcategory.value)}"${draft.skillSubcategory === subcategory.value ? " selected" : ""}>${escapeHtml(`${subcategory.label} | max ${subcategory.maxLevel}`)}</option>`)
     .join("");
 
   return `

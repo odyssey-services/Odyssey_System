@@ -4207,6 +4207,14 @@ function makeEquipmentDuplicateDraft(source) {
     })) : []
   };
 }
+function generatedSkillPreview(draft, references, state) {
+  const list = Array.isArray(state?.lists?.skills) ? state.lists.skills : [];
+  const existingCodes = list.map((item) => item?.code);
+  const code = uniqueGeneratedCode(slugifyName(draft.name), existingCodes);
+  const tags = buildSkillAutoTags(draft, references);
+  const sortOrder = draft.id ? Number.parseInt(String(state?.bundles?.skills?.skill?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list);
+  return { code, tags, sortOrder };
+}
 function generatedEquipmentPreview(draft, state) {
   const list = Array.isArray(state?.lists?.equipment) ? state.lists.equipment : [];
   const existingCodes = list.map((item) => item?.code);
@@ -4252,22 +4260,22 @@ function buildAbilityLinkPayload(link, index) {
     data
   };
 }
-function buildSkillPayload(draft, auto2) {
+function buildSkillPayload(draft, auto) {
   const skillConfig = getSkillSubcategoryConfig(draft.skillGroup, draft.skillSubcategory);
   return {
     id: draft.id || void 0,
-    code: String(auto2.code ?? "").trim(),
+    code: String(auto.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
     category: String(skillConfig?.backendCategory ?? draft.category ?? "combat").trim() || "combat",
     max_level: coerceInteger(skillConfig?.maxLevel ?? draft.maxLevel, 5),
     main_attribute_id: String(draft.mainAttributeId ?? "").trim() || null,
     secondary_attribute_id: String(draft.secondaryAttributeId ?? "").trim() || null,
-    sort_order: auto2.sortOrder,
+    sort_order: auto.sortOrder,
     description: String(draft.description ?? ""),
-    tags: auto2.tags
+    tags: auto.tags
   };
 }
-function buildEquipmentPayload(draft, auto2) {
+function buildEquipmentPayload(draft, auto) {
   const showProtectionSlots = shouldShowProtectionSlots(draft.itemType);
   const selectedAllowedCodes = normalizeBodyPartCodeArray(draft.allowedBodyPartCodes);
   const suggestedAllowedCodes = suggestAllowedBodyPartCodes(draft.defaultBodyPartCode);
@@ -4301,7 +4309,7 @@ function buildEquipmentPayload(draft, auto2) {
   }
   return {
     id: draft.id || void 0,
-    code: String(auto2.code ?? "").trim(),
+    code: String(auto.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
     item_type: String(draft.itemType ?? "armor").trim() || "armor",
     description: String(draft.description ?? ""),
@@ -4312,8 +4320,8 @@ function buildEquipmentPayload(draft, auto2) {
     default_body_part_code: primaryBodyPartCode || null,
     can_equip: true,
     can_equip_to_body_part: canEquipToBodyPart,
-    sort_order: auto2.sortOrder,
-    tags: auto2.tags,
+    sort_order: auto.sortOrder,
+    tags: auto.tags,
     flags,
     effect_data: effectData,
     ability_links: (Array.isArray(draft.abilityLinks) ? draft.abilityLinks : []).filter((entry) => String(entry?.abilityDefId ?? "").trim()).map((entry, index) => buildAbilityLinkPayload(entry, index))
@@ -4627,9 +4635,10 @@ function buildModifierEditorMarkup(draft, references) {
 }
 function buildSkillEditorMarkup(state, references) {
   const draft = state.drafts.skills;
+  const auto = generatedSkillPreview(draft, references, state);
   const groupOptions = SKILL_UI_GROUP_OPTIONS.map((group) => `<option value="${escapeHtml(group.value)}"${draft.skillGroup === group.value ? " selected" : ""}>${escapeHtml(group.label)}</option>`).join("");
   const subcategoryOptions = SKILL_UI_GROUPS[draft.skillGroup]?.subcategories ?? SKILL_UI_GROUPS.combat.subcategories;
-  const subcategoryMarkup = subcategoryOptions.map((subcategory) => `<option value="${escapeHtml(subcategory.value)}"${draft.skillSubcategory === subcategory.value ? " selected" : ""}>${escapeHtml(`${subcategory.label} \xB7 max ${subcategory.maxLevel}`)}</option>`).join("");
+  const subcategoryMarkup = subcategoryOptions.map((subcategory) => `<option value="${escapeHtml(subcategory.value)}"${draft.skillSubcategory === subcategory.value ? " selected" : ""}>${escapeHtml(`${subcategory.label} | max ${subcategory.maxLevel}`)}</option>`).join("");
   return `
     <div class="creator-editor-head">
       <div>
@@ -4761,7 +4770,7 @@ function buildAbilityLinksEditorMarkup(draft, references) {
 }
 function buildEquipmentEditorMarkup(state, references) {
   const draft = state.drafts.equipment;
-  const auto2 = generatedEquipmentPreview(draft, state);
+  const auto = generatedEquipmentPreview(draft, state);
   const types = getEquipmentUiTypes(references);
   const showProtectionSlots = shouldShowProtectionSlots(draft.itemType);
   const allowedBodyPartCodes = getEffectiveAllowedBodyPartCodes(draft);
@@ -4772,7 +4781,7 @@ function buildEquipmentEditorMarkup(state, references) {
   const typeOptions = types.map((itemType) => `<option value="${escapeHtml(itemType)}"${draft.itemType === itemType ? " selected" : ""}>${escapeHtml(itemType)}</option>`).join("");
   const payloadPreview = (() => {
     try {
-      return prettyJson(buildEquipmentPayload(draft, auto2));
+      return prettyJson(buildEquipmentPayload(draft, auto));
     } catch (_error) {
       return prettyJson({ draft });
     }
@@ -5393,12 +5402,12 @@ function mountCreatorMenu({
       const referenceScope = state.references ?? {};
       const list2 = Array.isArray(allSkills.items) ? allSkills.items : [];
       const existingCodes2 = list2.filter((item) => item.id !== draft.id).map((item) => item.code);
-      const auto3 = {
+      const auto2 = {
         code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes2),
         sortOrder: draft.id ? Number.parseInt(String(state.bundles.skills?.skill?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list2),
         tags: buildSkillAutoTags(draft, referenceScope)
       };
-      return buildSkillPayload(draft, auto3);
+      return buildSkillPayload(draft, auto2);
     }
     const allEquipment = await runtime2.api.creator.listEquipmentModels({ search: null, itemTypes: [] }, settings);
     if (!allEquipment?.ok) {
@@ -5406,12 +5415,12 @@ function mountCreatorMenu({
     }
     const list = Array.isArray(allEquipment.items) ? allEquipment.items : [];
     const existingCodes = list.filter((item) => item.id !== draft.id).map((item) => item.code);
-    const auto2 = {
+    const auto = {
       code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes),
       sortOrder: draft.id ? Number.parseInt(String(state.bundles.equipment?.equipment_model?.sort_order ?? 0), 10) || 0 : nextFreeSortOrder(list),
       tags: buildEquipmentAutoTags(draft)
     };
-    return buildEquipmentPayload(draft, auto2);
+    return buildEquipmentPayload(draft, auto);
   }
   async function saveDraft() {
     const access = getAccess();
