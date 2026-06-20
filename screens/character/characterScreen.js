@@ -149,7 +149,7 @@ export function mountCharacterScreen({ root, runtime }) {
       state.pools = arr(s.abilities.resource_pools);
     }
     if (s.armory) state.armory = s.armory;
-    if (s.equipment !== undefined) state.equipment = arr(s.equipment);
+    if (s.equipment !== undefined) state.equipment = s.equipment;
     if (s.inventory) {
       state.inv = {
         ammoStock: arr(s.inventory.ammo_stock),
@@ -606,7 +606,7 @@ export function mountCharacterScreen({ root, runtime }) {
     const mag = w.loaded_magazine || w.active_profile?.loaded_magazine || null;
     const fm = w.selected_fire_mode || w.active_profile?.selected_fire_mode || null;
     const profiles = arr(w.profiles);
-    const fireModes = arr(w.available_fire_modes.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
+    const fireModes = arr(w.available_fire_modes?.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
     const compatMags = arr(state.armory?.magazines).filter((m) => !w.model?.caliber || (m.magazine_def?.caliber || m.caliber) === w.model.caliber);
     const ammoChips = isMelee
       ? `<span class="cp-chip">melee</span>`
