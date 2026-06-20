@@ -26488,25 +26488,46 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       return;
     }
     const token = tokens[0];
-    const link = bridges.token.getTokenCharacterLink(token);
-    if (!link.characterId) {
-      banner(statusEl, "warn", "Token is not linked to a character. Use manual character_id fallback.");
+    const tokenId = String(token?.id ?? "");
+    let characterId = bridges.token.getTokenCharacterLink(token).characterId;
+    if (!characterId && hasUsableSettings(settings())) {
+      banner(statusEl, "info", "Metadata not cached \u2014 querying DB by token_id\u2026");
+      const ctx = await withTimeout2(bridges.obr.getRoomSceneContext(), OBR_TIMEOUT_MS, null);
+      if (ctx?.roomId) {
+        state.obr.roomId = ctx.roomId;
+        state.obr.sceneId = ctx.sceneId;
+        state.obr.campaignId = ctx.campaignId;
+        const linksRes = await withTimeout2(
+          api.character.getRoomTokenLinks({ room_id: ctx.roomId, scene_id: ctx.sceneId }, settings()),
+          OBR_TIMEOUT_MS * 2,
+          null
+        );
+        const match = (linksRes?.links ?? []).find(
+          (l) => String(l?.token_id ?? "") === tokenId && l?.is_active !== false
+        );
+        characterId = String(match?.character_id ?? "").trim();
+      }
+    }
+    if (!characterId) {
+      banner(statusEl, "warn", "Token is not linked to a character. Bind it first in GM Tools \u2192 Placement.");
       return;
     }
-    const ctx = await withTimeout2(bridges.obr.getRoomSceneContext(), OBR_TIMEOUT_MS, null);
-    if (ctx) {
-      state.obr.roomId = ctx.roomId || "";
-      state.obr.sceneId = ctx.sceneId || "";
-      state.obr.campaignId = ctx.campaignId || "";
+    if (!state.obr.roomId) {
+      const ctx = await withTimeout2(bridges.obr.getRoomSceneContext(), OBR_TIMEOUT_MS, null);
+      if (ctx) {
+        state.obr.roomId = ctx.roomId || "";
+        state.obr.sceneId = ctx.sceneId || "";
+        state.obr.campaignId = ctx.campaignId || "";
+      }
     }
     if (which === "attacker") {
-      refs.attackerId.value = link.characterId;
-      state.obr.actorTokenId = String(token?.id ?? "");
+      refs.attackerId.value = characterId;
+      state.obr.actorTokenId = tokenId;
     } else {
-      refs.targetId.value = link.characterId;
-      state.obr.targetTokenId = String(token?.id ?? "");
+      refs.targetId.value = characterId;
+      state.obr.targetTokenId = tokenId;
     }
-    banner(statusEl, "ok", `Linked ${which} \u2192 character_id ${link.characterId.slice(0, 8)}\u2026 (token ${String(token?.id ?? "").slice(0, 8)}\u2026)`);
+    banner(statusEl, "ok", `Linked ${which} \u2192 character_id ${characterId.slice(0, 8)}\u2026 (token ${tokenId.slice(0, 8)}\u2026)`);
     renderObrContext();
     renderPayloadPreview();
   }
@@ -28511,15 +28532,33 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
       return;
     }
-    const link = bridges.token.getTokenCharacterLink(tokens[0]);
-    if (!link.characterId) {
-      setNotice("warn", "Token is not linked to a character.");
+    const token = tokens[0];
+    const tokenId = String(token?.id ?? "");
+    let characterId = bridges.token.getTokenCharacterLink(token).characterId;
+    if (!characterId && hasUsableSettings(settings())) {
+      setNotice("info", "Querying DB by token_id\u2026");
+      render();
+      const ctx = await withTimeout3(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null);
+      if (ctx?.roomId) {
+        const linksRes = await withTimeout3(
+          api.character.getRoomTokenLinks({ room_id: ctx.roomId, scene_id: ctx.sceneId }, settings()),
+          OBR_TIMEOUT * 2,
+          null
+        );
+        const match = (linksRes?.links ?? []).find(
+          (l) => String(l?.token_id ?? "") === tokenId && l?.is_active !== false
+        );
+        characterId = String(match?.character_id ?? "").trim();
+      }
+    }
+    if (!characterId) {
+      setNotice("warn", "Token is not linked to a character. Bind it first in GM Tools \u2192 Placement.");
       render();
       return;
     }
     const input = root2.querySelector('[data-ref="charId"]');
-    if (input) input.value = link.characterId;
-    loadCharacter(link.characterId);
+    if (input) input.value = characterId;
+    loadCharacter(characterId);
   }
   function openForm({ title, note, current: current2, min, max, onSave }) {
     const overlay = document.createElement("div");

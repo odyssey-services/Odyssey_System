@@ -968,11 +968,34 @@ export function mountCharacterScreen({ root, runtime }) {
     const tokens = await withTimeout(bridges.obr?.getSelectedOwlbearTokens?.(), OBR_TIMEOUT, null);
     if (!tokens) { setNotice("warn", "Owlbear not available (run inside Owlbear)."); render(); return; }
     if (!tokens.length) { setNotice("warn", "No token selected."); render(); return; }
-    const link = bridges.token.getTokenCharacterLink(tokens[0]);
-    if (!link.characterId) { setNotice("warn", "Token is not linked to a character."); render(); return; }
+
+    const token = tokens[0];
+    const tokenId = String(token?.id ?? "");
+
+    // Fast path: OBR token metadata (written by tokenRealtimeSync in GM Tools)
+    let characterId = bridges.token.getTokenCharacterLink(token).characterId;
+
+    // Fallback: query DB directly — works regardless of tokenRealtimeSync state
+    if (!characterId && hasUsableSettings(settings())) {
+      setNotice("info", "Querying DB by token_id…"); render();
+      const ctx = await withTimeout(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null);
+      if (ctx?.roomId) {
+        const linksRes = await withTimeout(
+          api.character.getRoomTokenLinks({ room_id: ctx.roomId, scene_id: ctx.sceneId }, settings()),
+          OBR_TIMEOUT * 2,
+          null,
+        );
+        const match = (linksRes?.links ?? []).find(
+          (l) => String(l?.token_id ?? "") === tokenId && l?.is_active !== false,
+        );
+        characterId = String(match?.character_id ?? "").trim();
+      }
+    }
+
+    if (!characterId) { setNotice("warn", "Token is not linked to a character. Bind it first in GM Tools → Placement."); render(); return; }
     const input = root.querySelector('[data-ref="charId"]');
-    if (input) input.value = link.characterId;
-    loadCharacter(link.characterId);
+    if (input) input.value = characterId;
+    loadCharacter(characterId);
   }
 
   /* ---- numeric edit dialog (Save/Cancel) ---- */
