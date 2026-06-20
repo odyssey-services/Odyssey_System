@@ -28,10 +28,43 @@ const MODIFIER_TARGET_OPTIONS = Object.freeze([
   { value: "custom", label: "Custom Target" },
 ]);
 
+const SKILL_UI_GROUPS = Object.freeze({
+  combat: Object.freeze({
+    label: "Combat",
+    subcategories: Object.freeze([
+      { value: "melee", label: "Melee", backendCategory: "combat", maxLevel: 5 },
+      { value: "ranged", label: "Ranged", backendCategory: "combat", maxLevel: 5 },
+    ]),
+  }),
+  applied: Object.freeze({
+    label: "Applied",
+    subcategories: Object.freeze([
+      { value: "applied", label: "Applied", backendCategory: "applied", maxLevel: 5 },
+      { value: "survival", label: "Survival", backendCategory: "survival", maxLevel: 5 },
+      { value: "vehicle", label: "Vehicle", backendCategory: "vehicle", maxLevel: 3 },
+      { value: "social", label: "Social", backendCategory: "social", maxLevel: 3 },
+    ]),
+  }),
+  passive: Object.freeze({
+    label: "Passive",
+    subcategories: Object.freeze([
+      { value: "passive", label: "Passive", backendCategory: "passive", maxLevel: 1 },
+    ]),
+  }),
+});
+
+const SKILL_UI_GROUP_OPTIONS = Object.freeze([
+  { value: "combat", label: "Combat" },
+  { value: "applied", label: "Applied" },
+  { value: "passive", label: "Passive" },
+]);
+
 function createEmptySkillDraft() {
   return {
     id: "",
     name: "",
+    skillGroup: "combat",
+    skillSubcategory: "melee",
     category: "combat",
     maxLevel: "5",
     mainAttributeId: "",
@@ -211,9 +244,53 @@ function nextFreeSortOrder(items) {
   return value;
 }
 
+function getAllowedSkillBackendCategories() {
+  return ["combat", "applied", "survival", "vehicle", "social", "passive"];
+}
+
+function getSkillBackendCategoriesForFilter(skillGroup) {
+  switch (String(skillGroup ?? "").trim()) {
+    case "combat":
+      return ["combat"];
+    case "applied":
+      return ["applied", "survival", "vehicle", "social"];
+    case "passive":
+      return ["passive"];
+    default:
+      return getAllowedSkillBackendCategories();
+  }
+}
+
+function getSkillSubcategoryConfig(skillGroup, skillSubcategory) {
+  const groupConfig = SKILL_UI_GROUPS[String(skillGroup ?? "").trim()] ?? SKILL_UI_GROUPS.combat;
+  return groupConfig.subcategories.find((entry) => entry.value === skillSubcategory) ?? groupConfig.subcategories[0];
+}
+
+function deriveSkillUiState(category, tags = []) {
+  const normalizedCategory = String(category ?? "").trim();
+  const tagList = Array.isArray(tags) ? tags.map((entry) => String(entry ?? "").trim()) : [];
+  const subcategoryTag = tagList.find((entry) => entry.startsWith("skill_subcategory:"));
+  const taggedSubcategory = subcategoryTag ? subcategoryTag.split(":").slice(1).join(":") : "";
+
+  if (normalizedCategory === "combat") {
+    const subcategory = taggedSubcategory === "ranged" ? "ranged" : "melee";
+    return { skillGroup: "combat", skillSubcategory: subcategory };
+  }
+  if (["applied", "survival", "vehicle", "social"].includes(normalizedCategory)) {
+    return { skillGroup: "applied", skillSubcategory: normalizedCategory };
+  }
+  if (normalizedCategory === "passive") {
+    return { skillGroup: "passive", skillSubcategory: "passive" };
+  }
+  return { skillGroup: "combat", skillSubcategory: "melee" };
+}
+
 function buildSkillAutoTags(draft, references) {
   const tags = new Set();
-  if (draft.category) tags.add(String(draft.category).trim());
+  const skillConfig = getSkillSubcategoryConfig(draft.skillGroup, draft.skillSubcategory);
+  if (draft.skillGroup) tags.add(`skill_group:${String(draft.skillGroup).trim()}`);
+  if (draft.skillSubcategory) tags.add(`skill_subcategory:${String(draft.skillSubcategory).trim()}`);
+  if (skillConfig?.backendCategory) tags.add(String(skillConfig.backendCategory).trim());
   const attributes = Array.isArray(references?.attributes) ? references.attributes : [];
   const main = attributes.find((entry) => entry.id === draft.mainAttributeId);
   const secondary = attributes.find((entry) => entry.id === draft.secondaryAttributeId);
@@ -306,11 +383,15 @@ function getEquipmentUiTypes(references) {
 
 function normalizeSkillDraft(bundle) {
   const skill = bundle?.skill ?? {};
+  const uiState = deriveSkillUiState(skill.category, skill.tags);
+  const config = getSkillSubcategoryConfig(uiState.skillGroup, uiState.skillSubcategory);
   return {
     id: String(skill.id ?? ""),
     name: String(skill.name ?? ""),
-    category: String(skill.category ?? "combat"),
-    maxLevel: String(skill.max_level ?? 5),
+    skillGroup: uiState.skillGroup,
+    skillSubcategory: uiState.skillSubcategory,
+    category: String(config?.backendCategory ?? skill.category ?? "combat"),
+    maxLevel: String(config?.maxLevel ?? skill.max_level ?? 5),
     mainAttributeId: String(skill.main_attribute_id ?? ""),
     secondaryAttributeId: String(skill.secondary_attribute_id ?? ""),
     description: String(skill.description ?? ""),
@@ -485,12 +566,13 @@ function buildAbilityLinkPayload(link, index) {
 }
 
 function buildSkillPayload(draft, auto) {
+  const skillConfig = getSkillSubcategoryConfig(draft.skillGroup, draft.skillSubcategory);
   return {
     id: draft.id || undefined,
     code: String(auto.code ?? "").trim(),
     name: String(draft.name ?? "").trim(),
-    category: String(draft.category ?? "combat").trim() || "combat",
-    max_level: coerceInteger(draft.maxLevel, 5),
+    category: String(skillConfig?.backendCategory ?? draft.category ?? "combat").trim() || "combat",
+    max_level: coerceInteger(skillConfig?.maxLevel ?? draft.maxLevel, 5),
     main_attribute_id: String(draft.mainAttributeId ?? "").trim() || null,
     secondary_attribute_id: String(draft.secondaryAttributeId ?? "").trim() || null,
     sort_order: auto.sortOrder,
@@ -613,11 +695,10 @@ function buildTabButtons(activeTab) {
 
 function buildSkillFilterMarkup(state, references) {
   const selected = state.filters.skills.category;
-  const categories = Array.isArray(references?.skill_categories) ? references.skill_categories : [];
   const options = [
-    '<option value="">All categories</option>',
-    ...categories.map(
-      (category) => `<option value="${escapeHtml(category)}"${selected === category ? " selected" : ""}>${escapeHtml(category)}</option>`,
+    '<option value="">All groups</option>',
+    ...SKILL_UI_GROUP_OPTIONS.map(
+      (group) => `<option value="${escapeHtml(group.value)}"${selected === group.value ? " selected" : ""}>${escapeHtml(group.label)}</option>`,
     ),
   ];
   return `
@@ -627,7 +708,7 @@ function buildSkillFilterMarkup(state, references) {
         <input data-creator-filter-search="skills" type="text" value="${escapeHtml(state.filters.skills.search)}" placeholder="code, name, tags">
       </label>
       <label class="field-stack">
-        <span>Category</span>
+        <span>Group</span>
         <select data-creator-filter-category="skills">
           ${options.join("")}
         </select>
@@ -677,11 +758,14 @@ function buildListMarkup(kind, items, selectedId) {
     .map((item) => {
       const isActive = selectedId && selectedId === item.id;
       const meta = kind === "skills"
-        ? [
-            item.category || "unknown",
+        ? (() => {
+            const uiState = deriveSkillUiState(item.category, item.tags);
+            return [
+            `${uiState.skillGroup} / ${uiState.skillSubcategory}`,
             item.main_attribute_name || item.main_attribute_code || "no main attribute",
             item.secondary_attribute_name || item.secondary_attribute_code || "no secondary attribute",
-          ]
+          ];
+          })()
         : [
             item.item_type || "unknown",
             item.default_body_part_code || "no body part",
@@ -894,15 +978,13 @@ function buildModifierEditorMarkup(draft, references) {
 
 function buildSkillEditorMarkup(state, references) {
   const draft = state.drafts.skills;
-  const bundle = state.bundles.skills;
-  const auto = generatedSkillPreview(draft, references, state);
-  const categories = Array.isArray(references?.skill_categories) ? references.skill_categories : [];
-  const categoryOptions = categories
-    .map((category) => `<option value="${escapeHtml(category)}"${draft.category === category ? " selected" : ""}>${escapeHtml(category)}</option>`)
+  const groupOptions = SKILL_UI_GROUP_OPTIONS
+    .map((group) => `<option value="${escapeHtml(group.value)}"${draft.skillGroup === group.value ? " selected" : ""}>${escapeHtml(group.label)}</option>`)
     .join("");
-  const levelPreview = bundle?.level_requirements?.length
-    ? prettyJson(bundle.level_requirements)
-    : "[]";
+  const subcategoryOptions = SKILL_UI_GROUPS[draft.skillGroup]?.subcategories ?? SKILL_UI_GROUPS.combat.subcategories;
+  const subcategoryMarkup = subcategoryOptions
+    .map((subcategory) => `<option value="${escapeHtml(subcategory.value)}"${draft.skillSubcategory === subcategory.value ? " selected" : ""}>${escapeHtml(`${subcategory.label} · max ${subcategory.maxLevel}`)}</option>`)
+    .join("");
 
   return `
     <div class="creator-editor-head">
@@ -926,16 +1008,12 @@ function buildSkillEditorMarkup(state, references) {
       </label>
       <div class="field-grid creator-grid-4">
         <label class="field-stack">
-          <span>Category</span>
-          <select data-creator-input="category">${categoryOptions}</select>
+          <span>Group</span>
+          <select data-creator-input="skillGroup">${groupOptions}</select>
         </label>
         <label class="field-stack">
-          <span>Max Level</span>
-          <select data-creator-input="maxLevel">
-            <option value="1"${draft.maxLevel === "1" ? " selected" : ""}>1</option>
-            <option value="3"${draft.maxLevel === "3" ? " selected" : ""}>3</option>
-            <option value="5"${draft.maxLevel === "5" ? " selected" : ""}>5</option>
-          </select>
+          <span>Subcategory</span>
+          <select data-creator-input="skillSubcategory">${subcategoryMarkup}</select>
         </label>
         <label class="field-stack">
           <span>Main Attribute</span>
@@ -950,16 +1028,6 @@ function buildSkillEditorMarkup(state, references) {
         <span>Description</span>
         <textarea data-creator-input="description" rows="4" placeholder="Short GM-facing description">${escapeHtml(draft.description)}</textarea>
       </label>
-      <div class="creator-auto-meta">
-        <div><strong>Auto code:</strong> ${escapeHtml(auto.code || "will be generated from name")}</div>
-        <div><strong>Auto sort:</strong> ${escapeHtml(String(auto.sortOrder))}</div>
-        <div><strong>Auto tags:</strong> ${escapeHtml(auto.tags.join(", ") || "none")}</div>
-      </div>
-      <label class="field-stack">
-        <span>Level Requirements Preview</span>
-        <textarea rows="8" readonly>${escapeHtml(levelPreview)}</textarea>
-      </label>
-      <p class="muted">Skill level requirements are preview-only in this V1 UI because the current backend upsert path does not persist edits for that nested block yet.</p>
       ${buildDisclosureSection({
         title: "Payload Preview",
         collapsed: Boolean(state.collapsed.skillsPayload),
@@ -1241,11 +1309,15 @@ function readSkillDraftFromDom(root) {
     return createEmptySkillDraft();
   }
   const query = (field) => form.querySelector(`[data-creator-input="${field}"]`);
+  const skillGroup = String(query("skillGroup")?.value ?? "combat");
+  const skillConfig = getSkillSubcategoryConfig(skillGroup, String(query("skillSubcategory")?.value ?? ""));
   return {
     id: String(form.dataset.creatorEntityId ?? ""),
     name: String(query("name")?.value ?? ""),
-    category: String(query("category")?.value ?? "combat"),
-    maxLevel: String(query("maxLevel")?.value ?? "5"),
+    skillGroup,
+    skillSubcategory: String(skillConfig.value ?? "melee"),
+    category: String(skillConfig.backendCategory ?? "combat"),
+    maxLevel: String(skillConfig.maxLevel ?? 5),
     mainAttributeId: String(query("mainAttributeId")?.value ?? ""),
     secondaryAttributeId: String(query("secondaryAttributeId")?.value ?? ""),
     description: String(query("description")?.value ?? ""),
@@ -1401,6 +1473,10 @@ export function mountCreatorMenu({
           target instanceof HTMLElement
           && (
             (
+              target.hasAttribute("data-creator-input")
+              && ["skillGroup"].includes(String(target.getAttribute("data-creator-input")))
+            )
+            || (
               target.hasAttribute("data-creator-link-input")
               && ["grantMode", "reloadMode", "durationRoundsMode", "chargesMode", "cooldownRoundsMode"].includes(String(target.getAttribute("data-creator-link-input")))
             )
@@ -1619,7 +1695,7 @@ export function mountCreatorMenu({
       result = await runtime.api.creator.listSkills(
         {
           search: filters.search || null,
-          categories: filters.category ? [filters.category] : [],
+          categories: getSkillBackendCategoriesForFilter(filters.category),
         },
         settings,
       );
@@ -1639,7 +1715,9 @@ export function mountCreatorMenu({
       throw new Error(formatCreatorError(result, "Unable to load catalog list."));
     }
 
-    state.lists[kind] = kind === "equipment"
+    state.lists[kind] = kind === "skills"
+      ? (Array.isArray(result.items) ? result.items : []).filter((item) => getAllowedSkillBackendCategories().includes(String(item?.category ?? "")))
+      : kind === "equipment"
       ? (Array.isArray(result.items) ? result.items : []).filter((item) => String(item?.item_type ?? "") !== "device")
       : (Array.isArray(result.items) ? result.items : []);
     state.loadedTabs[kind] = true;
