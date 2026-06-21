@@ -1,6 +1,6 @@
 {
   "name": "Odyssey System",
-  "version": "1.7.16",
+  "version": "1.7.17",
   "manifest_version": 1,
   "description": "Odyssey Bridge Shell foundation for the Supabase-backed system.",
   "author": "Codex",

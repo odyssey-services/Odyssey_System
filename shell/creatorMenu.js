@@ -446,6 +446,10 @@ function deriveEffectUiCategory(category) {
   }
 }
 
+function effectCategoryIsNegative(category) {
+  return ["debuff", "condition", "damage"].includes(String(category ?? "").trim().toLowerCase());
+}
+
 function getDefaultTargetScopeForEffectType(effectType) {
   switch (String(effectType ?? "").trim()) {
     case "body_part_heal":
@@ -517,8 +521,7 @@ function buildEffectAutoTags(draft) {
   if (draft.uiCategory) tags.add(String(draft.uiCategory).trim());
   if (draft.effectType) tags.add(`effect_type:${String(draft.effectType).trim()}`);
   if (draft.targetScope) tags.add(`target_scope:${String(draft.targetScope).trim()}`);
-  if (draft.isNegative) tags.add("negative");
-  if (draft.isNarrative) tags.add("narrative");
+  if (effectCategoryIsNegative(draft.uiCategory)) tags.add("negative");
   return Array.from(tags);
 }
 
@@ -660,8 +663,8 @@ function normalizeEffectDraft(bundle) {
     defaultDurationType: String(effect.default_duration_type ?? "manual"),
     defaultRounds: effect.default_rounds === null || effect.default_rounds === undefined ? "" : String(effect.default_rounds),
     stackingMode: String(effect.stacking_mode ?? "replace"),
-    isNegative: Boolean(effect.is_negative),
-    isNarrative: Boolean(effect.is_narrative),
+    isNegative: effectCategoryIsNegative(effect.category),
+    isNarrative: false,
     effectType,
     targetScope,
     amountMetric,
@@ -972,8 +975,8 @@ function buildEffectPayload(draft, auto) {
       ? coerceInteger(draft.defaultRounds, 1)
       : null,
     stacking_mode: String(draft.stackingMode ?? "replace").trim() || "replace",
-    is_negative: Boolean(draft.isNegative),
-    is_narrative: Boolean(draft.isNarrative),
+    is_negative: effectCategoryIsNegative(draft.uiCategory),
+    is_narrative: false,
     sort_order: auto.sortOrder,
     tags: auto.tags,
     data,
@@ -1606,19 +1609,15 @@ function buildEffectEditorMarkup(state, references) {
           <select data-creator-input="stackingMode">${stackingOptions}</select>
         </label>
       </div>
-      <div class="field-grid creator-grid-3">
+      <div class="field-grid creator-grid-2">
         <label class="field-stack">
           <span>Default Rounds</span>
           <input data-creator-input="defaultRounds" type="number" min="0" value="${escapeHtml(draft.defaultRounds)}"${draft.defaultDurationType === "rounds" ? "" : " disabled"}>
         </label>
-        <label class="field-stack">
-          <span>Negative</span>
-          <input data-creator-input="isNegative" type="checkbox"${draft.isNegative ? " checked" : ""}>
-        </label>
-        <label class="field-stack">
-          <span>Narrative</span>
-          <input data-creator-input="isNarrative" type="checkbox"${draft.isNarrative ? " checked" : ""}>
-        </label>
+        <div class="creator-auto-meta creator-small-meta">
+          <div><strong>Negative:</strong> ${effectCategoryIsNegative(draft.uiCategory) ? "auto yes" : "auto no"}</div>
+          <div><strong>Narrative:</strong> hidden for now</div>
+        </div>
       </div>
       <label class="field-stack">
         <span>Description</span>
