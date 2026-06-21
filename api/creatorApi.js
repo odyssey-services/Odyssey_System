@@ -9,6 +9,40 @@ export function getCreatorReferenceData(settings) {
   );
 }
 
+export function listWeapons({ search = null } = {}, settings) {
+  return callSupabaseRpc(
+    CREATOR_RPC_NAMES.listWeapons,
+    {
+      p_search: search || null,
+    },
+    settings,
+  );
+}
+
+export function getWeapon(weaponModelId, settings) {
+  return callSupabaseRpc(
+    CREATOR_RPC_NAMES.getWeapon,
+    { p_weapon_model_id: weaponModelId },
+    settings,
+  );
+}
+
+export function upsertWeapon(payload, settings) {
+  return callSupabaseRpc(
+    CREATOR_RPC_NAMES.upsertWeapon,
+    { p_payload: payload },
+    settings,
+  );
+}
+
+export function deleteWeapon(weaponModelId, settings) {
+  return callSupabaseRpc(
+    CREATOR_RPC_NAMES.deleteWeapon,
+    { p_weapon_model_id: weaponModelId },
+    settings,
+  );
+}
+
 export function listCalibers({ search = null } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listCalibers,

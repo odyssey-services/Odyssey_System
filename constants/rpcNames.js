@@ -86,6 +86,10 @@ export const CHARACTER_PLACEMENT_RPC_NAMES = Object.freeze({
 
 export const CREATOR_RPC_NAMES = Object.freeze({
   getCreatorReferenceData: "get_creator_reference_data",
+  listWeapons: "creator_list_weapons",
+  getWeapon: "creator_get_weapon",
+  upsertWeapon: "creator_upsert_weapon",
+  deleteWeapon: "creator_delete_weapon",
   listCalibers: "creator_list_calibers",
   getCaliber: "creator_get_caliber",
   upsertCaliber: "creator_upsert_caliber",
