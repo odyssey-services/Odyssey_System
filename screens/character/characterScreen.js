@@ -76,6 +76,7 @@ export function mountCharacterScreen({ root, runtime }) {
     error: null,
     section: "overview",
     sheet: null,
+    perks: [],
     abilities: [],
     pools: [],
     armory: null,
@@ -176,6 +177,9 @@ export function mountCharacterScreen({ root, runtime }) {
       state.abilities = arr(s.abilities.abilities);
       state.pools = arr(s.abilities.resource_pools);
     }
+    if (s.perks !== undefined) {
+      state.perks = arr(s.perks);
+    }
     if (s.equipment !== undefined) {
       // Bundle returns a flat array; add model/body_part sub-objects for render compat
       state.equipment = arr(s.equipment).map((it) => ({
@@ -205,7 +209,7 @@ export function mountCharacterScreen({ root, runtime }) {
     return resolved.settings;
   }
 
-  const ALL_SECTIONS = ["summary", "combat", "attributes", "skills", "equipment", "inventory", "abilities", "effects"];
+  const ALL_SECTIONS = ["summary", "combat", "attributes", "skills", "perks", "equipment", "inventory", "abilities", "effects"];
 
   async function loadCharacter(id) {
     state.loading = true; state.error = null; state.notice = ""; render();
@@ -216,10 +220,11 @@ export function mountCharacterScreen({ root, runtime }) {
         throw new Error("Supabase is not configured. Set URL/key in the Resolve Attack tab.");
       }
       const gmMode = isGM();
-      const [bundle, itemDefs, armoryData] = await Promise.all([
+      const [bundle, itemDefs, armoryData, perksResult] = await Promise.all([
         loadBundle(id, ALL_SECTIONS),
         gmMode && !state.itemDefs.length ? fetchItemDefs().catch(() => []) : Promise.resolve(state.itemDefs),
         api.weapon.getCharacterArmory(id, settings()).catch(() => null),
+        api.perk.getCharacterPerks({ character_id: id }, settings()).catch(() => null),
       ]);
       if (!state.ammoDefs.length || !state.magazineDefs.length) {
         await fetchAmmoAndMagazineDefs().catch(() => {});
@@ -232,6 +237,7 @@ export function mountCharacterScreen({ root, runtime }) {
       state.itemDefs = arr(itemDefs);
       if (armoryData) state.armory = armoryData;
       applyBundle(bundle);
+      if (perksResult?.ok) state.perks = arr(perksResult.perks);
       state.pinnedPartId = "";
       setupRealtimeSubscriptions(id);
     } catch (e) {
@@ -248,15 +254,18 @@ export function mountCharacterScreen({ root, runtime }) {
     if (!id) return;
     const sections = [
       ...(sheet ? ["summary", "combat", "attributes", "skills"] : []),
+      ...(sheet ? ["perks"] : []),
       ...(equipment ? ["equipment"] : []),
       ...(inventory ? ["inventory"] : []),
       ...(abilities ? ["abilities"] : []),
     ];
     const bundlePromise = sections.length ? loadBundle(id, sections).catch(() => null) : Promise.resolve(null);
     const armoryPromise = armory ? api.weapon.getCharacterArmory(id, settings()).catch(() => null) : Promise.resolve(null);
-    const [bundle, armoryData] = await Promise.all([bundlePromise, armoryPromise]);
+    const perksPromise = sheet ? api.perk.getCharacterPerks({ character_id: id }, settings()).catch(() => null) : Promise.resolve(null);
+    const [bundle, armoryData, perksResult] = await Promise.all([bundlePromise, armoryPromise, perksPromise]);
     if (bundle) applyBundle(bundle);
     if (armoryData) state.armory = armoryData;
+    if (perksResult?.ok) state.perks = arr(perksResult.perks);
     render();
   }
 
@@ -273,7 +282,9 @@ export function mountCharacterScreen({ root, runtime }) {
       "odyssey_character_weapons",
       "odyssey_character_weapon_profile_states",
       "odyssey_character_magazines",
+      "odyssey_character_perks",
       "odyssey_character_abilities",
+      "odyssey_character_effects",
       "odyssey_character_resource_pools",
     ];
 
@@ -311,6 +322,10 @@ export function mountCharacterScreen({ root, runtime }) {
         refresh({ sheet: false, armory: false, equipment: false, inventory: true, abilities: false });
         break;
       case "odyssey_character_attributes":
+        refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false });
+        break;
+      case "odyssey_character_perks":
+      case "odyssey_character_effects":
         refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false });
         break;
       case "odyssey_character_weapons":
@@ -446,7 +461,7 @@ export function mountCharacterScreen({ root, runtime }) {
 
   function navTabs() {
     const tabs = [
-      ["overview", "Overview"], ["skills", "Skills"], ["abilities", "Abilities"],
+      ["overview", "Overview"], ["skills", "Skills"], ["perks", "Perks"], ["abilities", "Abilities"],
       ["inventory", "Inventory"], ["armor", "Armor"], ["implants", "Implants"],
     ];
     return tabs.map(([k, label]) =>
@@ -457,6 +472,7 @@ export function mountCharacterScreen({ root, runtime }) {
   function sectionContent() {
     switch (state.section) {
       case "skills": return renderSkills();
+      case "perks": return renderPerks();
       case "abilities": return renderAbilities();
       case "inventory": return renderInventory();
       case "armor": return renderArmor();
@@ -590,6 +606,76 @@ export function mountCharacterScreen({ root, runtime }) {
         <span class="cp-row" style="gap:6px">${perks}<span class="cp-pips" title="${dash(eff)}/${max}">${pips}</span>${locked ? `<span class="cp-pill bad">locked</span>` : ""}</span>
       </div>
       ${isGM() ? `<div class="button-row" style="margin-top:4px"><button class="cp-btn-sm secondary" data-gmdel="skill" data-id="${esc(s.id)}" type="button">GM delete</button></div>` : ""}
+    </div>`;
+  }
+
+  /* ---- PERKS ---- */
+  function perkRequiresWeapon(perk) {
+    return arr(perk?.effect_data?.requires_weapon_tags).length > 0 || perk?.code === "not_full_auto";
+  }
+  function perkWeaponOptions(perk) {
+    const weapons = arr(state.armory?.weapons);
+    if (!weapons.length) return `<option value="">-- no weapons --</option>`;
+    return weapons.map((w) => {
+      const activeProfile = w.active_profile || {};
+      const label = [
+        w.name || "Weapon",
+        activeProfile.name || activeProfile.code || w.model?.weapon_class_name || "",
+      ].filter(Boolean).join(" - ");
+      return `<option value="${esc(w.id)}">${esc(label)}</option>`;
+    }).join("");
+  }
+  function renderPerks() {
+    const perks = arr(state.perks);
+    if (!perks.length) return `<div class="cp-empty">No perks.</div>`;
+    const groups = {
+      passive: [],
+      active: [],
+      narrative: [],
+      other: [],
+    };
+    for (const perk of perks) {
+      const key = String(perk.perk_type || "").toLowerCase();
+      if (groups[key]) groups[key].push(perk);
+      else groups.other.push(perk);
+    }
+    const titles = {
+      passive: "Passive perks",
+      active: "Active perks",
+      narrative: "Narrative / reaction perks",
+      other: "Other perks",
+    };
+    return Object.entries(groups)
+      .filter(([_, list]) => list.length > 0)
+      .map(([key, list]) => `
+        <div class="cp-section-title">${titles[key]}</div>
+        <div class="cp-list">${list.map(perkCard).join("")}</div>
+      `)
+      .join("");
+  }
+  function perkCard(perk) {
+    const passive = perk.is_passive || perk.activation_type === "passive" || perk.perk_type === "passive";
+    const requiresWeapon = perkRequiresWeapon(perk);
+    const hint = perk.ui_hint || perk.description || "";
+    const canUse = !passive && perk.can_use !== false;
+    return `<div class="cp-card" data-perk="${esc(perk.id)}">
+      <div class="cp-rowitem">
+        <span><b>${esc(perk.name)}</b> <span class="cp-pill">${esc(perk.linked_skill_name || perk.linked_skill_code || "perk")}</span></span>
+        <span class="cp-row" style="gap:6px">
+          <span class="cp-pill">${esc(perk.perk_type || "perk")}</span>
+          <span class="cp-pill ${passive ? "" : "good"}">${esc(perk.resolution_mode || "backend")}</span>
+        </span>
+      </div>
+      <div class="cp-row" style="gap:6px;margin-top:6px">
+        <span class="cp-chip">req lvl ${dash(perk.required_skill_level)}</span>
+        <span class="cp-chip">${esc(perk.activation_type || "manual")}</span>
+      </div>
+      ${perk.description ? `<div class="cp-muted" style="margin-top:6px">${esc(perk.description)}</div>` : ""}
+      ${hint && hint !== perk.description ? `<div class="cp-muted" style="margin-top:6px">${esc(hint)}</div>` : ""}
+      ${requiresWeapon ? `<div class="cp-row" style="gap:8px;margin-top:8px">
+        <label class="cp-field" style="min-width:170px"><span>Weapon</span><select data-perk-weapon="${esc(perk.id)}">${perkWeaponOptions(perk)}</select></label>
+      </div>` : ""}
+      ${canUse ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-perk-use="${esc(perk.id)}" type="button">Use perk</button></div>` : ""}
     </div>`;
   }
 
@@ -1004,6 +1090,8 @@ export function mountCharacterScreen({ root, runtime }) {
       el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRollSkill(el.dataset.skillRoll); } }));
     root.querySelectorAll("[data-ability-use]").forEach((el) =>
       el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onUseAbility(el.dataset.abilityUse); } }));
+    root.querySelectorAll("[data-perk-use]").forEach((el) =>
+      el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onUsePerk(el.dataset.perkUse); } }));
     document.addEventListener("keydown", onEscOnce);
   }
   function onEscOnce(e) { if (e.key === "Escape") { hideTip(); if (state.pinnedPartId) { state.pinnedPartId = ""; render(); } } }
@@ -1035,6 +1123,7 @@ export function mountCharacterScreen({ root, runtime }) {
     const attrEdit = t.closest("[data-attr-edit]"); if (attrEdit) { e.stopPropagation(); onAttrEdit(attrEdit.dataset.attrEdit); return; }
     const skillRoll = t.closest("[data-skill-roll]"); if (skillRoll) { onRollSkill(skillRoll.dataset.skillRoll); return; }
     const abilityUse = t.closest("[data-ability-use]"); if (abilityUse) { onUseAbility(abilityUse.dataset.abilityUse); return; }
+    const perkUse = t.closest("[data-perk-use]"); if (perkUse) { onUsePerk(perkUse.dataset.perkUse); return; }
     // weapon buttons
     const wbtn = t.closest("[data-wbtn]"); if (wbtn) { onReloadWeapon(wbtn.dataset.weapon); return; }
     const mbtn = t.closest("[data-mbtn]"); if (mbtn) { mbtn.dataset.mbtn === "load" ? onLoadRounds(mbtn.dataset.mag) : onUnloadRounds(mbtn.dataset.mag); return; }
@@ -1189,6 +1278,49 @@ export function mountCharacterScreen({ root, runtime }) {
     if (passive) { setNotice("warn", "Passive abilities activate automatically."); render(); return; }
     setNotice("info", `Ability activation: ${esc(ability.name)} - ready to use (no RPC yet).`);
     render();
+  }
+
+  async function onUsePerk(perkId) {
+    const perk = state.perks.find((p) => p.id === perkId);
+    if (!perk || state.busy) return;
+    if (perk.is_passive || perk.activation_type === "passive" || perk.perk_type === "passive") {
+      setNotice("warn", "Passive perks activate automatically.");
+      render();
+      return;
+    }
+    const payload = {
+      character_id: state.characterId,
+      perk_code: perk.code,
+      created_by: isGM() ? "GM" : "PLAYER",
+    };
+    if (perkRequiresWeapon(perk)) {
+      const weaponId = root.querySelector(`select[data-perk-weapon="${CSS.escape(perkId)}"]`)?.value || "";
+      if (!weaponId) {
+        setNotice("err", "Select a weapon for this perk.");
+        render();
+        return;
+      }
+      payload.character_weapon_id = weaponId;
+    }
+    state.busy = true;
+    state.notice = `Using perk ${perk.name}...`;
+    render();
+    try {
+      const result = await api.perk.useCharacterPerk(payload, settings());
+      if (!result || result.ok === false) {
+        setNotice("err", `${esc(describeError(result?.error, result?.message || "Perk use failed."))}${result?.error ? ` <span class="cp-mono">[${esc(result.error)}]</span>` : ""}`);
+        return;
+      }
+      await refresh({ sheet: true, armory: true, equipment: false, inventory: false, abilities: false });
+      const message = result.message || `${perk.name} used.`;
+      const hint = result.gm_hint ? `<div class="cp-muted" style="margin-top:4px">${esc(result.gm_hint)}</div>` : "";
+      setNotice("ok", `${esc(message)}${hint}`);
+    } catch (e) {
+      setNotice("err", `Perk use failed: ${esc(e.message)}`);
+    } finally {
+      state.busy = false;
+      render();
+    }
   }
 
   /* ---- items / medkit ---- */

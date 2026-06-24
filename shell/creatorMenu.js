@@ -11,6 +11,7 @@ const CREATOR_TABS = Object.freeze([
   { id: "skills", label: "Skills" },
   { id: "effects", label: "Effects" },
   { id: "abilities", label: "Abilities" },
+  { id: "perks", label: "Perks" },
   { id: "equipment", label: "Equipment Models" },
 ]);
 
@@ -190,6 +191,25 @@ const ABILITY_RANGE_MODE_OPTIONS = Object.freeze([
   { value: "limited", label: "Limited distance" },
 ]);
 
+const PERK_TYPE_OPTIONS = Object.freeze([
+  { value: "passive", label: "Passive" },
+  { value: "active", label: "Active" },
+  { value: "narrative", label: "Narrative" },
+]);
+
+const PERK_ACTIVATION_OPTIONS = Object.freeze([
+  { value: "passive", label: "Automatic" },
+  { value: "manual", label: "Manual" },
+  { value: "reaction", label: "Reaction" },
+  { value: "scene_start", label: "Scene Start" },
+]);
+
+const PERK_RESOLUTION_OPTIONS = Object.freeze([
+  { value: "backend", label: "Backend" },
+  { value: "gm_resolved", label: "Announce" },
+  { value: "hybrid", label: "Hybrid" },
+]);
+
 function createEmptySkillDraft() {
   return {
     id: "",
@@ -352,6 +372,21 @@ function createEmptyAbilityDraft() {
   });
 }
 
+function createEmptyPerkDraft() {
+  return {
+    id: "",
+    name: "",
+    linkedSkillId: "",
+    requiredSkillLevel: "1",
+    perkType: "passive",
+    activationType: "passive",
+    resolutionMode: "backend",
+    isEnabled: true,
+    description: "",
+    effectDataText: "{\n  \n}",
+  };
+}
+
 function createEmptyAbilityLinkDraft() {
   return {
     abilityDefId: "",
@@ -422,6 +457,7 @@ function createInitialState() {
       skills: false,
       effects: false,
       abilities: false,
+      perks: false,
       equipment: false,
     },
     filters: {
@@ -454,6 +490,12 @@ function createInitialState() {
       abilities: {
         search: "",
       },
+      perks: {
+        search: "",
+        linkedSkillId: "",
+        perkType: "",
+        resolutionMode: "",
+      },
       equipment: {
         search: "",
         itemType: "",
@@ -468,6 +510,7 @@ function createInitialState() {
       skills: [],
       effects: [],
       abilities: [],
+      perks: [],
       equipment: [],
     },
     selectedIds: {
@@ -479,6 +522,7 @@ function createInitialState() {
       skills: "",
       effects: "",
       abilities: "",
+      perks: "",
       equipment: "",
     },
     bundles: {
@@ -490,6 +534,7 @@ function createInitialState() {
       skills: null,
       effects: null,
       abilities: null,
+      perks: null,
       equipment: null,
     },
     drafts: {
@@ -501,6 +546,7 @@ function createInitialState() {
       skills: createEmptySkillDraft(),
       effects: createEmptyEffectDraft(),
       abilities: createEmptyAbilityDraft(),
+      perks: createEmptyPerkDraft(),
       equipment: createEmptyEquipmentDraft(),
     },
     dirty: {
@@ -512,6 +558,7 @@ function createInitialState() {
       skills: false,
       effects: false,
       abilities: false,
+      perks: false,
       equipment: false,
     },
     collapsed: {
@@ -523,6 +570,7 @@ function createInitialState() {
       skillsCatalog: true,
       effectsCatalog: true,
       abilitiesCatalog: true,
+      perksCatalog: true,
       equipmentCatalog: true,
       weaponsPayload: true,
       itemsPayload: true,
@@ -534,6 +582,7 @@ function createInitialState() {
       effectsBehavior: true,
       abilitiesPayload: true,
       abilitiesLevels: false,
+      perksPayload: true,
       equipmentPayload: true,
       equipmentDataModifiers: true,
     },
@@ -974,6 +1023,19 @@ function buildAbilityAutoTags(draft) {
   return Array.from(tags);
 }
 
+function buildPerkAutoTags(draft, references) {
+  const tags = new Set(["perk"]);
+  if (draft.perkType) tags.add(`perk_type:${String(draft.perkType).trim()}`);
+  if (draft.activationType) tags.add(`perk_activation:${String(draft.activationType).trim()}`);
+  if (draft.resolutionMode) tags.add(`perk_resolution:${String(draft.resolutionMode).trim()}`);
+  const linkedSkill = (Array.isArray(references?.skills) ? references.skills : [])
+    .find((entry) => String(entry?.id ?? "") === String(draft.linkedSkillId ?? ""));
+  if (linkedSkill?.code) {
+    tags.add(`skill:${String(linkedSkill.code).trim()}`);
+  }
+  return Array.from(tags);
+}
+
 function toPlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -1314,6 +1376,22 @@ function normalizeAbilityDraft(bundle) {
   });
 }
 
+function normalizePerkDraft(bundle) {
+  const perk = bundle?.perk ?? {};
+  return {
+    id: String(perk.id ?? ""),
+    name: String(perk.name ?? ""),
+    linkedSkillId: String(perk.linked_skill_id ?? perk.skill_def_id ?? ""),
+    requiredSkillLevel: String(perk.required_skill_level ?? 1),
+    perkType: String(perk.perk_type ?? "passive"),
+    activationType: String(perk.activation_type ?? "passive"),
+    resolutionMode: String(perk.resolution_mode ?? "backend"),
+    isEnabled: Boolean(perk.is_enabled ?? true),
+    description: String(perk.description ?? ""),
+    effectDataText: prettyJson(toPlainObject(perk.effect_data)),
+  };
+}
+
 function normalizeAbilityLinkDraft(entry) {
   const data = entry?.data && typeof entry.data === "object" && !Array.isArray(entry.data)
     ? entry.data
@@ -1494,6 +1572,15 @@ function makeAbilityDuplicateDraft(source) {
   });
 }
 
+function makePerkDuplicateDraft(source) {
+  const name = String(source.name ?? "").trim();
+  return {
+    ...cloneJson(source),
+    id: "",
+    name: name ? `${name} Copy` : "",
+  };
+}
+
 function makeEquipmentDuplicateDraft(source) {
   const name = String(source.name ?? "").trim();
   return {
@@ -1614,6 +1701,17 @@ function generatedAbilityPreview(draft, state) {
   const tags = buildAbilityAutoTags(draft);
   const sortOrder = draft.id
     ? Number.parseInt(String(state?.bundles?.abilities?.ability?.sort_order ?? 0), 10) || 0
+    : nextFreeSortOrder(list);
+  return { code, tags, sortOrder };
+}
+
+function generatedPerkPreview(draft, references, state) {
+  const list = Array.isArray(state?.lists?.perks) ? state.lists.perks : [];
+  const existingCodes = list.map((item) => item?.code);
+  const code = uniqueGeneratedCode(slugifyName(draft.name), existingCodes);
+  const tags = buildPerkAutoTags(draft, references);
+  const sortOrder = draft.id
+    ? Number.parseInt(String(state?.bundles?.perks?.perk?.sort_order ?? 0), 10) || 0
     : nextFreeSortOrder(list);
   return { code, tags, sortOrder };
 }
@@ -2024,6 +2122,25 @@ function buildAbilityPayload(draft, auto) {
   };
 }
 
+function buildPerkPayload(draft, auto) {
+  const effectDataText = String(draft.effectDataText ?? "").trim();
+  return {
+    id: draft.id || undefined,
+    code: String(auto.code ?? "").trim(),
+    name: String(draft.name ?? "").trim(),
+    linked_skill_id: String(draft.linkedSkillId ?? "").trim() || null,
+    required_skill_level: Math.max(1, coerceInteger(draft.requiredSkillLevel, 1)),
+    perk_type: String(draft.perkType ?? "passive").trim() || "passive",
+    activation_type: String(draft.activationType ?? "passive").trim() || "passive",
+    resolution_mode: String(draft.resolutionMode ?? "backend").trim() || "backend",
+    is_enabled: Boolean(draft.isEnabled),
+    description: String(draft.description ?? ""),
+    effect_data: effectDataText ? parseJsonField(effectDataText, "Effect Data", "object") : {},
+    tags: auto.tags,
+    sort_order: auto.sortOrder,
+  };
+}
+
 function buildEquipmentPayload(draft, auto) {
   const showProtectionSlots = shouldShowProtectionSlots(draft.itemType);
   const selectedAllowedCodes = normalizeBodyPartCodeArray(draft.allowedBodyPartCodes);
@@ -2319,6 +2436,60 @@ function buildAbilityFilterMarkup(state) {
   `;
 }
 
+function buildPerkFilterMarkup(state, references) {
+  const selectedSkillId = String(state.filters.perks.linkedSkillId ?? "");
+  const selectedPerkType = String(state.filters.perks.perkType ?? "");
+  const selectedResolution = String(state.filters.perks.resolutionMode ?? "");
+  const skillOptions = ['<option value="">All skills</option>'];
+  for (const skill of Array.isArray(references?.skills) ? references.skills : []) {
+    skillOptions.push(
+      `<option value="${escapeHtml(skill.id)}"${selectedSkillId === skill.id ? " selected" : ""}>${escapeHtml(skill.name || skill.code || skill.id)}${skill.category ? ` | ${escapeHtml(skill.category)}` : ""}</option>`,
+    );
+  }
+  const perkTypeOptions = [
+    '<option value="">All perk types</option>',
+    ...PERK_TYPE_OPTIONS.map(
+      (option) => `<option value="${escapeHtml(option.value)}"${selectedPerkType === option.value ? " selected" : ""}>${escapeHtml(option.label)}</option>`,
+    ),
+  ];
+  const resolutionOptions = [
+    '<option value="">All resolution modes</option>',
+    ...PERK_RESOLUTION_OPTIONS.map(
+      (option) => `<option value="${escapeHtml(option.value)}"${selectedResolution === option.value ? " selected" : ""}>${escapeHtml(option.label)}</option>`,
+    ),
+  ];
+  return `
+    <div class="creator-toolbar">
+      <label class="field-stack">
+        <span>Search</span>
+        <input data-creator-filter-search="perks" type="text" value="${escapeHtml(state.filters.perks.search)}" placeholder="code, name, skill, tags">
+      </label>
+      <label class="field-stack">
+        <span>Linked Skill</span>
+        <select data-creator-filter-linked-skill="perks">
+          ${skillOptions.join("")}
+        </select>
+      </label>
+      <label class="field-stack">
+        <span>Perk Type</span>
+        <select data-creator-filter-perk-type="perks">
+          ${perkTypeOptions.join("")}
+        </select>
+      </label>
+      <label class="field-stack">
+        <span>Resolution</span>
+        <select data-creator-filter-resolution-mode="perks">
+          ${resolutionOptions.join("")}
+        </select>
+      </label>
+      <div class="creator-filter-actions">
+        <button type="button" class="secondary" data-creator-action="applyFilters">Apply Filters</button>
+        <button type="button" class="secondary" data-creator-action="refreshList">Refresh</button>
+      </div>
+    </div>
+  `;
+}
+
 function buildEquipmentFilterMarkup(state, references) {
   const selected = state.filters.equipment.itemType;
   const types = getEquipmentUiTypes(references);
@@ -2367,6 +2538,8 @@ function buildListMarkup(kind, items, selectedId) {
         ? "effects"
         : kind === "abilities"
         ? "abilities"
+        : kind === "perks"
+        ? "perks"
         : "equipment models"
     } found for the current filter.</div>`;
   }
@@ -2421,6 +2594,13 @@ function buildListMarkup(kind, items, selectedId) {
             item.ability_kind || "utility",
             item.source_type === "psionic" ? "psionic" : "technical",
             item.effect_mode || "narrative",
+          ]
+        : kind === "perks"
+        ? [
+            item.skill_name || item.linked_skill_name || item.skill_code || item.linked_skill_code || "no skill",
+            `${getAbilityOptionLabel(PERK_TYPE_OPTIONS, item.perk_type, item.perk_type || "passive")}`,
+            `${getAbilityOptionLabel(PERK_RESOLUTION_OPTIONS, item.resolution_mode, item.resolution_mode || "backend")}`,
+            item.is_enabled === false ? "disabled" : `req ${item.required_skill_level ?? 1}`,
           ]
         : [
             item.item_type || "unknown",
@@ -3761,6 +3941,101 @@ function buildAbilityEditorMarkup(state, references) {
   `;
 }
 
+function buildPerkEditorMarkup(state, references) {
+  const draft = state.drafts.perks;
+  const auto = generatedPerkPreview(draft, references, state);
+  const perkTypeOptions = PERK_TYPE_OPTIONS
+    .map((option) => `<option value="${escapeHtml(option.value)}"${draft.perkType === option.value ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
+    .join("");
+  const activationOptions = PERK_ACTIVATION_OPTIONS
+    .map((option) => `<option value="${escapeHtml(option.value)}"${draft.activationType === option.value ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
+    .join("");
+  const resolutionOptions = PERK_RESOLUTION_OPTIONS
+    .map((option) => `<option value="${escapeHtml(option.value)}"${draft.resolutionMode === option.value ? " selected" : ""}>${escapeHtml(option.label)}</option>`)
+    .join("");
+  const linkedSkill = (Array.isArray(references?.skills) ? references.skills : [])
+    .find((entry) => String(entry?.id ?? "") === String(draft.linkedSkillId ?? ""));
+  let payloadPreview = "{}";
+  try {
+    payloadPreview = prettyJson(buildPerkPayload(draft, auto));
+  } catch (_error) {
+    payloadPreview = prettyJson({ draft });
+  }
+
+  return `
+    <div class="creator-editor-head">
+      <div>
+        <div class="creator-editor-title">${escapeHtml(draft.name || "New Perk Draft")}</div>
+        <div class="muted">${draft.id ? "Editing saved definition." : "Draft is local until Save."}</div>
+      </div>
+      <div class="creator-pill${state.dirty.perks ? " dirty" : ""}" data-creator-dirty-pill="perks">${state.dirty.perks ? "Unsaved" : "Saved / clean"}</div>
+    </div>
+    <div class="button-row">
+      <button type="button" data-creator-action="newDraft">Create New</button>
+      <button type="button" class="secondary" data-creator-action="duplicateDraft">Duplicate</button>
+      <button type="button" data-creator-action="saveDraft">Save</button>
+      <button type="button" class="secondary" data-creator-action="reloadSelected"${draft.id ? "" : " disabled"}>Reload</button>
+      <button type="button" class="secondary" data-creator-action="deleteSelected"${draft.id ? "" : " disabled"}>Delete</button>
+    </div>
+    <form class="creator-form" data-creator-form="perks">
+      <label class="field-stack">
+        <span>Name</span>
+        <input data-creator-input="name" type="text" value="${escapeHtml(draft.name)}" placeholder="Not Full Auto">
+      </label>
+      <div class="field-grid creator-grid-4">
+        <label class="field-stack">
+          <span>Linked Skill</span>
+          <select data-creator-input="linkedSkillId">${buildSkillIdOptions(references, draft.linkedSkillId)}</select>
+        </label>
+        <label class="field-stack">
+          <span>Required Level</span>
+          <input data-creator-input="requiredSkillLevel" type="number" min="1" value="${escapeHtml(draft.requiredSkillLevel)}">
+        </label>
+        <label class="field-stack">
+          <span>Perk Type</span>
+          <select data-creator-input="perkType">${perkTypeOptions}</select>
+        </label>
+        <label class="field-stack">
+          <span>Activation</span>
+          <select data-creator-input="activationType">${activationOptions}</select>
+        </label>
+      </div>
+      <div class="field-grid creator-grid-3">
+        <label class="field-stack">
+          <span>Resolution</span>
+          <select data-creator-input="resolutionMode">${resolutionOptions}</select>
+        </label>
+        <label class="toggle-inline creator-toggle-card">
+          <input data-creator-input="isEnabled" type="checkbox"${draft.isEnabled ? " checked" : ""}>
+          <span>Enabled</span>
+        </label>
+        <div class="creator-auto-meta creator-small-meta">
+          <div><strong>Linked Skill:</strong> ${escapeHtml(linkedSkill?.name || linkedSkill?.code || "not selected")}</div>
+          <div><strong>UI label:</strong> Automatic = stored as passive, Announce = stored as gm_resolved.</div>
+        </div>
+      </div>
+      <label class="field-stack">
+        <span>Description</span>
+        <textarea data-creator-input="description" rows="4" placeholder="Short GM-facing description">${escapeHtml(draft.description)}</textarea>
+      </label>
+      <label class="field-stack">
+        <span>Effect Data (JSON)</span>
+        <textarea data-creator-input="effectDataText" rows="12" placeholder="{ }">${escapeHtml(draft.effectDataText)}</textarea>
+      </label>
+      ${buildDisclosureSection({
+        title: "Payload Preview",
+        collapsed: Boolean(state.collapsed.perksPayload),
+        action: "togglePerksPayload",
+        bodyMarkup: `
+          <label class="field-stack">
+            <textarea rows="14" readonly>${escapeHtml(payloadPreview)}</textarea>
+          </label>
+        `,
+      })}
+    </form>
+  `;
+}
+
 function buildAbilityLinksEditorMarkup(draft, references) {
   const links = Array.isArray(draft.abilityLinks) ? draft.abilityLinks : [];
   const selectedIds = links.map((entry) => entry.abilityDefId).filter(Boolean);
@@ -3977,7 +4252,7 @@ function buildPanelMarkup(state, access) {
     return `
       <section class="panel">
         <div class="panel-title">Creator Menu</div>
-        <p class="muted">Configure Supabase room settings above, then the creator tabs for Weapons, Items, Calibers, Ammo, Magazines, Skills, Effects, Abilities, and Equipment Models will unlock here.</p>
+        <p class="muted">Configure Supabase room settings above, then the creator tabs for Weapons, Items, Calibers, Ammo, Magazines, Skills, Effects, Abilities, Perks, and Equipment Models will unlock here.</p>
       </section>
     `;
   }
@@ -3999,6 +4274,8 @@ function buildPanelMarkup(state, access) {
     ? buildListMarkup("effects", state.lists.effects, state.selectedIds.effects)
     : state.activeTab === "abilities"
     ? buildListMarkup("abilities", state.lists.abilities, state.selectedIds.abilities)
+    : state.activeTab === "perks"
+    ? buildListMarkup("perks", state.lists.perks, state.selectedIds.perks)
     : buildListMarkup("equipment", state.lists.equipment, state.selectedIds.equipment);
   const filtersMarkup = state.activeTab === "weapons"
     ? buildWeaponFilterMarkup(state)
@@ -4016,6 +4293,8 @@ function buildPanelMarkup(state, access) {
     ? buildEffectFilterMarkup(state)
     : state.activeTab === "abilities"
     ? buildAbilityFilterMarkup(state)
+    : state.activeTab === "perks"
+    ? buildPerkFilterMarkup(state, references)
     : buildEquipmentFilterMarkup(state, references);
   const editorMarkup = state.activeTab === "weapons"
     ? buildWeaponEditorMarkup(state, references)
@@ -4033,6 +4312,8 @@ function buildPanelMarkup(state, access) {
     ? buildEffectEditorMarkup(state, references)
     : state.activeTab === "abilities"
     ? buildAbilityEditorMarkup(state, references)
+    : state.activeTab === "perks"
+    ? buildPerkEditorMarkup(state, references)
     : buildEquipmentEditorMarkup(state, references);
   const catalogCollapsed = state.activeTab === "weapons"
     ? Boolean(state.collapsed.weaponsCatalog)
@@ -4050,12 +4331,14 @@ function buildPanelMarkup(state, access) {
     ? Boolean(state.collapsed.effectsCatalog)
     : state.activeTab === "abilities"
     ? Boolean(state.collapsed.abilitiesCatalog)
+    : state.activeTab === "perks"
+    ? Boolean(state.collapsed.perksCatalog)
     : Boolean(state.collapsed.equipmentCatalog);
   const catalogMarkup = buildCatalogSection({
-    title: state.activeTab === "weapons" ? "Weapon Catalog" : state.activeTab === "items" ? "Item Catalog" : state.activeTab === "calibers" ? "Caliber Catalog" : state.activeTab === "ammo" ? "Ammo Catalog" : state.activeTab === "magazines" ? "Magazine Catalog" : state.activeTab === "skills" ? "Skill Catalog" : state.activeTab === "effects" ? "Effect Catalog" : state.activeTab === "abilities" ? "Ability Catalog" : "Equipment Catalog",
-    count: state.activeTab === "weapons" ? state.lists.weapons.length : state.activeTab === "items" ? state.lists.items.length : state.activeTab === "calibers" ? state.lists.calibers.length : state.activeTab === "ammo" ? state.lists.ammo.length : state.activeTab === "magazines" ? state.lists.magazines.length : state.activeTab === "skills" ? state.lists.skills.length : state.activeTab === "effects" ? state.lists.effects.length : state.activeTab === "abilities" ? state.lists.abilities.length : state.lists.equipment.length,
+    title: state.activeTab === "weapons" ? "Weapon Catalog" : state.activeTab === "items" ? "Item Catalog" : state.activeTab === "calibers" ? "Caliber Catalog" : state.activeTab === "ammo" ? "Ammo Catalog" : state.activeTab === "magazines" ? "Magazine Catalog" : state.activeTab === "skills" ? "Skill Catalog" : state.activeTab === "effects" ? "Effect Catalog" : state.activeTab === "abilities" ? "Ability Catalog" : state.activeTab === "perks" ? "Perk Catalog" : "Equipment Catalog",
+    count: state.activeTab === "weapons" ? state.lists.weapons.length : state.activeTab === "items" ? state.lists.items.length : state.activeTab === "calibers" ? state.lists.calibers.length : state.activeTab === "ammo" ? state.lists.ammo.length : state.activeTab === "magazines" ? state.lists.magazines.length : state.activeTab === "skills" ? state.lists.skills.length : state.activeTab === "effects" ? state.lists.effects.length : state.activeTab === "abilities" ? state.lists.abilities.length : state.activeTab === "perks" ? state.lists.perks.length : state.lists.equipment.length,
     collapsed: catalogCollapsed,
-    action: state.activeTab === "weapons" ? "toggleWeaponsCatalog" : state.activeTab === "items" ? "toggleItemsCatalog" : state.activeTab === "calibers" ? "toggleCalibersCatalog" : state.activeTab === "ammo" ? "toggleAmmoCatalog" : state.activeTab === "magazines" ? "toggleMagazinesCatalog" : state.activeTab === "skills" ? "toggleSkillsCatalog" : state.activeTab === "effects" ? "toggleEffectsCatalog" : state.activeTab === "abilities" ? "toggleAbilitiesCatalog" : "toggleEquipmentCatalog",
+    action: state.activeTab === "weapons" ? "toggleWeaponsCatalog" : state.activeTab === "items" ? "toggleItemsCatalog" : state.activeTab === "calibers" ? "toggleCalibersCatalog" : state.activeTab === "ammo" ? "toggleAmmoCatalog" : state.activeTab === "magazines" ? "toggleMagazinesCatalog" : state.activeTab === "skills" ? "toggleSkillsCatalog" : state.activeTab === "effects" ? "toggleEffectsCatalog" : state.activeTab === "abilities" ? "toggleAbilitiesCatalog" : state.activeTab === "perks" ? "togglePerksCatalog" : "toggleEquipmentCatalog",
     bodyMarkup: listMarkup,
   });
 
@@ -4372,6 +4655,26 @@ function readAbilityDraftFromDom(root, fallbackDraft = createEmptyAbilityDraft()
   });
 }
 
+function readPerkDraftFromDom(root, fallbackDraft = createEmptyPerkDraft()) {
+  const form = root.querySelector('[data-creator-form="perks"]');
+  if (!(form instanceof HTMLElement)) {
+    return cloneJson(fallbackDraft);
+  }
+  const query = (field) => form.querySelector(`[data-creator-input="${field}"]`);
+  return {
+    id: String(form.dataset.creatorEntityId ?? ""),
+    name: String(query("name")?.value ?? fallbackDraft.name ?? ""),
+    linkedSkillId: String(query("linkedSkillId")?.value ?? fallbackDraft.linkedSkillId ?? ""),
+    requiredSkillLevel: String(query("requiredSkillLevel")?.value ?? fallbackDraft.requiredSkillLevel ?? "1"),
+    perkType: String(query("perkType")?.value ?? fallbackDraft.perkType ?? "passive"),
+    activationType: String(query("activationType")?.value ?? fallbackDraft.activationType ?? "passive"),
+    resolutionMode: String(query("resolutionMode")?.value ?? fallbackDraft.resolutionMode ?? "backend"),
+    isEnabled: Boolean(query("isEnabled")?.checked ?? fallbackDraft.isEnabled ?? true),
+    description: String(query("description")?.value ?? fallbackDraft.description ?? ""),
+    effectDataText: String(query("effectDataText")?.value ?? fallbackDraft.effectDataText ?? "{\n  \n}"),
+  };
+}
+
 function readEquipmentDraftFromDom(root, fallbackDraft = createEmptyEquipmentDraft()) {
   const form = root.querySelector('[data-creator-form="equipment"]');
   if (!(form instanceof HTMLElement)) {
@@ -4487,6 +4790,8 @@ export function mountCreatorMenu({
       state.drafts.effects = readEffectDraftFromDom(root, state.drafts.effects);
     } else if (state.activeTab === "abilities") {
       state.drafts.abilities = readAbilityDraftFromDom(root, state.drafts.abilities);
+    } else if (state.activeTab === "perks") {
+      state.drafts.perks = readPerkDraftFromDom(root, state.drafts.perks);
     } else {
       state.drafts.equipment = readEquipmentDraftFromDom(root, state.drafts.equipment);
     }
@@ -4500,10 +4805,10 @@ export function mountCreatorMenu({
   function resetLoadedData({ keepTab = true } = {}) {
     const activeTab = keepTab ? state.activeTab : "calibers";
     state.references = null;
-    state.loadedTabs = { weapons: false, items: false, calibers: false, ammo: false, magazines: false, skills: false, effects: false, abilities: false, equipment: false };
-    state.lists = { weapons: [], items: [], calibers: [], ammo: [], magazines: [], skills: [], effects: [], abilities: [], equipment: [] };
-    state.selectedIds = { weapons: "", items: "", calibers: "", ammo: "", magazines: "", skills: "", effects: "", abilities: "", equipment: "" };
-    state.bundles = { weapons: null, items: null, calibers: null, ammo: null, magazines: null, skills: null, effects: null, abilities: null, equipment: null };
+    state.loadedTabs = { weapons: false, items: false, calibers: false, ammo: false, magazines: false, skills: false, effects: false, abilities: false, perks: false, equipment: false };
+    state.lists = { weapons: [], items: [], calibers: [], ammo: [], magazines: [], skills: [], effects: [], abilities: [], perks: [], equipment: [] };
+    state.selectedIds = { weapons: "", items: "", calibers: "", ammo: "", magazines: "", skills: "", effects: "", abilities: "", perks: "", equipment: "" };
+    state.bundles = { weapons: null, items: null, calibers: null, ammo: null, magazines: null, skills: null, effects: null, abilities: null, perks: null, equipment: null };
     state.drafts = {
       weapons: createEmptyWeaponDraft(),
       items: createEmptyItemDraft(),
@@ -4513,9 +4818,10 @@ export function mountCreatorMenu({
       skills: createEmptySkillDraft(),
       effects: createEmptyEffectDraft(),
       abilities: createEmptyAbilityDraft(),
+      perks: createEmptyPerkDraft(),
       equipment: createEmptyEquipmentDraft(),
     };
-    state.dirty = { weapons: false, items: false, calibers: false, ammo: false, magazines: false, skills: false, effects: false, abilities: false, equipment: false };
+    state.dirty = { weapons: false, items: false, calibers: false, ammo: false, magazines: false, skills: false, effects: false, abilities: false, perks: false, equipment: false };
     state.activeTab = activeTab;
   }
 
@@ -4543,7 +4849,7 @@ export function mountCreatorMenu({
           && (
             (
               target.hasAttribute("data-creator-input")
-              && ["skillGroup", "effectType", "defaultDurationType", "uiKind", "sourceLabel", "resolutionMode", "rangeMode", "attackType", "targetType", "caliberId", "itemType", "useActionType", "isStackable"].includes(String(target.getAttribute("data-creator-input")))
+              && ["skillGroup", "effectType", "defaultDurationType", "uiKind", "sourceLabel", "resolutionMode", "rangeMode", "attackType", "targetType", "caliberId", "itemType", "useActionType", "isStackable", "linkedSkillId", "perkType", "activationType", "isEnabled"].includes(String(target.getAttribute("data-creator-input")))
             )
             || (
               target.hasAttribute("data-creator-link-input")
@@ -4733,6 +5039,11 @@ export function mountCreatorMenu({
             state.collapsed.abilitiesCatalog = !state.collapsed.abilitiesCatalog;
             render();
             break;
+          case "togglePerksCatalog":
+            captureActiveDraft();
+            state.collapsed.perksCatalog = !state.collapsed.perksCatalog;
+            render();
+            break;
           case "toggleSkillsPayload":
             captureActiveDraft();
             state.collapsed.skillsPayload = !state.collapsed.skillsPayload;
@@ -4781,6 +5092,11 @@ export function mountCreatorMenu({
           case "toggleAbilitiesLevels":
             captureActiveDraft();
             state.collapsed.abilitiesLevels = !state.collapsed.abilitiesLevels;
+            render();
+            break;
+          case "togglePerksPayload":
+            captureActiveDraft();
+            state.collapsed.perksPayload = !state.collapsed.perksPayload;
             render();
             break;
           case "toggleEquipmentPayload":
@@ -4971,6 +5287,15 @@ export function mountCreatorMenu({
     } else if (state.activeTab === "abilities") {
       const search = root.querySelector('[data-creator-filter-search="abilities"]');
       state.filters.abilities.search = String(search?.value ?? "").trim();
+    } else if (state.activeTab === "perks") {
+      const search = root.querySelector('[data-creator-filter-search="perks"]');
+      const linkedSkill = root.querySelector('[data-creator-filter-linked-skill="perks"]');
+      const perkType = root.querySelector('[data-creator-filter-perk-type="perks"]');
+      const resolutionMode = root.querySelector('[data-creator-filter-resolution-mode="perks"]');
+      state.filters.perks.search = String(search?.value ?? "").trim();
+      state.filters.perks.linkedSkillId = String(linkedSkill?.value ?? "").trim();
+      state.filters.perks.perkType = String(perkType?.value ?? "").trim();
+      state.filters.perks.resolutionMode = String(resolutionMode?.value ?? "").trim();
     } else {
       const search = root.querySelector('[data-creator-filter-search="equipment"]');
       const itemType = root.querySelector('[data-creator-filter-item-type="equipment"]');
@@ -5108,6 +5433,17 @@ export function mountCreatorMenu({
         },
         settings,
       );
+    } else if (kind === "perks") {
+      const filters = state.filters.perks;
+      result = await runtime.api.creator.listPerks(
+        {
+          search: filters.search || null,
+          linkedSkillId: filters.linkedSkillId || null,
+          perkType: filters.perkType || null,
+          resolutionMode: filters.resolutionMode || null,
+        },
+        settings,
+      );
     } else {
       const filters = state.filters.equipment;
       result = await runtime.api.creator.listEquipmentModels(
@@ -5136,6 +5472,8 @@ export function mountCreatorMenu({
       ? (Array.isArray(result.items) ? result.items : [])
       : kind === "abilities"
       ? (Array.isArray(result.items) ? result.items : [])
+      : kind === "perks"
+      ? (Array.isArray(result.items) ? result.items : [])
       : kind === "equipment"
       ? (Array.isArray(result.items) ? result.items : []).filter((item) => String(item?.item_type ?? "") !== "device")
       : (Array.isArray(result.items) ? result.items : []);
@@ -5163,6 +5501,8 @@ export function mountCreatorMenu({
         ? createEmptyEffectDraft()
         : kind === "abilities"
         ? createEmptyAbilityDraft()
+        : kind === "perks"
+        ? createEmptyPerkDraft()
         : createEmptyEquipmentDraft();
       state.dirty[kind] = false;
     }
@@ -5185,7 +5525,7 @@ export function mountCreatorMenu({
       }
       await loadListForTab(state.activeTab, access.settings, requestId);
       state.loading = false;
-      state.info = `${state.activeTab === "weapons" ? "Weapon" : state.activeTab === "items" ? "Item" : state.activeTab === "calibers" ? "Caliber" : state.activeTab === "ammo" ? "Ammo" : state.activeTab === "magazines" ? "Magazine" : state.activeTab === "skills" ? "Skill" : state.activeTab === "effects" ? "Effect" : state.activeTab === "abilities" ? "Ability" : "Equipment"} catalog refreshed.`;
+      state.info = `${state.activeTab === "weapons" ? "Weapon" : state.activeTab === "items" ? "Item" : state.activeTab === "calibers" ? "Caliber" : state.activeTab === "ammo" ? "Ammo" : state.activeTab === "magazines" ? "Magazine" : state.activeTab === "skills" ? "Skill" : state.activeTab === "effects" ? "Effect" : state.activeTab === "abilities" ? "Ability" : state.activeTab === "perks" ? "Perk" : "Equipment"} catalog refreshed.`;
       render();
     } catch (error) {
       state.loading = false;
@@ -5202,7 +5542,7 @@ export function mountCreatorMenu({
     }
     const requestId = ++state.requestNonce;
     state.loading = true;
-      state.loadingLabel = `loading ${kind === "weapons" ? "weapon model" : kind === "items" ? "item definition" : kind === "calibers" ? "caliber" : kind === "ammo" ? "ammo definition" : kind === "magazines" ? "magazine definition" : kind === "skills" ? "skill" : kind === "effects" ? "effect" : kind === "abilities" ? "ability" : "equipment model"}`;
+    state.loadingLabel = `loading ${kind === "weapons" ? "weapon model" : kind === "items" ? "item definition" : kind === "calibers" ? "caliber" : kind === "ammo" ? "ammo definition" : kind === "magazines" ? "magazine definition" : kind === "skills" ? "skill" : kind === "effects" ? "effect" : kind === "abilities" ? "ability" : kind === "perks" ? "perk" : "equipment model"}`;
     clearMessages();
     render();
 
@@ -5223,6 +5563,8 @@ export function mountCreatorMenu({
         ? await runtime.api.creator.getEffect(id, access.settings)
         : kind === "abilities"
         ? await runtime.api.creator.getAbility(id, access.settings)
+        : kind === "perks"
+        ? await runtime.api.creator.getPerk(id, access.settings)
         : await runtime.api.creator.getEquipmentModel(id, access.settings);
       if (requestId !== state.requestNonce) return;
       if (!result?.ok) {
@@ -5246,10 +5588,12 @@ export function mountCreatorMenu({
         ? normalizeEffectDraft(result)
         : kind === "abilities"
         ? normalizeAbilityDraft(result)
+        : kind === "perks"
+        ? normalizePerkDraft(result)
         : normalizeEquipmentDraft(result);
       state.dirty[kind] = false;
       state.loading = false;
-      state.info = `${kind === "weapons" ? "Weapon" : kind === "items" ? "Item" : kind === "calibers" ? "Caliber" : kind === "ammo" ? "Ammo" : kind === "magazines" ? "Magazine" : kind === "skills" ? "Skill" : kind === "effects" ? "Effect" : kind === "abilities" ? "Ability" : "Equipment model"} loaded into draft.`;
+      state.info = `${kind === "weapons" ? "Weapon" : kind === "items" ? "Item" : kind === "calibers" ? "Caliber" : kind === "ammo" ? "Ammo" : kind === "magazines" ? "Magazine" : kind === "skills" ? "Skill" : kind === "effects" ? "Effect" : kind === "abilities" ? "Ability" : kind === "perks" ? "Perk" : "Equipment model"} loaded into draft.`;
       render();
     } catch (error) {
       if (requestId !== state.requestNonce) return;
@@ -5310,6 +5654,12 @@ export function mountCreatorMenu({
       state.drafts.abilities = createEmptyAbilityDraft();
       state.dirty.abilities = false;
       state.info = "New ability draft created.";
+    } else if (state.activeTab === "perks") {
+      state.selectedIds.perks = "";
+      state.bundles.perks = null;
+      state.drafts.perks = createEmptyPerkDraft();
+      state.dirty.perks = false;
+      state.info = "New perk draft created.";
     } else {
       state.selectedIds.equipment = "";
       state.bundles.equipment = null;
@@ -5370,6 +5720,12 @@ export function mountCreatorMenu({
       state.drafts.abilities = makeAbilityDuplicateDraft(state.drafts.abilities);
       state.dirty.abilities = true;
       state.info = "Ability draft duplicated as a new record.";
+    } else if (state.activeTab === "perks") {
+      state.selectedIds.perks = "";
+      state.bundles.perks = null;
+      state.drafts.perks = makePerkDuplicateDraft(state.drafts.perks);
+      state.dirty.perks = true;
+      state.info = "Perk draft duplicated as a new record.";
     } else {
       state.selectedIds.equipment = "";
       state.bundles.equipment = null;
@@ -5546,6 +5902,25 @@ export function mountCreatorMenu({
       return buildAbilityPayload(draft, auto);
     }
 
+    if (kind === "perks") {
+      const allPerks = await runtime.api.creator.listPerks({}, settings);
+      if (!allPerks?.ok) {
+        throw new Error(formatCreatorError(allPerks, "Unable to calculate automatic perk fields."));
+      }
+      const list = Array.isArray(allPerks.items) ? allPerks.items : [];
+      const existingCodes = list
+        .filter((item) => item.id !== draft.id)
+        .map((item) => item.code);
+      const auto = {
+        code: uniqueGeneratedCode(slugifyName(draft.name), existingCodes),
+        sortOrder: draft.id
+          ? Number.parseInt(String(state.bundles.perks?.perk?.sort_order ?? 0), 10) || 0
+          : nextFreeSortOrder(list),
+        tags: buildPerkAutoTags(draft, state.references ?? {}),
+      };
+      return buildPerkPayload(draft, auto);
+    }
+
     const allEquipment = await runtime.api.creator.listEquipmentModels({ search: null, itemTypes: [] }, settings);
     if (!allEquipment?.ok) {
       throw new Error(formatCreatorError(allEquipment, "Unable to calculate automatic equipment fields."));
@@ -5590,6 +5965,8 @@ export function mountCreatorMenu({
         ? state.drafts.effects
         : state.activeTab === "abilities"
         ? state.drafts.abilities
+        : state.activeTab === "perks"
+        ? state.drafts.perks
         : state.drafts.equipment;
       const payload = await buildSavePayload(state.activeTab, draft, access.settings);
       const result = state.activeTab === "weapons"
@@ -5608,6 +5985,8 @@ export function mountCreatorMenu({
         ? await runtime.api.creator.upsertEffect(payload, access.settings)
         : state.activeTab === "abilities"
         ? await runtime.api.creator.upsertAbility(payload, access.settings)
+        : state.activeTab === "perks"
+        ? await runtime.api.creator.upsertPerk(payload, access.settings)
         : await runtime.api.creator.upsertEquipmentModel(payload, access.settings);
       if (!result?.ok) {
         throw new Error(formatCreatorError(result, "Unable to save draft."));
@@ -5656,6 +6035,11 @@ export function mountCreatorMenu({
         state.bundles.abilities = bundle;
         state.drafts.abilities = normalizeAbilityDraft(bundle);
         state.dirty.abilities = false;
+      } else if (state.activeTab === "perks") {
+        state.selectedIds.perks = String(result.entity_id ?? "");
+        state.bundles.perks = bundle;
+        state.drafts.perks = normalizePerkDraft(bundle);
+        state.dirty.perks = false;
       } else {
         state.selectedIds.equipment = String(result.entity_id ?? "");
         state.bundles.equipment = bundle;
@@ -5664,7 +6048,7 @@ export function mountCreatorMenu({
       }
       await loadListForTab(state.activeTab, access.settings);
       state.loading = false;
-      state.info = `${state.activeTab === "weapons" ? "Weapon" : state.activeTab === "items" ? "Item" : state.activeTab === "calibers" ? "Caliber" : state.activeTab === "ammo" ? "Ammo" : state.activeTab === "magazines" ? "Magazine" : state.activeTab === "skills" ? "Skill" : state.activeTab === "effects" ? "Effect" : state.activeTab === "abilities" ? "Ability" : "Equipment model"} saved to Supabase.`;
+      state.info = `${state.activeTab === "weapons" ? "Weapon" : state.activeTab === "items" ? "Item" : state.activeTab === "calibers" ? "Caliber" : state.activeTab === "ammo" ? "Ammo" : state.activeTab === "magazines" ? "Magazine" : state.activeTab === "skills" ? "Skill" : state.activeTab === "effects" ? "Effect" : state.activeTab === "abilities" ? "Ability" : state.activeTab === "perks" ? "Perk" : "Equipment model"} saved to Supabase.`;
       onDiagnostic("info", "Creator save complete", state.info);
       render();
     } catch (error) {
@@ -5689,7 +6073,7 @@ export function mountCreatorMenu({
     if (!access.isGm || !access.configured || !id) {
       return;
     }
-    const label = state.activeTab === "weapons" ? "weapon model" : state.activeTab === "items" ? "item definition" : state.activeTab === "calibers" ? "caliber" : state.activeTab === "ammo" ? "ammo definition" : state.activeTab === "magazines" ? "magazine definition" : state.activeTab === "skills" ? "skill" : state.activeTab === "effects" ? "effect" : state.activeTab === "abilities" ? "ability" : "equipment model";
+    const label = state.activeTab === "weapons" ? "weapon model" : state.activeTab === "items" ? "item definition" : state.activeTab === "calibers" ? "caliber" : state.activeTab === "ammo" ? "ammo definition" : state.activeTab === "magazines" ? "magazine definition" : state.activeTab === "skills" ? "skill" : state.activeTab === "effects" ? "effect" : state.activeTab === "abilities" ? "ability" : state.activeTab === "perks" ? "perk" : "equipment model";
     if (!globalThis.confirm(`Delete this ${label} definition from the catalog?`)) {
       return;
     }
@@ -5715,6 +6099,8 @@ export function mountCreatorMenu({
         ? await runtime.api.creator.deleteEffect(id, access.settings)
         : state.activeTab === "abilities"
         ? await runtime.api.creator.deleteAbility(id, access.settings)
+        : state.activeTab === "perks"
+        ? await runtime.api.creator.deletePerk(id, access.settings)
         : await runtime.api.creator.deleteEquipmentModel(id, access.settings);
       if (!result?.ok) {
         throw new Error(formatCreatorError(result, `Unable to delete ${label}.`));
@@ -5759,6 +6145,11 @@ export function mountCreatorMenu({
         state.bundles.abilities = null;
         state.drafts.abilities = createEmptyAbilityDraft();
         state.dirty.abilities = false;
+      } else if (state.activeTab === "perks") {
+        state.selectedIds.perks = "";
+        state.bundles.perks = null;
+        state.drafts.perks = createEmptyPerkDraft();
+        state.dirty.perks = false;
       } else {
         state.selectedIds.equipment = "";
         state.bundles.equipment = null;

@@ -53,6 +53,13 @@ export const EFFECT_RPC_NAMES = Object.freeze({
   advanceCharacterEffects: "advance_character_effects",
 });
 
+export const PERK_RPC_NAMES = Object.freeze({
+  getCharacterPerks: "get_character_perks",
+  getCharacterAvailablePerks: "get_character_available_perks",
+  grantCharacterPerk: "grant_character_perk",
+  useCharacterPerk: "use_character_perk",
+});
+
 export const EQUIPMENT_RPC_NAMES = Object.freeze({
   getCharacterArmorSummary: "get_character_armor_summary",
   getCharacterEquipment: "get_character_equipment",
@@ -118,6 +125,10 @@ export const CREATOR_RPC_NAMES = Object.freeze({
   getAbility: "creator_get_ability",
   upsertAbility: "creator_upsert_ability",
   deleteAbility: "creator_delete_ability",
+  listPerks: "creator_list_perks",
+  getPerk: "creator_get_perk",
+  upsertPerk: "creator_upsert_perk",
+  deletePerk: "creator_delete_perk",
   listEquipmentModels: "creator_list_equipment_models",
   getEquipmentModel: "creator_get_equipment_model",
   upsertEquipmentModel: "creator_upsert_equipment_model",

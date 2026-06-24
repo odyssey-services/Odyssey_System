@@ -8,6 +8,7 @@ import {
   COMBAT_RPC_NAMES,
   GM_RPC_NAMES,
   EFFECT_RPC_NAMES,
+  PERK_RPC_NAMES,
   EQUIPMENT_RPC_NAMES,
   INVENTORY_RPC_NAMES,
   CHARACTER_PLACEMENT_RPC_NAMES,
@@ -25,6 +26,7 @@ import * as weaponApi from "../api/weaponApi.js";
 import * as combatApi from "../api/combatApi.js";
 import * as gmApi from "../api/gmApi.js";
 import * as effectsApi from "../api/effectsApi.js";
+import * as perkApi from "../api/perkApi.js";
 import * as equipmentApi from "../api/equipmentApi.js";
 import * as inventoryApi from "../api/inventoryApi.js";
 import * as logApi from "../api/logApi.js";
@@ -43,6 +45,7 @@ export function createOdysseyRuntime() {
       COMBAT_RPC_NAMES,
       GM_RPC_NAMES,
       EFFECT_RPC_NAMES,
+      PERK_RPC_NAMES,
       EQUIPMENT_RPC_NAMES,
       INVENTORY_RPC_NAMES,
       CHARACTER_PLACEMENT_RPC_NAMES,
@@ -63,6 +66,7 @@ export function createOdysseyRuntime() {
       combat: combatApi,
       gm: gmApi,
       effects: effectsApi,
+      perk: perkApi,
       equipment: equipmentApi,
       inventory: inventoryApi,
       log: logApi,

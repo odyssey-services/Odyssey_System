@@ -283,6 +283,48 @@ export function deleteAbility(abilityId, settings) {
   );
 }
 
+export function listPerks({
+  search = null,
+  linkedSkillId = null,
+  perkType = null,
+  resolutionMode = null,
+} = {}, settings) {
+  return callSupabaseRpc(
+    CREATOR_RPC_NAMES.listPerks,
+    {
+      p_search: search || null,
+      p_linked_skill_id: linkedSkillId || null,
+      p_perk_type: perkType || null,
+      p_resolution_mode: resolutionMode || null,
+    },
+    settings,
+  );
+}
+
+export function getPerk(perkDefId, settings) {
+  return callSupabaseRpc(
+    CREATOR_RPC_NAMES.getPerk,
+    { p_perk_def_id: perkDefId },
+    settings,
+  );
+}
+
+export function upsertPerk(payload, settings) {
+  return callSupabaseRpc(
+    CREATOR_RPC_NAMES.upsertPerk,
+    { p_payload: payload },
+    settings,
+  );
+}
+
+export function deletePerk(perkDefId, settings) {
+  return callSupabaseRpc(
+    CREATOR_RPC_NAMES.deletePerk,
+    { p_perk_def_id: perkDefId },
+    settings,
+  );
+}
+
 export function listEquipmentModels({ search = null, itemTypes = [] } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listEquipmentModels,

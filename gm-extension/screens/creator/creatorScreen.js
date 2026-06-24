@@ -6,7 +6,7 @@ function createMarkup() {
   return `
     <section class="panel">
       <div class="panel-title">Creator Catalog</div>
-      <p class="panel-note">GM-only catalog editor for skills and equipment models. Save updates goes straight into Supabase definitions.</p>
+      <p class="panel-note">GM-only catalog editor for rules content. Save updates goes straight into Supabase definitions.</p>
     </section>
     <div data-creator-screen-host></div>
   `;
