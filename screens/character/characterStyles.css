@@ -52,6 +52,8 @@ select, .cp-screen input { font: inherit; }
 .cp-attr .cp-attr-edit { position: absolute; top: 1px; right: 1px; width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; padding: 0; }
 .cp-attr .cp-attr-edit:hover { color: #d8eeff; border-color: var(--accent); }
 .cp-attr .cp-attr-pending { position: absolute; bottom: 1px; left: 0; right: 0; font-size: 7px; color: var(--accent); }
+.cp-skill-edit { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; flex: none; }
+.cp-skill-edit:hover { color: #d8eeff; border-color: var(--accent); }
 
 /* doll */
 .cp-doll-wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }

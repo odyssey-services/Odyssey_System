@@ -593,8 +593,15 @@ export function mountCharacterScreen({ root, runtime }) {
       <div class="cp-section-title">${esc(cat)}</div>
       <div class="cp-list">${list.map(skillRow).join("")}</div>`).join("") + gmBlock;
   }
+  function skillDisplayMaxLevel(s) {
+    const baseMax = Number(s?.max_level ?? 0) || 5;
+    const promotedMax = baseMax >= 5 ? 10 : baseMax === 3 ? 5 : baseMax;
+    const eff = Number(s?.effective_level ?? s?.level ?? 0) || 0;
+    const purchased = Number(s?.purchased_level ?? 0) || 0;
+    return Math.max(promotedMax, eff, purchased);
+  }
   function skillRow(s) {
-    const max = s.max_level || 5;
+    const max = skillDisplayMaxLevel(s);
     const eff = s.effective_level ?? s.level ?? 0;
     const purchased = s.purchased_level;
     const pips = Array.from({ length: max }).map((_, i) => `<span class="cp-pip ${i < eff ? "on" : ""}"></span>`).join("");
@@ -606,11 +613,14 @@ export function mountCharacterScreen({ root, runtime }) {
     const isClickable = !passive && !isPsionics;
     const attrs_str = attrs ? ` <span class="cp-muted">(${esc(attrs)})</span>` : "";
     const buyStr = purchased != null && purchased !== eff ? ` <span class="cp-muted cp-mono">buy ${esc(purchased)}</span>` : "";
+    const editBtn = isGM()
+      ? `<button class="cp-skill-edit" data-skill-edit="${esc(s.id)}" aria-label="Edit ${esc(s.name)} (GM)" title="Edit ${esc(s.name)} (GM)" type="button">E</button>`
+      : "";
     return `<div class="cp-card"${isClickable ? ` role="button" tabindex="0" data-skill-roll="${esc(s.code)}"` : ""} aria-label="Skill ${esc(s.name)}" ${isClickable ? 'title="Skill check"' : ''}>
       <div class="cp-rowitem">
         <span>${esc(s.name)}${attrs_str}
           <span class="cp-pill">${passive ? "passive" : "trained"}</span>${buyStr}</span>
-        <span class="cp-row" style="gap:6px">${perks}<span class="cp-pips" title="${dash(eff)}/${max}">${pips}</span>${locked ? `<span class="cp-pill bad">locked</span>` : ""}</span>
+        <span class="cp-row" style="gap:6px">${perks}<span class="cp-pips" title="${dash(eff)}/${max}">${pips}</span>${locked ? `<span class="cp-pill bad">locked</span>` : ""}${editBtn}</span>
       </div>
       ${isGM() ? `<div class="button-row" style="margin-top:4px"><button class="cp-btn-sm secondary" data-gmdel="skill" data-id="${esc(s.id)}" type="button">GM delete</button></div>` : ""}
     </div>`;
@@ -1168,7 +1178,8 @@ export function mountCharacterScreen({ root, runtime }) {
     const part = t.closest("[data-part]"); if (part && !t.closest("[data-wact],[data-mact]")) { pinPart(part.dataset.part); return; }
     const attrRoll = t.closest("[data-attr-roll]"); if (attrRoll && !t.closest("[data-attr-edit]")) { onRoll(attrRoll.dataset.attrRoll); return; }
     const attrEdit = t.closest("[data-attr-edit]"); if (attrEdit) { e.stopPropagation(); onAttrEdit(attrEdit.dataset.attrEdit); return; }
-    const skillRoll = t.closest("[data-skill-roll]"); if (skillRoll) { onRollSkill(skillRoll.dataset.skillRoll); return; }
+    const skillEdit = t.closest("[data-skill-edit]"); if (skillEdit) { e.stopPropagation(); onSkillEdit(skillEdit.dataset.skillEdit); return; }
+    const skillRoll = t.closest("[data-skill-roll]"); if (skillRoll && !t.closest("[data-skill-edit]")) { onRollSkill(skillRoll.dataset.skillRoll); return; }
     const abilityUse = t.closest("[data-ability-use]"); if (abilityUse) { onUseAbility(abilityUse.dataset.abilityUse); return; }
     const perkUse = t.closest("[data-perk-use]"); if (perkUse) { onUsePerk(perkUse.dataset.perkUse); return; }
     // weapon buttons
@@ -1290,6 +1301,32 @@ export function mountCharacterScreen({ root, runtime }) {
       current: a.value, min: a.default_value, max: a.max_value,
       onSave: (value) => runMutation("Update attribute",
         () => api.gm.gmUpdateCharacterAttribute({ character_id: state.characterId, attribute_code: code, operation: "set", value, reason: "GM edit" }, settings()),
+        () => refresh({ armory: false, equipment: false, inventory: false })),
+    });
+  }
+  function onSkillEdit(skillId) {
+    const skill = arr(state.sheet?.skills).find((entry) => entry.id === skillId);
+    if (!skill) return;
+    const current = Number(skill.level ?? skill.effective_level ?? 0) || 0;
+    const max = skillDisplayMaxLevel(skill);
+    const note = skill.max_level === 5
+      ? `Base skill cap: 5. GM manual cap: ${max}.`
+      : skill.max_level === 3
+        ? `Base skill cap: 3. GM manual cap: ${max}.`
+        : `Allowed: 0 - ${max}`;
+    openForm({
+      title: `Edit ${skill.name} (GM)`,
+      note,
+      current,
+      min: 0,
+      max,
+      onSave: (value) => runMutation("Update skill",
+        () => bridges.supabase.mutateSupabaseRows(
+          `odyssey_character_skills?id=eq.${encodeURIComponent(skillId)}&character_id=eq.${encodeURIComponent(state.characterId)}`,
+          { level: value },
+          settings(),
+          { method: "PATCH", prefer: "return=minimal" },
+        ),
         () => refresh({ armory: false, equipment: false, inventory: false })),
     });
   }
@@ -1440,8 +1477,11 @@ export function mountCharacterScreen({ root, runtime }) {
   }
   function onGmAddSkill() {
     const defId = root.querySelector('[data-ref="gmSkillDef"]')?.value;
-    const level = Math.max(1, Number(root.querySelector('[data-ref="gmSkillLevel"]')?.value) || 1);
     if (!defId) { setNotice("err", "Select a skill."); render(); return; }
+    const def = arr(state.skillDefs).find((entry) => String(entry?.id || "") === defId);
+    const baseMax = Number(def?.max_level ?? 0) || 5;
+    const manualMax = baseMax >= 5 ? 10 : baseMax === 3 ? 5 : baseMax;
+    const level = Math.max(1, Math.min(manualMax, Number(root.querySelector('[data-ref="gmSkillLevel"]')?.value) || 1));
     runMutation("Add skill", () => bridges.supabase.mutateSupabaseRows(
       "odyssey_character_skills",
       { character_id: state.characterId, skill_def_id: defId, level },
