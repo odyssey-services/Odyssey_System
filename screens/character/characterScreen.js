@@ -95,6 +95,11 @@ export function mountCharacterScreen({ root, runtime }) {
     busy: false,
     notice: "",
     realtimeSubscriptions: [], // Real-Time listeners for auto-refresh
+    catalogSubscriptions: [],
+    refreshInFlight: null,
+    queuedRefresh: null,
+    realtimeRefreshPending: null,
+    realtimeRefreshTimer: null,
   };
 
   const settings = () => state.settings;
@@ -144,6 +149,15 @@ export function mountCharacterScreen({ root, runtime }) {
     state.skillDefs = arr(skills);
     state.weaponDefs = arr(weapons);
     state.equipmentDefs = arr(equipment);
+  }
+
+  async function refreshGmCatalogs() {
+    await Promise.all([
+      fetchAmmoAndMagazineDefs().catch(() => {}),
+      fetchGmDefs().catch(() => {}),
+      fetchItemDefs().then((rows) => { state.itemDefs = arr(rows); }).catch(() => {}),
+    ]);
+    render();
   }
 
   // Maps bundle response into state. Merges into existing sheet so partial refreshes
@@ -211,6 +225,18 @@ export function mountCharacterScreen({ root, runtime }) {
   }
 
   const ALL_SECTIONS = ["summary", "combat", "attributes", "skills", "perks", "equipment", "inventory", "abilities", "effects"];
+  const DEFAULT_REFRESH = { sheet: true, armory: true, equipment: true, inventory: true, abilities: false, perkAvailability: false };
+
+  function mergeRefreshOptions(base = {}, extra = {}) {
+    return {
+      sheet: !!(base.sheet || extra.sheet),
+      armory: !!(base.armory || extra.armory),
+      equipment: !!(base.equipment || extra.equipment),
+      inventory: !!(base.inventory || extra.inventory),
+      abilities: !!(base.abilities || extra.abilities),
+      perkAvailability: !!(base.perkAvailability || extra.perkAvailability),
+    };
+  }
 
   async function loadCharacter(id) {
     state.loading = true; state.error = null; state.notice = ""; render();
@@ -252,9 +278,10 @@ export function mountCharacterScreen({ root, runtime }) {
   }
 
   // Re-pull server state after a mutation using bundle sections - selective refresh.
-  async function refresh({ sheet = true, armory = true, equipment = true, inventory = true, abilities = false } = {}) {
+  async function performRefresh(options) {
     const id = state.characterId;
     if (!id) return;
+    const { sheet, armory, equipment, inventory, abilities, perkAvailability } = options;
     const sections = [
       ...(sheet ? ["summary", "combat", "attributes", "skills"] : []),
       ...(sheet ? ["perks"] : []),
@@ -265,15 +292,56 @@ export function mountCharacterScreen({ root, runtime }) {
     const bundlePromise = sections.length ? loadBundle(id, sections).catch(() => null) : Promise.resolve(null);
     const armoryPromise = armory ? api.weapon.getCharacterArmory(id, settings()).catch(() => null) : Promise.resolve(null);
     const perksPromise = sheet ? api.perk.getCharacterPerks({ character_id: id }, settings()).catch(() => null) : Promise.resolve(null);
-    const availablePerksPromise = isGM()
+    const availablePerksPromise = isGM() && perkAvailability
       ? api.perk.getCharacterAvailablePerks({ character_id: id }, settings()).catch(() => null)
       : Promise.resolve(null);
     const [bundle, armoryData, perksResult, availablePerksResult] = await Promise.all([bundlePromise, armoryPromise, perksPromise, availablePerksPromise]);
     if (bundle) applyBundle(bundle);
     if (armoryData) state.armory = armoryData;
     if (perksResult?.ok) state.perks = arr(perksResult.perks);
-    state.perkAvailability = isGM() && availablePerksResult?.ok ? arr(availablePerksResult.perks) : [];
+    if (perkAvailability) {
+      state.perkAvailability = isGM() && availablePerksResult?.ok ? arr(availablePerksResult.perks) : [];
+    }
     render();
+  }
+
+  async function refresh(options = {}) {
+    const merged = { ...DEFAULT_REFRESH, ...options };
+    if (state.refreshInFlight) {
+      state.queuedRefresh = state.queuedRefresh
+        ? mergeRefreshOptions(state.queuedRefresh, merged)
+        : merged;
+      return state.refreshInFlight;
+    }
+
+    state.refreshInFlight = (async () => {
+      await performRefresh(merged);
+    })();
+
+    try {
+      await state.refreshInFlight;
+    } finally {
+      state.refreshInFlight = null;
+      if (state.queuedRefresh) {
+        const next = state.queuedRefresh;
+        state.queuedRefresh = null;
+        return refresh(next);
+      }
+    }
+    return null;
+  }
+
+  function queueRealtimeRefresh(options = {}) {
+    state.realtimeRefreshPending = state.realtimeRefreshPending
+      ? mergeRefreshOptions(state.realtimeRefreshPending, options)
+      : { ...DEFAULT_REFRESH, ...options };
+    if (state.realtimeRefreshTimer) clearTimeout(state.realtimeRefreshTimer);
+    state.realtimeRefreshTimer = setTimeout(() => {
+      const pending = state.realtimeRefreshPending;
+      state.realtimeRefreshPending = null;
+      state.realtimeRefreshTimer = null;
+      refresh(pending).catch(() => {});
+    }, 120);
   }
 
   /* ---- Real-Time subscriptions for live updates ---- */
@@ -307,6 +375,33 @@ export function mountCharacterScreen({ root, runtime }) {
         .subscribe();
       state.realtimeSubscriptions.push(channel);
     }
+
+    if (isGM()) setupCatalogSubscriptions(sb);
+  }
+
+  function setupCatalogSubscriptions(sb = getRealtimeClient(settings())) {
+    if (!sb) return;
+    cleanupCatalogSubscriptions(sb);
+    const tables = [
+      "odyssey_item_defs",
+      "odyssey_skill_defs",
+      "odyssey_weapon_model_defs",
+      "odyssey_equipment_model_defs",
+      "odyssey_magazine_defs",
+      "odyssey_ammo_type_defs",
+    ];
+    const epoch = Date.now();
+    for (const table of tables) {
+      const channel = sb
+        .channel(`cp:def:${epoch}:${table}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table },
+          () => { refreshGmCatalogs().catch(() => {}); },
+        )
+        .subscribe();
+      state.catalogSubscriptions.push(channel);
+    }
   }
 
   function cleanupRealtimeSubscriptions() {
@@ -314,35 +409,45 @@ export function mountCharacterScreen({ root, runtime }) {
     if (!sb) { state.realtimeSubscriptions = []; return; }
     for (const channel of state.realtimeSubscriptions) sb.removeChannel(channel);
     state.realtimeSubscriptions = [];
+    cleanupCatalogSubscriptions(sb);
+    if (state.realtimeRefreshTimer) clearTimeout(state.realtimeRefreshTimer);
+    state.realtimeRefreshTimer = null;
+    state.realtimeRefreshPending = null;
+  }
+
+  function cleanupCatalogSubscriptions(sb = getRealtimeClient(settings())) {
+    if (!sb) { state.catalogSubscriptions = []; return; }
+    for (const channel of state.catalogSubscriptions) sb.removeChannel(channel);
+    state.catalogSubscriptions = [];
   }
 
   function onRealtimeUpdate(table) {
     // Selectively refresh based on which table changed
     switch (table) {
       case "odyssey_character_body_parts":
-        refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false });
+        queueRealtimeRefresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
         break;
       case "odyssey_character_equipment_items":
-        refresh({ sheet: true, armory: false, equipment: true, inventory: false, abilities: false });
+        queueRealtimeRefresh({ sheet: true, armory: false, equipment: true, inventory: false, abilities: false, perkAvailability: false });
         break;
       case "odyssey_character_items":
-        refresh({ sheet: false, armory: false, equipment: false, inventory: true, abilities: false });
+        queueRealtimeRefresh({ sheet: false, armory: false, equipment: false, inventory: true, abilities: false, perkAvailability: false });
         break;
       case "odyssey_character_attributes":
-        refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false });
+        queueRealtimeRefresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: true });
         break;
       case "odyssey_character_perks":
       case "odyssey_character_effects":
-        refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false });
+        queueRealtimeRefresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: true });
         break;
       case "odyssey_character_weapons":
       case "odyssey_character_weapon_profile_states":
       case "odyssey_character_magazines":
-        refresh({ sheet: false, armory: true, equipment: false, inventory: true, abilities: false });
+        queueRealtimeRefresh({ sheet: false, armory: true, equipment: false, inventory: true, abilities: false, perkAvailability: false });
         break;
       case "odyssey_character_abilities":
       case "odyssey_character_resource_pools":
-        refresh({ sheet: false, armory: false, equipment: false, inventory: false, abilities: true });
+        queueRealtimeRefresh({ sheet: false, armory: false, equipment: false, inventory: false, abilities: true, perkAvailability: false });
         break;
     }
   }
@@ -976,7 +1081,7 @@ export function mountCharacterScreen({ root, runtime }) {
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Item</span><select data-ref="gmAddCode">${itemOpts}</select></label>
         <label class="cp-field" style="max-width:90px"><span>qty</span><input data-ref="gmAddQty" type="number" min="1" value="1" class="cp-mono"></label>
-        <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="additem" type="button" ${state.itemDefs.length ? "" : "disabled"}>Add item</button></div>
+        <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="additem" type="button" ${state.itemDefs.length ? "" : "disabled"}>Add item</button><button class="cp-btn-sm secondary" data-gmbtn="refreshcatalogs" type="button">Refresh catalogs</button></div>
       </div></div>`;
   }
   function gmSkillsBlock() {
@@ -1102,15 +1207,29 @@ export function mountCharacterScreen({ root, runtime }) {
     const eff = it.model?.effect_data;
     const effTxt = eff && typeof eff === "object" ? (eff.summary || eff.description || "") : "";
     const active = it.is_equipped;
+    const slot = it.body_part?.name || it.model?.default_body_part_code || "-";
+    const canInstall = isGM() && it.model?.can_equip !== false && it.model?.can_equip_to_body_part !== false;
+    const slotOptions = equipmentSlotOptions(it);
+    const hasCompatiblePart = !slotOptions.includes("-- no compatible body parts --");
     return `<div class="cp-card">
       <div class="cp-rowitem"><span><b>${esc(it.name)}</b> <span class="cp-pill">${esc(it.model?.item_type || "implant")}</span></span>
       <span class="cp-pill ${active ? "good" : ""}">${active ? "installed" : "inactive"}</span></div>
       ${it.model?.description ? `<div class="cp-muted" style="margin-top:6px">${esc(it.model.description)}</div>` : ""}
       <div class="cp-row" style="gap:6px;margin-top:6px">
+        <span class="cp-chip">${active ? `Installed · ${esc(slot)}` : "Not installed"}</span>
         ${it.max_charges ? `<span class="cp-chip">charges ${dash(it.current_charges)}/${dash(it.max_charges)}</span>` : ""}
         ${effTxt ? `<span class="cp-chip">${esc(effTxt)}</span>` : ""}
       </div>
-      ${isGM() ? `<div class="button-row" style="margin-top:6px"><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc(it.id)}" type="button">GM delete</button></div>` : ""}
+      ${isGM() && active
+        ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-armorbtn="unequip" data-equip="${esc(it.id)}" type="button">Uninstall</button><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc(it.id)}" type="button">GM delete</button></div>`
+        : isGM() && canInstall
+          ? `<div class="cp-row" style="gap:8px;margin-top:8px">
+              <label class="cp-field" style="min-width:150px"><span>Install to body part</span><select data-equip-part="${esc(it.id)}">${slotOptions}</select></label>
+              <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-armorbtn="equip" data-equip="${esc(it.id)}" type="button" ${hasCompatiblePart ? "" : "disabled"}>Install</button><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc(it.id)}" type="button">GM delete</button></div>
+            </div>`
+          : isGM()
+            ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc(it.id)}" type="button">GM delete</button></div>`
+            : ""}
     </div>`;
   }
 
@@ -1126,9 +1245,14 @@ export function mountCharacterScreen({ root, runtime }) {
     $("charId")?.addEventListener("keydown", (e) => { if (e.key === "Enter") $("loadBtn").click(); });
     $("devRole")?.addEventListener("change", async (e) => {
       state.devRole = e.target.value;
+      if (isGM()) {
+        setupCatalogSubscriptions();
+      } else {
+        cleanupCatalogSubscriptions();
+      }
       render();
       if (state.characterId && isGM()) {
-        await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false });
+        await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: true });
       }
     });
     $("useToken")?.addEventListener("click", onUseToken);
@@ -1326,7 +1450,7 @@ export function mountCharacterScreen({ root, runtime }) {
       current: a.value, min: a.default_value, max: a.max_value,
       onSave: (value) => runMutation("Update attribute",
         () => api.gm.gmUpdateCharacterAttribute({ character_id: state.characterId, attribute_code: code, operation: "set", value, reason: "GM edit" }, settings()),
-        () => refresh({ armory: false, equipment: false, inventory: false })),
+        () => refresh({ armory: false, equipment: false, inventory: false, perkAvailability: true })),
     });
   }
   function onSkillEdit(skillId) {
@@ -1443,7 +1567,7 @@ export function mountCharacterScreen({ root, runtime }) {
   // Body-part choices when equipping armor. The model's default slot (if any) is
   // pre-selected; otherwise the user picks the target part explicitly so an
   // unequipped item can always be re-equipped.
-  function armorSlotOptions(it) {
+  function equipmentSlotOptions(it) {
     const def = String(it.model?.default_body_part_code || "").toLowerCase();
     const allowed = arr(it.model?.flags?.allowed_body_part_codes || []).map((c) => String(c).toLowerCase());
     const lastId = state.lastSlot[it.id]; // previously-equipped part wins as default
@@ -1472,6 +1596,7 @@ export function mountCharacterScreen({ root, runtime }) {
       return `<option value="${esc(b.id)}" ${sel}>${esc(b.name)}</option>`;
     }).join("");
   }
+  function armorSlotOptions(it) { return equipmentSlotOptions(it); }
   function onEquip(equipId) {
     const partId = root.querySelector(`select[data-equip-part="${CSS.escape(equipId)}"]`)?.value;
     if (!partId) { setNotice("err", "Select a body part to equip to."); render(); return; }
@@ -1511,7 +1636,7 @@ export function mountCharacterScreen({ root, runtime }) {
       "odyssey_character_skills",
       { character_id: state.characterId, skill_def_id: defId, level },
       settings(), { method: "POST", prefer: "return=minimal" }
-    ), () => refresh({ armory: false, equipment: false, inventory: false }));
+    ), () => refresh({ armory: false, equipment: false, inventory: false, perkAvailability: true }));
   }
   function onGmAddPerk() {
     const perkCode = root.querySelector('[data-ref="gmPerkCode"]')?.value?.trim();
@@ -1527,7 +1652,7 @@ export function mountCharacterScreen({ root, runtime }) {
     runMutation("Add perk", () => api.perk.grantCharacterPerk(
       { character_id: state.characterId, perk_code: perkCode, created_by: "GM", spend_development_point: false },
       settings()
-    ), () => refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false }));
+    ), () => refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: true }));
   }
   function onGmAddWeapon() {
     const defId = root.querySelector('[data-ref="gmWeaponDef"]')?.value;
@@ -1567,7 +1692,7 @@ export function mountCharacterScreen({ root, runtime }) {
     if (type === "skill") {
       runMutation("Delete skill", () => bridges.supabase.mutateSupabaseRows(
         `odyssey_character_skills?${idFilter}&${charIdFilter}`, null, settings(), DEL
-      ), () => refresh({ armory: false, equipment: false, inventory: false }));
+      ), () => refresh({ armory: false, equipment: false, inventory: false, perkAvailability: true }));
     } else if (type === "weapon") {
       runMutation("Delete weapon", () => bridges.supabase.mutateSupabaseRows(
         `odyssey_character_weapons?${idFilter}&${charIdFilter}`, null, settings(), DEL
@@ -1598,6 +1723,7 @@ export function mountCharacterScreen({ root, runtime }) {
     if (kind === "addweapon")  return onGmAddWeapon();
     if (kind === "addmag")     return onGmAddMagazine();
     if (kind === "addammo")    return onGmAddAmmo();
+    if (kind === "refreshcatalogs") return refreshGmCatalogs();
     if (kind === "addarmor")   return onGmAddEquipment("gmArmorDef", "Add armor");
     if (kind === "addimplant") return onGmAddEquipment("gmImplantDef", "Add implant");
     if (kind === "heal")   return runMutation("GM heal",   () => api.gm.gmHealCharacter(state.characterId, settings()), () => refresh());

@@ -16832,7 +16832,12 @@ begin
     active_profile_id = v_active_state.profile_id,
     loaded_magazine_id = v_resolved_magazine_id,
     selected_fire_mode_id = v_resolved_fire_mode_id
-  where id = v_weapon.id;
+  where id = v_weapon.id
+    and (
+      active_profile_id is distinct from v_active_state.profile_id
+      or loaded_magazine_id is distinct from v_resolved_magazine_id
+      or selected_fire_mode_id is distinct from v_resolved_fire_mode_id
+    );
 
   return jsonb_build_object(
     'ok', true,
@@ -16910,7 +16915,8 @@ begin
 
   update public.odyssey_character_weapon_profile_states
   set is_active = (profile_id = v_active_profile_id)
-  where character_weapon_id = v_weapon.id;
+  where character_weapon_id = v_weapon.id
+    and is_active is distinct from (profile_id = v_active_profile_id);
 
   update public.odyssey_character_weapons
   set active_profile_id = v_active_profile_id
@@ -53747,29 +53753,111 @@ returns jsonb
 language plpgsql
 as $
 declare
-  v_armory jsonb := '{}'::jsonb;
   v_weapons jsonb := '[]'::jsonb;
+  v_magazines jsonb := '[]'::jsonb;
 begin
-  v_armory := public.odyssey_get_character_armory_legacy(p_character_id);
-
-  select coalesce(
-    jsonb_agg(
-      item.value
-      || jsonb_build_object(
-        'data', coalesce(w.data, '{}'::jsonb),
-        'equipped_slot', w.equipped_slot
-      )
-      order by ordinality
-    ),
-    '[]'::jsonb
-  )
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', w.id,
+          'character_id', w.character_id,
+          'custom_name', w.custom_name,
+          'name', coalesce(nullif(trim(w.custom_name), ''), wm.name),
+          'notes', w.notes,
+          'sort_order', w.sort_order,
+          'active_profile_id', w.active_profile_id,
+          'data', coalesce(w.data, '{}'::jsonb),
+          'equipped_slot', w.equipped_slot,
+          'model',
+            jsonb_build_object(
+              'id', wm.id,
+              'code', wm.code,
+              'name', wm.name,
+              'weapon_class', mwc.code,
+              'weapon_class_name', mwc.name,
+              'linked_skill', mskill.code,
+              'linked_skill_name', mskill.name,
+              'caliber', mcal.code,
+              'caliber_name', mcal.name,
+              'base_accuracy_bonus', wm.base_accuracy_bonus,
+              'base_melee_damage', wm.base_melee_damage,
+              'range_profile', mrp.code,
+              'range_profile_name', mrp.name,
+              'tags', wm.tags
+            ),
+          'active_profile', runtime.active_profile_json,
+          'profiles', runtime.profiles_json,
+          'features', coalesce(runtime.features_bundle->'features', '[]'::jsonb),
+          'loaded_magazine', coalesce(runtime.active_profile_json->'loaded_magazine', 'null'::jsonb),
+          'selected_fire_mode', coalesce(runtime.active_profile_json->'selected_fire_mode', 'null'::jsonb),
+          'available_fire_modes', coalesce(runtime.active_profile_json->'available_fire_modes', '[]'::jsonb),
+          'compatible_magazines', coalesce(runtime.active_profile_json->'compatible_magazines', '[]'::jsonb),
+          'lock_state', public.odyssey_get_weapon_lock_state(w.character_id, w.id)
+        )
+        order by w.sort_order, coalesce(nullif(trim(w.custom_name), ''), wm.name), w.id
+      ),
+      '[]'::jsonb
+    )
   into v_weapons
-  from jsonb_array_elements(coalesce(v_armory->'weapons', '[]'::jsonb)) with ordinality as item(value, ordinality)
-  left join public.odyssey_character_weapons w
-    on w.id = public.odyssey_try_parse_uuid(item.value->>'id');
+  from public.odyssey_character_weapons w
+  join public.odyssey_weapon_model_defs wm on wm.id = w.weapon_model_id
+  join public.odyssey_weapon_class_defs mwc on mwc.id = wm.weapon_class_id
+  join public.odyssey_skill_defs mskill on mskill.id = wm.linked_skill_id
+  left join public.odyssey_caliber_defs mcal on mcal.id = wm.caliber_id
+  join public.odyssey_range_profile_defs mrp on mrp.id = wm.range_profile_id
+  left join lateral (
+    select
+      public.odyssey_get_active_character_weapon_profile(w.id) as active_profile_json,
+      public.odyssey_get_character_weapon_profiles(w.id) as profiles_json,
+      public.get_character_weapon_features(w.id) as features_bundle
+  ) runtime on true
+  where w.character_id = p_character_id;
 
-  return v_armory || jsonb_build_object(
-    'weapons', coalesce(v_weapons, '[]'::jsonb)
+  select
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', cm.id,
+          'character_id', cm.character_id,
+          'custom_name', cm.custom_name,
+          'name', coalesce(nullif(trim(cm.custom_name), ''), md.name),
+          'notes', cm.notes,
+          'current_rounds', cm.current_rounds,
+          'magazine_def',
+            jsonb_build_object(
+              'id', md.id,
+              'code', md.code,
+              'name', md.name,
+              'capacity', md.capacity,
+              'caliber', caliber.code,
+              'caliber_name', caliber.name
+            ),
+          'ammo_type',
+            jsonb_build_object(
+              'id', ammo.id,
+              'code', ammo.code,
+              'name', ammo.name,
+              'caliber', ammo_caliber.code,
+              'caliber_name', ammo_caliber.name
+            )
+        )
+        order by md.sort_order, md.name, cm.created_at, cm.id
+      ),
+      '[]'::jsonb
+    )
+  into v_magazines
+  from public.odyssey_character_magazines cm
+  join public.odyssey_magazine_defs md on md.id = cm.magazine_def_id
+  join public.odyssey_caliber_defs caliber on caliber.id = md.caliber_id
+  join public.odyssey_ammo_type_defs ammo on ammo.id = cm.ammo_type_id
+  join public.odyssey_caliber_defs ammo_caliber on ammo_caliber.id = ammo.caliber_id
+  where cm.character_id = p_character_id;
+
+  return jsonb_build_object(
+    'character_id', p_character_id,
+    'weapons', coalesce(v_weapons, '[]'::jsonb),
+    'magazines', coalesce(v_magazines, '[]'::jsonb)
   );
 end;
 $;
