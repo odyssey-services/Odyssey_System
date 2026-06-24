@@ -511,12 +511,18 @@ export function mountCharacterScreen({ root, runtime }) {
   function attrCard(a) {
     const label = a.name || a.code;
     const pending = state.rollingAttr === a.code;
+    const modifier = Number(a?.effect_modifier ?? 0) || 0;
+    const effectiveValue = Number(
+      a?.effective_value ?? ((Number(a?.value ?? 0) || 0) + modifier),
+    ) || 0;
     const editBtn = isGM()
       ? `<button class="cp-attr-edit" data-attr-edit="${esc(a.code)}" aria-label="Edit ${esc(label)} (GM)" title="Edit (GM)">E</button>`
       : "";
     return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc(a.code)}" aria-label="Roll ${esc(label)}" aria-disabled="${pending}" title="Roll ${esc(label)}">
       ${editBtn}
-      <div class="cp-attr-val">${dash(a.value)}</div>
+      ${modifier > 0 ? `<div class="cp-attr-mod cp-attr-mod-pos">+${esc(modifier)}</div>` : ""}
+      ${modifier < 0 ? `<div class="cp-attr-mod cp-attr-mod-neg">${esc(modifier)}</div>` : ""}
+      <div class="cp-attr-val">${dash(effectiveValue)}</div>
       <div class="cp-attr-code">${esc(a.code)}</div>
       ${pending ? `<div class="cp-attr-pending">Rolling...</div>` : ""}
     </div>`;
@@ -603,8 +609,12 @@ export function mountCharacterScreen({ root, runtime }) {
   function skillRow(s) {
     const baseMax = Number(s?.max_level ?? 0) || 5;
     const max = skillDisplayMaxLevel(s);
-    const eff = s.effective_level ?? s.level ?? 0;
-    const purchased = s.purchased_level;
+    const eff = Number(s?.effective_level ?? s?.level ?? 0) || 0;
+    const purchased = Number(s?.purchased_level ?? s?.level ?? 0) || 0;
+    const levelModifier = Number(s?.effect_level_modifier ?? (eff - purchased)) || 0;
+    const rollBonusBase = Number(s?.skill_bonus ?? 0) || 0;
+    const rollBonusModifier = Number(s?.effect_skill_bonus ?? 0) || 0;
+    const rollBonusTotal = rollBonusBase + rollBonusModifier;
     const pips = Array.from({ length: max }).map((_, i) => `<span class="cp-pip ${i < eff ? "on" : ""}"></span>`).join("");
     const attrs = [s.main_attribute, s.secondary_attribute].filter(Boolean).join(" В· ");
     const perks = arr(s.perks).map((p) => `<span class="cp-pill good">${esc(p.name || p.code || p)}</span>`).join("");
@@ -613,7 +623,19 @@ export function mountCharacterScreen({ root, runtime }) {
     const isPsionics = s.category?.toLowerCase() === "psionics";
     const isClickable = !passive && !isPsionics;
     const attrs_str = attrs ? ` <span class="cp-muted">(${esc(attrs)})</span>` : "";
-    const buyStr = purchased != null && purchased !== eff ? ` <span class="cp-muted cp-mono">buy ${esc(purchased)}</span>` : "";
+    const levelModChip = levelModifier > 0
+      ? `<span class="cp-skill-mod cp-skill-mod-pos">lvl +${esc(levelModifier)}</span>`
+      : levelModifier < 0
+        ? `<span class="cp-skill-mod cp-skill-mod-neg">lvl ${esc(levelModifier)}</span>`
+        : "";
+    const rollModChip = rollBonusModifier > 0
+      ? `<span class="cp-skill-mod cp-skill-mod-pos">roll +${esc(rollBonusModifier)}</span>`
+      : rollBonusModifier < 0
+        ? `<span class="cp-skill-mod cp-skill-mod-neg">roll ${esc(rollBonusModifier)}</span>`
+        : "";
+    const totalRollChip = rollBonusTotal !== 0
+      ? `<span class="cp-chip"><span class="cp-mono">roll ${rollBonusTotal > 0 ? `+${esc(rollBonusTotal)}` : esc(rollBonusTotal)}</span></span>`
+      : "";
     const capStr = max > baseMax ? `<span class="cp-chip">base ${dash(baseMax)} / GM ${dash(max)}</span>` : "";
     const editBtn = isGM()
       ? `<button class="cp-skill-edit" data-skill-edit="${esc(s.id)}" aria-label="Edit ${esc(s.name)} (GM)" title="Edit ${esc(s.name)} (GM)" type="button">E</button>`
@@ -621,8 +643,8 @@ export function mountCharacterScreen({ root, runtime }) {
     return `<div class="cp-card"${isClickable ? ` role="button" tabindex="0" data-skill-roll="${esc(s.code)}"` : ""} aria-label="Skill ${esc(s.name)}" ${isClickable ? 'title="Skill check"' : ''}>
       <div class="cp-rowitem">
         <span>${esc(s.name)}${attrs_str}
-          <span class="cp-pill">${passive ? "passive" : "trained"}</span>${buyStr}</span>
-        <span class="cp-row" style="gap:6px">${perks}<span class="cp-pips" title="${dash(eff)}/${max}">${pips}</span>${locked ? `<span class="cp-pill bad">locked</span>` : ""}${editBtn}</span>
+          <span class="cp-pill">${passive ? "passive" : "trained"}</span></span>
+        <span class="cp-row" style="gap:6px">${perks}${levelModChip}${rollModChip}${totalRollChip}<span class="cp-pips" title="${dash(eff)}/${max}">${pips}</span>${locked ? `<span class="cp-pill bad">locked</span>` : ""}${editBtn}</span>
       </div>
       ${capStr ? `<div class="cp-row" style="gap:6px;margin-top:6px">${capStr}</div>` : ""}
       ${isGM() ? `<div class="button-row" style="margin-top:4px"><button class="cp-btn-sm secondary" data-gmdel="skill" data-id="${esc(s.id)}" type="button">GM delete</button></div>` : ""}
