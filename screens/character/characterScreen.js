@@ -505,7 +505,7 @@ export function mountCharacterScreen({ root, runtime }) {
     const label = a.name || a.code;
     const pending = state.rollingAttr === a.code;
     const editBtn = isGM()
-      ? `<button class="cp-attr-edit" data-attr-edit="${esc(a.code)}" aria-label="Edit ${esc(label)} (GM)" title="Edit (GM)">вњЋ</button>`
+      ? `<button class="cp-attr-edit" data-attr-edit="${esc(a.code)}" aria-label="Edit ${esc(label)} (GM)" title="Edit (GM)">E</button>`
       : "";
     return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc(a.code)}" aria-label="Roll ${esc(label)}" aria-disabled="${pending}" title="Roll ${esc(label)}">
       ${editBtn}

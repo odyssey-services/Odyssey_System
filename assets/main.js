@@ -33804,7 +33804,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function attrCard(a) {
     const label = a.name || a.code;
     const pending = state.rollingAttr === a.code;
-    const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc2(a.code)}" aria-label="Edit ${esc2(label)} (GM)" title="Edit (GM)">\u0432\u045A\u040B</button>` : "";
+    const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc2(a.code)}" aria-label="Edit ${esc2(label)} (GM)" title="Edit (GM)">E</button>` : "";
     return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc2(a.code)}" aria-label="Roll ${esc2(label)}" aria-disabled="${pending}" title="Roll ${esc2(label)}">
       ${editBtn}
       <div class="cp-attr-val">${dash2(a.value)}</div>
