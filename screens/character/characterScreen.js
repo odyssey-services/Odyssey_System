@@ -108,7 +108,16 @@ export function mountCharacterScreen({ root, runtime }) {
   /* ---- detect role (best-effort; OBR may be absent) ---- */
   (async () => {
     const player = await withTimeout(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null);
-    if (player?.role) { state.role = String(player.role).toUpperCase() === "GM" ? "GM" : "PLAYER"; render(); }
+    if (player?.role) {
+      state.role = String(player.role).toUpperCase() === "GM" ? "GM" : "PLAYER";
+      if (isGM()) {
+        setupCatalogSubscriptions();
+        refreshGmCatalogs().catch(() => {});
+      } else {
+        cleanupCatalogSubscriptions();
+      }
+      render();
+    }
   })();
 
   /* ---- data adapters ---- */
@@ -566,7 +575,9 @@ export function mountCharacterScreen({ root, runtime }) {
         <div class="cp-name">${esc(ch.name || ch.character_key || "Character")}</div>
         <div class="cp-muted">${meta.join(" В· ") || "&nbsp;"}</div>
       </div>
-      ${isGM() ? `<span class="cp-pill good">GM</span>` : `<span class="cp-pill">Player</span>`}
+      <div class="cp-head-actions">
+        ${isGM() ? `<button data-ref="refreshCatalogsTop" type="button" class="cp-pill cp-head-btn">Sync</button><span class="cp-pill good">GM</span>` : `<span class="cp-pill">Player</span>`}
+      </div>
     </div>
     ${poolChips ? `<div class="cp-row" style="margin-top:8px">${poolChips}</div>` : ""}`;
   }
@@ -1243,10 +1254,12 @@ export function mountCharacterScreen({ root, runtime }) {
     });
     $("retry")?.addEventListener("click", () => state.characterId && loadCharacter(state.characterId));
     $("charId")?.addEventListener("keydown", (e) => { if (e.key === "Enter") $("loadBtn").click(); });
+    $("refreshCatalogsTop")?.addEventListener("click", () => refreshGmCatalogs().catch(() => {}));
     $("devRole")?.addEventListener("change", async (e) => {
       state.devRole = e.target.value;
       if (isGM()) {
         setupCatalogSubscriptions();
+        refreshGmCatalogs().catch(() => {});
       } else {
         cleanupCatalogSubscriptions();
       }
@@ -1259,7 +1272,14 @@ export function mountCharacterScreen({ root, runtime }) {
 
     // section nav
     root.querySelectorAll("[data-section]").forEach((b) =>
-      b.addEventListener("click", () => { state.section = b.dataset.section; state.notice = ""; render(); }));
+      b.addEventListener("click", () => {
+        state.section = b.dataset.section;
+        state.notice = "";
+        render();
+        if (isGM() && ["inventory", "armor", "implants", "skills", "perks"].includes(state.section)) {
+          refreshGmCatalogs().catch(() => {});
+        }
+      }));
 
     // pool +/- buttons in header - registered once on root to survive re-renders
     if (!root._poolAdjBound) {

@@ -19,6 +19,9 @@ select, .cp-screen input { font: inherit; }
 
 /* header */
 .cp-head { display: flex; gap: 12px; align-items: center; }
+.cp-head-actions { display: flex; gap: 6px; align-items: center; }
+.cp-head-btn { cursor: pointer; }
+.cp-head-btn:hover { border-color: var(--accent); color: #d8eeff; }
 .cp-avatar { width: 46px; height: 46px; border-radius: 10px; background: var(--panel-soft); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; flex: none; overflow: hidden; }
 .cp-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .cp-name { font-size: 15px; font-weight: 700; }
