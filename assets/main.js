@@ -33389,6 +33389,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     section: "overview",
     sheet: null,
     perks: [],
+    perkAvailability: [],
     abilities: [],
     pools: [],
     armory: null,
@@ -33522,11 +33523,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         throw new Error("Supabase is not configured. Set URL/key in the Resolve Attack tab.");
       }
       const gmMode = isGM();
-      const [bundle, itemDefs, armoryData, perksResult] = await Promise.all([
+      const [bundle, itemDefs, armoryData, perksResult, availablePerksResult] = await Promise.all([
         loadBundle(id, ALL_SECTIONS),
         gmMode && !state.itemDefs.length ? fetchItemDefs().catch(() => []) : Promise.resolve(state.itemDefs),
         api.weapon.getCharacterArmory(id, settings()).catch(() => null),
-        api.perk.getCharacterPerks({ character_id: id }, settings()).catch(() => null)
+        api.perk.getCharacterPerks({ character_id: id }, settings()).catch(() => null),
+        gmMode ? api.perk.getCharacterAvailablePerks({ character_id: id }, settings()).catch(() => null) : Promise.resolve(null)
       ]);
       if (!state.ammoDefs.length || !state.magazineDefs.length) {
         await fetchAmmoAndMagazineDefs().catch(() => {
@@ -33542,6 +33544,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       if (armoryData) state.armory = armoryData;
       applyBundle(bundle);
       if (perksResult?.ok) state.perks = arr2(perksResult.perks);
+      state.perkAvailability = gmMode && availablePerksResult?.ok ? arr2(availablePerksResult.perks) : [];
       state.pinnedPartId = "";
       setupRealtimeSubscriptions(id);
     } catch (e) {
@@ -33564,10 +33567,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const bundlePromise = sections.length ? loadBundle(id, sections).catch(() => null) : Promise.resolve(null);
     const armoryPromise = armory ? api.weapon.getCharacterArmory(id, settings()).catch(() => null) : Promise.resolve(null);
     const perksPromise = sheet ? api.perk.getCharacterPerks({ character_id: id }, settings()).catch(() => null) : Promise.resolve(null);
-    const [bundle, armoryData, perksResult] = await Promise.all([bundlePromise, armoryPromise, perksPromise]);
+    const availablePerksPromise = isGM() ? api.perk.getCharacterAvailablePerks({ character_id: id }, settings()).catch(() => null) : Promise.resolve(null);
+    const [bundle, armoryData, perksResult, availablePerksResult] = await Promise.all([bundlePromise, armoryPromise, perksPromise, availablePerksPromise]);
     if (bundle) applyBundle(bundle);
     if (armoryData) state.armory = armoryData;
     if (perksResult?.ok) state.perks = arr2(perksResult.perks);
+    state.perkAvailability = isGM() && availablePerksResult?.ok ? arr2(availablePerksResult.perks) : [];
     render();
   }
   function setupRealtimeSubscriptions(characterId) {
@@ -33920,7 +33925,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function renderPerks() {
     const perks = arr2(state.perks);
-    if (!perks.length) return `<div class="cp-empty">No perks.</div>`;
+    const gmBlock = isGM() ? gmPerksBlock() : "";
+    if (!perks.length) return `<div class="cp-empty">No perks.</div>${gmBlock}`;
     const groups = {
       passive: [],
       active: [],
@@ -33941,7 +33947,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     return Object.entries(groups).filter(([_, list]) => list.length > 0).map(([key, list]) => `
         <div class="cp-section-title">${titles[key]}</div>
         <div class="cp-list">${list.map(perkCard).join("")}</div>
-      `).join("");
+      `).join("") + gmBlock;
   }
   function perkCard(perk) {
     const passive = perk.is_passive || perk.activation_type === "passive" || perk.perk_type === "passive";
@@ -34176,6 +34182,35 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="addskill" type="button" ${state.skillDefs.length ? "" : "disabled"}>Add skill</button></div>
       </div></div>`;
   }
+  function gmPerkGrantOptions() {
+    const items = arr2(state.perkAvailability).filter((perk) => perk && perk.owned !== true).sort((a, b) => {
+      const aLocked = a.available === true ? 0 : 1;
+      const bLocked = b.available === true ? 0 : 1;
+      if (aLocked !== bLocked) return aLocked - bLocked;
+      return String(a.name || a.code || "").localeCompare(String(b.name || b.code || ""));
+    });
+    if (!items.length) return `<option value="">-- no perks to add --</option>`;
+    return items.map((perk) => {
+      const skillName = perk.linked_skill_name || perk.linked_skill_code || "No skill";
+      const req = Number(perk.required_skill_level ?? 0);
+      const cur = Number(perk.current_skill_level ?? 0);
+      const locked = perk.available !== true;
+      const lockSuffix = locked ? ` [locked ${cur}/${req}${perk.lock_reason ? ` ${perk.lock_reason}` : ""}]` : ` [ready ${cur}/${req}]`;
+      return `<option value="${esc2(perk.code)}" ${locked ? "disabled" : ""}>${esc2(perk.name)} - ${esc2(skillName)} ${esc2(lockSuffix)}</option>`;
+    }).join("");
+  }
+  function gmPerksBlock() {
+    const availableCount = arr2(state.perkAvailability).filter((perk) => perk.available === true).length;
+    const totalCount = arr2(state.perkAvailability).filter((perk) => perk.owned !== true).length;
+    return `<div class="cp-section-title">GM - add perk</div>
+      <div class="cp-card"><div class="cp-row" style="gap:8px;flex-wrap:wrap">
+        <label class="cp-field" style="min-width:260px"><span>Perk</span><select data-ref="gmPerkCode">${gmPerkGrantOptions()}</select></label>
+        <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-gmbtn="addperk" type="button" ${availableCount > 0 ? "" : "disabled"}>Add perk</button></div>
+      </div>
+      <div class="cp-muted" style="margin-top:6px">Available now: ${availableCount}. Locked perks stay unavailable until the linked skill level requirement is met.</div>
+      ${totalCount > 0 ? "" : `<div class="cp-muted" style="margin-top:4px">This character already owns every perk visible to the current catalog.</div>`}
+      </div>`;
+  }
   function gmArmorBlock() {
     const defs = state.equipmentDefs.filter((d) => ARMOR_TYPES.has(d.item_type));
     const opts = defs.length ? defs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)} \u0412\xB7 ${esc2(d.item_type)}</option>`).join("") : `<option value="">-- no armor models --</option>`;
@@ -34270,9 +34305,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     $("charId")?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") $("loadBtn").click();
     });
-    $("devRole")?.addEventListener("change", (e) => {
+    $("devRole")?.addEventListener("change", async (e) => {
       state.devRole = e.target.value;
       render();
+      if (state.characterId && isGM()) {
+        await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false });
+      }
     });
     $("useToken")?.addEventListener("click", onUseToken);
     root2.querySelectorAll("[data-section]").forEach((b) => b.addEventListener("click", () => {
@@ -34722,6 +34760,30 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       { method: "POST", prefer: "return=minimal" }
     ), () => refresh({ armory: false, equipment: false, inventory: false }));
   }
+  function onGmAddPerk() {
+    const perkCode = root2.querySelector('[data-ref="gmPerkCode"]')?.value?.trim();
+    if (!perkCode) {
+      setNotice("err", "Select a perk.");
+      render();
+      return;
+    }
+    const perk = arr2(state.perkAvailability).find((entry) => String(entry?.code || "").trim() === perkCode);
+    if (!perk) {
+      setNotice("err", "Perk definition not found.");
+      render();
+      return;
+    }
+    if (perk.available !== true) {
+      const skillName = perk.linked_skill_name || perk.linked_skill_code || "linked skill";
+      setNotice("err", `Cannot add perk: ${esc2(perk.name || perkCode)} requires ${esc2(skillName)} ${dash2(perk.required_skill_level)}, current ${dash2(perk.current_skill_level)}.`);
+      render();
+      return;
+    }
+    runMutation("Add perk", () => api.perk.grantCharacterPerk(
+      { character_id: state.characterId, perk_code: perkCode, created_by: "GM", spend_development_point: false },
+      settings()
+    ), () => refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false }));
+  }
   function onGmAddWeapon() {
     const defId = root2.querySelector('[data-ref="gmWeaponDef"]')?.value;
     if (!defId) {
@@ -34832,6 +34894,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function onGmTool(kind) {
     if (kind === "additem") return onGmAddItem();
     if (kind === "addskill") return onGmAddSkill();
+    if (kind === "addperk") return onGmAddPerk();
     if (kind === "addweapon") return onGmAddWeapon();
     if (kind === "addmag") return onGmAddMagazine();
     if (kind === "addammo") return onGmAddAmmo();
