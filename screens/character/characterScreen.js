@@ -4,6 +4,7 @@
 
 import characterStyles from "./characterStyles.css";
 import { escapeHtml } from "../../utils/json.js";
+import { toErrorMessage } from "../../utils/errors.js";
 import { describeError } from "../resolveAttack/resolveAttackService.js";
 import {
   loadDevSettings,
@@ -960,28 +961,27 @@ export function mountCharacterScreen({ root, runtime }) {
 
   async function refreshAfterCombatStart() {
     setCombatStartStage("Refreshing character sheet...");
-    const results = await Promise.allSettled([
-      withTimeout(
-        refresh({
-          sheet: true,
-          armory: false,
-          equipment: false,
-          inventory: false,
-          abilities: false,
-          perkAvailability: false,
-        }),
-        5000,
-        { __timedOut: "refresh" },
-      ),
-      withTimeout(
-        (async () => {
-          setCombatStartStage("Refreshing selected token...");
-          return refreshSelectedTokenContext();
-        })(),
+    const refreshPromise = withTimeout(
+      refresh({
+        sheet: true,
+        armory: false,
+        equipment: false,
+        inventory: false,
+        abilities: false,
+        perkAvailability: false,
+      }),
+      5000,
+      { __timedOut: "refresh" },
+    );
+    const selectedTokenPromise = (async () => {
+      setCombatStartStage("Refreshing selected token...");
+      return withTimeout(
+        refreshSelectedTokenContext(),
         5000,
         { __timedOut: "selectedTokenContext" },
-      ),
-    ]);
+      );
+    })();
+    const results = await Promise.allSettled([refreshPromise, selectedTokenPromise]);
 
     for (const result of results) {
       if (result.status === "rejected") {
@@ -1003,15 +1003,23 @@ export function mountCharacterScreen({ root, runtime }) {
     }
     state.busy = true;
     state.isStartingCombat = true;
-    setCombatStartStage("Creating encounter...");
+    setCombatStartStage("Resolving Supabase settings...");
     setNotice("info", "Starting combat...");
     render();
     try {
       await ensureSettings();
-      const [context, player] = await Promise.all([
-        withTimeout(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null),
-        withTimeout(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null),
-      ]);
+      setCombatStartStage("Reading Owlbear room and scene...");
+      const context = await withTimeout(
+        bridges.obr?.getRoomSceneContext?.(),
+        OBR_TIMEOUT,
+        null,
+      );
+      setCombatStartStage("Reading Owlbear player...");
+      const player = await withTimeout(
+        bridges.obr?.getPlayerInfo?.(),
+        OBR_TIMEOUT,
+        null,
+      );
       if (!context?.campaignId || !context?.roomId || !context?.sceneId) {
         throw new Error("Unable to resolve Owlbear room or scene context.");
       }
@@ -1023,13 +1031,23 @@ export function mountCharacterScreen({ root, runtime }) {
         actor_is_gm: true,
         name: "Combat",
       };
+      setCombatStartStage("Creating Supabase RPC request...");
+      let startPromise;
+      try {
+        startPromise = api.combat.startEncounter(payload, settings());
+      } catch (error) {
+        setCombatStartStage("Start RPC failed before request creation.");
+        throw error;
+      }
+      setCombatStartStage("Waiting for Supabase response...");
       const timedResult = await withTimeout(
-        api.combat.startEncounter(payload, settings()),
+        startPromise,
         8000,
         { __timedOut: true },
       );
       let result = timedResult;
       if (timedResult?.__timedOut) {
+        setCombatStartStage("Start RPC timed out. Checking whether combat was created...");
         const runtimeAfterTimeout = await withTimeout(
           fetchActiveCombatRuntimeForScene(context, player, true),
           3000,
@@ -1043,7 +1061,9 @@ export function mountCharacterScreen({ root, runtime }) {
             __resolvedByPoll: true,
           };
         } else {
-          throw new Error("Start combat request timed out. The encounter may still be starting on Supabase.");
+          throw new Error(
+            "Start combat request timed out and no active encounter was found.",
+          );
         }
       }
       if (!result || result.ok === false) {
@@ -1056,7 +1076,9 @@ export function mountCharacterScreen({ root, runtime }) {
       render();
       void refreshAfterCombatStart();
     } catch (error) {
-      setNotice("err", esc(toErrorMessage(error, "Unable to start combat.")));
+      const message = toErrorMessage(error, "Unable to start combat.");
+      setCombatStartStage(`Failed: ${message}`);
+      setNotice("err", esc(message));
       render();
     } finally {
       state.isStartingCombat = false;

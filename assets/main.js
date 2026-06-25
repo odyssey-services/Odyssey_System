@@ -441,7 +441,7 @@ function subscribeDiagnostics(listener) {
 }
 
 // utils/errors.js
-function toErrorMessage2(error, fallback = "Unknown error.") {
+function toErrorMessage(error, fallback = "Unknown error.") {
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
   }
@@ -459,7 +459,7 @@ function toErrorMessage2(error, fallback = "Unknown error.") {
 function normalizeError(error, fallback = "Unknown error.") {
   return {
     name: error instanceof Error ? error.name : "Error",
-    message: toErrorMessage2(error, fallback)
+    message: toErrorMessage(error, fallback)
   };
 }
 
@@ -8551,7 +8551,7 @@ function mountCreatorMenu({
     } catch (error) {
       if (requestId !== state.requestNonce) return;
       state.loading = false;
-      state.error = toErrorMessage2(error, "Unable to load creator data.");
+      state.error = toErrorMessage(error, "Unable to load creator data.");
       onDiagnostic("error", "Creator load failed", state.error);
       render();
     }
@@ -8679,7 +8679,7 @@ function mountCreatorMenu({
       render();
     } catch (error) {
       state.loading = false;
-      state.error = toErrorMessage2(error, "Unable to refresh creator list.");
+      state.error = toErrorMessage(error, "Unable to refresh creator list.");
       onDiagnostic("error", "Creator refresh failed", state.error);
       render();
     }
@@ -8710,7 +8710,7 @@ function mountCreatorMenu({
     } catch (error) {
       if (requestId !== state.requestNonce) return;
       state.loading = false;
-      state.error = toErrorMessage2(error, "Unable to open creator record.");
+      state.error = toErrorMessage(error, "Unable to open creator record.");
       onDiagnostic("error", "Creator open failed", state.error);
       render();
     }
@@ -9074,7 +9074,7 @@ function mountCreatorMenu({
       render();
     } catch (error) {
       state.loading = false;
-      state.error = toErrorMessage2(error, "Unable to save draft.");
+      state.error = toErrorMessage(error, "Unable to save draft.");
       onDiagnostic("error", "Creator save failed", state.error);
       render();
     }
@@ -9163,7 +9163,7 @@ function mountCreatorMenu({
       render();
     } catch (error) {
       state.loading = false;
-      state.error = toErrorMessage2(error, `Unable to delete ${label}.`);
+      state.error = toErrorMessage(error, `Unable to delete ${label}.`);
       onDiagnostic("error", "Creator delete failed", state.error);
       render();
     }
@@ -9270,12 +9270,19 @@ function buildHeaders(apiKey, method, extraHeaders = {}, prefer = "return=repres
   }
   return headers;
 }
-async function parseSupabaseResponse(response, fallbackMessage) {
+async function parseSupabaseResponse(response, fallbackMessage, requestId = "") {
+  console.info(`[Odyssey RPC ${requestId}] response headers received`, {
+    status: response.status,
+    ok: response.ok
+  });
   const rawText = await response.text();
+  console.info(`[Odyssey RPC ${requestId}] response body read`, {
+    bytes: rawText.length
+  });
   const body = safeJsonParse(rawText, rawText || null);
   if (!response.ok) {
     throw new Error(
-      toErrorMessage2(body, fallbackMessage || "Supabase request failed.")
+      toErrorMessage(body, fallbackMessage || "Supabase request failed.")
     );
   }
   return body;
@@ -9290,6 +9297,7 @@ async function requestSupabase(path, options = {}) {
     fallbackMessage = "Supabase request failed."
   } = options;
   const { url, apiKey } = getSupabaseSettingsOrThrow(settings);
+  const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const requestInit = {
     method,
     headers: buildHeaders(apiKey, method, headers, prefer)
@@ -9299,13 +9307,20 @@ async function requestSupabase(path, options = {}) {
     requestInit.headers["Content-Type"] = "application/json";
   }
   try {
-    const response = await fetch(`${url}/rest/v1/${path}`, requestInit);
-    return await parseSupabaseResponse(response, fallbackMessage);
+    console.info(`[Odyssey RPC ${requestId}] request prepared`, {
+      method,
+      path
+    });
+    console.info(`[Odyssey RPC ${requestId}] fetch starting`);
+    const fetchPromise = fetch(`${url}/rest/v1/${path}`, requestInit);
+    console.info(`[Odyssey RPC ${requestId}] fetch promise created`);
+    const response = await fetchPromise;
+    return await parseSupabaseResponse(response, fallbackMessage, requestId);
   } catch (error) {
     addDiagnosticEntry(
       "error",
       "Supabase request failed",
-      `${method} ${path}: ${toErrorMessage2(error)}`
+      `${method} ${path}: ${toErrorMessage(error)}`
     );
     throw error;
   }
@@ -9677,7 +9692,7 @@ async function mountBridgeShell({
       render();
       creatorController?.syncAccess();
     } catch (error) {
-      addDiagnosticEntry("error", "Clear failed", toErrorMessage2(error, "Unable to clear room Supabase settings."));
+      addDiagnosticEntry("error", "Clear failed", toErrorMessage(error, "Unable to clear room Supabase settings."));
     }
   });
   buttons.testConnection.addEventListener("click", async () => {
@@ -9697,7 +9712,7 @@ async function mountBridgeShell({
     } catch (error) {
       state.connectionTest = {
         ok: false,
-        message: toErrorMessage2(error, "Supabase connection test failed.")
+        message: toErrorMessage(error, "Supabase connection test failed.")
       };
       addDiagnosticEntry(
         "error",
@@ -9711,7 +9726,7 @@ async function mountBridgeShell({
     void refreshSnapshot().then(() => {
       addDiagnosticEntry("info", "Shell status refreshed");
     }).catch((error) => {
-      addDiagnosticEntry("error", "Refresh failed", toErrorMessage2(error, "Unable to refresh shell state."));
+      addDiagnosticEntry("error", "Refresh failed", toErrorMessage(error, "Unable to refresh shell state."));
     });
   });
   buttons.clearDiagnostics.addEventListener("click", () => {
@@ -34889,28 +34904,27 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   async function refreshAfterCombatStart() {
     setCombatStartStage("Refreshing character sheet...");
-    const results = await Promise.allSettled([
-      withTimeout3(
-        refresh({
-          sheet: true,
-          armory: false,
-          equipment: false,
-          inventory: false,
-          abilities: false,
-          perkAvailability: false
-        }),
-        5e3,
-        { __timedOut: "refresh" }
-      ),
-      withTimeout3(
-        (async () => {
-          setCombatStartStage("Refreshing selected token...");
-          return refreshSelectedTokenContext();
-        })(),
+    const refreshPromise = withTimeout3(
+      refresh({
+        sheet: true,
+        armory: false,
+        equipment: false,
+        inventory: false,
+        abilities: false,
+        perkAvailability: false
+      }),
+      5e3,
+      { __timedOut: "refresh" }
+    );
+    const selectedTokenPromise = (async () => {
+      setCombatStartStage("Refreshing selected token...");
+      return withTimeout3(
+        refreshSelectedTokenContext(),
         5e3,
         { __timedOut: "selectedTokenContext" }
-      )
-    ]);
+      );
+    })();
+    const results = await Promise.allSettled([refreshPromise, selectedTokenPromise]);
     for (const result of results) {
       if (result.status === "rejected") {
         console.error("[Odyssey] Post-start refresh failed:", result.reason);
@@ -34930,15 +34944,23 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
     state.busy = true;
     state.isStartingCombat = true;
-    setCombatStartStage("Creating encounter...");
+    setCombatStartStage("Resolving Supabase settings...");
     setNotice("info", "Starting combat...");
     render();
     try {
       await ensureSettings();
-      const [context, player] = await Promise.all([
-        withTimeout3(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null),
-        withTimeout3(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null)
-      ]);
+      setCombatStartStage("Reading Owlbear room and scene...");
+      const context = await withTimeout3(
+        bridges.obr?.getRoomSceneContext?.(),
+        OBR_TIMEOUT,
+        null
+      );
+      setCombatStartStage("Reading Owlbear player...");
+      const player = await withTimeout3(
+        bridges.obr?.getPlayerInfo?.(),
+        OBR_TIMEOUT,
+        null
+      );
       if (!context?.campaignId || !context?.roomId || !context?.sceneId) {
         throw new Error("Unable to resolve Owlbear room or scene context.");
       }
@@ -34950,13 +34972,23 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         actor_is_gm: true,
         name: "Combat"
       };
+      setCombatStartStage("Creating Supabase RPC request...");
+      let startPromise;
+      try {
+        startPromise = api.combat.startEncounter(payload, settings());
+      } catch (error) {
+        setCombatStartStage("Start RPC failed before request creation.");
+        throw error;
+      }
+      setCombatStartStage("Waiting for Supabase response...");
       const timedResult = await withTimeout3(
-        api.combat.startEncounter(payload, settings()),
+        startPromise,
         8e3,
         { __timedOut: true }
       );
       let result = timedResult;
       if (timedResult?.__timedOut) {
+        setCombatStartStage("Start RPC timed out. Checking whether combat was created...");
         const runtimeAfterTimeout = await withTimeout3(
           fetchActiveCombatRuntimeForScene(context, player, true),
           3e3,
@@ -34970,7 +35002,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
             __resolvedByPoll: true
           };
         } else {
-          throw new Error("Start combat request timed out. The encounter may still be starting on Supabase.");
+          throw new Error(
+            "Start combat request timed out and no active encounter was found."
+          );
         }
       }
       if (!result || result.ok === false) {
@@ -34983,7 +35017,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
       void refreshAfterCombatStart();
     } catch (error) {
-      setNotice("err", esc2(toErrorMessage(error, "Unable to start combat.")));
+      const message = toErrorMessage(error, "Unable to start combat.");
+      setCombatStartStage(`Failed: ${message}`);
+      setNotice("err", esc2(message));
       render();
     } finally {
       state.isStartingCombat = false;

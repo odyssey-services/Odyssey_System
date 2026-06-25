@@ -4524,8 +4524,15 @@ function buildHeaders(apiKey, method, extraHeaders = {}, prefer = "return=repres
   }
   return headers;
 }
-async function parseSupabaseResponse(response, fallbackMessage) {
+async function parseSupabaseResponse(response, fallbackMessage, requestId = "") {
+  console.info(`[Odyssey RPC ${requestId}] response headers received`, {
+    status: response.status,
+    ok: response.ok
+  });
   const rawText = await response.text();
+  console.info(`[Odyssey RPC ${requestId}] response body read`, {
+    bytes: rawText.length
+  });
   const body = safeJsonParse(rawText, rawText || null);
   if (!response.ok) {
     throw new Error(
@@ -4544,6 +4551,7 @@ async function requestSupabase(path, options = {}) {
     fallbackMessage = "Supabase request failed."
   } = options;
   const { url, apiKey } = getSupabaseSettingsOrThrow(settings);
+  const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const requestInit = {
     method,
     headers: buildHeaders(apiKey, method, headers, prefer)
@@ -4553,8 +4561,15 @@ async function requestSupabase(path, options = {}) {
     requestInit.headers["Content-Type"] = "application/json";
   }
   try {
-    const response = await fetch(`${url}/rest/v1/${path}`, requestInit);
-    return await parseSupabaseResponse(response, fallbackMessage);
+    console.info(`[Odyssey RPC ${requestId}] request prepared`, {
+      method,
+      path
+    });
+    console.info(`[Odyssey RPC ${requestId}] fetch starting`);
+    const fetchPromise = fetch(`${url}/rest/v1/${path}`, requestInit);
+    console.info(`[Odyssey RPC ${requestId}] fetch promise created`);
+    const response = await fetchPromise;
+    return await parseSupabaseResponse(response, fallbackMessage, requestId);
   } catch (error) {
     addDiagnosticEntry(
       "error",
