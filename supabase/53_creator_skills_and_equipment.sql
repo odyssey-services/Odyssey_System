@@ -885,6 +885,11 @@ begin
     );
   end if;
 
+  if v_item_type in ('exoskeleton', 'closed_suit') then
+    v_can_equip := true;
+    v_can_equip_to_body_part := true;
+  end if;
+
   if v_default_body_part_code is not null and not exists (
     select 1
     from public.odyssey_body_part_defs body_part

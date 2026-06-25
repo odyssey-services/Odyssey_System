@@ -33783,6 +33783,10 @@ var PART_GEOMETRY2 = {
   r_leg: { x: 42, y: 58, w: 9, h: 24, r: 5 }
 };
 var PART_ALIASES2 = {
+  leftarm: "l_arm",
+  rightarm: "r_arm",
+  leftleg: "l_leg",
+  rightleg: "r_leg",
   arm_l: "l_arm",
   arm_r: "r_arm",
   leg_l: "l_leg",
@@ -33794,11 +33798,7 @@ var PART_ALIASES2 = {
   left_arm: "l_arm",
   right_arm: "r_arm",
   left_leg: "l_leg",
-  right_leg: "r_leg",
-  leftarm: "l_arm",
-  rightarm: "r_arm",
-  leftleg: "l_leg",
-  rightleg: "r_leg"
+  right_leg: "r_leg"
 };
 var DOLL_SCALE2 = 1.7;
 var OBR_TIMEOUT = 1500;
@@ -34455,7 +34455,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     };
   }
   function bodyPartCodes(part) {
-    return [part?.code, part?.part_key].map((value) => normalizeBodyPartCode(value)).filter(Boolean);
+    return [part?.code, part?.part_key, part?.name].map((value) => normalizeBodyPartCode(value)).filter(Boolean);
   }
   function collectAllowedBodyPartCodes(item) {
     const allowedCodes = /* @__PURE__ */ new Set();
@@ -34484,12 +34484,23 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     pushCodes(item?.effective_flags?.allowed_body_part_codes);
     pushCodes(item?.flags?.allowed_body_part_codes);
     pushCodes(item?.model?.flags?.allowed_body_part_codes);
+    pushCodes(item?.data?.flags?.allowed_body_part_codes);
+    pushCodes(item?.model?.data?.flags?.allowed_body_part_codes);
     pushCodes(item?.effective_flags?.allowedBodyPartCodes);
     pushCodes(item?.flags?.allowedBodyPartCodes);
     pushCodes(item?.model?.flags?.allowedBodyPartCodes);
+    pushCodes(item?.data?.flags?.allowedBodyPartCodes);
+    pushCodes(item?.model?.data?.flags?.allowedBodyPartCodes);
+    pushCodes(item?.allowed_body_part_codes);
+    pushCodes(item?.model?.allowed_body_part_codes);
     if (!allowedCodes.size) {
       pushCode(item?.default_body_part_code);
       pushCode(item?.model?.default_body_part_code);
+    }
+    if (!allowedCodes.size) {
+      arr2(item?.effective_flags?.allowed_body_part_tags).forEach(pushCode);
+      arr2(item?.flags?.allowed_body_part_tags).forEach(pushCode);
+      arr2(item?.model?.flags?.allowed_body_part_tags).forEach(pushCode);
     }
     if (!allowedCodes.size) {
       arr2(item?.model?.tags || item?.tags || []).forEach((tag) => {
@@ -34506,7 +34517,10 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const allowedCodes = collectAllowedBodyPartCodes(item);
     const parts = arr2(state.sheet?.body_parts).filter((part) => !!part?.id);
     if (!allowedCodes.length) return [];
-    return parts.filter((part) => bodyPartCodes(part).some((code) => allowedCodes.includes(code)));
+    return parts.filter((part) => {
+      const codes = bodyPartCodes(part);
+      return codes.some((code) => allowedCodes.includes(code));
+    });
   }
   function shouldShowAdditionalPart(p) {
     if (!p || PART_GEOMETRY2[normPart(p)]) return false;

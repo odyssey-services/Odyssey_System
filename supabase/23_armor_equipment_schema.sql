@@ -1186,7 +1186,8 @@ begin
     );
   end if;
 
-  if not coalesce(v_model.can_equip_to_body_part, true) then
+  if not coalesce(v_model.can_equip_to_body_part, true)
+    and lower(trim(coalesce(v_model.item_type, ''))) not in ('exoskeleton', 'closed_suit') then
     return jsonb_build_object(
       'ok', false,
       'error', 'ITEM_CANNOT_EQUIP_TO_BODY_PART',
