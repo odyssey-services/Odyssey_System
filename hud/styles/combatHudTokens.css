@@ -1,0 +1,56 @@
+/*
+ * Combat HUD — design tokens (Phase 0).
+ *
+ * Semantic custom properties ONLY. No layout, no component rules — those
+ * arrive in Phase 1. JavaScript must never hard-code colours; it stores
+ * semantic state names (see hud/models/combatHudContracts.js) and the UI
+ * maps state → token here.
+ *
+ * Scope: variables are declared on a `.odyssey-hud` root class so the HUD's
+ * theme cannot leak into the existing popup screens (Resolve Attack, etc.).
+ */
+
+.odyssey-hud {
+  /* Surfaces */
+  --odyssey-hud-bg: rgba(10, 12, 20, 0.92);
+  --odyssey-hud-panel: rgba(22, 26, 40, 0.95);
+  --odyssey-hud-panel-raised: rgba(32, 38, 56, 0.96);
+  --odyssey-hud-border: rgba(255, 255, 255, 0.12);
+  --odyssey-hud-border-strong: rgba(255, 255, 255, 0.28);
+
+  /* Text */
+  --odyssey-hud-text: #e8ecf4;
+  --odyssey-hud-muted: #9aa3b8;
+
+  /* Generic valence */
+  --odyssey-hud-positive: #2ecc71;
+  --odyssey-hud-negative: #e74c3c;
+  --odyssey-hud-warning: #f5a623;
+
+  /* Action / ability semantics (spec §3 colour language) */
+  --odyssey-hud-attack: #e94560;       /* red — attacking / hostile        */
+  --odyssey-hud-neutral: #5a6076;      /* grey — neutral / defensive / util */
+  --odyssey-hud-psionic: #9b59b6;      /* purple — psionics                 */
+  --odyssey-hud-implant: #1abc9c;      /* cyan/teal — implants / tech       */
+  --odyssey-hud-intervention: #f1c40f; /* yellow/gold — intervention        */
+
+  /* State / availability */
+  --odyssey-hud-state-active: #2ecc71;    /* green/cyan — active positive    */
+  --odyssey-hud-state-unavailable: #d35400;/* red/orange — negative/blocked  */
+  --odyssey-hud-disabled: rgba(255, 255, 255, 0.28);
+
+  /* Body zone condition scale (healthy → disabled) */
+  --odyssey-hud-zone-healthy: #2ecc71;
+  --odyssey-hud-zone-wounded: #f1c40f;
+  --odyssey-hud-zone-serious: #e67e22;
+  --odyssey-hud-zone-critical: #e74c3c;
+  --odyssey-hud-zone-disabled: #5a5f6b;
+
+  /* Resources */
+  --odyssey-hud-shield: #3aa0ff;
+  --odyssey-hud-psi: #9b59b6;
+
+  /* Elevation */
+  --odyssey-hud-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  --odyssey-hud-radius: 8px;
+}
