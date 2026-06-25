@@ -777,13 +777,25 @@ export function mountCharacterScreen({ root, runtime }) {
     pushCodes(item?.effective_flags?.allowed_body_part_codes);
     pushCodes(item?.flags?.allowed_body_part_codes);
     pushCodes(item?.model?.flags?.allowed_body_part_codes);
+    pushCodes(item?.data?.flags?.allowed_body_part_codes);
+    pushCodes(item?.model?.data?.flags?.allowed_body_part_codes);
     pushCodes(item?.effective_flags?.allowedBodyPartCodes);
     pushCodes(item?.flags?.allowedBodyPartCodes);
     pushCodes(item?.model?.flags?.allowedBodyPartCodes);
+    pushCodes(item?.data?.flags?.allowedBodyPartCodes);
+    pushCodes(item?.model?.data?.flags?.allowedBodyPartCodes);
+    pushCodes(item?.allowed_body_part_codes);
+    pushCodes(item?.model?.allowed_body_part_codes);
 
     if (!allowedCodes.size) {
       pushCode(item?.default_body_part_code);
       pushCode(item?.model?.default_body_part_code);
+    }
+
+    if (!allowedCodes.size) {
+      arr(item?.effective_flags?.allowed_body_part_tags).forEach(pushCode);
+      arr(item?.flags?.allowed_body_part_tags).forEach(pushCode);
+      arr(item?.model?.flags?.allowed_body_part_tags).forEach(pushCode);
     }
 
     if (!allowedCodes.size) {
