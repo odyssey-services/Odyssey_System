@@ -4741,8 +4741,7 @@ function getEffectiveAllowedBodyPartCodes(draft) {
   return selectedCodes.length ? selectedCodes : suggestAllowedBodyPartCodes(draft?.defaultBodyPartCode);
 }
 function shouldShowProtectionSlots(itemType) {
-  const type = String(itemType ?? "").trim();
-  return type !== "exoskeleton" && type !== "closed_suit";
+  return true;
 }
 function shouldEquipToBodyPart(itemType, allowedBodyPartCodes = [], defaultBodyPartCode = "") {
   const type = String(itemType ?? "").trim();
@@ -4755,7 +4754,10 @@ function shouldEquipToBodyPart(itemType, allowedBodyPartCodes = [], defaultBodyP
   return false;
 }
 function getEquipmentUiTypes(references) {
-  return (Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : []).filter((itemType) => String(itemType ?? "") !== "device");
+  return (Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : []).filter((itemType) => {
+    const normalized = String(itemType ?? "").trim();
+    return normalized !== "device";
+  });
 }
 function normalizeWeaponProfileDraft(profile) {
   const data = toPlainObject(profile?.data);
@@ -33802,7 +33804,7 @@ var PART_ALIASES2 = {
 };
 var DOLL_SCALE2 = 1.7;
 var OBR_TIMEOUT = 1500;
-var ARMOR_TYPES = /* @__PURE__ */ new Set(["armor", "shield", "special_protection", "exoskeleton", "closed_suit"]);
+var ARMOR_TYPES = /* @__PURE__ */ new Set(["armor", "shield", "special_protection"]);
 var IMPLANT_TYPES = /* @__PURE__ */ new Set(["implant", "prosthetic", "device"]);
 var esc2 = (v) => escapeHtml(v);
 var arr2 = (v) => Array.isArray(v) ? v : [];
@@ -34508,9 +34510,6 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         if (knownBodyPartCodes.has(normalized)) allowedCodes.add(normalized);
       });
     }
-    if (!allowedCodes.size && ["exoskeleton", "closed_suit"].includes(String(item?.model?.item_type || item?.item_type || "").toLowerCase())) {
-      allowedCodes.add("torso");
-    }
     return [...allowedCodes];
   }
   function compatibleBodyParts(item) {
@@ -34962,7 +34961,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const hasSerious = (it.armor_serious || 0) > 0;
     const hasMinor = (it.armor_minor || 0) > 0;
     const status = dest ? ["Destroyed", "bad"] : hasCrit ? ["Damaged", ""] : hasSerious ? ["Damaged", ""] : hasMinor ? ["Minor damage", ""] : ["OK", "good"];
-    const slot = it.body_part?.name || it.model?.default_body_part_code || "-";
+    const slot = it.body_part?.name || it.equipped_body_part_name || it.default_body_part_code || it.model?.default_body_part_code || "-";
     return `<div class="cp-card" data-equip="${esc2(it.id)}">
       <div class="cp-rowitem"><span><b>${esc2(it.name)}</b> <span class="cp-pill">${esc2(it.model?.item_type || "armor")}</span></span>
       <span class="cp-pill ${status[1]}">${status[0]}</span></div>
@@ -34991,10 +34990,10 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const eff = it.model?.effect_data;
     const effTxt = eff && typeof eff === "object" ? eff.summary || eff.description || "" : "";
     const active = it.is_equipped;
-    const slot = it.body_part?.name || it.model?.default_body_part_code || "-";
+    const slot = it.body_part?.name || it.equipped_body_part_name || it.default_body_part_code || it.model?.default_body_part_code || "-";
     const canInstall = isGM() && it.model?.can_equip !== false && it.model?.can_equip_to_body_part !== false;
     const slotOptions = equipmentSlotOptions(it);
-    const hasCompatiblePart = !slotOptions.includes("-- no compatible body parts --");
+    const hasCompatiblePart = compatibleBodyParts(it).length > 0;
     return `<div class="cp-card">
       <div class="cp-rowitem"><span><b>${esc2(it.name)}</b> <span class="cp-pill">${esc2(it.model?.item_type || "implant")}</span></span>
       <span class="cp-pill ${active ? "good" : ""}">${active ? "installed" : "inactive"}</span></div>
@@ -35447,10 +35446,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function equipmentSlotOptions(it) {
     const def = normalizeBodyPartCode(it?.default_body_part_code || it?.model?.default_body_part_code || "");
-    const allowed = collectAllowedBodyPartCodes(it);
     const lastId = state.lastSlot[it.id];
     let parts = compatibleBodyParts(it);
-    if (!parts.length) return `<option value="">-- no compatible body parts --</option>`;
+    if (!parts.length) return `<option value="">This item has no configured installation slot.</option>`;
     const selected = parts.find((b) => b.id === lastId) || parts.find((b) => def && bodyPartCodes(b).includes(def)) || parts[0];
     return parts.map((b) => {
       const sel = b.id === selected?.id ? "selected" : "";

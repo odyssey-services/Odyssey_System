@@ -42,7 +42,7 @@ create table if not exists public.odyssey_equipment_model_defs (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   name text not null,
-  item_type text not null check (item_type in ('armor', 'shield', 'special_protection', 'exoskeleton', 'closed_suit', 'device', 'implant', 'prosthetic', 'custom')),
+  item_type text not null check (item_type in ('armor', 'shield', 'special_protection', 'device', 'implant', 'prosthetic', 'custom')),
   description text not null default '',
   armor_value integer not null default 0 check (armor_value >= 0),
   armor_max_critical integer not null default 0 check (armor_max_critical >= 0),

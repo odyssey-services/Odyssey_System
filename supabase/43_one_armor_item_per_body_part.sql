@@ -123,9 +123,7 @@ begin
   v_is_armor_protection := lower(trim(coalesce(v_model.item_type, ''))) in (
     'armor',
     'shield',
-    'special_protection',
-    'exoskeleton',
-    'closed_suit'
+    'special_protection'
   );
 
   if v_is_armor_protection then
@@ -142,9 +140,7 @@ begin
       and lower(trim(coalesce(occupied_model.item_type, ''))) in (
         'armor',
         'shield',
-        'special_protection',
-        'exoskeleton',
-        'closed_suit'
+        'special_protection'
       )
     order by e.updated_at desc nulls last, e.created_at desc, e.id
     for update of e

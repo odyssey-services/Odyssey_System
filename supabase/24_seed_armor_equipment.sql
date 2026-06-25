@@ -525,44 +525,30 @@ values
   (
     'basic_exoskeleton_frame',
     'Basic Exoskeleton Frame',
-    'exoskeleton',
-    'Reserved Stage 4B equipment model for future exoskeleton automation.',
+    'prosthetic',
+    'Torso prosthetic frame that grants Superheavy Armor Training while installed.',
     0,
     0,
     'torso',
     true,
     true,
     jsonb_build_object(
-      'reserved_for_future', true,
-      'notes', 'Stage 4B stores the model and equips it, but does not automatically apply exoskeleton effects yet.'
+      'modifiers',
+      jsonb_build_array(
+        jsonb_build_object(
+          'target', 'skill',
+          'skill_code', 'superheavy_armor',
+          'mode', 'set_min',
+          'value', 1
+        )
+      )
     ),
     jsonb_build_object(
       'allowed_body_part_codes', jsonb_build_array('torso')
     ),
-    '["stage4b","equipment","exoskeleton"]'::jsonb,
+    '["stage4b","equipment","prosthetic","torso","equipable","body_part"]'::jsonb,
     false,
     520
-  ),
-  (
-    'basic_closed_suit',
-    'Basic Closed Suit',
-    'closed_suit',
-    'Reserved Stage 4B equipment model for future closed-suit automation.',
-    0,
-    0,
-    'torso',
-    true,
-    true,
-    jsonb_build_object(
-      'reserved_for_future', true,
-      'notes', 'Stage 4B stores the model and equips it, but does not automatically apply closed-suit effects yet.'
-    ),
-    jsonb_build_object(
-      'allowed_body_part_codes', jsonb_build_array('torso')
-    ),
-    '["stage4b","equipment","closed-suit"]'::jsonb,
-    false,
-    530
   )
 on conflict (code) do update
 set

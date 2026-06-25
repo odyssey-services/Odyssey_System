@@ -153,7 +153,11 @@ as $$
       coalesce(
         nullif(jsonb_extract_path_text(effect_summary.effect_summary, 'modifiers', 'skills', resolved_rows.skill_code), '')::integer,
         0
-      ) as effect_level_modifier
+      ) as effect_level_modifier,
+      coalesce(
+        nullif(jsonb_extract_path_text(effect_summary.effect_summary, 'modifiers', 'skills_set_min', resolved_rows.skill_code), '')::integer,
+        0
+      ) as effect_level_minimum
     from resolved_rows
     cross join effect_summary
     left join public.odyssey_attribute_defs main_attr on main_attr.id = resolved_rows.resolved_main_attribute_def_id
@@ -249,26 +253,23 @@ as $$
         when availability.is_passive then availability.purchased_level
         else least(availability.purchased_level, greatest(availability.highest_available_level, 0))
       end as base_effective_level,
-      case
-        when availability.is_passive then 0
-        else availability.effect_level_modifier
-      end as effect_level_modifier,
+      availability.effect_level_modifier as effect_level_modifier,
       0 as effect_skill_bonus,
-      case
-        when availability.is_passive then availability.purchased_level
-        else least(
-          greatest(
-            least(availability.purchased_level, greatest(availability.highest_available_level, 0))
-            + availability.effect_level_modifier,
-            0
-          ),
+      least(
+        greatest(
           case
-            when availability.max_level >= 5 then 10
-            when availability.max_level = 3 then 5
-            else availability.max_level
-          end
-        )
-      end as effective_level,
+            when availability.is_passive then availability.purchased_level
+            else least(availability.purchased_level, greatest(availability.highest_available_level, 0))
+          end + availability.effect_level_modifier,
+          availability.effect_level_minimum,
+          0
+        ),
+        case
+          when availability.max_level >= 5 then 10
+          when availability.max_level = 3 then 5
+          else availability.max_level
+        end
+      ) as effective_level,
       availability.highest_available_level,
       availability.current_level_requirements_met,
       availability.next_available_level,

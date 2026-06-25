@@ -110,8 +110,7 @@ begin
     );
   end if;
 
-  if not coalesce(v_model.can_equip_to_body_part, true)
-    and lower(trim(coalesce(v_model.item_type, ''))) not in ('exoskeleton', 'closed_suit') then
+  if not coalesce(v_model.can_equip_to_body_part, true) then
     return jsonb_build_object(
       'ok', false,
       'error', 'ITEM_CANNOT_EQUIP_TO_BODY_PART',
@@ -161,9 +160,7 @@ begin
   v_is_armor_protection := lower(trim(coalesce(v_model.item_type, ''))) in (
     'armor',
     'shield',
-    'special_protection',
-    'exoskeleton',
-    'closed_suit'
+    'special_protection'
   );
 
   if v_is_armor_protection then
@@ -180,9 +177,7 @@ begin
       and lower(trim(coalesce(occupied_model.item_type, ''))) in (
         'armor',
         'shield',
-        'special_protection',
-        'exoskeleton',
-        'closed_suit'
+        'special_protection'
       )
     order by e.updated_at desc nulls last, e.created_at desc, e.id
     for update of e

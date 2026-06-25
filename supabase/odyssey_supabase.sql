@@ -10132,6 +10132,7 @@ declare
   v_modifier_rows jsonb := '[]'::jsonb;
   v_attribute_modifiers jsonb := '{}'::jsonb;
   v_skill_modifiers jsonb := '{}'::jsonb;
+  v_skill_minimums jsonb := '{}'::jsonb;
   v_attack_accuracy integer := 0;
   v_defense integer := 0;
   v_damage integer := 0;
@@ -10266,6 +10267,7 @@ begin
       aer.category,
       aer.stacking_mode,
       lower(coalesce(modifier.value->>'target', '')) as target,
+      lower(coalesce(modifier.value->>'mode', '')) as mode,
       nullif(trim(coalesce(modifier.value->>'attribute', '')), '') as attribute_ref,
       nullif(trim(coalesce(modifier.value->>'skill_code', modifier.value->>'skill', '')), '') as skill_ref,
       coalesce(nullif(trim(coalesce(modifier.value->>'value', '')), '')::integer, 0) as value
@@ -10284,6 +10286,7 @@ begin
       raw.category,
       raw.stacking_mode,
       raw.target,
+      raw.mode,
       case
         when raw.target = 'attribute' then coalesce(attribute_by_id.code, attribute_by_code.code, lower(raw.attribute_ref))
         else null
@@ -10324,7 +10327,18 @@ begin
       end as aggregation
     from modifier_resolved
     where target <> ''
+      and coalesce(mode, '') <> 'set_min'
     group by target, attribute_code, skill_code
+  ),
+  skill_minimum_summary as (
+    select
+      skill_code,
+      max(value) as minimum_value
+    from modifier_resolved
+    where target = 'skill'
+      and skill_code is not null
+      and mode = 'set_min'
+    group by skill_code
   ),
   flag_raw as (
     select
@@ -10384,7 +10398,8 @@ begin
             'attribute', attribute_code,
             'skill_code', skill_code,
             'value', resolved_value,
-            'aggregation', aggregation
+            'aggregation', aggregation,
+            'mode', aggregation
           )
           order by target, attribute_code, skill_code
         )
@@ -10407,6 +10422,13 @@ begin
         from modifier_summary
         where target = 'skill'
           and skill_code is not null
+      ),
+      '{}'::jsonb
+    ),
+    coalesce(
+      (
+        select jsonb_object_agg(skill_code, minimum_value)
+        from skill_minimum_summary
       ),
       '{}'::jsonb
     ),
@@ -10434,6 +10456,7 @@ begin
     v_modifier_rows,
     v_attribute_modifiers,
     v_skill_modifiers,
+    v_skill_minimums,
     v_attack_accuracy,
     v_defense,
     v_damage,
@@ -10462,6 +10485,7 @@ begin
       jsonb_build_object(
         'attributes', v_attribute_modifiers,
         'skills', v_skill_modifiers,
+        'skills_set_min', v_skill_minimums,
         'attack_accuracy', v_attack_accuracy,
         'defense', v_defense,
         'damage', v_damage,
@@ -12659,7 +12683,7 @@ create table if not exists public.odyssey_equipment_model_defs (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   name text not null,
-  item_type text not null check (item_type in ('armor', 'shield', 'special_protection', 'exoskeleton', 'closed_suit', 'device', 'implant', 'prosthetic', 'custom')),
+  item_type text not null check (item_type in ('armor', 'shield', 'special_protection', 'device', 'implant', 'prosthetic', 'custom')),
   description text not null default '',
   armor_value integer not null default 0 check (armor_value >= 0),
   armor_max_critical integer not null default 0 check (armor_max_critical >= 0),
@@ -16239,44 +16263,30 @@ values
   (
     'basic_exoskeleton_frame',
     'Basic Exoskeleton Frame',
-    'exoskeleton',
-    'Reserved Stage 4B equipment model for future exoskeleton automation.',
+    'prosthetic',
+    'Torso prosthetic frame that grants Superheavy Armor Training while installed.',
     0,
     0,
     'torso',
     true,
     true,
     jsonb_build_object(
-      'reserved_for_future', true,
-      'notes', 'Stage 4B stores the model and equips it, but does not automatically apply exoskeleton effects yet.'
+      'modifiers',
+      jsonb_build_array(
+        jsonb_build_object(
+          'target', 'skill',
+          'skill_code', 'superheavy_armor',
+          'mode', 'set_min',
+          'value', 1
+        )
+      )
     ),
     jsonb_build_object(
       'allowed_body_part_codes', jsonb_build_array('torso')
     ),
-    '["stage4b","equipment","exoskeleton"]'::jsonb,
+    '["stage4b","equipment","prosthetic","torso","equipable","body_part"]'::jsonb,
     false,
     520
-  ),
-  (
-    'basic_closed_suit',
-    'Basic Closed Suit',
-    'closed_suit',
-    'Reserved Stage 4B equipment model for future closed-suit automation.',
-    0,
-    0,
-    'torso',
-    true,
-    true,
-    jsonb_build_object(
-      'reserved_for_future', true,
-      'notes', 'Stage 4B stores the model and equips it, but does not automatically apply closed-suit effects yet.'
-    ),
-    jsonb_build_object(
-      'allowed_body_part_codes', jsonb_build_array('torso')
-    ),
-    '["stage4b","equipment","closed-suit"]'::jsonb,
-    false,
-    530
   )
 on conflict (code) do update
 set
@@ -31786,7 +31796,11 @@ as $$
       coalesce(
         nullif(jsonb_extract_path_text(effect_summary.effect_summary, 'modifiers', 'skills', resolved_rows.skill_code), '')::integer,
         0
-      ) as effect_level_modifier
+      ) as effect_level_modifier,
+      coalesce(
+        nullif(jsonb_extract_path_text(effect_summary.effect_summary, 'modifiers', 'skills_set_min', resolved_rows.skill_code), '')::integer,
+        0
+      ) as effect_level_minimum
     from resolved_rows
     cross join effect_summary
     left join public.odyssey_attribute_defs main_attr on main_attr.id = resolved_rows.resolved_main_attribute_def_id
@@ -31882,26 +31896,23 @@ as $$
         when availability.is_passive then availability.purchased_level
         else least(availability.purchased_level, greatest(availability.highest_available_level, 0))
       end as base_effective_level,
-      case
-        when availability.is_passive then 0
-        else availability.effect_level_modifier
-      end as effect_level_modifier,
+      availability.effect_level_modifier as effect_level_modifier,
       0 as effect_skill_bonus,
-      case
-        when availability.is_passive then availability.purchased_level
-        else least(
-          greatest(
-            least(availability.purchased_level, greatest(availability.highest_available_level, 0))
-            + availability.effect_level_modifier,
-            0
-          ),
+      least(
+        greatest(
           case
-            when availability.max_level >= 5 then 10
-            when availability.max_level = 3 then 5
-            else availability.max_level
-          end
-        )
-      end as effective_level,
+            when availability.is_passive then availability.purchased_level
+            else least(availability.purchased_level, greatest(availability.highest_available_level, 0))
+          end + availability.effect_level_modifier,
+          availability.effect_level_minimum,
+          0
+        ),
+        case
+          when availability.max_level >= 5 then 10
+          when availability.max_level = 3 then 5
+          else availability.max_level
+        end
+      ) as effective_level,
       availability.highest_available_level,
       availability.current_level_requirements_met,
       availability.next_available_level,
@@ -36203,9 +36214,7 @@ begin
   v_is_armor_protection := lower(trim(coalesce(v_model.item_type, ''))) in (
     'armor',
     'shield',
-    'special_protection',
-    'exoskeleton',
-    'closed_suit'
+    'special_protection'
   );
 
   if v_is_armor_protection then
@@ -36222,9 +36231,7 @@ begin
       and lower(trim(coalesce(occupied_model.item_type, ''))) in (
         'armor',
         'shield',
-        'special_protection',
-        'exoskeleton',
-        'closed_suit'
+        'special_protection'
       )
     order by e.updated_at desc nulls last, e.created_at desc, e.id
     for update of e
@@ -37136,9 +37143,15 @@ as $$
       select jsonb_build_object(
         'id', s.id,
         'character_id', s.character_id,
+        'equipment_model_id', s.equipment_model_id,
+        'code', s.equipment_model_code,
+        'item_type', s.item_type,
         'custom_name', s.custom_name,
         'name', coalesce(nullif(trim(s.custom_name), ''), s.equipment_model_name),
         'is_equipped', s.is_equipped,
+        'equipped_body_part_id', s.equipped_body_part_id,
+        'equipped_body_part_code', coalesce(s.body_part_code, ''),
+        'equipped_body_part_name', s.body_part_name,
         'armor_value', s.armor_value,
         'armor_minor', s.armor_minor,
         'armor_max_minor', s.armor_max_minor,
@@ -37151,6 +37164,12 @@ as $$
         'current_charges', s.current_charges,
         'max_charges', s.max_charges,
         'data', s.data,
+        'effect_data', coalesce(s.effect_data, '{}'::jsonb),
+        'flags', coalesce(s.model_flags, '{}'::jsonb),
+        'tags', coalesce(s.tags, '[]'::jsonb),
+        'default_body_part_code', s.default_body_part_code,
+        'can_equip', s.can_equip,
+        'can_equip_to_body_part', s.can_equip_to_body_part,
         'notes', s.notes,
         'sort_order', s.sort_order,
         'created_at', s.created_at,
@@ -37267,9 +37286,15 @@ as $$
       jsonb_build_object(
         'id', id,
         'character_id', character_id,
+        'equipment_model_id', equipment_model_id,
+        'code', equipment_model_code,
+        'item_type', item_type,
         'custom_name', custom_name,
         'name', coalesce(nullif(trim(custom_name), ''), equipment_model_name),
         'is_equipped', is_equipped,
+        'equipped_body_part_id', equipped_body_part_id,
+        'equipped_body_part_code', coalesce(body_part_code, ''),
+        'equipped_body_part_name', body_part_name,
         'armor_value', armor_value,
         'armor_minor', armor_minor,
         'armor_max_minor', armor_max_minor,
@@ -37282,6 +37307,12 @@ as $$
         'current_charges', current_charges,
         'max_charges', max_charges,
         'data', data,
+        'effect_data', coalesce(effect_data, '{}'::jsonb),
+        'flags', coalesce(model_flags, '{}'::jsonb),
+        'tags', coalesce(tags, '[]'::jsonb),
+        'default_body_part_code', default_body_part_code,
+        'can_equip', can_equip,
+        'can_equip_to_body_part', can_equip_to_body_part,
         'notes', notes,
         'sort_order', sort_order,
         'created_at', created_at,
@@ -39312,7 +39343,7 @@ set
       then 1
     else armor_max_serious
   end
-where item_type in ('armor', 'shield', 'special_protection', 'exoskeleton', 'closed_suit');
+where item_type in ('armor', 'shield', 'special_protection');
 
 update public.odyssey_character_equipment_items e
 set
@@ -39340,7 +39371,7 @@ where exists (
   select 1
   from public.odyssey_equipment_model_defs m
   where m.id = e.equipment_model_id
-    and m.item_type in ('armor', 'shield', 'special_protection', 'exoskeleton', 'closed_suit')
+    and m.item_type in ('armor', 'shield', 'special_protection')
 );
 
 create or replace function public.get_character_armor_summary(
@@ -43086,9 +43117,7 @@ as $$
         'shield',
         'implant',
         'prosthetic',
-        'device',
-        'exoskeleton',
-        'closed_suit'
+        'device'
       )
   );
 $$;
@@ -43540,7 +43569,7 @@ begin
   into v_model
   from public.odyssey_equipment_model_defs m
   where m.id = p_equipment_model_id
-    and m.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit');
+    and m.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device');
 
   if v_model is null then
     return public.odyssey_creator_error(
@@ -43604,7 +43633,7 @@ as $$
         else '[]'::jsonb
       end
     ) value
-    where lower(trim(value)) in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit')
+    where lower(trim(value)) in ('armor', 'shield', 'implant', 'prosthetic', 'device')
   ),
   filtered as (
     select
@@ -43625,7 +43654,7 @@ as $$
     cross join search_input
     where (
       (not exists (select 1 from requested_item_types)
-        and model.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit'))
+        and model.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device'))
       or model.item_type in (select item_type from requested_item_types)
     )
       and (
@@ -43710,7 +43739,7 @@ declare
   v_link_sort integer := 0;
   v_link_data jsonb := '{}'::jsonb;
 begin
-  if v_item_type not in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit') then
+  if v_item_type not in ('armor', 'shield', 'implant', 'prosthetic', 'device') then
     return public.odyssey_creator_error(
       'VALIDATION_ERROR',
       'item_type is invalid.',
@@ -43778,7 +43807,7 @@ begin
     limit 1;
   end if;
 
-  if v_entity_id is not null and v_existing_item_type not in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit') then
+  if v_entity_id is not null and v_existing_item_type not in ('armor', 'shield', 'implant', 'prosthetic', 'device') then
     return public.odyssey_creator_error(
       'VALIDATION_ERROR',
       'The selected equipment model belongs to another module.',
@@ -43957,7 +43986,7 @@ begin
   into v_model
   from public.odyssey_equipment_model_defs model
   where model.id = p_equipment_model_id
-    and model.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit');
+    and model.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device');
 
   if not found then
     return public.odyssey_creator_error(
@@ -53997,6 +54026,58 @@ begin
 end;
 $;
 
+create or replace function public.odyssey_runtime_flatten_equipment_item(
+  p_item jsonb
+)
+returns jsonb
+language sql
+immutable
+as $$
+  with normalized as (
+    select
+      case when jsonb_typeof(p_item) = 'object' then p_item else '{}'::jsonb end as item_data
+  ),
+  split as (
+    select
+      item_data,
+      case when jsonb_typeof(item_data->'model') = 'object' then item_data->'model' else '{}'::jsonb end as model_data,
+      case when jsonb_typeof(item_data->'body_part') = 'object' then item_data->'body_part' else '{}'::jsonb end as body_part_data
+    from normalized
+  )
+  select item_data || jsonb_build_object(
+    'equipment_model_id', coalesce(nullif(item_data->>'equipment_model_id', ''), nullif(model_data->>'id', '')),
+    'code', coalesce(nullif(item_data->>'code', ''), nullif(model_data->>'code', '')),
+    'name', coalesce(nullif(item_data->>'name', ''), nullif(model_data->>'name', '')),
+    'item_type', coalesce(nullif(item_data->>'item_type', ''), nullif(model_data->>'item_type', '')),
+    'is_equipped', coalesce((item_data->>'is_equipped')::boolean, false),
+    'equipped_body_part_id', coalesce(nullif(item_data->>'equipped_body_part_id', ''), nullif(body_part_data->>'id', '')),
+    'equipped_body_part_code', coalesce(nullif(item_data->>'equipped_body_part_code', ''), nullif(body_part_data->>'code', ''), ''),
+    'equipped_body_part_name', coalesce(nullif(item_data->>'equipped_body_part_name', ''), nullif(body_part_data->>'name', '')),
+    'can_equip', coalesce((item_data->>'can_equip')::boolean, (model_data->>'can_equip')::boolean, true),
+    'can_equip_to_body_part', coalesce((item_data->>'can_equip_to_body_part')::boolean, (model_data->>'can_equip_to_body_part')::boolean, true),
+    'default_body_part_code', coalesce(nullif(item_data->>'default_body_part_code', ''), nullif(model_data->>'default_body_part_code', '')),
+    'flags',
+      case
+        when jsonb_typeof(item_data->'flags') = 'object' then item_data->'flags'
+        when jsonb_typeof(model_data->'flags') = 'object' then model_data->'flags'
+        else '{}'::jsonb
+      end,
+    'tags',
+      case
+        when jsonb_typeof(item_data->'tags') = 'array' then item_data->'tags'
+        when jsonb_typeof(model_data->'tags') = 'array' then model_data->'tags'
+        else '[]'::jsonb
+      end,
+    'effect_data',
+      case
+        when jsonb_typeof(item_data->'effect_data') = 'object' then item_data->'effect_data'
+        when jsonb_typeof(model_data->'effect_data') = 'object' then model_data->'effect_data'
+        else '{}'::jsonb
+      end
+  )
+  from split;
+$$;
+
 do $
 begin
   if to_regprocedure('public.get_character_runtime_bundle(jsonb)') is not null
@@ -54145,6 +54226,21 @@ begin
   end if;
   if v_wants_combat_session then
     v_sections := v_sections || jsonb_build_object('combat_session', coalesce(v_combat_session, 'null'::jsonb));
+  end if;
+
+  if v_sections ? 'equipment' and jsonb_typeof(v_sections->'equipment') = 'array' then
+    v_sections := jsonb_set(
+      v_sections,
+      '{equipment}',
+      coalesce(
+        (
+          select jsonb_agg(public.odyssey_runtime_flatten_equipment_item(item_value))
+          from jsonb_array_elements(v_sections->'equipment') as equipment_rows(item_value)
+        ),
+        '[]'::jsonb
+      ),
+      true
+    );
   end if;
 
   return v_bundle || jsonb_build_object('sections', v_sections);
@@ -55175,8 +55271,7 @@ begin
     );
   end if;
 
-  if not coalesce(v_model.can_equip_to_body_part, true)
-    and lower(trim(coalesce(v_model.item_type, ''))) not in ('exoskeleton', 'closed_suit') then
+  if not coalesce(v_model.can_equip_to_body_part, true) then
     return jsonb_build_object(
       'ok', false,
       'error', 'ITEM_CANNOT_EQUIP_TO_BODY_PART',
@@ -55226,9 +55321,7 @@ begin
   v_is_armor_protection := lower(trim(coalesce(v_model.item_type, ''))) in (
     'armor',
     'shield',
-    'special_protection',
-    'exoskeleton',
-    'closed_suit'
+    'special_protection'
   );
 
   if v_is_armor_protection then
@@ -55245,9 +55338,7 @@ begin
       and lower(trim(coalesce(occupied_model.item_type, ''))) in (
         'armor',
         'shield',
-        'special_protection',
-        'exoskeleton',
-        'closed_suit'
+        'special_protection'
       )
     order by e.updated_at desc nulls last, e.created_at desc, e.id
     for update of e

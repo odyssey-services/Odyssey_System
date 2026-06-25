@@ -16,6 +16,7 @@ declare
   v_modifier_rows jsonb := '[]'::jsonb;
   v_attribute_modifiers jsonb := '{}'::jsonb;
   v_skill_modifiers jsonb := '{}'::jsonb;
+  v_skill_minimums jsonb := '{}'::jsonb;
   v_attack_accuracy integer := 0;
   v_defense integer := 0;
   v_damage integer := 0;
@@ -150,6 +151,7 @@ begin
       aer.category,
       aer.stacking_mode,
       lower(coalesce(modifier.value->>'target', '')) as target,
+      lower(coalesce(modifier.value->>'mode', '')) as mode,
       nullif(trim(coalesce(modifier.value->>'attribute', '')), '') as attribute_ref,
       nullif(trim(coalesce(modifier.value->>'skill_code', modifier.value->>'skill', '')), '') as skill_ref,
       coalesce(nullif(trim(coalesce(modifier.value->>'value', '')), '')::integer, 0) as value
@@ -168,6 +170,7 @@ begin
       raw.category,
       raw.stacking_mode,
       raw.target,
+      raw.mode,
       case
         when raw.target = 'attribute' then coalesce(attribute_by_id.code, attribute_by_code.code, lower(raw.attribute_ref))
         else null
@@ -208,7 +211,18 @@ begin
       end as aggregation
     from modifier_resolved
     where target <> ''
+      and coalesce(mode, '') <> 'set_min'
     group by target, attribute_code, skill_code
+  ),
+  skill_minimum_summary as (
+    select
+      skill_code,
+      max(value) as minimum_value
+    from modifier_resolved
+    where target = 'skill'
+      and skill_code is not null
+      and mode = 'set_min'
+    group by skill_code
   ),
   flag_raw as (
     select
@@ -268,7 +282,8 @@ begin
             'attribute', attribute_code,
             'skill_code', skill_code,
             'value', resolved_value,
-            'aggregation', aggregation
+            'aggregation', aggregation,
+            'mode', aggregation
           )
           order by target, attribute_code, skill_code
         )
@@ -291,6 +306,13 @@ begin
         from modifier_summary
         where target = 'skill'
           and skill_code is not null
+      ),
+      '{}'::jsonb
+    ),
+    coalesce(
+      (
+        select jsonb_object_agg(skill_code, minimum_value)
+        from skill_minimum_summary
       ),
       '{}'::jsonb
     ),
@@ -318,6 +340,7 @@ begin
     v_modifier_rows,
     v_attribute_modifiers,
     v_skill_modifiers,
+    v_skill_minimums,
     v_attack_accuracy,
     v_defense,
     v_damage,
@@ -346,6 +369,7 @@ begin
       jsonb_build_object(
         'attributes', v_attribute_modifiers,
         'skills', v_skill_modifiers,
+        'skills_set_min', v_skill_minimums,
         'attack_accuracy', v_attack_accuracy,
         'defense', v_defense,
         'damage', v_damage,

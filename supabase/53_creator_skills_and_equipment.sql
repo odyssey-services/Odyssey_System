@@ -226,9 +226,7 @@ as $$
         'shield',
         'implant',
         'prosthetic',
-        'device',
-        'exoskeleton',
-        'closed_suit'
+        'device'
       )
   );
 $$;
@@ -680,7 +678,7 @@ begin
   into v_model
   from public.odyssey_equipment_model_defs m
   where m.id = p_equipment_model_id
-    and m.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit');
+    and m.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device');
 
   if v_model is null then
     return public.odyssey_creator_error(
@@ -744,7 +742,7 @@ as $$
         else '[]'::jsonb
       end
     ) value
-    where lower(trim(value)) in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit')
+    where lower(trim(value)) in ('armor', 'shield', 'implant', 'prosthetic', 'device')
   ),
   filtered as (
     select
@@ -765,7 +763,7 @@ as $$
     cross join search_input
     where (
       (not exists (select 1 from requested_item_types)
-        and model.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit'))
+        and model.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device'))
       or model.item_type in (select item_type from requested_item_types)
     )
       and (
@@ -850,7 +848,7 @@ declare
   v_link_sort integer := 0;
   v_link_data jsonb := '{}'::jsonb;
 begin
-  if v_item_type not in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit') then
+  if v_item_type not in ('armor', 'shield', 'implant', 'prosthetic', 'device') then
     return public.odyssey_creator_error(
       'VALIDATION_ERROR',
       'item_type is invalid.',
@@ -918,7 +916,7 @@ begin
     limit 1;
   end if;
 
-  if v_entity_id is not null and v_existing_item_type not in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit') then
+  if v_entity_id is not null and v_existing_item_type not in ('armor', 'shield', 'implant', 'prosthetic', 'device') then
     return public.odyssey_creator_error(
       'VALIDATION_ERROR',
       'The selected equipment model belongs to another module.',
@@ -1097,7 +1095,7 @@ begin
   into v_model
   from public.odyssey_equipment_model_defs model
   where model.id = p_equipment_model_id
-    and model.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device', 'exoskeleton', 'closed_suit');
+    and model.item_type in ('armor', 'shield', 'implant', 'prosthetic', 'device');
 
   if not found then
     return public.odyssey_creator_error(

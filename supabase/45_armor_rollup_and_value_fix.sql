@@ -12,7 +12,7 @@ set
       then 1
     else armor_max_serious
   end
-where item_type in ('armor', 'shield', 'special_protection', 'exoskeleton', 'closed_suit');
+where item_type in ('armor', 'shield', 'special_protection');
 
 update public.odyssey_character_equipment_items e
 set
@@ -40,7 +40,7 @@ where exists (
   select 1
   from public.odyssey_equipment_model_defs m
   where m.id = e.equipment_model_id
-    and m.item_type in ('armor', 'shield', 'special_protection', 'exoskeleton', 'closed_suit')
+    and m.item_type in ('armor', 'shield', 'special_protection')
 );
 
 create or replace function public.get_character_armor_summary(

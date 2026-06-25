@@ -116,7 +116,7 @@ Stage 4B adds Armor & Equipment Foundation:
 - armor penalties applied as Stage 4A active effects via `effect_key = armor_penalty`
 - item-based armor critical absorption inside `perform_attack(jsonb)`
 
-Stage 4B still does **not** implement final Owlbear UI, armor sets, full repair mechanics, automatic exoskeleton or closed-suit automation, full weapon feature toggles, full psionics casting flow, or mechs.
+Stage 4B still does **not** implement final Owlbear UI, armor sets, full repair mechanics, full weapon feature toggles, full psionics casting flow, or mechs.
 
 ## Stage 4C scope
 
@@ -532,7 +532,7 @@ Run these manual/backend checks after applying `32_magazine_ammo_management_fix.
 - Helpless handling in Stage 4A no longer auto-kills on any damage. Helpless targets in `none/light` armor defend with `defense_roll = 1`, and helpless targets in `medium/heavy/superheavy` armor take `-60` defense.
 - Stage 4B armor class uses only equipped item `armor_value`, not `natural_armor_value`. Body-part effective armor snapshots use `natural_armor_value + equipped item armor_value`, and depleted armor still keeps its `armor_value`.
 - Stage 4B seeds armor-class thresholds as `none=0`, `light=1..70`, `medium=71..140`, `heavy=141..260`, and `superheavy=261+`.
-- Stage 4B seeds starter armor models plus `basic_psionic_shield`, `basic_exoskeleton_frame`, and `basic_closed_suit`.
+- Stage 4B seeds starter armor models plus `basic_psionic_shield` and `basic_exoskeleton_frame`.
 - Stage 4B keeps helpless hit logic the same as Stage 4A. The new `head_protected`, `torso_protected`, `special_protection`, and `helpless_execution_protected` values are computed in armor summary, but they do not replace the Stage 4A `defense_roll = 1` / `-60 defense` behavior yet.
 - Stage 4C keeps weapon profiles strict in combat resolution: active attack profiles are currently expected to be either `ranged` or `melee`.
 - `plasma_edge` is a manual duration feature that grants `+10 damage` and `+20 armor_pierce` for the next 2 attack attempts with that weapon, then becomes inactive and requires manual reload.

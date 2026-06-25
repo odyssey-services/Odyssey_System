@@ -4741,8 +4741,7 @@ function getEffectiveAllowedBodyPartCodes(draft) {
   return selectedCodes.length ? selectedCodes : suggestAllowedBodyPartCodes(draft?.defaultBodyPartCode);
 }
 function shouldShowProtectionSlots(itemType) {
-  const type = String(itemType ?? "").trim();
-  return type !== "exoskeleton" && type !== "closed_suit";
+  return true;
 }
 function shouldEquipToBodyPart(itemType, allowedBodyPartCodes = [], defaultBodyPartCode = "") {
   const type = String(itemType ?? "").trim();
@@ -4755,7 +4754,10 @@ function shouldEquipToBodyPart(itemType, allowedBodyPartCodes = [], defaultBodyP
   return false;
 }
 function getEquipmentUiTypes(references) {
-  return (Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : []).filter((itemType) => String(itemType ?? "") !== "device");
+  return (Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : []).filter((itemType) => {
+    const normalized = String(itemType ?? "").trim();
+    return normalized !== "device";
+  });
 }
 function normalizeWeaponProfileDraft(profile) {
   const data = toPlainObject(profile?.data);

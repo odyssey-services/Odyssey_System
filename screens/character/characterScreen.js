@@ -54,7 +54,7 @@ const PART_ALIASES = {
 };
 const DOLL_SCALE = 1.7;
 const OBR_TIMEOUT = 1500;
-const ARMOR_TYPES = new Set(["armor", "shield", "special_protection", "exoskeleton", "closed_suit"]);
+const ARMOR_TYPES = new Set(["armor", "shield", "special_protection"]);
 const IMPLANT_TYPES = new Set(["implant", "prosthetic", "device"]);
 
 const esc = (v) => escapeHtml(v);
@@ -805,10 +805,6 @@ export function mountCharacterScreen({ root, runtime }) {
       });
     }
 
-    if (!allowedCodes.size && ["exoskeleton", "closed_suit"].includes(String(item?.model?.item_type || item?.item_type || "").toLowerCase())) {
-      allowedCodes.add("torso");
-    }
-
     return [...allowedCodes];
   }
   function compatibleBodyParts(item) {
@@ -1355,7 +1351,7 @@ export function mountCharacterScreen({ root, runtime }) {
       : hasCrit ? ["Damaged", ""]
       : hasSerious ? ["Damaged", ""]
       : (hasMinor ? ["Minor damage", ""] : ["OK", "good"]);
-    const slot = it.body_part?.name || it.model?.default_body_part_code || "-";
+    const slot = it.body_part?.name || it.equipped_body_part_name || it.default_body_part_code || it.model?.default_body_part_code || "-";
     return `<div class="cp-card" data-equip="${esc(it.id)}">
       <div class="cp-rowitem"><span><b>${esc(it.name)}</b> <span class="cp-pill">${esc(it.model?.item_type || "armor")}</span></span>
       <span class="cp-pill ${status[1]}">${status[0]}</span></div>
@@ -1388,10 +1384,10 @@ export function mountCharacterScreen({ root, runtime }) {
     const eff = it.model?.effect_data;
     const effTxt = eff && typeof eff === "object" ? (eff.summary || eff.description || "") : "";
     const active = it.is_equipped;
-    const slot = it.body_part?.name || it.model?.default_body_part_code || "-";
+    const slot = it.body_part?.name || it.equipped_body_part_name || it.default_body_part_code || it.model?.default_body_part_code || "-";
     const canInstall = isGM() && it.model?.can_equip !== false && it.model?.can_equip_to_body_part !== false;
     const slotOptions = equipmentSlotOptions(it);
-    const hasCompatiblePart = !slotOptions.includes("-- no compatible body parts --");
+    const hasCompatiblePart = compatibleBodyParts(it).length > 0;
     return `<div class="cp-card">
       <div class="cp-rowitem"><span><b>${esc(it.name)}</b> <span class="cp-pill">${esc(it.model?.item_type || "implant")}</span></span>
       <span class="cp-pill ${active ? "good" : ""}">${active ? "installed" : "inactive"}</span></div>
@@ -1759,11 +1755,10 @@ export function mountCharacterScreen({ root, runtime }) {
   // unequipped item can always be re-equipped.
   function equipmentSlotOptions(it) {
     const def = normalizeBodyPartCode(it?.default_body_part_code || it?.model?.default_body_part_code || "");
-    const allowed = collectAllowedBodyPartCodes(it);
     const lastId = state.lastSlot[it.id]; // previously-equipped part wins as default
     let parts = compatibleBodyParts(it);
 
-    if (!parts.length) return `<option value="">-- no compatible body parts --</option>`;
+    if (!parts.length) return `<option value="">This item has no configured installation slot.</option>`;
 
     // Pre-select: last slot > default > first available
     const selected = parts.find((b) => b.id === lastId) ||
