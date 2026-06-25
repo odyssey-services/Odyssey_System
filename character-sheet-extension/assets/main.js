@@ -4756,7 +4756,7 @@ function shouldEquipToBodyPart(itemType, allowedBodyPartCodes = [], defaultBodyP
 function getEquipmentUiTypes(references) {
   return (Array.isArray(references?.equipment_item_types) ? references.equipment_item_types : []).filter((itemType) => {
     const normalized = String(itemType ?? "").trim();
-    return normalized !== "device";
+    return normalized !== "device" && normalized !== "exoskeleton" && normalized !== "closed_suit";
   });
 }
 function normalizeWeaponProfileDraft(profile) {
