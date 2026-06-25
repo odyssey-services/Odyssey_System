@@ -1,0 +1,341 @@
+/*
+ * Combat HUD — Phase 2.1 layout & module styles.
+ *
+ * Bottom-left composition: a tall PlayerBlock, a responsive gap, then a compact
+ * combat rail (Gun · Skills · Target · Mod+Action). A thin top strip holds the
+ * drag grip + dev + LOG + collapse. Scoped under .ohud-hud; consumes semantic
+ * tokens from combatHudTokens.css. No raw colours from JS, no native scrollbar.
+ */
+
+/* ===================== Shell ===================== */
+.ohud-hud {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 6px 4px;
+  overflow: hidden;                 /* no native scrollbar — content fits */
+  color: var(--odyssey-hud-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  --ohud-gap: 200px;
+}
+.ohud-hud.is-dragging { user-select: none; }
+.ohud-hud.is-dragging, .ohud-hud.is-dragging * { cursor: grabbing !important; }
+
+/* ---- top control strip (thin) ---- */
+.ohud-controls {
+  display: flex; align-items: center; gap: 8px;
+  height: 16px; flex: 0 0 16px; padding: 0 2px;
+}
+.ohud-grip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 14px; padding: 0; cursor: grab; touch-action: none;
+  color: var(--odyssey-hud-muted);
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);
+  border-radius: 5px;
+}
+.ohud-grip:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }
+.ohud-fallback {
+  font-size: 9px; font-weight: 700; color: var(--odyssey-hud-warning);
+  border: 1px dashed var(--odyssey-hud-warning); border-radius: 5px; padding: 0 6px;
+}
+.ohud-controls-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.ohud-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 14px; padding: 0 2px; cursor: pointer;
+  color: var(--odyssey-hud-muted);
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);
+  border-radius: 5px;
+}
+.ohud-icon-btn:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }
+.ohud-icon-btn.is-on { color: var(--odyssey-cyan); border-color: var(--odyssey-cyan); }
+
+.ohud-dev { display: inline-flex; align-items: center; gap: 6px; }
+.ohud-dev.is-open .ohud-icon-btn { color: var(--odyssey-purple); border-color: var(--odyssey-purple); }
+.ohud-dev-strip { display: inline-flex; align-items: center; gap: 5px; }
+.ohud-select {
+  font: inherit; font-size: 10px; color: var(--odyssey-hud-text);
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);
+  border-radius: 5px; padding: 1px 4px; cursor: pointer;
+}
+.ohud-chip {
+  font: inherit; font-size: 10px; color: var(--odyssey-hud-muted);
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);
+  border-radius: 10px; padding: 1px 8px; cursor: pointer;
+}
+.ohud-chip.is-on { background: var(--odyssey-purple-strong); border-color: var(--odyssey-purple-strong); color: #fff; }
+
+/* ===================== Main composition ===================== */
+.ohud-main {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; align-items: flex-end; gap: var(--ohud-gap);
+}
+.ohud-main--state { align-items: stretch; }
+.ohud-rail {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: flex-end; gap: 10px;
+}
+
+/* ===================== Panel frame ===================== */
+.ohud-panel {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0;
+  background: var(--odyssey-hud-panel);
+  border: 1px solid var(--odyssey-hud-border);
+  border-radius: var(--odyssey-hud-radius);
+  box-shadow: var(--odyssey-hud-shadow-soft);
+  padding: 6px 8px;
+}
+.ohud-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 11px; }
+.ohud-panel-label { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; color: var(--odyssey-hud-dim); }
+.ohud-panel-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ohud-muted-fill { color: var(--odyssey-hud-dim); font-size: 11px; display: grid; place-items: center; flex: 1; }
+
+/* block footprints (desktop) */
+.ohud-panel--player { flex: 0 0 144px; height: 146px; }
+.ohud-panel--gun { flex: 0 0 240px; height: 95px; }
+.ohud-panel--skills { flex: 1 1 auto; min-width: 280px; height: 95px; }
+.ohud-panel--target { flex: 0 0 100px; height: 95px; }
+.ohud-panel--modact { flex: 0 0 126px; height: 95px; }
+
+/* accent text colours */
+.ohud-accent--attack { color: var(--odyssey-hud-attack); }
+.ohud-accent--psionic { color: var(--odyssey-hud-psionic); }
+.ohud-accent--implant { color: var(--odyssey-hud-implant); }
+.ohud-accent--intervention { color: var(--odyssey-hud-intervention); }
+.ohud-accent--positive { color: var(--odyssey-hud-positive); }
+.ohud-accent--negative { color: var(--odyssey-hud-negative); }
+.ohud-accent--neutral { color: var(--odyssey-hud-neutral); }
+
+/* ===================== Body zones (silhouettes) ===================== */
+.ohud-silhouette { display: block; }
+.ohud-zone { transition: fill 120ms ease; }
+.ohud-zone--healthy { fill: var(--odyssey-hud-zone-healthy); }
+.ohud-zone--wounded { fill: var(--odyssey-hud-zone-wounded); }
+.ohud-zone--serious { fill: var(--odyssey-hud-zone-serious); }
+.ohud-zone--critical { fill: var(--odyssey-hud-zone-critical); }
+.ohud-zone--disabled { fill: var(--odyssey-hud-zone-disabled); }
+.ohud-zone.is-target { stroke: var(--odyssey-cyan); stroke-width: 2.5; }
+
+/* ===================== Player block ===================== */
+.ohud-turn {
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.4px; padding: 1px 6px; border-radius: 7px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.ohud-turn--active { color: #06210f; background: var(--odyssey-hud-state-active); }
+.ohud-turn--waiting { color: #2a1c00; background: var(--odyssey-hud-warning); }
+.ohud-turn--gm { color: #fff; background: var(--odyssey-purple-strong); }
+.ohud-turn--idle { color: var(--odyssey-hud-muted); border-color: var(--odyssey-hud-border); }
+
+.ohud-player-grid { display: grid; grid-template-columns: 46px 1fr; gap: 7px; align-items: center; flex: 1; min-height: 0; }
+.ohud-figure { position: relative; width: 46px; height: 100%; min-height: 50px; display: grid; place-items: center; }
+.ohud-figure-svg { width: 100%; height: 100%; }
+.ohud-figure-shield {
+  position: absolute; right: -4px; bottom: 0; width: 16px; height: 18px;
+  color: var(--odyssey-hud-shield); opacity: 0.85;
+}
+.ohud-figure--ghost { opacity: 0.4; }
+
+.ohud-player-stats { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ohud-player-name {
+  font-size: 12px; font-weight: 700; color: var(--odyssey-hud-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ohud-res { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 5px; }
+.ohud-res-label { font-size: 8px; font-weight: 700; color: var(--odyssey-hud-dim); }
+.ohud-res-track { height: 6px; border-radius: 3px; background: var(--odyssey-line-soft); overflow: hidden; }
+.ohud-res-fill { display: block; height: 100%; border-radius: 3px; }
+.ohud-res--shield .ohud-res-fill { background: var(--odyssey-hud-shield); }
+.ohud-res--psi .ohud-res-fill { background: var(--odyssey-hud-psi); }
+.ohud-res-num { font-size: 10px; font-weight: 700; color: var(--odyssey-hud-text); font-variant-numeric: tabular-nums; }
+.ohud-res-max { color: var(--odyssey-hud-dim); font-weight: 600; }
+
+.ohud-pips { display: flex; gap: 4px; }
+.ohud-pip { font-size: 8px; font-weight: 800; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--odyssey-hud-border); }
+.ohud-pip.is-on { color: #06210f; background: var(--odyssey-hud-state-active); border-color: transparent; }
+.ohud-pip.is-off { color: var(--odyssey-hud-dim); }
+
+.ohud-pilot { display: flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 7px;
+  background: var(--odyssey-purple-panel); border: 1px solid rgba(167, 139, 250, 0.4); }
+.ohud-pilot-tag { font-size: 7.5px; font-weight: 800; letter-spacing: 0.8px; color: var(--odyssey-purple); }
+.ohud-pilot-name { font-size: 10px; color: var(--odyssey-hud-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ohud-pilot-psi { margin-left: auto; font-size: 9px; color: var(--odyssey-purple); }
+
+.ohud-statuses { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.ohud-chip-status {
+  display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
+  font-size: 8.5px; padding: 1px 5px 1px 2px; border-radius: 8px;
+  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base); color: var(--odyssey-hud-muted);
+}
+.ohud-chip-dot { width: 12px; height: 12px; border-radius: 50%; display: grid; place-items: center; font-size: 7px; font-weight: 800; color: #0a0e18; }
+.ohud-chip-status--positive .ohud-chip-dot { background: var(--odyssey-hud-positive); }
+.ohud-chip-status--negative .ohud-chip-dot { background: var(--odyssey-hud-negative); }
+.ohud-chip-status--neutral .ohud-chip-dot { background: var(--odyssey-hud-neutral); }
+.ohud-chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ohud-chip-status--more { color: var(--odyssey-hud-dim); padding: 1px 6px; font-weight: 700; }
+
+/* ===================== Gun block ===================== */
+.ohud-gun { display: grid; grid-template-columns: 1fr 70px; gap: 7px; flex: 1; min-height: 0; }
+.ohud-gun.is-disabled { opacity: 0.55; }
+.ohud-gun-main {
+  position: relative; border-radius: var(--odyssey-hud-radius-inner);
+  border: 1.5px solid var(--odyssey-hud-border-strong);
+  background: var(--odyssey-bg-deep); min-width: 0; overflow: hidden;
+}
+.ohud-gun-name { position: absolute; top: 4px; left: 8px; font-size: 9px; color: var(--odyssey-hud-muted); }
+.ohud-gun-caret { position: absolute; top: 3px; right: 5px; color: var(--odyssey-hud-muted); display: inline-flex; }
+.ohud-gun-silhouette { position: absolute; inset: 13px 8px 10px; color: var(--odyssey-hud-weapon); display: block; }
+.ohud-gun-silhouette svg { width: 100%; height: 100%; }
+.ohud-firemode {
+  position: absolute; right: 6px; bottom: 5px; display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 6px 1px 2px; border-radius: 10px;
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);
+}
+.ohud-firemode-knob { width: 9px; height: 9px; border-radius: 50%; background: var(--odyssey-hud-muted); }
+.ohud-firemode-letter { font-size: 9px; font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-gun-secondary { position: absolute; left: 6px; bottom: 5px; font-size: 8px; font-weight: 700; color: var(--odyssey-hud-muted); border: 1px solid var(--odyssey-hud-border); border-radius: 6px; padding: 0 5px; }
+
+.ohud-gun-side { display: grid; grid-template-rows: 1fr 1fr; gap: 6px; min-width: 0; }
+.ohud-mag-card { position: relative; display: flex; align-items: center; gap: 3px; border-radius: var(--odyssey-hud-radius-inner);
+  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base); padding: 2px 5px; }
+.ohud-mag-icon { width: 13px; height: 20px; color: var(--odyssey-steel); display: inline-flex; }
+.ohud-mag-icon svg { width: 100%; height: 100%; }
+.ohud-mag-caret { position: absolute; top: 2px; right: 3px; color: var(--odyssey-hud-muted); }
+.ohud-mag-type { margin-left: auto; font-size: 9px; font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-ammo-card { display: flex; flex-direction: column; justify-content: center; border-radius: var(--odyssey-hud-radius-inner);
+  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base); padding: 2px 6px; }
+.ohud-ammo-head { display: flex; align-items: center; justify-content: space-between; }
+.ohud-ammo-label { font-size: 8px; letter-spacing: 0.5px; color: var(--odyssey-hud-dim); }
+.ohud-ammo-reload { color: var(--odyssey-hud-muted); display: inline-flex; }
+.ohud-ammo-reload.is-off { opacity: 0.35; }
+.ohud-ammo-count { font-weight: 800; line-height: 1; color: var(--odyssey-hud-text); font-variant-numeric: tabular-nums; }
+.ohud-ammo-cur { font-size: clamp(22px, 2.2vw, 28px); }
+.ohud-ammo-max { font-size: 11px; color: var(--odyssey-hud-dim); }
+.ohud-ammo-count--empty .ohud-ammo-cur { color: var(--odyssey-hud-negative); }
+
+/* ===================== Skill block ===================== */
+.ohud-panel--skills .ohud-panel-body { justify-content: flex-end; }
+.ohud-skill-groups { display: flex; align-items: flex-end; gap: 14px; flex-wrap: nowrap; overflow: hidden; }
+.ohud-skill-group { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ohud-group-cap { font-size: 10px; font-weight: 700; }
+.ohud-group-tiles { display: flex; gap: 6px; }
+.ohud-slot {
+  position: relative; width: clamp(44px, 3.4vw, 54px); height: clamp(44px, 3.4vw, 54px);
+  border-radius: var(--odyssey-hud-radius-inner);
+  border: 1.5px solid var(--odyssey-hud-border);
+  background: var(--odyssey-bg-deep);
+  display: grid; place-items: center; color: var(--odyssey-hud-neutral);
+}
+.ohud-slot-icon { width: 58%; height: 58%; display: inline-flex; }
+.ohud-slot-icon svg { width: 100%; height: 100%; }
+.ohud-accent--attack.ohud-slot { border-color: var(--odyssey-hud-attack); color: var(--odyssey-hud-attack); }
+.ohud-accent--psionic.ohud-slot { border-color: var(--odyssey-purple); color: var(--odyssey-purple); }
+.ohud-accent--implant.ohud-slot { border-color: var(--odyssey-cyan); color: var(--odyssey-cyan); }
+.ohud-accent--positive.ohud-slot { border-color: var(--odyssey-green); color: var(--odyssey-green); }
+.ohud-accent--neutral.ohud-slot { border-color: var(--odyssey-hud-border-strong); color: var(--odyssey-hud-neutral); }
+.ohud-slot.is-disabled { opacity: 0.42; filter: grayscale(0.4); }
+.ohud-slot.is-selected { box-shadow: 0 0 0 2px var(--odyssey-cyan); }
+.ohud-slot.is-toggled { background: rgba(167, 139, 250, 0.16); }
+.ohud-slot-cost { position: absolute; left: 3px; bottom: 2px; font-size: 8px; font-weight: 800; color: var(--odyssey-hud-dim); }
+.ohud-slot-res { position: absolute; right: 3px; bottom: 2px; font-size: 8px; font-weight: 800; color: var(--odyssey-purple); }
+.ohud-slot-cd { position: absolute; top: 2px; right: 3px; font-size: 9px; font-weight: 800; color: var(--odyssey-hud-warning); }
+.ohud-slot-toggle { position: absolute; top: 3px; left: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--odyssey-purple); }
+
+/* ===================== Target block ===================== */
+.ohud-target { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; min-height: 0; justify-content: center; }
+.ohud-target .ohud-figure { width: 42px; }
+.ohud-target-meta { text-align: center; min-width: 0; width: 100%; }
+.ohud-target-name { font-size: 10px; font-weight: 700; color: var(--odyssey-hud-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ohud-target-zone { display: inline-block; margin-top: 1px; font-size: 8px; font-weight: 800; letter-spacing: 0.5px;
+  color: var(--odyssey-cyan); border: 1px solid rgba(52, 225, 214, 0.4); border-radius: 6px; padding: 0 6px; }
+.ohud-target.is-empty .ohud-target-hint { font-size: 9px; font-weight: 700; color: var(--odyssey-hud-dim); }
+
+/* ===================== Mod + Action column ===================== */
+.ohud-panel--modact { gap: 3px; }
+.ohud-mods { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.ohud-mod {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px;
+  height: 17px; font-size: 9px; padding: 0 6px; border-radius: var(--odyssey-hud-radius-chip);
+  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base); color: var(--odyssey-hud-muted);
+}
+.ohud-mod-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ohud-mod-val { font-weight: 800; flex: 0 0 auto; }
+.ohud-mod--positive { border-color: rgba(74, 222, 128, 0.55); color: var(--odyssey-green); }
+.ohud-mod--negative { border-color: rgba(255, 92, 108, 0.6); color: var(--odyssey-red); }
+.ohud-mod--intervention { border-color: rgba(255, 194, 75, 0.6); color: var(--odyssey-yellow); }
+.ohud-mod--narrative { border-color: rgba(167, 139, 250, 0.55); color: var(--odyssey-purple); }
+.ohud-mod.is-selected { box-shadow: 0 0 0 1.5px var(--odyssey-cyan); }
+.ohud-mod.is-passive { opacity: 0.85; }
+
+.ohud-action { display: flex; align-items: center; gap: 6px; }
+.ohud-action-econ { display: flex; gap: 3px; }
+.ohud-econ-pip { font-size: 7.5px; font-weight: 800; padding: 0 4px; border-radius: 5px; color: var(--odyssey-hud-dim); border: 1px solid var(--odyssey-hud-border); }
+.ohud-econ-pip.is-spend { color: var(--odyssey-cyan); border-color: var(--odyssey-cyan); }
+.ohud-action-btn {
+  flex: 1 1 auto; height: 22px; cursor: pointer; font: inherit;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+  border-radius: 7px; border: 1.5px solid var(--odyssey-purple);
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.22), rgba(38, 33, 92, 0.42));
+  color: var(--odyssey-purple);
+}
+.ohud-action-btn.is-ready:hover { background: rgba(139, 92, 246, 0.34); color: #fff; }
+.ohud-action-btn.is-disabled { cursor: not-allowed; border-color: var(--odyssey-hud-border); background: var(--odyssey-panel-base); color: var(--odyssey-hud-dim); }
+
+/* ===================== Floating Battle Log ===================== */
+.ohud-log-float { position: absolute; top: 18px; right: 6px; z-index: 8; width: 250px; max-width: calc(100% - 12px); }
+.ohud-log-panel { max-height: 128px; box-shadow: var(--odyssey-hud-shadow); }
+.ohud-log-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex: 1; min-height: 0; }
+.ohud-log-list::-webkit-scrollbar { width: 5px; }
+.ohud-log-list::-webkit-scrollbar-thumb { background: var(--odyssey-line); border-radius: 3px; }
+.ohud-log-row { font-size: 10px; line-height: 1.25; color: var(--odyssey-hud-muted); display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; padding: 2px 4px; border-radius: 5px; background: var(--odyssey-bg-deep); }
+.ohud-log-row--system { color: var(--odyssey-hud-dim); background: transparent; font-style: italic; }
+.ohud-log-row--narr { color: var(--odyssey-purple); background: transparent; font-style: italic; }
+.ohud-log-actor { font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-log-act { color: var(--odyssey-hud-muted); }
+.ohud-log-arrow { color: var(--odyssey-hud-dim); }
+.ohud-log-target { color: var(--odyssey-hud-text); }
+.ohud-log-delta { margin-left: auto; font-weight: 700; font-size: 9.5px; }
+.ohud-log-delta--hit { color: var(--odyssey-green); }
+.ohud-log-delta--miss { color: var(--odyssey-hud-dim); }
+.ohud-log-delta--neutral { color: var(--odyssey-hud-muted); }
+.ohud-log-empty { font-size: 10px; color: var(--odyssey-hud-dim); display: grid; place-items: center; flex: 1; padding: 8px; }
+
+/* ===================== Empty / error / loading ===================== */
+.ohud-state-wrap { flex: 1 1 auto; display: grid; place-items: center; background: var(--odyssey-hud-panel);
+  border: 1px solid var(--odyssey-hud-border); border-radius: var(--odyssey-hud-radius); box-shadow: var(--odyssey-hud-shadow-soft); }
+.ohud-empty { text-align: center; padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.ohud-empty-mark { color: var(--odyssey-purple); opacity: 0.8; }
+.ohud-empty-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: var(--odyssey-hud-text); }
+.ohud-empty-hint { font-size: 11px; color: var(--odyssey-hud-muted); max-width: 420px; }
+.ohud-empty--error .ohud-empty-title { color: var(--odyssey-hud-negative); }
+
+/* ===================== Toast ===================== */
+.ohud-toast { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
+  font-size: 11px; color: var(--odyssey-hud-text); background: var(--odyssey-panel-base);
+  border: 1px solid var(--odyssey-hud-border-strong); border-radius: 8px; padding: 4px 11px;
+  box-shadow: var(--odyssey-hud-shadow); z-index: 12; }
+.ohud-toast[hidden] { display: none; }
+
+/* ===================== Tooltip ===================== */
+.ohud-tooltip { position: fixed; z-index: 50; pointer-events: none; max-width: 240px;
+  background: var(--odyssey-bg-deep); border: 1px solid var(--odyssey-hud-border-strong);
+  border-radius: 8px; padding: 6px 9px; box-shadow: var(--odyssey-hud-shadow); }
+.ohud-tooltip[hidden] { display: none; }
+.ohud-tooltip-title { font-size: 11px; font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-tooltip-line { font-size: 10px; color: var(--odyssey-hud-muted); margin-top: 2px; }
+
+/* ===================== Compact / mini (two rows) ===================== */
+.ohud-hud[data-mode="compact"] .ohud-main,
+.ohud-hud[data-mode="mini"] .ohud-main {
+  flex-direction: column; align-items: stretch; gap: 8px;
+}
+.ohud-hud[data-mode="compact"] .ohud-panel--player,
+.ohud-hud[data-mode="mini"] .ohud-panel--player { flex: 0 0 auto; height: auto; width: 100%; }
+.ohud-hud[data-mode="compact"] .ohud-rail,
+.ohud-hud[data-mode="mini"] .ohud-rail { flex-wrap: wrap; align-items: stretch; }
+.ohud-hud[data-mode="compact"] .ohud-panel--skills,
+.ohud-hud[data-mode="mini"] .ohud-panel--skills { flex: 1 1 100%; min-width: 0; }
+.ohud-hud[data-mode="mini"] .ohud-res-label { display: none; }
+.ohud-hud[data-mode="mini"] .ohud-fallback { display: none; }

@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "test:hud": "node scripts/combat-hud-phase0.test.mjs && node scripts/combat-hud-phase1a.test.mjs && node scripts/combat-hud-phase2.test.mjs && node scripts/combat-hud-phase21.test.mjs"
   },
   "dependencies": {
     "@owlbear-rodeo/sdk": "3.1.0",

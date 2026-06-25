@@ -1,0 +1,52 @@
+/*
+ * Combat HUD overlay — frame + collapsed pill (Phase 2.1).
+ *
+ * The popover iframe is sized tightly to the HUD by the background controller,
+ * so the HUD fills it. NOTHING here may scroll vertically — overflow:hidden on
+ * every level kills the native scrollbar seen in earlier builds. The only
+ * permitted scroll is inside the expanded Battle Log list (see layout CSS).
+ */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;            /* no native scrollbar */
+}
+body {
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--odyssey-hud-text, #eaf0ff);
+}
+
+#root { height: 100%; overflow: hidden; }
+
+/* The popover rect IS the HUD footprint; the HUD fills it. */
+.ohud-overlay {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+/* ===================== Collapsed pill ===================== */
+.ohud-overlay.is-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ohud-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+  color: var(--odyssey-hud-text);
+  background: var(--odyssey-hud-bg); border: 1px solid var(--odyssey-hud-border-strong);
+  border-radius: 20px; box-shadow: var(--odyssey-hud-shadow);
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+}
+.ohud-pill:hover { border-color: var(--odyssey-purple); }
+.ohud-pill .ohud-mark { color: var(--odyssey-purple); display: inline-flex; }
+.ohud-pill-label { line-height: 1; }

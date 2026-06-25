@@ -1,8 +1,10 @@
 import { getPlayerInfo, getRoomSceneContext, waitForObrReady } from "./bridge/obrBridge.js";
 import { hasSupabaseSettings, loadRoomSupabaseSettings } from "./bridge/settingsBridge.js";
+import { setupCombatHudOverlay } from "./hud/overlay/combatHudOverlayController.js";
 import { addDiagnosticEntry } from "./utils/diagnostics.js";
 
 async function bootstrapBackgroundShell() {
+  setupCombatHudOverlay();
   await waitForObrReady();
   const [player, roomContext, settings] = await Promise.all([
     getPlayerInfo(),

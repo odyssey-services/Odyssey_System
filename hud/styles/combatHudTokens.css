@@ -1,0 +1,89 @@
+/*
+ * Combat HUD — design tokens (Phase 0, palette refreshed for Phase 2).
+ *
+ * Semantic custom properties ONLY. No layout, no component rules — those live
+ * in hud/components/combatHudLayout.css and hud/overlay/combatHudOverlay.css.
+ * JavaScript must never hard-code colours; it stores semantic state names
+ * (see hud/models/combatHudContracts.js) and the UI maps state → token here.
+ *
+ * Scope: variables are declared on a `.odyssey-hud` root class so the HUD's
+ * theme cannot leak into the existing popup screens (Resolve Attack, etc.).
+ *
+ * The palette follows the approved Phase 2 references: a dark sci-fi MMORPG
+ * panel — deep navy surfaces, thin blue-grey borders, bright colours reserved
+ * for game-state accents only.
+ */
+
+.odyssey-hud {
+  /* ---- Raw palette (approved Phase 2 reference) ---- */
+  --odyssey-bg-deep: #0e1320;
+  --odyssey-panel-base: #16203a;
+  --odyssey-panel-raised: #1a2236;
+  --odyssey-panel-hover: #232e47;
+  --odyssey-line: #3a4a66;
+  --odyssey-line-soft: #283448;
+
+  --odyssey-ink: #eaf0ff;
+  --odyssey-ink-muted: #9fb0d0;
+  --odyssey-ink-dim: #6b7a9c;
+
+  --odyssey-purple: #a78bfa;
+  --odyssey-purple-strong: #8b5cf6;
+  --odyssey-purple-panel: #26215c;
+  --odyssey-cyan: #34e1d6;
+  --odyssey-yellow: #ffc24b;
+  --odyssey-orange: #f59042;
+  --odyssey-red: #ff5c6c;
+  --odyssey-green: #4ade80;
+  --odyssey-steel: #aecbf0;     /* light cool blue — weapon / vehicle silhouettes */
+
+  /* ---- Semantic surfaces (names kept stable since Phase 0/1A) ---- */
+  --odyssey-hud-bg: rgba(14, 19, 32, 0.94);
+  --odyssey-hud-panel: rgba(22, 32, 58, 0.96);
+  --odyssey-hud-panel-raised: rgba(26, 34, 54, 0.98);
+  --odyssey-hud-panel-hover: #232e47;
+  --odyssey-hud-border: rgba(120, 142, 184, 0.30);
+  --odyssey-hud-border-strong: rgba(150, 172, 214, 0.55);
+
+  /* ---- Text ---- */
+  --odyssey-hud-text: var(--odyssey-ink);
+  --odyssey-hud-muted: var(--odyssey-ink-muted);
+  --odyssey-hud-dim: var(--odyssey-ink-dim);
+
+  /* ---- Generic valence ---- */
+  --odyssey-hud-positive: var(--odyssey-green);
+  --odyssey-hud-negative: var(--odyssey-red);
+  --odyssey-hud-warning: var(--odyssey-yellow);
+
+  /* ---- Action / ability semantics (spec colour language) ---- */
+  --odyssey-hud-attack: var(--odyssey-red);          /* red — attacking / hostile     */
+  --odyssey-hud-neutral: #8593b0;                    /* cool grey — defensive / util  */
+  --odyssey-hud-psionic: var(--odyssey-purple);      /* purple — psionics             */
+  --odyssey-hud-implant: var(--odyssey-cyan);        /* cyan — implants / tech        */
+  --odyssey-hud-intervention: var(--odyssey-yellow); /* gold — intervention           */
+
+  /* ---- State / availability ---- */
+  --odyssey-hud-state-active: var(--odyssey-green);
+  --odyssey-hud-state-unavailable: var(--odyssey-red);
+  --odyssey-hud-disabled: rgba(159, 176, 208, 0.22);
+
+  /* ---- Body zone condition scale (healthy → disabled) ---- */
+  /* healthy is a MUTED COOL tone (not green) per the spec. */
+  --odyssey-hud-zone-healthy: #6e7da0;
+  --odyssey-hud-zone-wounded: var(--odyssey-yellow);
+  --odyssey-hud-zone-serious: var(--odyssey-orange);
+  --odyssey-hud-zone-critical: var(--odyssey-red);
+  --odyssey-hud-zone-disabled: #39414f;
+
+  /* ---- Resources ---- */
+  --odyssey-hud-shield: #5b9be0;
+  --odyssey-hud-psi: var(--odyssey-purple);
+  --odyssey-hud-weapon: var(--odyssey-steel);
+
+  /* ---- Elevation & geometry ---- */
+  --odyssey-hud-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --odyssey-hud-shadow-soft: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --odyssey-hud-radius: 14px;       /* outer panels */
+  --odyssey-hud-radius-inner: 10px; /* nested cards / tiles */
+  --odyssey-hud-radius-chip: 9px;
+}

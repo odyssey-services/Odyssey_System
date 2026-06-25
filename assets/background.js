@@ -3581,6 +3581,263 @@ async function loadRoomSupabaseSettings() {
   return normalizeSupabaseSettings(metadata?.[ROOM_SUPABASE_SETTINGS_KEY]);
 }
 
+// hud/overlay/hudPlacement.js
+var SAFE_MARGIN = 10;
+var DEFAULT_PLACEMENT = Object.freeze({ mode: "default", x: 0, y: 1 });
+function clamp01(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return v;
+}
+function clampPlacement(raw) {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_PLACEMENT };
+  const mode = raw.mode === "custom" ? "custom" : "default";
+  if (mode === "default") return { ...DEFAULT_PLACEMENT };
+  return { mode: "custom", x: clamp01(raw.x), y: clamp01(raw.y) };
+}
+function availableTravel({ vw, vh, hudW, hudH, safeMargin = SAFE_MARGIN }) {
+  return {
+    width: Math.max(0, (Number(vw) || 0) - (Number(hudW) || 0) - 2 * safeMargin),
+    height: Math.max(0, (Number(vh) || 0) - (Number(hudH) || 0) - 2 * safeMargin)
+  };
+}
+function placementToPixels(placement, dims) {
+  const p = clampPlacement(placement);
+  const safeMargin = dims.safeMargin ?? SAFE_MARGIN;
+  const { width: availW, height: availH } = availableTravel({ ...dims, safeMargin });
+  return {
+    left: Math.round(safeMargin + p.x * availW),
+    top: Math.round(safeMargin + p.y * availH)
+  };
+}
+function serializePlacement(placement) {
+  return JSON.stringify(clampPlacement(placement));
+}
+
+// hud/overlay/overlayConstants.js
+var OVERLAY_POPOVER_ID = "com.odyssey.combat-hud/overlay";
+var OVERLAY_HTML = "combat-hud-overlay.html";
+var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
+var PLAYER_W = 144;
+var PLAYER_HEIGHT = 146;
+var RAIL_GAP = 10;
+var GUN_W = 240;
+var SKILLS_W = 430;
+var TARGET_W = 100;
+var MODACT_W = 126;
+var RAIL_W = GUN_W + SKILLS_W + TARGET_W + MODACT_W + RAIL_GAP * 3;
+var HUD_PAD_X = 16;
+var HUD_TOP_STRIP = 16;
+var HUD_GAP_MIN = 110;
+var HUD_GAP_MAX = 235;
+var EXPANDED_HEIGHT = HUD_TOP_STRIP + PLAYER_HEIGHT + 4;
+var COMPACT_EXPANDED_HEIGHT = 300;
+var EXPANDED_MAX_WIDTH = PLAYER_W + HUD_GAP_MAX + RAIL_W + HUD_PAD_X;
+var COLLAPSED_WIDTH = 150;
+var COLLAPSED_HEIGHT = 44;
+var WIDE_BREAKPOINT = 1280;
+var MEDIUM_BREAKPOINT = 960;
+var MINI_BREAKPOINT = 620;
+function resolveLayoutMode(vw) {
+  const w = Math.max(0, Number(vw) || 0);
+  if (w >= WIDE_BREAKPOINT) return "wide";
+  if (w >= MEDIUM_BREAKPOINT) return "medium";
+  if (w >= MINI_BREAKPOINT) return "compact";
+  return "mini";
+}
+function isTwoRowMode(mode) {
+  return mode === "compact" || mode === "mini";
+}
+function computeHudGap(vw) {
+  const v = Math.max(0, Number(vw) || 0);
+  return Math.round(Math.min(HUD_GAP_MAX, Math.max(HUD_GAP_MIN, v * 0.12)));
+}
+function computeContentWidth(vw) {
+  return PLAYER_W + computeHudGap(vw) + RAIL_W + HUD_PAD_X;
+}
+function computeExpandedWidth(vw) {
+  const avail = Math.max(0, (Number(vw) || 0) - 2 * SAFE_MARGIN);
+  if (isTwoRowMode(resolveLayoutMode(vw))) return avail;
+  return Math.max(0, Math.min(computeContentWidth(vw), avail));
+}
+function computeExpandedHeight(vw) {
+  return isTwoRowMode(resolveLayoutMode(vw)) ? COMPACT_EXPANDED_HEIGHT : EXPANDED_HEIGHT;
+}
+function computeOverlaySize(collapsed, vw) {
+  if (collapsed) return { width: COLLAPSED_WIDTH, height: COLLAPSED_HEIGHT };
+  return { width: computeExpandedWidth(vw), height: computeExpandedHeight(vw) };
+}
+var ANCHOR_ORIGIN = Object.freeze({ horizontal: "LEFT", vertical: "BOTTOM" });
+var TRANSFORM_ORIGIN = Object.freeze({ horizontal: "LEFT", vertical: "BOTTOM" });
+function computeAnchorPosition({ vw, vh, width, height, placement }) {
+  const px = placementToPixels(placement, { vw, vh, hudW: width, hudH: height });
+  return { left: px.left, top: px.top + height };
+}
+var DEFAULT_HUD_UI_STATE = Object.freeze({
+  isHudCollapsed: false,
+  mockScenarioId: "A",
+  viewerRole: "player",
+  selectedTokenId: null,
+  hudPlacement: { ...DEFAULT_PLACEMENT }
+});
+var HUD_UI_PARAM_KEYS = Object.freeze({
+  collapsed: "collapsed",
+  scenario: "scenario",
+  role: "role",
+  token: "token",
+  placement: "placement"
+});
+var HUD_RENDER_PARAM_KEYS = Object.freeze({ vw: "vw", vh: "vh", gap: "gap" });
+function serializeHudUiState(ui) {
+  const src = ui && typeof ui === "object" ? ui : {};
+  const params = new URLSearchParams();
+  params.set(HUD_UI_PARAM_KEYS.collapsed, src.isHudCollapsed ? "1" : "0");
+  params.set(HUD_UI_PARAM_KEYS.scenario, src.mockScenarioId != null ? String(src.mockScenarioId) : "");
+  params.set(HUD_UI_PARAM_KEYS.role, src.viewerRole === "gm" ? "gm" : "player");
+  params.set(HUD_UI_PARAM_KEYS.token, src.selectedTokenId == null ? "" : String(src.selectedTokenId));
+  params.set(HUD_UI_PARAM_KEYS.placement, serializePlacement(src.hudPlacement));
+  return params.toString();
+}
+function normalizeHudUiState(partial) {
+  const p = partial && typeof partial === "object" ? partial : {};
+  return {
+    isHudCollapsed: typeof p.isHudCollapsed === "boolean" ? p.isHudCollapsed : DEFAULT_HUD_UI_STATE.isHudCollapsed,
+    mockScenarioId: p.mockScenarioId != null && p.mockScenarioId !== "" ? String(p.mockScenarioId) : DEFAULT_HUD_UI_STATE.mockScenarioId,
+    viewerRole: p.viewerRole === "gm" ? "gm" : "player",
+    selectedTokenId: Object.prototype.hasOwnProperty.call(p, "selectedTokenId") ? p.selectedTokenId : DEFAULT_HUD_UI_STATE.selectedTokenId,
+    hudPlacement: clampPlacement(p.hudPlacement ?? DEFAULT_HUD_UI_STATE.hudPlacement)
+  };
+}
+function buildOverlayPopoverParams({ vw, vh, collapsed, placement }) {
+  const { width, height } = computeOverlaySize(collapsed, vw);
+  return {
+    width,
+    height,
+    anchorReference: "POSITION",
+    anchorPosition: computeAnchorPosition({ vw, vh, width, height, placement }),
+    anchorOrigin: { ...ANCHOR_ORIGIN },
+    transformOrigin: { ...TRANSFORM_ORIGIN },
+    hidePaper: true,
+    disableClickAway: true,
+    marginThreshold: 0
+  };
+}
+
+// hud/overlay/combatHudOverlayController.js
+var VIEWPORT_POLL_MS = 600;
+var started = false;
+var lastUiState = { ...DEFAULT_HUD_UI_STATE };
+var lastVW = 0;
+var lastVH = 0;
+var pollTimer = null;
+var cleanups = [];
+function isCollapsed() {
+  return Boolean(lastUiState.isHudCollapsed);
+}
+function samePlacement(a, b) {
+  if (!a || !b) return a === b;
+  if (a.mode !== b.mode) return false;
+  return Math.abs((a.x ?? 0) - (b.x ?? 0)) < 1e-3 && Math.abs((a.y ?? 0) - (b.y ?? 0)) < 1e-3;
+}
+function resolveOverlayUrl(vw, vh) {
+  const params = new URLSearchParams(serializeHudUiState(lastUiState));
+  params.set(HUD_RENDER_PARAM_KEYS.vw, String(Math.round(vw)));
+  params.set(HUD_RENDER_PARAM_KEYS.vh, String(Math.round(vh)));
+  params.set(HUD_RENDER_PARAM_KEYS.gap, String(computeHudGap(vw)));
+  const query = params.toString();
+  try {
+    const base = typeof window !== "undefined" ? window.location.href : "";
+    const url = new URL(OVERLAY_HTML, base);
+    url.search = query;
+    return url.toString();
+  } catch {
+    return `${OVERLAY_HTML}?${query}`;
+  }
+}
+async function readViewport() {
+  const [vw, vh] = await Promise.all([
+    lib_default.viewport.getWidth(),
+    lib_default.viewport.getHeight()
+  ]);
+  return { vw, vh };
+}
+async function openOrReanchor() {
+  const { vw, vh } = await readViewport();
+  lastVW = vw;
+  lastVH = vh;
+  const params = buildOverlayPopoverParams({
+    vw,
+    vh,
+    collapsed: isCollapsed(),
+    placement: lastUiState.hudPlacement
+  });
+  const url = resolveOverlayUrl(vw, vh);
+  await lib_default.popover.open({ id: OVERLAY_POPOVER_ID, url, ...params });
+}
+async function applyCollapsedSize() {
+  try {
+    const { width, height } = buildOverlayPopoverParams({
+      vw: lastVW,
+      vh: lastVH,
+      collapsed: isCollapsed(),
+      placement: lastUiState.hudPlacement
+    });
+    await lib_default.popover.setWidth(OVERLAY_POPOVER_ID, width);
+    await lib_default.popover.setHeight(OVERLAY_POPOVER_ID, height);
+  } catch (error) {
+    try {
+      await openOrReanchor();
+    } catch (_e) {
+    }
+    void error;
+  }
+}
+function startViewportPoll() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    try {
+      const { vw, vh } = await readViewport();
+      if (vw === lastVW && vh === lastVH) return;
+      await openOrReanchor();
+    } catch (_e) {
+    }
+  }, VIEWPORT_POLL_MS);
+  cleanups.push(() => {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  });
+}
+function setupCombatHudOverlay() {
+  if (started) return;
+  if (typeof lib_default === "undefined" || lib_default.isAvailable === false) return;
+  started = true;
+  lib_default.onReady(async () => {
+    try {
+      await openOrReanchor();
+      startViewportPoll();
+      const unsubUiState = lib_default.broadcast.onMessage(BC_HUD_UI_STATE, async (event) => {
+        const next = normalizeHudUiState(event?.data);
+        const collapseChanged = next.isHudCollapsed !== lastUiState.isHudCollapsed;
+        const placementChanged = !samePlacement(next.hudPlacement, lastUiState.hudPlacement);
+        lastUiState = next;
+        if (placementChanged) {
+          await openOrReanchor();
+        } else if (collapseChanged) {
+          await applyCollapsedSize();
+        }
+      });
+      cleanups.push(unsubUiState);
+    } catch (error) {
+      console.error("[combatHud/overlay] setup failed", error);
+      started = false;
+    }
+  });
+}
+
 // utils/diagnostics.js
 var ENTRY_LIMIT = 40;
 var listeners = /* @__PURE__ */ new Set();
@@ -3608,6 +3865,7 @@ function addDiagnosticEntry(level, title, details2 = "") {
 
 // background.js
 async function bootstrapBackgroundShell() {
+  setupCombatHudOverlay();
   await waitForObrReady();
   const [player, roomContext, settings] = await Promise.all([
     getPlayerInfo(),

@@ -334,10 +334,10 @@ var require_events = __commonJS({
     EventEmitter2.prototype.eventNames = function eventNames() {
       return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
     };
-    function arrayClone(arr5, n) {
+    function arrayClone(arr3, n) {
       var copy = new Array(n);
       for (var i = 0; i < n; ++i)
-        copy[i] = arr5[i];
+        copy[i] = arr3[i];
       return copy;
     }
     function spliceOne(list, index) {
@@ -345,10 +345,10 @@ var require_events = __commonJS({
         list[index] = list[index + 1];
       list.pop();
     }
-    function unwrapListeners(arr5) {
-      var ret = new Array(arr5.length);
+    function unwrapListeners(arr3) {
+      var ret = new Array(arr3.length);
       for (var i = 0; i < ret.length; ++i) {
-        ret[i] = arr5[i].listener || arr5[i];
+        ret[i] = arr3[i].listener || arr3[i];
       }
       return ret;
     }
@@ -806,8 +806,8 @@ var byteToHex = [];
 for (let i = 0; i < 256; ++i) {
   byteToHex.push((i + 256).toString(16).slice(1));
 }
-function unsafeStringify(arr5, offset = 0) {
-  return byteToHex[arr5[offset + 0]] + byteToHex[arr5[offset + 1]] + byteToHex[arr5[offset + 2]] + byteToHex[arr5[offset + 3]] + "-" + byteToHex[arr5[offset + 4]] + byteToHex[arr5[offset + 5]] + "-" + byteToHex[arr5[offset + 6]] + byteToHex[arr5[offset + 7]] + "-" + byteToHex[arr5[offset + 8]] + byteToHex[arr5[offset + 9]] + "-" + byteToHex[arr5[offset + 10]] + byteToHex[arr5[offset + 11]] + byteToHex[arr5[offset + 12]] + byteToHex[arr5[offset + 13]] + byteToHex[arr5[offset + 14]] + byteToHex[arr5[offset + 15]];
+function unsafeStringify(arr3, offset = 0) {
+  return byteToHex[arr3[offset + 0]] + byteToHex[arr3[offset + 1]] + byteToHex[arr3[offset + 2]] + byteToHex[arr3[offset + 3]] + "-" + byteToHex[arr3[offset + 4]] + byteToHex[arr3[offset + 5]] + "-" + byteToHex[arr3[offset + 6]] + byteToHex[arr3[offset + 7]] + "-" + byteToHex[arr3[offset + 8]] + byteToHex[arr3[offset + 9]] + "-" + byteToHex[arr3[offset + 10]] + byteToHex[arr3[offset + 11]] + byteToHex[arr3[offset + 12]] + byteToHex[arr3[offset + 13]] + byteToHex[arr3[offset + 14]] + byteToHex[arr3[offset + 15]];
 }
 
 // node_modules/uuid/dist/esm-browser/native.js
@@ -10961,510 +10961,193 @@ function createOdysseyRuntime() {
   };
 }
 
-// screens/combatHud/combatHudStyles.css
-var combatHudStyles_default = ".combat-hud-screen {\n  display: flex;\n  flex-direction: column;\n  gap: 16px;\n  color: #e7f1ff;\n}\n\n.combat-hud-banner {\n  border: 1px solid rgba(117, 162, 224, 0.28);\n  border-radius: 12px;\n  background:\n    linear-gradient(180deg, rgba(13, 29, 53, 0.96), rgba(10, 20, 38, 0.96));\n  padding: 12px 14px;\n}\n\n.combat-hud-banner-title {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n  font-size: 13px;\n  font-weight: 700;\n  letter-spacing: 0.04em;\n  text-transform: uppercase;\n}\n\n.combat-hud-banner-meta {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n  margin-top: 8px;\n}\n\n.combat-hud-chip {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 24px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid rgba(111, 154, 219, 0.25);\n  background: rgba(20, 40, 71, 0.72);\n  font-size: 11px;\n  line-height: 1;\n  color: #d9eaff;\n}\n\n.combat-hud-chip.ok {\n  border-color: rgba(98, 186, 117, 0.35);\n  color: #bdf0c9;\n}\n\n.combat-hud-chip.warn {\n  border-color: rgba(224, 173, 90, 0.35);\n  color: #f4d69e;\n}\n\n.combat-hud-chip.err {\n  border-color: rgba(211, 92, 92, 0.35);\n  color: #ffb6b6;\n}\n\n.combat-hud-toolbar {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n}\n\n.combat-hud-button {\n  appearance: none;\n  border: 1px solid rgba(109, 156, 226, 0.34);\n  border-radius: 10px;\n  background: linear-gradient(180deg, rgba(24, 51, 92, 0.96), rgba(15, 33, 61, 0.96));\n  color: #edf5ff;\n  min-height: 34px;\n  padding: 0 12px;\n  font: inherit;\n  cursor: pointer;\n}\n\n.combat-hud-button.secondary {\n  background: rgba(17, 35, 63, 0.92);\n}\n\n.combat-hud-button:disabled {\n  opacity: 0.55;\n  cursor: not-allowed;\n}\n\n.combat-hud-layout {\n  display: grid;\n  gap: 14px;\n  grid-template-columns: minmax(260px, 1.2fr) minmax(250px, 1fr) minmax(260px, 1fr);\n}\n\n.combat-hud-column {\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n  min-width: 0;\n}\n\n.combat-hud-panel {\n  border: 1px solid rgba(117, 162, 224, 0.22);\n  border-radius: 14px;\n  background:\n    radial-gradient(circle at top right, rgba(62, 105, 172, 0.18), transparent 32%),\n    linear-gradient(180deg, rgba(13, 27, 50, 0.98), rgba(9, 18, 35, 0.98));\n  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);\n  padding: 14px;\n}\n\n.combat-hud-panel-title {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 12px;\n  font-size: 11px;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: #84a8de;\n}\n\n.combat-hud-player-header {\n  display: flex;\n  justify-content: space-between;\n  gap: 12px;\n  align-items: flex-start;\n}\n\n.combat-hud-player-name {\n  font-size: 20px;\n  font-weight: 700;\n  color: #f5f9ff;\n}\n\n.combat-hud-player-subtitle {\n  margin-top: 4px;\n  font-size: 12px;\n  color: #95b2d9;\n}\n\n.combat-hud-status-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n  margin-top: 12px;\n}\n\n.combat-hud-stat {\n  border: 1px solid rgba(112, 150, 204, 0.18);\n  border-radius: 10px;\n  background: rgba(13, 29, 51, 0.62);\n  padding: 10px;\n}\n\n.combat-hud-stat-label {\n  font-size: 10px;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: #85a6d6;\n}\n\n.combat-hud-stat-value {\n  margin-top: 4px;\n  font-size: 15px;\n  font-weight: 700;\n  color: #f4f8ff;\n}\n\n.combat-hud-zones {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n  margin-top: 12px;\n}\n\n.combat-hud-zone {\n  border: 1px solid rgba(108, 149, 219, 0.18);\n  border-radius: 10px;\n  padding: 10px;\n  background: rgba(10, 23, 43, 0.7);\n}\n\n.combat-hud-zone.healthy { border-color: rgba(104, 163, 221, 0.22); }\n.combat-hud-zone.wounded { border-color: rgba(233, 208, 116, 0.35); }\n.combat-hud-zone.serious { border-color: rgba(228, 150, 83, 0.35); }\n.combat-hud-zone.critical { border-color: rgba(211, 88, 88, 0.42); }\n.combat-hud-zone.disabled { border-color: rgba(94, 113, 139, 0.28); opacity: 0.85; }\n\n.combat-hud-zone-top {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.combat-hud-zone-name {\n  font-size: 12px;\n  font-weight: 700;\n  color: #f2f6ff;\n}\n\n.combat-hud-zone-state {\n  font-size: 10px;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: #9ab6db;\n}\n\n.combat-hud-zone-meta {\n  margin-top: 6px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.combat-hud-status-list,\n.combat-hud-modifier-list,\n.combat-hud-skill-list,\n.combat-hud-log-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.combat-hud-status-item,\n.combat-hud-modifier-item,\n.combat-hud-skill-item,\n.combat-hud-log-item {\n  border: 1px solid rgba(110, 149, 215, 0.16);\n  border-radius: 10px;\n  background: rgba(11, 24, 45, 0.72);\n  padding: 10px 12px;\n}\n\n.combat-hud-skill-item {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 12px;\n}\n\n.combat-hud-skill-meta {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin-top: 6px;\n}\n\n.combat-hud-item-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: #f3f7ff;\n}\n\n.combat-hud-item-subtitle,\n.combat-hud-item-detail {\n  margin-top: 4px;\n  font-size: 12px;\n  color: #9db7d9;\n}\n\n.combat-hud-target-empty {\n  padding: 14px;\n  border: 1px dashed rgba(118, 157, 216, 0.28);\n  border-radius: 10px;\n  color: #89a8d0;\n  text-align: center;\n}\n\n.combat-hud-action {\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.combat-hud-action-button {\n  min-height: 44px;\n  border-radius: 12px;\n  border: 1px solid rgba(122, 175, 241, 0.38);\n  background: linear-gradient(180deg, rgba(31, 87, 153, 0.96), rgba(19, 54, 101, 0.96));\n  color: #f7fbff;\n  font-size: 14px;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n}\n\n.combat-hud-action-hint {\n  font-size: 12px;\n  color: #9fb8da;\n}\n\n.combat-hud-action-hint.err {\n  color: #ffb3b3;\n}\n\n.combat-hud-empty {\n  padding: 22px;\n  border: 1px dashed rgba(116, 158, 220, 0.24);\n  border-radius: 14px;\n  color: #94afd4;\n  text-align: center;\n}\n\n.combat-hud-inline {\n  display: inline-flex;\n  gap: 6px;\n  flex-wrap: wrap;\n}\n\n@media (max-width: 1200px) {\n  .combat-hud-layout {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }\n}\n\n@media (max-width: 820px) {\n  .combat-hud-layout {\n    grid-template-columns: minmax(0, 1fr);\n  }\n}\n";
+// screens/resolveAttack/resolveAttackStyles.css
+var resolveAttackStyles_default = '/* Resolve Attack screen \u2014 scoped styles (prefix .ra-). Reuses shell design tokens. */\n.ra-screen { display: flex; flex-direction: column; gap: 14px; }\n.ra-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\n.ra-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }\n@media (max-width: 640px) { .ra-grid2 { grid-template-columns: 1fr; } }\n.ra-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }\n.ra-field > span { font-size: 11px; color: var(--muted); }\n.ra-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 0 2px; }\n.ra-hidden { display: none !important; }\n.ra-mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }\n.ra-muted { color: var(--muted); font-size: 12px; }\n\nselect { width: 100%; border-radius: 10px; border: 1px solid rgba(61,92,129,.9); background: rgba(8,17,28,.9); color: var(--text); padding: 9px 11px; font: inherit; }\n\n/* mode toggle */\n.ra-modes { display: flex; gap: 8px; }\n.ra-mode { flex: 1; text-align: center; padding: 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--text); cursor: pointer; font-size: 13px; }\n.ra-mode.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; font-weight: 700; }\n\n/* status banners */\n.ra-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\n.ra-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\n.ra-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\n.ra-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\n.ra-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\n\n/* chips */\n.ra-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(8,17,28,.7); border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; font-size: 11px; }\n.ra-chip.neg { border-color: rgba(201,75,88,.5); color: #ffd9de; }\n.ra-block { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }\n\n/* modifier chips */\n.ra-mc { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 4px 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\n.ra-mc.on { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; }\n.ra-pos { color: #7fe0a3; } .ra-neg { color: #ff9aa5; }\n\n/* energy bar */\n.ra-ebar { width: 80px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; display: inline-block; }\n.ra-ebar > span { display: block; height: 100%; background: var(--accent); }\n\n/* doll */\n.ra-doll { position: relative; }\n.ra-doll .ra-part { position: absolute; cursor: pointer; border: 1px solid rgba(0,0,0,.35); }\n.ra-doll .ra-part:hover { outline: 1.5px solid var(--accent); outline-offset: 1px; }\n.ra-doll .ra-part.sel { outline: 2px solid var(--accent); outline-offset: 2px; }\n.ra-doll .ra-base { position: absolute; border-radius: 50%; background: rgba(21,34,53,.9); border: 1px solid var(--line); }\n\n/* part chips */\n.ra-parts { display: flex; gap: 6px; flex-wrap: wrap; }\n.ra-partchip { font-size: 11px; padding: 4px 9px; border-radius: 999px; cursor: pointer; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\n.ra-partchip.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; }\n.ra-partchip.custom { border-style: dashed; }\n.ra-partchip.disabled { opacity: .45; cursor: not-allowed; text-decoration: line-through; }\n\n/* summary card */\n.ra-summary { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }\n@media (max-width: 640px) { .ra-summary { grid-template-columns: repeat(2, minmax(0,1fr)); } }\n.ra-stat { background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }\n.ra-stat .k { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n.ra-stat .v { font-size: 14px; font-weight: 700; }\n.ra-stat .v.hit { color: #7fe0a3; } .ra-stat .v.miss { color: var(--muted); }\n.ra-stat .v.crit { color: #ffb454; } .ra-stat .v.danger { color: #ff9aa5; }\n\n/* debug panel */\n.ra-debug pre { max-height: 220px; overflow: auto; }\n.ra-debug .ra-row { margin-bottom: 6px; }\n.ra-feature { display: flex; justify-content: space-between; gap: 8px; padding: 6px 9px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 8px; font-size: 11px; }\n.ra-feature .on { color: #7fe0a3; } .ra-feature .off { color: var(--muted); }\n\n/* inventory lists */\n.ra-list { display: flex; flex-direction: column; gap: 6px; }\n\n/* log */\n.ra-log .ra-logline { font-size: 11px; color: var(--muted); padding: 6px 0; border-bottom: 1px solid rgba(39,65,95,.5); line-height: 1.5; }\n.ra-log .who { color: var(--text); }\n.ra-flash { animation: ra-fl .5s ease; }\n@keyframes ra-fl { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }\n';
 
-// hud/models/combatHudContracts.js
-var HUD_STATUS = Object.freeze({
-  idle: "idle",
-  loading: "loading",
-  ready: "ready",
-  empty: "empty",
-  error: "error"
-});
-var HUD_SOURCE = Object.freeze({
-  mock: "mock",
-  supabase: "supabase"
-});
-var VIEWER_ROLES = Object.freeze({
-  player: "player",
-  gm: "gm"
-});
-var TOKEN_KINDS = Object.freeze({
-  player: "player",
-  npc: "npc",
-  turret: "turret",
-  mech: "mech",
-  other: "other"
-});
-var ZONE_STATES = Object.freeze({
-  healthy: "healthy",
-  wounded: "wounded",
-  serious: "serious",
-  critical: "critical",
-  disabled: "disabled"
-});
-var ZONE_STATE_ORDER = Object.freeze([
-  ZONE_STATES.healthy,
-  ZONE_STATES.wounded,
-  ZONE_STATES.serious,
-  ZONE_STATES.critical,
-  ZONE_STATES.disabled
-]);
-var COMBAT_STATUS = Object.freeze({
-  inactive: "inactive",
-  active: "active",
-  ended: "ended"
-});
-var SKILL_TYPES = Object.freeze({
-  attackTechnique: "attackTechnique",
-  targetedAbility: "targetedAbility",
-  instantAbility: "instantAbility",
-  toggleAbility: "toggleAbility",
-  itemAction: "itemAction"
-});
-var SKILL_SOURCES = Object.freeze({
-  perk: "perk",
-  psionic: "psionic",
-  implant: "implant",
-  item: "item"
-});
-var ACTION_COSTS = Object.freeze({
-  free: "FREE",
-  move: "MOVE",
-  main: "MAIN",
-  turn: "TURN"
-});
-var COLOR_SEMANTICS = Object.freeze({
-  attack: "attack",
-  neutral: "neutral",
-  psionic: "psionic",
-  implant: "implant",
-  intervention: "intervention",
-  positive: "positive",
-  negative: "negative"
-});
-var TARGETING_MODES = Object.freeze({
-  none: "none",
-  token: "token",
-  multipleTokens: "multipleTokens",
-  point: "point"
-});
-var MODIFIER_KINDS = Object.freeze({
-  passive: "passive",
-  active: "active",
-  narrative: "narrative"
-});
-var MODIFIER_POLARITY = Object.freeze({
-  positive: "positive",
-  negative: "negative",
-  neutral: "neutral"
-});
-var LOG_ENTRY_KINDS = Object.freeze({
-  action: "action",
-  system: "system",
-  narrative: "narrative"
-});
-var EMPTY_REASONS = Object.freeze({
-  noToken: "NO_TOKEN_SELECTED",
-  noCharacterLink: "TOKEN_HAS_NO_CHARACTER",
-  notOwner: "CHARACTER_NOT_CONTROLLED_BY_VIEWER"
-});
-var EMPTY_REASON_TEXT = Object.freeze({
-  [EMPTY_REASONS.noToken]: "No token selected.",
-  [EMPTY_REASONS.noCharacterLink]: "Selected token is not linked to a character.",
-  [EMPTY_REASONS.notOwner]: "You do not control this character."
-});
-var DEFAULT_BODY_PART_ID = "torso";
-function cloneDeep(value) {
-  if (value === null || typeof value !== "object") return value;
-  if (typeof structuredClone === "function") {
-    try {
-      return structuredClone(value);
-    } catch (_error) {
-    }
+// screens/resolveAttack/resolveAttackService.js
+var ValidationError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ValidationError";
   }
+};
+var ERROR_MESSAGES = Object.freeze({
+  // characters / targets
+  CHARACTER_NOT_FOUND: "Attacker character was not found.",
+  TARGET_NOT_FOUND: "Target character was not found.",
+  INVALID_TARGET: "Invalid target for this attack.",
+  // body parts
+  BODY_PART_NOT_FOUND: "Target body part was not found or cannot be targeted.",
+  TARGET_BODY_PART_NOT_FOUND: "Target body part was not found.",
+  BODY_PART_DESTROYED: "That body part is already destroyed \u2014 choose another.",
+  // weapon model / profile
+  WEAPON_NOT_FOUND: "Weapon was not found for the attacker.",
+  INVALID_WEAPON_MODEL: "Weapon model linked to the weapon was not found.",
+  INVALID_PROFILE: "Selected weapon profile is invalid.",
+  PROFILE_NOT_FOUND: "Weapon profile was not found.",
+  NO_ACTIVE_PROFILE: "Weapon has no active profile.",
+  // fire mode
+  INVALID_FIRE_MODE: "Fire mode is missing or not allowed for this weapon.",
+  FIRE_MODE_NOT_ALLOWED: "This fire mode is not allowed for the weapon.",
+  FIRE_MODE_NOT_ALLOWED_FOR_ACTIVE_PROFILE: "This fire mode is not allowed for the active profile.",
+  // magazine / ammo
+  NO_MAGAZINE: "Weapon requires a loaded magazine.",
+  INVALID_MAGAZINE: "Loaded magazine is invalid or incompatible.",
+  MAGAZINE_EMPTY: "The loaded magazine is empty.",
+  NO_AMMO: "Not enough ammunition to fire.",
+  MAGAZINE_HAS_DIFFERENT_AMMO_TYPE: "Magazine ammo type does not match.",
+  CALIBER_MISMATCH: "Magazine caliber does not match the weapon.",
+  // features
+  WEAPON_FEATURE_NOT_AVAILABLE: "That weapon feature is not available right now.",
+  MISSING_RELOAD_ITEM: "Missing the item required to reload this feature.",
+  // abilities / resources
+  ABILITY_NOT_FOUND: "Ability was not found or is disabled.",
+  INVALID_ABILITY: "Invalid ability for this action.",
+  INVALID_ATTACK_TYPE: "This ability cannot be used as an attack.",
+  ABILITY_ON_COOLDOWN: "Ability is on cooldown.",
+  NO_ENERGY: "Not enough energy for this ability.",
+  NOT_ENOUGH_RESOURCE: "Not enough resource to use this ability.",
+  RESOURCE_POOL_NOT_FOUND: "Resource pool was not found.",
+  // ammo stock / magazine loading
+  AMMO_STOCK_NOT_FOUND: "Ammo stock was not found.",
+  OWNER_MISMATCH: "Magazine and ammo stock belong to different characters.",
+  MAGAZINE_FULL: "Magazine is already full.",
+  NOT_ENOUGH_AMMO_STOCK: "Not enough ammo in stock.",
+  NOT_ENOUGH_MAGAZINE_ROUNDS: "Magazine does not contain that many rounds.",
+  INVALID_QUANTITY: "Invalid quantity.",
+  MAGAZINE_INCOMPATIBLE: "Magazine is not compatible with this weapon profile.",
+  // consumable items / healing (use_character_item)
+  ITEM_NOT_FOUND: "Item was not found.",
+  ITEM_NOT_AVAILABLE: "Item is not available (none left).",
+  ITEM_OWNERSHIP_MISMATCH: "Item belongs to another character.",
+  ITEM_ACTION_NOT_SUPPORTED: "This item cannot be used this way.",
+  BODY_PART_TARGET_MISMATCH: "Body part does not belong to that character.",
+  NO_HEALABLE_DAMAGE: "Nothing to heal on that body part.",
+  // GM tools
+  CHARACTER_ID_REQUIRED: "A character must be selected.",
+  // equipment / armor
+  BODY_PART_NOT_ALLOWED: "This item can't be equipped to that body part.",
+  EQUIPMENT_ITEM_NOT_FOUND: "Equipment item was not found.",
+  ALREADY_EQUIPPED: "This item is already equipped.",
+  SLOT_OCCUPIED: "That body part already has equipment in this slot."
+});
+function describeError(code, fallback) {
+  if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];
+  return fallback || "The attack could not be performed.";
+}
+function splitManualModifiers(modifiers = []) {
+  let bonus = 0;
+  let penalty = 0;
+  for (const m of modifiers) {
+    if (!m || m.auto || m.on === false) continue;
+    const value = Number(m.value) || 0;
+    if (value > 0) bonus += value;
+    else if (value < 0) penalty += -value;
+  }
+  return { manual_attack_bonus: bonus, manual_attack_penalty: penalty };
+}
+function requireId(value, message) {
+  const id = String(value || "").trim();
+  if (!id) throw new ValidationError(message);
+  return id;
+}
+function buildAttackPayload(ctx = {}) {
+  const mode = ctx.mode === "skill" ? "skill" : "weapon";
+  const payload = {
+    attacker_character_id: requireId(ctx.attackerCharacterId, "No attacker selected."),
+    target_character_id: requireId(ctx.targetCharacterId, "No target selected."),
+    target_body_part_id: requireId(ctx.targetBodyPartId, "No target body part selected."),
+    distance_m: Math.max(Number(ctx.distanceM) || 0, 0),
+    attack_context: splitManualModifiers(ctx.modifiers)
+  };
+  if (mode === "skill") {
+    payload.character_ability_id = requireId(ctx.abilityId, "No ability selected.");
+  } else {
+    payload.weapon_id = requireId(ctx.weaponId, "No weapon selected.");
+  }
+  for (const [key, value] of Object.entries({
+    room_id: ctx.roomId,
+    campaign_id: ctx.campaignId,
+    scene_id: ctx.sceneId,
+    encounter_id: ctx.encounterId,
+    actor_token_id: ctx.actorTokenId,
+    target_token_id: ctx.targetTokenId
+  })) {
+    const trimmed = String(value ?? "").trim();
+    if (trimmed) payload[key] = trimmed;
+  }
+  return payload;
+}
+function firstDefined(...values) {
+  for (const v of values) if (v !== void 0 && v !== null) return v;
+  return null;
+}
+function asArray(v) {
+  return Array.isArray(v) ? v : [];
+}
+function normalizeResult(raw) {
+  const r = raw && typeof raw === "object" ? raw : {};
+  const attack = r.attack && typeof r.attack === "object" ? r.attack : {};
+  const defense = r.defense && typeof r.defense === "object" ? r.defense : {};
+  const damage = r.damage && typeof r.damage === "object" ? r.damage : {};
+  const bodyPart = r.body_part && typeof r.body_part === "object" ? r.body_part : {};
+  const magazine = r.magazine && typeof r.magazine === "object" ? r.magazine : {};
+  const resource = r.resource && typeof r.resource === "object" ? r.resource : {};
+  const targetState = r.target_state && typeof r.target_state === "object" ? r.target_state : {};
+  return {
+    ok: r.ok !== false,
+    hit: typeof r.hit === "boolean" ? r.hit : null,
+    auto: firstDefined(r.auto),
+    // 'crit' | 'fail' | null
+    attackType: firstDefined(r.attack_type),
+    attackRoll: firstDefined(attack.roll, r.attack_roll),
+    attackTotal: firstDefined(attack.total, r.attack_total),
+    defenseTotal: firstDefined(defense.total, r.defense_total),
+    damageLevel: firstDefined(damage.level, r.damage_level),
+    damageDiff: firstDefined(damage.diff, r.damage_diff),
+    criticalDelta: firstDefined(damage.critical_delta, r.critical_delta),
+    bodyCriticalDelta: firstDefined(damage.body_critical_delta, r.body_critical_delta),
+    targetBodyPartName: firstDefined(bodyPart.name, r.target_body_part_name),
+    bodyPart: Object.keys(bodyPart).length ? bodyPart : null,
+    ammoSpent: firstDefined(magazine.bullets_spent, r.bullets_spent),
+    ammoRemaining: firstDefined(magazine.remaining_rounds, r.remaining_magazine_rounds),
+    energySpent: firstDefined(resource.spent, resource.cost, resource.amount_spent),
+    energyRemaining: firstDefined(resource.remaining, resource.current_value),
+    feature: firstDefined(r.feature),
+    armor: firstDefined(bodyPart.effective_armor, r.effective_armor, r.armor),
+    pendingChecks: asArray(firstDefined(r.pending_checks, r.pending_saves, [])),
+    targetAlive: typeof targetState.is_alive === "boolean" ? targetState.is_alive : null,
+    targetConscious: typeof targetState.is_conscious === "boolean" ? targetState.is_conscious : null,
+    combatLogId: firstDefined(r.log_id, r.combat_log_id)
+  };
+}
+async function resolveAttack(ctx, deps) {
+  const payload = buildAttackPayload(ctx);
+  let raw;
   try {
-    return JSON.parse(JSON.stringify(value));
-  } catch (_error) {
-    return value;
-  }
-}
-function createEmptySnapshot() {
-  return {
-    entity: null,
-    weapon: { primary: null, secondary: null },
-    skills: { library: [], quickSlots: [] },
-    combatSession: createInactiveCombatSession(),
-    modifiers: { passive: [], active: [], narrative: [] },
-    battleLog: { entries: [] }
-  };
-}
-function createInactiveCombatSession() {
-  return {
-    id: null,
-    status: COMBAT_STATUS.inactive,
-    round: 0,
-    currentParticipantId: null,
-    participants: [],
-    isViewerTurn: false
-  };
-}
-function createDefaultUiState() {
-  return {
-    isHudCollapsed: false,
-    selectedTechniqueId: null,
-    selectedAbilityId: null,
-    selectedReloadMagazineId: null,
-    selectedModifierIds: [],
-    targeting: createDefaultTargeting(),
-    isBattleLogExpanded: false
-  };
-}
-function createDefaultTargeting() {
-  return {
-    mode: TARGETING_MODES.none,
-    selectedTargetIds: [],
-    selectedBodyPartId: DEFAULT_BODY_PART_ID,
-    selectedPoint: null,
-    radius: null
-  };
-}
-
-// hud/core/combatHudActions.js
-function createInitialState2(source = HUD_SOURCE.mock) {
-  return {
-    status: HUD_STATUS.idle,
-    source,
-    viewer: { playerId: "", playerName: "", role: VIEWER_ROLES.player },
-    selectedTokenId: null,
-    selectedCharacterId: null,
-    access: { canViewSelectedCharacter: false, reason: null },
-    snapshot: createEmptySnapshot(),
-    ui: createDefaultUiState(),
-    error: null
-  };
-}
-function computeAccess(viewer, entity) {
-  if (!entity) {
-    return { canView: false, reason: EMPTY_REASONS.noCharacterLink };
-  }
-  if (viewer?.role === VIEWER_ROLES.gm) {
-    return { canView: true, reason: null };
-  }
-  const ownerId = entity.summary?.ownerPlayerId ?? null;
-  if (ownerId && viewer?.playerId && ownerId === viewer.playerId) {
-    return { canView: true, reason: null };
-  }
-  return { canView: false, reason: EMPTY_REASONS.notOwner };
-}
-function applyViewer(state, viewer) {
-  return {
-    ...state,
-    viewer: {
-      playerId: String(viewer?.playerId ?? ""),
-      playerName: String(viewer?.playerName ?? ""),
-      role: viewer?.role === VIEWER_ROLES.gm ? VIEWER_ROLES.gm : VIEWER_ROLES.player
-    }
-  };
-}
-function applyLoading(state) {
-  return { ...state, status: HUD_STATUS.loading, error: null };
-}
-function applySelectionResult(state, resolved) {
-  const base = applyViewer(state, resolved.viewer);
-  if (!resolved.selectedTokenId) {
+    raw = await deps.performAttack(payload);
+  } catch (error) {
     return {
-      ...base,
-      status: HUD_STATUS.empty,
-      selectedTokenId: null,
-      selectedCharacterId: null,
-      access: { canViewSelectedCharacter: false, reason: EMPTY_REASONS.noToken },
-      snapshot: createEmptySnapshot(),
-      error: null
+      ok: false,
+      payload,
+      raw: error?.details ?? null,
+      normalized: null,
+      code: error?.code ?? null,
+      error: error?.message || "Network or RPC error."
     };
   }
-  if (!resolved.characterId || !resolved.entity) {
+  if (!raw || raw.ok === false) {
+    const code = raw?.error ?? null;
     return {
-      ...base,
-      status: HUD_STATUS.empty,
-      selectedTokenId: resolved.selectedTokenId,
-      selectedCharacterId: null,
-      access: { canViewSelectedCharacter: false, reason: EMPTY_REASONS.noCharacterLink },
-      snapshot: createEmptySnapshot(),
-      error: null
+      ok: false,
+      payload,
+      raw: raw ?? null,
+      normalized: raw ? normalizeResult(raw) : null,
+      code,
+      error: raw?.message || describeError(code)
     };
   }
-  const access = computeAccess(resolved.viewer, resolved.entity);
-  if (!access.canView) {
-    return {
-      ...base,
-      status: HUD_STATUS.empty,
-      selectedTokenId: resolved.selectedTokenId,
-      selectedCharacterId: resolved.characterId,
-      access: { canViewSelectedCharacter: false, reason: access.reason },
-      snapshot: createEmptySnapshot(),
-      error: null
-    };
-  }
-  return {
-    ...base,
-    status: HUD_STATUS.ready,
-    selectedTokenId: resolved.selectedTokenId,
-    selectedCharacterId: resolved.characterId,
-    access: { canViewSelectedCharacter: true, reason: null },
-    snapshot: resolved.snapshot,
-    error: null
-  };
-}
-function applyError(state, message, cause = null) {
-  return {
-    ...state,
-    status: HUD_STATUS.error,
-    error: { message: String(message ?? "Unknown error"), cause: cause ? String(cause) : null }
-  };
-}
-function setCollapsed(state, isCollapsed) {
-  return { ...state, ui: { ...state.ui, isHudCollapsed: Boolean(isCollapsed) } };
-}
-function resetActionDraft(state) {
-  return {
-    ...state,
-    ui: {
-      ...state.ui,
-      selectedTechniqueId: null,
-      selectedAbilityId: null,
-      selectedReloadMagazineId: null,
-      selectedModifierIds: [],
-      targeting: createDefaultTargeting()
-      // isHudCollapsed and isBattleLogExpanded are view prefs, intentionally kept.
-    }
-  };
-}
-function assembleSnapshot(pieces) {
-  const snapshot = createEmptySnapshot();
-  snapshot.entity = cloneDeep(pieces.entity) ?? null;
-  if (pieces.weapon) {
-    snapshot.weapon = {
-      primary: cloneDeep(pieces.weapon.primary) ?? null,
-      secondary: cloneDeep(pieces.weapon.secondary) ?? null
-    };
-  }
-  snapshot.skills = {
-    library: cloneDeep(pieces.skills?.library ?? []),
-    quickSlots: cloneDeep(pieces.skills?.quickSlots ?? [])
-  };
-  const session = pieces.combatSession ? cloneDeep(pieces.combatSession) : null;
-  if (session) {
-    session.isViewerTurn = computeIsViewerTurn(session, pieces.selectedCharacterId);
-    snapshot.combatSession = normalizeCombatSession(session);
-  }
-  const groups = { passive: [], active: [], narrative: [] };
-  for (const mod of cloneDeep(pieces.modifiers ?? [])) {
-    const bucket = groups[mod.kind] ? mod.kind : "active";
-    groups[bucket].push(mod);
-  }
-  snapshot.modifiers = groups;
-  snapshot.battleLog = { entries: cloneDeep(pieces.battleLog?.entries ?? []) };
-  return snapshot;
-}
-function computeIsViewerTurn(session, selectedCharacterId) {
-  if (!session || session.status !== "active") return false;
-  if (!selectedCharacterId) return false;
-  return session.currentParticipantId === selectedCharacterId;
-}
-function normalizeCombatSession(session) {
-  return {
-    id: session.id ?? null,
-    status: session.status ?? "inactive",
-    round: Number(session.round ?? 0) || 0,
-    currentParticipantId: session.currentParticipantId ?? null,
-    participants: Array.isArray(session.participants) ? session.participants : [],
-    isViewerTurn: Boolean(session.isViewerTurn)
-  };
-}
-
-// hud/core/combatHudStore.js
-function createCombatHudStore({ adapter }) {
-  if (!adapter || typeof adapter.subscribe !== "function") {
-    throw new Error("createCombatHudStore: a valid adapter is required.");
-  }
-  let state = createInitialState2(adapter.source);
-  const listeners2 = /* @__PURE__ */ new Set();
-  let disposed = false;
-  let unsubscribeAdapter = null;
-  function setState(next) {
-    state = next;
-    emit();
-  }
-  function emit() {
-    if (disposed) return;
-    for (const listener of Array.from(listeners2)) {
-      try {
-        listener(state);
-      } catch (error) {
-        console.error("[combatHud/store] listener threw", error);
-      }
-    }
-  }
-  function refreshRuntime() {
-    if (disposed) return;
-    try {
-      const viewer = adapter.getViewer();
-      const selectedTokenId = adapter.getSelectedTokenId();
-      if (!selectedTokenId) {
-        setState(applySelectionResult(state, {
-          viewer,
-          selectedTokenId: null,
-          characterId: null,
-          entity: null,
-          snapshot: state.snapshot
-        }));
-        return;
-      }
-      const link = adapter.getCharacterForToken(selectedTokenId);
-      const characterId = link?.characterId ?? null;
-      const entity = characterId ? adapter.getCharacterRuntime(characterId) : null;
-      if (!characterId || !entity) {
-        setState(applySelectionResult(state, {
-          viewer,
-          selectedTokenId,
-          characterId,
-          entity: null,
-          snapshot: state.snapshot
-        }));
-        return;
-      }
-      const weapon = adapter.getWeaponState(characterId);
-      const skills = adapter.getAvailableSkills(characterId);
-      const modifiers = adapter.getModifiers(characterId);
-      const combatSession = adapter.getCombatSession();
-      const battleLog = adapter.getBattleLog(combatSession?.id ?? null);
-      const snapshot = assembleSnapshot({
-        entity,
-        weapon,
-        skills,
-        combatSession,
-        modifiers,
-        battleLog,
-        selectedCharacterId: characterId
-      });
-      setState(applySelectionResult(state, {
-        viewer,
-        selectedTokenId,
-        characterId,
-        entity,
-        snapshot
-      }));
-    } catch (error) {
-      setState(applyError(state, "Failed to refresh Combat HUD state.", error?.message ?? error));
-    }
-  }
-  function initialize() {
-    if (disposed) return;
-    setState(applyLoading(state));
-    if (!unsubscribeAdapter) {
-      unsubscribeAdapter = adapter.subscribe(() => refreshRuntime());
-    }
-    refreshRuntime();
-  }
-  function selectToken(tokenId) {
-    if (disposed) return;
-    adapter.selectToken(tokenId ?? null);
-  }
-  function setViewerRole(role) {
-    if (disposed) return;
-    adapter.setViewerRole(role);
-  }
-  function setViewer(viewer) {
-    if (disposed) return;
-    setState(applyViewer(state, viewer));
-    refreshRuntime();
-  }
-  function setHudCollapsed(isCollapsed) {
-    if (disposed) return;
-    setState(setCollapsed(state, isCollapsed));
-  }
-  function setMockScenario(scenarioId) {
-    if (disposed) return;
-    try {
-      adapter.setMockScenario(scenarioId);
-    } catch (error) {
-      setState(applyError(state, "setMockScenario is not supported by this adapter.", error?.message ?? error));
-    }
-  }
-  function resetActionDraft2() {
-    if (disposed) return;
-    setState(resetActionDraft(state));
-  }
-  function getState() {
-    return state;
-  }
-  function subscribe(listener) {
-    if (typeof listener !== "function") return () => {
-    };
-    listeners2.add(listener);
-    return () => {
-      listeners2.delete(listener);
-    };
-  }
-  function dispose() {
-    if (disposed) return;
-    disposed = true;
-    if (typeof unsubscribeAdapter === "function") {
-      try {
-        unsubscribeAdapter();
-      } catch (_e) {
-      }
-      unsubscribeAdapter = null;
-    }
-    listeners2.clear();
-  }
-  return {
-    // lifecycle
-    initialize,
-    dispose,
-    // reads
-    getState,
-    subscribe,
-    // actions
-    selectToken,
-    setViewer,
-    setViewerRole,
-    setHudCollapsed,
-    setMockScenario,
-    resetActionDraft: resetActionDraft2,
-    // exposed for diagnostics/tests
-    get status() {
-      return state.status;
-    },
-    isReady() {
-      return state.status === HUD_STATUS.ready;
-    }
-  };
-}
-
-// hud/adapters/combatHudAdapter.js
-var REQUIRED_METHODS = [
-  "getViewer",
-  "getSelectedTokenId",
-  "getSceneTokens",
-  "getCharacterForToken",
-  "getCharacterRuntime",
-  "getWeaponState",
-  "getAvailableSkills",
-  "getModifiers",
-  "getCombatSession",
-  "getBattleLog",
-  "selectToken",
-  "setViewerRole",
-  "setMockScenario",
-  "subscribe",
-  "dispose"
-];
-function createCombatHudAdapter(impl, source = "mock") {
-  if (!impl || typeof impl !== "object") {
-    throw new Error("createCombatHudAdapter: impl object is required.");
-  }
-  for (const method of REQUIRED_METHODS) {
-    if (typeof impl[method] !== "function") {
-      throw new Error(`createCombatHudAdapter: missing method "${method}".`);
-    }
-  }
-  return Object.freeze({
-    source,
-    ...impl
-  });
+  return { ok: true, payload, raw, normalized: normalizeResult(raw), code: null, error: null };
 }
 
 // screens/resolveAttack/resolveAttackSettings.js
@@ -17355,14 +17038,14 @@ var toArray = (value, type) => {
   const closeBrace = value[lastIdx];
   const openBrace = value[0];
   if (openBrace === "{" && closeBrace === "}") {
-    let arr5;
+    let arr3;
     const valTrim = value.slice(1, lastIdx);
     try {
-      arr5 = JSON.parse("[" + valTrim + "]");
+      arr3 = JSON.parse("[" + valTrim + "]");
     } catch (_) {
-      arr5 = valTrim ? valTrim.split(",") : [];
+      arr3 = valTrim ? valTrim.split(",") : [];
     }
-    return arr5.map((val) => convertCell(type, val));
+    return arr3.map((val) => convertCell(type, val));
   }
   return value;
 };
@@ -32593,1413 +32276,6 @@ function getRealtimeClient(settings) {
   return _client;
 }
 
-// hud/adapters/supabaseCombatHudAdapter.js
-var BODY_PART_LABELS = Object.freeze({
-  head: "Head",
-  torso: "Torso",
-  l_arm: "L.Arm",
-  r_arm: "R.Arm",
-  l_leg: "L.Leg",
-  r_leg: "R.Leg"
-});
-var BODY_PART_ALIASES = Object.freeze({
-  arm_l: "l_arm",
-  arm_r: "r_arm",
-  leg_l: "l_leg",
-  leg_r: "r_leg",
-  left_arm: "l_arm",
-  right_arm: "r_arm",
-  left_leg: "l_leg",
-  right_leg: "r_leg",
-  larm: "l_arm",
-  rarm: "r_arm",
-  lleg: "l_leg",
-  rleg: "r_leg"
-});
-var CHARACTER_TABLES = [
-  "odyssey_character_body_parts",
-  "odyssey_character_effects",
-  "odyssey_character_resource_pools",
-  "odyssey_character_abilities",
-  "odyssey_character_equipment_items",
-  "odyssey_character_weapons",
-  "odyssey_character_magazines",
-  "odyssey_character_perks",
-  "odyssey_character_skills",
-  "odyssey_character_quickbar_slots",
-  "odyssey_character_combat_state"
-];
-var COMBAT_TABLES = [
-  { table: "odyssey_combat_encounters", filter: "id" },
-  { table: "odyssey_initiative_entries", filter: "encounter_id" },
-  { table: "odyssey_combat_log", filter: "encounter_id" }
-];
-function arr(value) {
-  return Array.isArray(value) ? value : [];
-}
-function safeInt(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-function signed(value) {
-  const number = safeInt(value, 0);
-  return `${number >= 0 ? "+" : ""}${number}`;
-}
-function normalizeViewerRole(role) {
-  return String(role || "").trim().toUpperCase() === "GM" ? VIEWER_ROLES.gm : VIEWER_ROLES.player;
-}
-function normalizeTokenKind(bucket) {
-  const normalized = String(bucket || "").trim().toLowerCase();
-  if (normalized === "player") return TOKEN_KINDS.player;
-  if (normalized === "npc_template" || normalized === "npc_active") return TOKEN_KINDS.npc;
-  return TOKEN_KINDS.other;
-}
-function normalizeBodyPartCode(value) {
-  const normalized = String(value || "").trim().toLowerCase().replace(/[\s.-]+/g, "_").replace(/__+/g, "_");
-  return BODY_PART_ALIASES[normalized] || normalized;
-}
-function normalizeActionCost(value) {
-  const normalized = String(value || "").trim().toUpperCase();
-  if (normalized === ACTION_COSTS.free) return ACTION_COSTS.free;
-  if (normalized === ACTION_COSTS.move) return ACTION_COSTS.move;
-  if (normalized === ACTION_COSTS.turn) return ACTION_COSTS.turn;
-  return ACTION_COSTS.main;
-}
-function normalizeTargeting(value, maxDistance) {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "point") return TARGETING_MODES.point;
-  if (normalized === "multiple" || normalized === "multiple_tokens") return TARGETING_MODES.multipleTokens;
-  if (normalized === "token" || safeInt(maxDistance, 0) > 0) return TARGETING_MODES.token;
-  return TARGETING_MODES.none;
-}
-function mapSkillSource(value) {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized.includes("psionic")) return SKILL_SOURCES.psionic;
-  if (normalized.includes("implant") || normalized.includes("prosthetic")) return SKILL_SOURCES.implant;
-  if (normalized.includes("technical") || normalized.includes("item")) return SKILL_SOURCES.item;
-  return SKILL_SOURCES.perk;
-}
-function deriveZoneState(part) {
-  if (!part) return ZONE_STATES.healthy;
-  if (part.destroyed || part.disabled) return ZONE_STATES.disabled;
-  if (safeInt(part.critical, 0) > 0) return ZONE_STATES.critical;
-  if (safeInt(part.serious, 0) > 0) return ZONE_STATES.serious;
-  if (safeInt(part.minor, 0) > 0) return ZONE_STATES.wounded;
-  return ZONE_STATES.healthy;
-}
-function dedupeBodyParts(parts) {
-  const seen = /* @__PURE__ */ new Map();
-  for (const part of arr(parts)) {
-    const code = normalizeBodyPartCode(part?.code || part?.part_key || part?.name || "");
-    if (!code || code === "shield" || code === "special") continue;
-    if (!seen.has(code)) {
-      seen.set(code, part);
-      continue;
-    }
-    const current2 = seen.get(code);
-    if (current2?.can_be_targeted === false && part?.can_be_targeted !== false) {
-      seen.set(code, part);
-    }
-  }
-  return Array.from(seen.entries()).map(([code, part]) => ({ code, part }));
-}
-function mapResourcePool(pools) {
-  const match = arr(pools).find((pool) => {
-    const code = String(pool?.code || pool?.name || "").trim().toLowerCase();
-    return code.includes("psi") || code.includes("psionic") || code.includes("energy");
-  });
-  return {
-    current: safeInt(match?.current_amount ?? match?.current ?? 0, 0),
-    max: safeInt(match?.max_amount ?? match?.max ?? 0, 0)
-  };
-}
-function mapShield(parts) {
-  const shield = arr(parts).find((part) => normalizeBodyPartCode(part?.code || part?.part_key) === "shield");
-  if (!shield) return { current: 0, max: 0 };
-  const max = safeInt(shield?.armor_max_critical ?? shield?.max_critical, 0);
-  const spent = safeInt(shield?.armor_critical ?? shield?.critical, 0);
-  return {
-    current: Math.max(max - spent, 0),
-    max
-  };
-}
-function mapStatuses(effectSummary) {
-  const effects = arr(effectSummary?.active_effects);
-  const mapped = effects.map((effect, index) => ({
-    id: String(effect?.id || effect?.effect_key || effect?.code || `effect-${index}`),
-    name: String(effect?.name || effect?.code || "Effect"),
-    polarity: effect?.is_negative ? MODIFIER_POLARITY.negative : MODIFIER_POLARITY.positive,
-    durationTurns: effect?.rounds_left == null ? null : safeInt(effect.rounds_left, null),
-    description: String(effect?.description || effect?.source || effect?.category || "").trim()
-  }));
-  return {
-    statuses: mapped.filter((entry) => entry.polarity === MODIFIER_POLARITY.negative),
-    effects: mapped.filter((entry) => entry.polarity !== MODIFIER_POLARITY.negative)
-  };
-}
-function mapModifiers(effectSummary) {
-  return arr(effectSummary?.modifier_rows).map((row, index) => {
-    const value = safeInt(row?.value, 0);
-    const target = String(row?.target || "modifier").replaceAll("_", " ");
-    return {
-      id: `${row?.target || "modifier"}:${row?.attribute || row?.skill_code || index}`,
-      name: target.replace(/\b\w/g, (letter) => letter.toUpperCase()),
-      value,
-      source: arr(row?.effect_codes).join(", ") || arr(row?.effect_keys).join(", ") || "effect",
-      polarity: value > 0 ? MODIFIER_POLARITY.positive : value < 0 ? MODIFIER_POLARITY.negative : MODIFIER_POLARITY.neutral,
-      selected: false,
-      alwaysActive: true,
-      requiresGMApproval: false,
-      consumesOnAction: false,
-      kind: arr(row?.effect_keys).some((key) => String(key).startsWith("equipment:")) ? MODIFIER_KINDS.passive : MODIFIER_KINDS.active,
-      description: `${target.replace(/\b\w/g, (letter) => letter.toUpperCase())} ${signed(value)}`
-    };
-  });
-}
-function mapZones(parts) {
-  return dedupeBodyParts(parts).map(({ code, part }) => ({
-    id: code,
-    label: BODY_PART_LABELS[code] || String(part?.name || code),
-    state: deriveZoneState(part),
-    canBeTargeted: part?.can_be_targeted !== false
-  }));
-}
-function mapArmorByZone(parts) {
-  return dedupeBodyParts(parts).map(({ code, part }) => ({
-    zoneId: code,
-    type: "armor",
-    protection: safeInt(part?.armor_value, 0),
-    durability: Math.max(safeInt(part?.armor_max_critical, 0) - safeInt(part?.armor_critical, 0), 0),
-    maxDurability: safeInt(part?.armor_max_critical, 0)
-  }));
-}
-function mapAbilityType(ability) {
-  if (String(ability?.attack_type || "").trim()) return SKILL_TYPES.attackTechnique;
-  if (String(ability?.activation_type || "").trim().toLowerCase() === "toggle") return SKILL_TYPES.toggleAbility;
-  if (safeInt(ability?.max_distance_m ?? ability?.max_distance, 0) > 0) return SKILL_TYPES.targetedAbility;
-  return SKILL_TYPES.instantAbility;
-}
-function mapAbility(ability) {
-  const maxDistance = safeInt(ability?.max_distance_m ?? ability?.max_distance, 0);
-  const resourceCost = safeInt(ability?.resource_cost ?? ability?.base_resource_cost, 0);
-  return {
-    id: `ability:${ability.id}`,
-    name: String(ability?.name || ability?.code || "Ability"),
-    type: mapAbilityType(ability),
-    source: mapSkillSource(ability?.source_type),
-    icon: String(ability?.name || ability?.code || "A").slice(0, 1).toUpperCase(),
-    color: mapSkillSource(ability?.source_type) === SKILL_SOURCES.psionic ? COLOR_SEMANTICS.psionic : mapSkillSource(ability?.source_type) === SKILL_SOURCES.implant ? COLOR_SEMANTICS.implant : String(ability?.attack_type || "").trim() ? COLOR_SEMANTICS.attack : COLOR_SEMANTICS.neutral,
-    actionCost: normalizeActionCost(ability?.action_cost),
-    resourceCost: resourceCost > 0 ? { type: "resource", amount: resourceCost } : null,
-    cooldownTurns: safeInt(ability?.cooldown_turns ?? ability?.base_cooldown_turns, 0),
-    weaponRequirements: [],
-    targeting: normalizeTargeting(ability?.targeting_mode || ability?.attack_type, maxDistance),
-    allowsMultipleTargets: false,
-    usesPoint: false,
-    radius: safeInt(ability?.radius_m, 0) || null,
-    isToggled: false,
-    disabledReason: ability?.is_enabled === false ? "Disabled" : null,
-    tooltip: String(ability?.description || ability?.name || ability?.code || "").trim()
-  };
-}
-function mapPerk(perk) {
-  const passive = String(perk?.activation_type || perk?.perk_type || "").trim().toLowerCase() === "passive";
-  return {
-    id: `perk:${perk.id}`,
-    name: String(perk?.name || perk?.code || "Perk"),
-    type: passive ? SKILL_TYPES.toggleAbility : SKILL_TYPES.instantAbility,
-    source: SKILL_SOURCES.perk,
-    icon: String(perk?.name || perk?.code || "P").slice(0, 1).toUpperCase(),
-    color: COLOR_SEMANTICS.neutral,
-    actionCost: ACTION_COSTS.main,
-    resourceCost: null,
-    cooldownTurns: 0,
-    weaponRequirements: [],
-    targeting: TARGETING_MODES.none,
-    allowsMultipleTargets: false,
-    usesPoint: false,
-    radius: null,
-    isToggled: passive,
-    disabledReason: passive ? "Passive" : null,
-    tooltip: String(perk?.description || perk?.name || perk?.code || "").trim()
-  };
-}
-function createFallbackQuickbarSkill(slot) {
-  const label = String(slot?.action_code || slot?.action_type || `Slot ${safeInt(slot?.slot_index, 0) + 1}`);
-  return {
-    id: `quickbar:${slot?.action_type || "item"}:${slot?.action_id || slot?.action_code || slot?.slot_index}`,
-    name: label,
-    type: SKILL_TYPES.instantAbility,
-    source: SKILL_SOURCES.item,
-    icon: label.slice(0, 1).toUpperCase(),
-    color: COLOR_SEMANTICS.neutral,
-    actionCost: ACTION_COSTS.main,
-    resourceCost: null,
-    cooldownTurns: 0,
-    weaponRequirements: [],
-    targeting: TARGETING_MODES.none,
-    allowsMultipleTargets: false,
-    usesPoint: false,
-    radius: null,
-    isToggled: false,
-    disabledReason: "Preview only",
-    tooltip: label
-  };
-}
-function mapSkills(bundle, quickbar) {
-  const library = [];
-  const registry = /* @__PURE__ */ new Map();
-  for (const ability of arr(bundle?.sections?.abilities?.abilities)) {
-    const mapped = mapAbility(ability);
-    library.push(mapped);
-    registry.set(mapped.id, mapped);
-  }
-  for (const perk of arr(bundle?.sections?.perks)) {
-    const mapped = mapPerk(perk);
-    library.push(mapped);
-    registry.set(mapped.id, mapped);
-  }
-  const quickSlots = arr(quickbar?.slots).sort((left, right) => safeInt(left?.slot_index, 0) - safeInt(right?.slot_index, 0)).map((slot) => {
-    let skillId = null;
-    if (slot?.action_type === "ability" && slot?.action_id) {
-      skillId = `ability:${slot.action_id}`;
-    } else if (slot?.action_type === "perk" && slot?.action_id) {
-      skillId = `perk:${slot.action_id}`;
-    } else {
-      const fallback = createFallbackQuickbarSkill(slot);
-      skillId = fallback.id;
-      if (!registry.has(skillId)) {
-        library.push(fallback);
-        registry.set(skillId, fallback);
-      }
-    }
-    return {
-      index: safeInt(slot?.slot_index, 0),
-      skillId
-    };
-  });
-  return { library, quickSlots };
-}
-function mapMagazine(magazine) {
-  if (!magazine) return null;
-  return {
-    id: String(magazine?.id || ""),
-    ammoType: String(magazine?.ammo_type_name || magazine?.ammo_type?.name || magazine?.ammo_type?.code || "Ammo"),
-    description: String(magazine?.name || magazine?.magazine_def?.name || magazine?.display_name || ""),
-    current: safeInt(magazine?.current_rounds ?? magazine?.current, 0),
-    max: safeInt(magazine?.capacity ?? magazine?.magazine_def?.capacity ?? magazine?.max, 0),
-    caliber: String(
-      magazine?.caliber_code || magazine?.magazine_def?.caliber_code || magazine?.caliber?.code || ""
-    )
-  };
-}
-function resolveWeaponCaliber(weapon, loadedMagazine) {
-  return String(
-    weapon?.active_profile?.caliber_code || weapon?.model?.caliber_code || loadedMagazine?.caliber || ""
-  ).trim();
-}
-function mapWeaponEntry(weapon, magazines) {
-  const loadedMagazine = mapMagazine(weapon?.loaded_magazine || weapon?.active_profile?.loaded_magazine);
-  const caliber = resolveWeaponCaliber(weapon, loadedMagazine);
-  const reserveMagazines = arr(magazines).map((magazine) => mapMagazine(magazine)).filter((magazine) => {
-    if (!magazine?.id) return false;
-    if (loadedMagazine?.id && magazine.id === loadedMagazine.id) return false;
-    if (magazine.current <= 0) return false;
-    if (caliber && magazine.caliber && magazine.caliber !== caliber) return false;
-    return true;
-  });
-  return {
-    id: String(weapon?.id || ""),
-    name: String(weapon?.name || weapon?.model?.name || "Weapon"),
-    svgRef: String(weapon?.model?.code || weapon?.weapon_model_code || ""),
-    fireModes: arr(
-      weapon?.available_fire_modes?.length ? weapon.available_fire_modes : weapon?.active_profile?.available_fire_modes
-    ).map((entry) => String(entry?.name || entry?.code || "").trim()).filter(Boolean),
-    currentFireMode: String(
-      weapon?.selected_fire_mode?.name || weapon?.selected_fire_mode?.code || weapon?.active_profile?.selected_fire_mode?.name || weapon?.active_profile?.selected_fire_mode?.code || ""
-    ) || null,
-    usesMagazine: Boolean(caliber || loadedMagazine || reserveMagazines.length),
-    usesConsumable: false,
-    requiresAmmo: Boolean(caliber),
-    loadedMagazine,
-    reserveMagazines,
-    ammo: {
-      current: loadedMagazine?.current ?? 0,
-      max: loadedMagazine?.max ?? 0
-    },
-    reloadCandidateId: reserveMagazines[0]?.id ?? null,
-    canReload: reserveMagazines.length > 0,
-    disabledReason: reserveMagazines.length > 0 ? null : "No compatible reserve magazines"
-  };
-}
-function mapWeaponState(armory) {
-  const weapons = arr(armory?.weapons);
-  const magazines = arr(armory?.magazines);
-  return {
-    primary: weapons[0] ? mapWeaponEntry(weapons[0], magazines) : null,
-    secondary: weapons[1] ? mapWeaponEntry(weapons[1], magazines) : null
-  };
-}
-function mapCombatSession(runtimeData, selectedCharacterId) {
-  if (!runtimeData?.encounter) {
-    return createInactiveCombatSession();
-  }
-  return {
-    id: String(runtimeData.encounter.id || ""),
-    status: String(runtimeData.encounter.status || "active"),
-    round: safeInt(runtimeData.encounter.current_round, 0),
-    currentParticipantId: String(runtimeData.encounter.active_character_id || "") || null,
-    participants: arr(runtimeData.visible_participants).map((participant) => ({
-      id: String(participant?.character_id || ""),
-      name: String(participant?.display_name || participant?.character_key || "Participant"),
-      tokenId: null,
-      isPlayer: String(participant?.character_bucket || "") === "player",
-      initiative: safeInt(participant?.initiative_value, 0),
-      initiativeRoll: safeInt(participant?.roll_value, 0),
-      order: safeInt(participant?.order_index, 0),
-      isCurrent: Boolean(participant?.is_current_turn),
-      canAct: safeInt(participant?.action_current, 0) > 0 || safeInt(participant?.move_current, 0) > 0,
-      condition: participant?.state?.is_alive === false ? "dead" : participant?.state?.is_conscious === false ? "unconscious" : "active"
-    })),
-    isViewerTurn: String(runtimeData.encounter.active_character_id || "") === String(selectedCharacterId || "")
-  };
-}
-function mapBattleLog(runtimeData) {
-  return {
-    entries: arr(runtimeData?.log).map((row, index) => ({
-      id: String(row?.id || `${index}`),
-      sequence: index,
-      kind: String(row?.event_type || "").includes("system") ? LOG_ENTRY_KINDS.system : LOG_ENTRY_KINDS.action,
-      actor: String(row?.actor_character_id || ""),
-      action: String(row?.event_type || "action"),
-      target: String(row?.target_character_id || ""),
-      delta: "",
-      summary: String(row?.message || row?.event_type || "Combat event"),
-      detail: row?.public_data && typeof row.public_data === "object" ? JSON.stringify(row.public_data) : ""
-    }))
-  };
-}
-function mapEntityRuntime(bundle, link, effectSummary, runtimeData) {
-  const character = bundle?.character ?? {};
-  const combat = bundle?.sections?.combat ?? {};
-  const participant = bundle?.sections?.combat_session?.participant ?? {};
-  const effectLists = mapStatuses(effectSummary);
-  const bodyParts = arr(combat?.body_parts);
-  return {
-    summary: {
-      id: String(character?.id || link?.character_id || ""),
-      name: String(
-        character?.display_name || character?.name || character?.resources?.name || link?.character_name || "Character"
-      ),
-      icon: "",
-      characterType: normalizeTokenKind(character?.character_bucket || link?.character_bucket),
-      ownerPlayerId: String(character?.owner_player_id || ""),
-      svgRef: "humanoid"
-    },
-    zones: mapZones(bodyParts),
-    shield: mapShield(bodyParts),
-    armorByZone: mapArmorByZone(bodyParts),
-    psi: mapResourcePool(bundle?.sections?.abilities?.resource_pools),
-    actions: {
-      main: safeInt(participant?.action_current, 0) > 0 || !runtimeData?.encounter,
-      move: safeInt(participant?.move_current, 0) > 0 || !runtimeData?.encounter
-    },
-    statuses: effectLists.statuses,
-    effects: effectLists.effects,
-    flags: {
-      alive: combat?.is_alive !== false,
-      conscious: combat?.is_conscious !== false
-    },
-    mech: null,
-    pilot: null
-  };
-}
-function buildSceneTokens(sceneItems, linksByTokenId) {
-  return arr(sceneItems).map((item) => {
-    const tokenId = String(item?.id || "").trim();
-    const link = linksByTokenId.get(tokenId) ?? null;
-    return {
-      tokenId,
-      name: String(item?.text?.plainText || item?.name || link?.token_name || link?.character_name || "Token"),
-      characterId: String(link?.character_id || "") || null,
-      kind: normalizeTokenKind(link?.character_bucket),
-      position: item?.position && typeof item.position === "object" ? { x: safeInt(item.position.x, 0), y: safeInt(item.position.y, 0) } : void 0
-    };
-  });
-}
-function createSupabaseCombatHudAdapter({ runtime: runtime2 } = {}) {
-  if (!runtime2?.bridges || !runtime2?.api) {
-    throw new Error("createSupabaseCombatHudAdapter: runtime is required.");
-  }
-  const listeners2 = /* @__PURE__ */ new Set();
-  const cache = {
-    settings: { url: "", apiKey: "" },
-    viewer: { playerId: "", playerName: "", role: VIEWER_ROLES.player },
-    selectedTokenId: null,
-    sceneTokens: [],
-    linksByTokenId: /* @__PURE__ */ new Map(),
-    runtimeByCharacterId: /* @__PURE__ */ new Map(),
-    weaponByCharacterId: /* @__PURE__ */ new Map(),
-    skillsByCharacterId: /* @__PURE__ */ new Map(),
-    modifiersByCharacterId: /* @__PURE__ */ new Map(),
-    combatSession: createInactiveCombatSession(),
-    battleLog: { entries: [] }
-  };
-  let disposed = false;
-  let selectedTokenOverride;
-  let roleOverride;
-  let refreshPromise = null;
-  let queuedRefresh = false;
-  let unsubscribePlayer = null;
-  let unsubscribeSceneItems = null;
-  let realtimeChannels = [];
-  let realtimeKey = "";
-  function emit() {
-    if (disposed) return;
-    for (const listener of Array.from(listeners2)) {
-      try {
-        listener();
-      } catch (error) {
-        console.error("[combatHud/supabase] listener failed", error);
-      }
-    }
-  }
-  function clearRealtime() {
-    const client = getRealtimeClient(cache.settings);
-    if (client) {
-      for (const channel of realtimeChannels) {
-        client.removeChannel(channel);
-      }
-    }
-    realtimeChannels = [];
-    realtimeKey = "";
-  }
-  function bindRealtime(settings, characterId, encounterId) {
-    if (!hasUsableSettings(settings)) {
-      clearRealtime();
-      return;
-    }
-    const key = `${characterId || ""}|${encounterId || ""}`;
-    if (key === realtimeKey) return;
-    clearRealtime();
-    realtimeKey = key;
-    const client = getRealtimeClient(settings);
-    if (!client) return;
-    if (characterId) {
-      for (const table of CHARACTER_TABLES) {
-        const channel = client.channel(`hud:${table}:${characterId}`).on(
-          "postgres_changes",
-          { event: "*", schema: "public", table, filter: `character_id=eq.${characterId}` },
-          () => {
-            void refresh();
-          }
-        ).subscribe();
-        realtimeChannels.push(channel);
-      }
-    }
-    if (encounterId) {
-      for (const entry of COMBAT_TABLES) {
-        const channel = client.channel(`hud:${entry.table}:${encounterId}`).on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: entry.table,
-            filter: `${entry.filter}=eq.${encounterId}`
-          },
-          () => {
-            void refresh();
-          }
-        ).subscribe();
-        realtimeChannels.push(channel);
-      }
-    }
-  }
-  async function ensureSubscriptions() {
-    if (!unsubscribePlayer) {
-      unsubscribePlayer = await runtime2.bridges.obr.subscribePlayerChanges(() => {
-        void refresh();
-      }).catch(() => null);
-    }
-    if (!unsubscribeSceneItems) {
-      unsubscribeSceneItems = await runtime2.bridges.obr.subscribeSceneItems(() => {
-        void refresh();
-      }).catch(() => null);
-    }
-  }
-  async function refresh() {
-    if (disposed) return;
-    if (refreshPromise) {
-      queuedRefresh = true;
-      return refreshPromise;
-    }
-    refreshPromise = (async () => {
-      const resolved = await resolveEffectiveSettings().catch(() => ({ settings: { url: "", apiKey: "" } }));
-      cache.settings = resolved.settings;
-      const player = await runtime2.bridges.obr.getPlayerInfo().catch(() => ({
-        id: "",
-        name: "",
-        role: "PLAYER",
-        selection: []
-      }));
-      cache.viewer = {
-        playerId: String(player?.id || ""),
-        playerName: String(player?.name || ""),
-        role: roleOverride ?? normalizeViewerRole(player?.role)
-      };
-      const context = await runtime2.bridges.obr.getRoomSceneContext().catch(() => ({
-        campaignId: "",
-        roomId: "",
-        sceneId: ""
-      }));
-      const sceneItems = await runtime2.bridges.obr.getSceneItems().catch(() => []);
-      const fallbackSelection = arr(player?.selection).map((value) => String(value || "").trim()).filter(Boolean)[0] ?? null;
-      cache.selectedTokenId = selectedTokenOverride !== void 0 ? selectedTokenOverride : fallbackSelection;
-      let links = [];
-      if (hasUsableSettings(cache.settings) && context.roomId && context.sceneId) {
-        const tokenLinks = await runtime2.api.placement.getSceneTokenLinks({
-          campaign_id: context.campaignId,
-          room_id: context.roomId,
-          scene_id: context.sceneId
-        }, cache.settings).catch(() => null);
-        links = arr(tokenLinks?.links);
-      }
-      cache.linksByTokenId = new Map(links.map((link) => [String(link?.token_id || "").trim(), link]));
-      cache.sceneTokens = buildSceneTokens(sceneItems, cache.linksByTokenId);
-      let runtimeData = null;
-      if (hasUsableSettings(cache.settings) && context.roomId && context.sceneId) {
-        runtimeData = await runtime2.api.combat.getActiveRuntime({
-          campaign_id: context.campaignId,
-          room_id: context.roomId,
-          scene_id: context.sceneId,
-          actor_player_id: cache.viewer.playerId,
-          actor_is_gm: cache.viewer.role === VIEWER_ROLES.gm,
-          log_limit: 8
-        }, cache.settings).catch(() => null);
-      }
-      const selectedLink = cache.selectedTokenId ? cache.linksByTokenId.get(String(cache.selectedTokenId).trim()) ?? null : null;
-      const selectedCharacterId = String(selectedLink?.character_id || "").trim() || null;
-      cache.combatSession = mapCombatSession(runtimeData, selectedCharacterId);
-      cache.battleLog = mapBattleLog(runtimeData);
-      if (!selectedCharacterId || !hasUsableSettings(cache.settings)) {
-        bindRealtime(cache.settings, null, runtimeData?.encounter?.id ?? null);
-        emit();
-        return;
-      }
-      const bundle = await runtime2.api.placement.getCharacterRuntimeBundle({
-        character_id: selectedCharacterId,
-        sections: ["summary", "combat", "skills", "abilities", "effects", "perks", "combat_session"],
-        campaign_id: context.campaignId,
-        room_id: context.roomId,
-        scene_id: context.sceneId,
-        actor_player_id: cache.viewer.playerId,
-        actor_is_gm: cache.viewer.role === VIEWER_ROLES.gm
-      }, cache.settings).catch(() => null);
-      const quickbar = await runtime2.api.placement.getCharacterQuickbar({
-        character_id: selectedCharacterId,
-        actor_player_id: cache.viewer.playerId,
-        actor_is_gm: cache.viewer.role === VIEWER_ROLES.gm
-      }, cache.settings).catch(() => null);
-      const armory = await runtime2.api.weapon.getCharacterArmory(selectedCharacterId, cache.settings).catch(() => null);
-      const effectSummary = await runtime2.api.effects.getCharacterEffectSummary(selectedCharacterId, cache.settings).catch(() => null);
-      cache.runtimeByCharacterId.set(selectedCharacterId, mapEntityRuntime(bundle, selectedLink, effectSummary, runtimeData));
-      cache.weaponByCharacterId.set(selectedCharacterId, mapWeaponState(armory));
-      cache.skillsByCharacterId.set(selectedCharacterId, mapSkills(bundle, quickbar));
-      cache.modifiersByCharacterId.set(selectedCharacterId, mapModifiers(effectSummary));
-      bindRealtime(cache.settings, selectedCharacterId, runtimeData?.encounter?.id ?? null);
-      emit();
-    })().finally(() => {
-      refreshPromise = null;
-      if (queuedRefresh) {
-        queuedRefresh = false;
-        void refresh();
-      }
-    });
-    return refreshPromise;
-  }
-  return createCombatHudAdapter({
-    getViewer() {
-      return cache.viewer;
-    },
-    getSelectedTokenId() {
-      return cache.selectedTokenId ?? null;
-    },
-    getSceneTokens() {
-      return cache.sceneTokens;
-    },
-    getCharacterForToken(tokenId) {
-      if (!tokenId) return null;
-      const token = cache.sceneTokens.find((entry) => entry.tokenId === tokenId) ?? null;
-      const link = cache.linksByTokenId.get(String(tokenId).trim()) ?? null;
-      if (!token || !link) return null;
-      return {
-        characterId: String(link.character_id || ""),
-        token
-      };
-    },
-    getCharacterRuntime(characterId) {
-      return cache.runtimeByCharacterId.get(String(characterId || "").trim()) ?? null;
-    },
-    getWeaponState(characterId) {
-      return cache.weaponByCharacterId.get(String(characterId || "").trim()) ?? null;
-    },
-    getAvailableSkills(characterId) {
-      return cache.skillsByCharacterId.get(String(characterId || "").trim()) ?? { library: [], quickSlots: [] };
-    },
-    getModifiers(characterId) {
-      return cache.modifiersByCharacterId.get(String(characterId || "").trim()) ?? [];
-    },
-    getCombatSession() {
-      return cache.combatSession;
-    },
-    getBattleLog() {
-      return cache.battleLog;
-    },
-    selectToken(tokenId) {
-      selectedTokenOverride = tokenId ?? null;
-      void refresh();
-    },
-    setViewerRole(role) {
-      roleOverride = normalizeViewerRole(role);
-      void refresh();
-    },
-    setMockScenario() {
-      return null;
-    },
-    subscribe(listener) {
-      if (typeof listener !== "function") return () => {
-      };
-      listeners2.add(listener);
-      void ensureSubscriptions();
-      void refresh();
-      return () => {
-        listeners2.delete(listener);
-      };
-    },
-    async refresh() {
-      await refresh();
-    },
-    dispose() {
-      disposed = true;
-      clearRealtime();
-      if (typeof unsubscribePlayer === "function") unsubscribePlayer();
-      if (typeof unsubscribeSceneItems === "function") unsubscribeSceneItems();
-      listeners2.clear();
-    }
-  }, "supabase");
-}
-
-// hud/core/combatHudSelectors.js
-var COMPACT_LOG_LIMIT = 5;
-function selectHudMode(state) {
-  if (state?.ui?.isHudCollapsed) return "collapsed";
-  return state?.status ?? HUD_STATUS.idle;
-}
-function selectCurrentEntity(state) {
-  return state?.snapshot?.entity ?? null;
-}
-function selectControlledCharacter(state) {
-  if (state?.status !== HUD_STATUS.ready) return null;
-  if (!state?.access?.canViewSelectedCharacter) return null;
-  const entity = state?.snapshot?.entity ?? null;
-  if (!entity) return null;
-  const type = entity.summary?.characterType;
-  if (state.viewer?.role === "player") return entity;
-  if (type === TOKEN_KINDS.player || type === TOKEN_KINDS.mech) return entity;
-  return null;
-}
-function selectCombatSession(state) {
-  return state?.snapshot?.combatSession ?? null;
-}
-function selectIsViewerTurn(state) {
-  return Boolean(state?.snapshot?.combatSession?.isViewerTurn);
-}
-function selectSelectedSkill(state) {
-  const id = state?.ui?.selectedTechniqueId ?? state?.ui?.selectedAbilityId ?? null;
-  if (!id) return null;
-  const library = state?.snapshot?.skills?.library ?? [];
-  return library.find((s) => s.id === id) ?? null;
-}
-function selectCurrentActionCost(state) {
-  const skill = selectSelectedSkill(state);
-  if (skill) return skill.actionCost;
-  return "MAIN";
-}
-function selectDisabledReason(state) {
-  if (state?.status !== HUD_STATUS.ready) return "No character loaded.";
-  const entity = selectCurrentEntity(state);
-  if (!entity) return "No character loaded.";
-  if (!entity.flags?.alive) return "Character is dead.";
-  if (!entity.flags?.conscious) return "Character is unconscious.";
-  const session = selectCombatSession(state);
-  if (session && session.status === "active" && !session.isViewerTurn) {
-    return "Not your turn.";
-  }
-  const skill = selectSelectedSkill(state);
-  if (skill?.disabledReason) return skill.disabledReason;
-  const cost = selectCurrentActionCost(state);
-  if (cost === "MAIN" && !entity.actions?.main) return "MAIN action already spent.";
-  if (cost === "MOVE" && !entity.actions?.move) return "MOVE action already spent.";
-  if (skill && skill.targeting !== "none") {
-    const targeting = state?.ui?.targeting ?? {};
-    if (skill.usesPoint && !targeting.selectedPoint) return "Pick a target point.";
-    if (!skill.usesPoint && (targeting.selectedTargetIds?.length ?? 0) === 0) {
-      return "Pick a target on the map.";
-    }
-  }
-  return null;
-}
-function selectCompactBattleLog(state) {
-  const entries2 = state?.snapshot?.battleLog?.entries ?? [];
-  if (entries2.length <= COMPACT_LOG_LIMIT) return entries2.slice();
-  return entries2.slice(entries2.length - COMPACT_LOG_LIMIT);
-}
-function selectQuickSlots(state) {
-  return state?.snapshot?.skills?.quickSlots ?? [];
-}
-function selectSkillById(state, skillId) {
-  if (!skillId) return null;
-  const library = state?.snapshot?.skills?.library ?? [];
-  return library.find((s) => s.id === skillId) ?? null;
-}
-function selectModifierGroups(state) {
-  return state?.snapshot?.modifiers ?? { passive: [], active: [], narrative: [] };
-}
-function selectSelectedBodyPart(state) {
-  return state?.ui?.targeting?.selectedBodyPartId ?? DEFAULT_BODY_PART_ID;
-}
-var BODY_PART_LABELS2 = Object.freeze({
-  head: "HEAD",
-  torso: "TORSO",
-  l_arm: "L.ARM",
-  r_arm: "R.ARM",
-  l_leg: "L.LEG",
-  r_leg: "R.LEG"
-});
-function selectBodyPartLabel(bodyPartId) {
-  if (!bodyPartId) return "";
-  return BODY_PART_LABELS2[bodyPartId] ?? String(bodyPartId).toUpperCase();
-}
-function selectActionLabel(state) {
-  const skill = selectSelectedSkill(state);
-  if (!skill) return "ATTACK";
-  switch (skill.type) {
-    case "attackTechnique":
-      return "ATTACK";
-    case "itemAction":
-      return skill.usesPoint ? "THROW" : "USE";
-    case "targetedAbility":
-      return skill.source === "psionic" ? "CAST" : "ACTIVATE";
-    case "instantAbility":
-      return skill.source === "item" ? "USE" : "ACTIVATE";
-    case "toggleAbility":
-      return "ACTIVATE";
-    default:
-      return "ATTACK";
-  }
-}
-function selectPlayerStatusLabel(state) {
-  const controlled = selectControlledCharacter(state);
-  if (state?.viewer?.role === "gm" && !controlled) return "GM VIEW";
-  const session = selectCombatSession(state);
-  if (session && session.status === "active") {
-    return selectIsViewerTurn(state) ? "YOUR TURN" : "WAITING";
-  }
-  return "READY";
-}
-function selectVisibleStatuses(state, limit = 5) {
-  const entity = selectCurrentEntity(state);
-  if (!entity) return { shown: [], overflow: 0 };
-  const all = [
-    ...Array.isArray(entity.statuses) ? entity.statuses : [],
-    ...Array.isArray(entity.effects) ? entity.effects : []
-  ];
-  if (all.length <= limit) return { shown: all, overflow: 0 };
-  return { shown: all.slice(0, limit), overflow: all.length - limit };
-}
-function selectTargetView(state) {
-  const bodyPartId = selectSelectedBodyPart(state);
-  const empty = {
-    hasTarget: false,
-    name: null,
-    kind: "humanoid",
-    bodyPartId,
-    bodyPartLabel: selectBodyPartLabel(bodyPartId)
-  };
-  const session = selectCombatSession(state);
-  if (!session || session.status !== "active") return empty;
-  const selfId = state?.selectedCharacterId ?? null;
-  const participants = Array.isArray(session.participants) ? session.participants : [];
-  const enemy = participants.find((p) => p.id !== selfId && !p.isPlayer && p.condition === "active") ?? participants.find((p) => p.id !== selfId && p.condition === "active") ?? null;
-  if (!enemy) return empty;
-  return {
-    hasTarget: true,
-    name: enemy.name,
-    kind: "humanoid",
-    bodyPartId,
-    bodyPartLabel: selectBodyPartLabel(bodyPartId)
-  };
-}
-function selectModifierChips(state) {
-  const groups = selectModifierGroups(state);
-  return [
-    ...groups.passive ?? [],
-    ...groups.active ?? [],
-    ...groups.narrative ?? []
-  ];
-}
-
-// screens/combatHud/combatHudScreen.js
-var esc = (value) => escapeHtml(value ?? "");
-var arr2 = (value) => Array.isArray(value) ? value : [];
-var dash = (value) => value === null || value === void 0 || value === "" ? "-" : value;
-var signed2 = (value) => {
-  const number = Number(value ?? 0) || 0;
-  return `${number >= 0 ? "+" : ""}${number}`;
-};
-function injectStylesOnce() {
-  if (document.getElementById("combat-hud-screen-styles")) return;
-  const style = document.createElement("style");
-  style.id = "combat-hud-screen-styles";
-  style.textContent = combatHudStyles_default;
-  document.head.appendChild(style);
-}
-function mountCombatHudScreen({ root: root2, runtime: runtime2 }) {
-  injectStylesOnce();
-  const adapter = createSupabaseCombatHudAdapter({ runtime: runtime2 });
-  const store = createCombatHudStore({ adapter });
-  let state = store.getState();
-  root2.innerHTML = `
-    <div class="combat-hud-screen">
-      <section class="combat-hud-banner">
-        <div class="combat-hud-banner-title">
-          <span>Combat HUD</span>
-          <div class="combat-hud-toolbar">
-            <button class="combat-hud-button secondary" type="button" data-hud-action="collapse">Collapse</button>
-            <button class="combat-hud-button secondary" type="button" data-hud-action="refresh">Refresh</button>
-          </div>
-        </div>
-        <div class="combat-hud-banner-meta" data-hud-ref="meta"></div>
-      </section>
-      <div data-hud-ref="body"></div>
-    </div>
-  `;
-  const refs = {
-    meta: root2.querySelector('[data-hud-ref="meta"]'),
-    body: root2.querySelector('[data-hud-ref="body"]')
-  };
-  function renderMeta() {
-    const mode = selectHudMode(state);
-    const session = selectCombatSession(state);
-    const viewerRole = String(state?.viewer?.role || "player").toUpperCase();
-    const chips = [
-      chip(`Source ${state?.source || "supabase"}`),
-      chip(`Role ${viewerRole}`),
-      chip(`State ${mode}`, chipKindForMode(mode)),
-      chip(`Selected token ${state?.selectedTokenId ? "linked" : "none"}`),
-      chip(`Combat ${session?.status || "inactive"}`)
-    ];
-    refs.meta.innerHTML = chips.join("");
-  }
-  function renderBody() {
-    const mode = selectHudMode(state);
-    if (mode === "collapsed") {
-      refs.body.innerHTML = `
-        <section class="combat-hud-empty">
-          HUD collapsed. Use <strong>Collapse</strong> again to reopen it.
-        </section>
-      `;
-      return;
-    }
-    if (mode === "loading" || mode === "idle") {
-      refs.body.innerHTML = `<section class="combat-hud-empty">Loading HUD state...</section>`;
-      return;
-    }
-    if (mode === "error") {
-      refs.body.innerHTML = `
-        <section class="combat-hud-empty">
-          <div>HUD failed to load.</div>
-          <div style="margin-top:8px">${esc(state?.error?.message || "Unknown error")}</div>
-          ${state?.error?.cause ? `<div style="margin-top:6px;color:#ffb3b3">${esc(state.error.cause)}</div>` : ""}
-        </section>
-      `;
-      return;
-    }
-    if (mode === "empty") {
-      refs.body.innerHTML = `
-        <section class="combat-hud-empty">
-          Select a linked token to preview the Combat HUD.
-        </section>
-      `;
-      return;
-    }
-    const entity = selectCurrentEntity(state);
-    const statuses = selectVisibleStatuses(state, 6);
-    const modifiers = selectModifierChips(state);
-    const target = selectTargetView(state);
-    const actionLabel = selectActionLabel(state);
-    const actionCost = selectCurrentActionCost(state);
-    const disabledReason = selectDisabledReason(state);
-    const quickSlots = selectQuickSlots(state);
-    const logEntries = selectCompactBattleLog(state);
-    const session = selectCombatSession(state);
-    const primaryWeapon = state?.snapshot?.weapon?.primary ?? null;
-    refs.body.innerHTML = `
-      <div class="combat-hud-layout">
-        <div class="combat-hud-column">
-          ${renderPlayerPanel(entity, statuses, session)}
-          ${renderTargetPanel(target)}
-        </div>
-        <div class="combat-hud-column">
-          ${renderWeaponPanel(primaryWeapon)}
-          ${renderSkillsPanel(quickSlots)}
-        </div>
-        <div class="combat-hud-column">
-          ${renderModifiersPanel(modifiers)}
-          ${renderActionPanel(actionLabel, actionCost, disabledReason)}
-          ${renderLogPanel(logEntries)}
-        </div>
-      </div>
-    `;
-  }
-  function renderPlayerPanel(entity, statuses, session) {
-    if (!entity) {
-      return panel("Player", `<div class="combat-hud-empty">No visible character runtime.</div>`);
-    }
-    const playerStatus = selectPlayerStatusLabel(state);
-    const zones = arr2(entity.zones).map((zone) => {
-      const armor = arr2(entity.armorByZone).find((entry) => entry.zoneId === zone.id) ?? null;
-      const meta = [
-        chip(zone.state),
-        armor ? chip(`Armor ${dash(armor.protection)}`) : "",
-        armor && armor.maxDurability ? chip(`Dur ${dash(armor.durability)}/${dash(armor.maxDurability)}`) : ""
-      ].filter(Boolean).join("");
-      return `
-        <div class="combat-hud-zone ${esc(zone.state)}">
-          <div class="combat-hud-zone-top">
-            <div class="combat-hud-zone-name">${esc(zone.label)}</div>
-            <div class="combat-hud-zone-state">${esc(zone.canBeTargeted ? "targetable" : "locked")}</div>
-          </div>
-          <div class="combat-hud-zone-meta">${meta}</div>
-        </div>
-      `;
-    }).join("");
-    const statusList = statuses.shown.length ? `<div class="combat-hud-status-list">${statuses.shown.map(renderStatusItem).join("")}</div>` : `<div class="combat-hud-empty">No active statuses.</div>`;
-    return panel(
-      "Player",
-      `
-        <div class="combat-hud-player-header">
-          <div>
-            <div class="combat-hud-player-name">${esc(entity.summary?.name || "Unknown")}</div>
-            <div class="combat-hud-player-subtitle">
-              ${esc(entity.summary?.characterType || "character")} - ${esc(playerStatus)}
-            </div>
-          </div>
-          <div class="combat-hud-inline">
-            ${chip(entity.flags?.alive ? "Alive" : "Dead", entity.flags?.alive ? "ok" : "err")}
-            ${chip(entity.flags?.conscious ? "Conscious" : "Unconscious", entity.flags?.conscious ? "ok" : "warn")}
-            ${chip(`Round ${dash(session?.round)}`)}
-          </div>
-        </div>
-        <div class="combat-hud-status-grid">
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Shield</div>
-            <div class="combat-hud-stat-value">${dash(entity.shield?.current)}/${dash(entity.shield?.max)}</div>
-          </div>
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Psi / Energy</div>
-            <div class="combat-hud-stat-value">${dash(entity.psi?.current)}/${dash(entity.psi?.max)}</div>
-          </div>
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Main Action</div>
-            <div class="combat-hud-stat-value">${entity.actions?.main ? "Ready" : "Spent"}</div>
-          </div>
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Move Action</div>
-            <div class="combat-hud-stat-value">${entity.actions?.move ? "Ready" : "Spent"}</div>
-          </div>
-        </div>
-        <div class="combat-hud-zones">${zones || `<div class="combat-hud-empty">No body zones.</div>`}</div>
-        <div style="margin-top:12px">
-          <div class="combat-hud-panel-title" style="margin-bottom:8px">Statuses</div>
-          ${statusList}
-          ${statuses.overflow > 0 ? `<div class="combat-hud-item-detail">+${statuses.overflow} more statuses hidden</div>` : ""}
-        </div>
-      `
-    );
-  }
-  function renderTargetPanel(target) {
-    if (!target?.hasTarget) {
-      return panel("Target", `<div class="combat-hud-target-empty">Pick a target on the map to populate this block.</div>`);
-    }
-    return panel(
-      "Target",
-      `
-        <div class="combat-hud-item-title">${esc(target.name || "Target")}</div>
-        <div class="combat-hud-item-subtitle">Kind: ${esc(target.kind || "unknown")}</div>
-        <div class="combat-hud-status-grid" style="margin-top:12px">
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Body Part</div>
-            <div class="combat-hud-stat-value">${esc(target.bodyPartLabel || "-")}</div>
-          </div>
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Mode</div>
-            <div class="combat-hud-stat-value">Token Target</div>
-          </div>
-        </div>
-      `
-    );
-  }
-  function renderWeaponPanel(weapon) {
-    if (!weapon) {
-      return panel("Weapon", `<div class="combat-hud-empty">No weapon state available.</div>`);
-    }
-    const fireModes = arr2(weapon.fireModes).length ? arr2(weapon.fireModes).join(", ") : "None";
-    const reserveCount = arr2(weapon.reserveMagazines).length;
-    const loadedMagazine = weapon.loadedMagazine ? `${dash(weapon.loadedMagazine.current)}/${dash(weapon.loadedMagazine.max)} ${esc(weapon.loadedMagazine.ammoType || "")}` : "Not loaded";
-    return panel(
-      "Gun",
-      `
-        <div class="combat-hud-item-title">${esc(weapon.name || "Weapon")}</div>
-        <div class="combat-hud-item-subtitle">Modes: ${esc(fireModes)}</div>
-        <div class="combat-hud-status-grid" style="margin-top:12px">
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Magazine</div>
-            <div class="combat-hud-stat-value">${loadedMagazine}</div>
-          </div>
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Reserve</div>
-            <div class="combat-hud-stat-value">${dash(reserveCount)}</div>
-          </div>
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Ammo Pool</div>
-            <div class="combat-hud-stat-value">${dash(weapon.ammo?.current)}/${dash(weapon.ammo?.max)}</div>
-          </div>
-          <div class="combat-hud-stat">
-            <div class="combat-hud-stat-label">Reload</div>
-            <div class="combat-hud-stat-value">${weapon.canReload ? "Available" : "Blocked"}</div>
-          </div>
-        </div>
-      `
-    );
-  }
-  function renderSkillsPanel(quickSlots) {
-    const items = arr2(quickSlots).map((slot) => {
-      const skill = selectSkillById(state, slot.skillId);
-      if (!skill) {
-        return `
-          <div class="combat-hud-skill-item">
-            <div>
-              <div class="combat-hud-item-title">Slot ${slot.index + 1}</div>
-              <div class="combat-hud-item-subtitle">Empty or unresolved quick action.</div>
-            </div>
-            ${chip(`Slot ${slot.index + 1}`)}
-          </div>
-        `;
-      }
-      return `
-        <div class="combat-hud-skill-item">
-          <div>
-            <div class="combat-hud-item-title">${esc(skill.name)}</div>
-            <div class="combat-hud-item-subtitle">${esc(skill.type)} - ${esc(skill.source)}</div>
-            <div class="combat-hud-skill-meta">
-              ${chip(skill.actionCost || "MAIN")}
-              ${skill.resourceCost ? chip(`${esc(skill.resourceCost.type)} ${dash(skill.resourceCost.amount)}`) : ""}
-              ${skill.cooldownTurns ? chip(`CD ${dash(skill.cooldownTurns)}`) : ""}
-              ${skill.disabledReason ? chip(skill.disabledReason, "warn") : chip("Ready", "ok")}
-            </div>
-          </div>
-          ${chip(`Q${slot.index + 1}`)}
-        </div>
-      `;
-    }).join("");
-    return panel(
-      "Skills",
-      items || `<div class="combat-hud-empty">No quick-slot actions configured.</div>`
-    );
-  }
-  function renderModifiersPanel(modifiers) {
-    const content = arr2(modifiers).length ? arr2(modifiers).map((modifier) => `
-          <div class="combat-hud-modifier-item">
-            <div class="combat-hud-item-title">${esc(modifier.name)}</div>
-            <div class="combat-hud-item-subtitle">${esc(modifier.source || modifier.kind || "modifier")}</div>
-            <div class="combat-hud-inline" style="margin-top:8px">
-              ${chip(`Value ${signed2(modifier.value)}`, modifier.polarity === "negative" ? "err" : modifier.polarity === "positive" ? "ok" : "")}
-              ${chip(modifier.kind || "active")}
-            </div>
-            ${modifier.description ? `<div class="combat-hud-item-detail">${esc(modifier.description)}</div>` : ""}
-          </div>
-        `).join("") : `<div class="combat-hud-empty">No modifiers detected.</div>`;
-    return panel("Modifiers", `<div class="combat-hud-modifier-list">${content}</div>`);
-  }
-  function renderActionPanel(actionLabel, actionCost, disabledReason) {
-    return panel(
-      "Action",
-      `
-        <div class="combat-hud-action">
-          <button class="combat-hud-action-button combat-hud-button" type="button" disabled>${esc(actionLabel)}</button>
-          <div class="combat-hud-action-hint">Action cost: ${esc(actionCost || "MAIN")}</div>
-          <div class="combat-hud-action-hint ${disabledReason ? "err" : ""}">
-            ${esc(disabledReason || "Read-only HUD preview. Action execution stays in Resolve Attack for now.")}
-          </div>
-        </div>
-      `
-    );
-  }
-  function renderLogPanel(entries2) {
-    const content = arr2(entries2).length ? arr2(entries2).map((entry) => `
-          <div class="combat-hud-log-item">
-            <div class="combat-hud-item-title">${esc(entry.summary || entry.action || "Log entry")}</div>
-            <div class="combat-hud-item-subtitle">${esc(entry.detail || entry.target || "")}</div>
-          </div>
-        `).join("") : `<div class="combat-hud-empty">Combat log is empty.</div>`;
-    return panel("Battle Log", `<div class="combat-hud-log-list">${content}</div>`);
-  }
-  function renderStatusItem(item) {
-    return `
-      <div class="combat-hud-status-item">
-        <div class="combat-hud-item-title">${esc(item.name || item.id || "Status")}</div>
-        <div class="combat-hud-item-subtitle">${esc(item.description || item.polarity || "")}</div>
-      </div>
-    `;
-  }
-  function panel(title, content) {
-    return `
-      <section class="combat-hud-panel">
-        <div class="combat-hud-panel-title">${esc(title)}</div>
-        ${content}
-      </section>
-    `;
-  }
-  function chip(label, kind = "") {
-    return `<span class="combat-hud-chip ${esc(kind)}">${esc(label)}</span>`;
-  }
-  function chipKindForMode(mode) {
-    if (mode === "ready") return "ok";
-    if (mode === "error") return "err";
-    if (mode === "empty") return "warn";
-    return "";
-  }
-  function render() {
-    renderMeta();
-    renderBody();
-  }
-  const unsubscribe = store.subscribe((nextState) => {
-    state = nextState;
-    render();
-  });
-  root2.addEventListener("click", async (event) => {
-    const action = event.target?.closest?.("[data-hud-action]")?.dataset?.hudAction;
-    if (!action) return;
-    if (action === "collapse") {
-      store.setHudCollapsed(!state?.ui?.isHudCollapsed);
-      return;
-    }
-    if (action === "refresh") {
-      await adapter.refresh();
-    }
-  });
-  root2.addEventListener("odyssey:tabshow", () => {
-    void adapter.refresh();
-  });
-  render();
-  store.initialize();
-  return () => {
-    unsubscribe?.();
-    store.dispose();
-    adapter.dispose();
-  };
-}
-
-// screens/resolveAttack/resolveAttackStyles.css
-var resolveAttackStyles_default = '/* Resolve Attack screen \u2014 scoped styles (prefix .ra-). Reuses shell design tokens. */\r\n.ra-screen { display: flex; flex-direction: column; gap: 14px; }\r\n.ra-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\r\n.ra-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }\r\n@media (max-width: 640px) { .ra-grid2 { grid-template-columns: 1fr; } }\r\n.ra-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }\r\n.ra-field > span { font-size: 11px; color: var(--muted); }\r\n.ra-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 0 2px; }\r\n.ra-hidden { display: none !important; }\r\n.ra-mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }\r\n.ra-muted { color: var(--muted); font-size: 12px; }\r\n\r\nselect { width: 100%; border-radius: 10px; border: 1px solid rgba(61,92,129,.9); background: rgba(8,17,28,.9); color: var(--text); padding: 9px 11px; font: inherit; }\r\n\r\n/* mode toggle */\r\n.ra-modes { display: flex; gap: 8px; }\r\n.ra-mode { flex: 1; text-align: center; padding: 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--text); cursor: pointer; font-size: 13px; }\r\n.ra-mode.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; font-weight: 700; }\r\n\r\n/* status banners */\r\n.ra-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\r\n.ra-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\r\n.ra-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\r\n.ra-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\r\n.ra-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\r\n\r\n/* chips */\r\n.ra-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(8,17,28,.7); border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; font-size: 11px; }\r\n.ra-chip.neg { border-color: rgba(201,75,88,.5); color: #ffd9de; }\r\n.ra-block { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }\r\n\r\n/* modifier chips */\r\n.ra-mc { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 4px 10px; font-size: 11px; cursor: pointer; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\r\n.ra-mc.on { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; }\r\n.ra-pos { color: #7fe0a3; } .ra-neg { color: #ff9aa5; }\r\n\r\n/* energy bar */\r\n.ra-ebar { width: 80px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; display: inline-block; }\r\n.ra-ebar > span { display: block; height: 100%; background: var(--accent); }\r\n\r\n/* doll */\r\n.ra-doll { position: relative; }\r\n.ra-doll .ra-part { position: absolute; cursor: pointer; border: 1px solid rgba(0,0,0,.35); }\r\n.ra-doll .ra-part:hover { outline: 1.5px solid var(--accent); outline-offset: 1px; }\r\n.ra-doll .ra-part.sel { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n.ra-doll .ra-base { position: absolute; border-radius: 50%; background: rgba(21,34,53,.9); border: 1px solid var(--line); }\r\n\r\n/* part chips */\r\n.ra-parts { display: flex; gap: 6px; flex-wrap: wrap; }\r\n.ra-partchip { font-size: 11px; padding: 4px 9px; border-radius: 999px; cursor: pointer; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\r\n.ra-partchip.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; }\r\n.ra-partchip.custom { border-style: dashed; }\r\n.ra-partchip.disabled { opacity: .45; cursor: not-allowed; text-decoration: line-through; }\r\n\r\n/* summary card */\r\n.ra-summary { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }\r\n@media (max-width: 640px) { .ra-summary { grid-template-columns: repeat(2, minmax(0,1fr)); } }\r\n.ra-stat { background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }\r\n.ra-stat .k { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\r\n.ra-stat .v { font-size: 14px; font-weight: 700; }\r\n.ra-stat .v.hit { color: #7fe0a3; } .ra-stat .v.miss { color: var(--muted); }\r\n.ra-stat .v.crit { color: #ffb454; } .ra-stat .v.danger { color: #ff9aa5; }\r\n\r\n/* debug panel */\r\n.ra-debug pre { max-height: 220px; overflow: auto; }\r\n.ra-debug .ra-row { margin-bottom: 6px; }\r\n.ra-feature { display: flex; justify-content: space-between; gap: 8px; padding: 6px 9px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 8px; font-size: 11px; }\r\n.ra-feature .on { color: #7fe0a3; } .ra-feature .off { color: var(--muted); }\r\n\r\n/* inventory lists */\r\n.ra-list { display: flex; flex-direction: column; gap: 6px; }\r\n\r\n/* log */\r\n.ra-log .ra-logline { font-size: 11px; color: var(--muted); padding: 6px 0; border-bottom: 1px solid rgba(39,65,95,.5); line-height: 1.5; }\r\n.ra-log .who { color: var(--text); }\r\n.ra-flash { animation: ra-fl .5s ease; }\r\n@keyframes ra-fl { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }\r\n';
-
-// screens/resolveAttack/resolveAttackService.js
-var ValidationError = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "ValidationError";
-  }
-};
-var ERROR_MESSAGES = Object.freeze({
-  // characters / targets
-  CHARACTER_NOT_FOUND: "Attacker character was not found.",
-  TARGET_NOT_FOUND: "Target character was not found.",
-  INVALID_TARGET: "Invalid target for this attack.",
-  // body parts
-  BODY_PART_NOT_FOUND: "Target body part was not found or cannot be targeted.",
-  TARGET_BODY_PART_NOT_FOUND: "Target body part was not found.",
-  BODY_PART_DESTROYED: "That body part is already destroyed \u2014 choose another.",
-  // weapon model / profile
-  WEAPON_NOT_FOUND: "Weapon was not found for the attacker.",
-  INVALID_WEAPON_MODEL: "Weapon model linked to the weapon was not found.",
-  INVALID_PROFILE: "Selected weapon profile is invalid.",
-  PROFILE_NOT_FOUND: "Weapon profile was not found.",
-  NO_ACTIVE_PROFILE: "Weapon has no active profile.",
-  // fire mode
-  INVALID_FIRE_MODE: "Fire mode is missing or not allowed for this weapon.",
-  FIRE_MODE_NOT_ALLOWED: "This fire mode is not allowed for the weapon.",
-  FIRE_MODE_NOT_ALLOWED_FOR_ACTIVE_PROFILE: "This fire mode is not allowed for the active profile.",
-  // magazine / ammo
-  NO_MAGAZINE: "Weapon requires a loaded magazine.",
-  INVALID_MAGAZINE: "Loaded magazine is invalid or incompatible.",
-  MAGAZINE_EMPTY: "The loaded magazine is empty.",
-  NO_AMMO: "Not enough ammunition to fire.",
-  MAGAZINE_HAS_DIFFERENT_AMMO_TYPE: "Magazine ammo type does not match.",
-  CALIBER_MISMATCH: "Magazine caliber does not match the weapon.",
-  // features
-  WEAPON_FEATURE_NOT_AVAILABLE: "That weapon feature is not available right now.",
-  MISSING_RELOAD_ITEM: "Missing the item required to reload this feature.",
-  // abilities / resources
-  ABILITY_NOT_FOUND: "Ability was not found or is disabled.",
-  INVALID_ABILITY: "Invalid ability for this action.",
-  INVALID_ATTACK_TYPE: "This ability cannot be used as an attack.",
-  ABILITY_ON_COOLDOWN: "Ability is on cooldown.",
-  NO_ENERGY: "Not enough energy for this ability.",
-  NOT_ENOUGH_RESOURCE: "Not enough resource to use this ability.",
-  RESOURCE_POOL_NOT_FOUND: "Resource pool was not found.",
-  // ammo stock / magazine loading
-  AMMO_STOCK_NOT_FOUND: "Ammo stock was not found.",
-  OWNER_MISMATCH: "Magazine and ammo stock belong to different characters.",
-  MAGAZINE_FULL: "Magazine is already full.",
-  NOT_ENOUGH_AMMO_STOCK: "Not enough ammo in stock.",
-  NOT_ENOUGH_MAGAZINE_ROUNDS: "Magazine does not contain that many rounds.",
-  INVALID_QUANTITY: "Invalid quantity.",
-  MAGAZINE_INCOMPATIBLE: "Magazine is not compatible with this weapon profile.",
-  // consumable items / healing (use_character_item)
-  ITEM_NOT_FOUND: "Item was not found.",
-  ITEM_NOT_AVAILABLE: "Item is not available (none left).",
-  ITEM_OWNERSHIP_MISMATCH: "Item belongs to another character.",
-  ITEM_ACTION_NOT_SUPPORTED: "This item cannot be used this way.",
-  BODY_PART_TARGET_MISMATCH: "Body part does not belong to that character.",
-  NO_HEALABLE_DAMAGE: "Nothing to heal on that body part.",
-  // GM tools
-  CHARACTER_ID_REQUIRED: "A character must be selected.",
-  // equipment / armor
-  BODY_PART_NOT_ALLOWED: "This item can't be equipped to that body part.",
-  EQUIPMENT_ITEM_NOT_FOUND: "Equipment item was not found.",
-  ALREADY_EQUIPPED: "This item is already equipped.",
-  SLOT_OCCUPIED: "That body part already has equipment in this slot."
-});
-function describeError(code, fallback) {
-  if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];
-  return fallback || "The attack could not be performed.";
-}
-function splitManualModifiers(modifiers = []) {
-  let bonus = 0;
-  let penalty = 0;
-  for (const m of modifiers) {
-    if (!m || m.auto || m.on === false) continue;
-    const value = Number(m.value) || 0;
-    if (value > 0) bonus += value;
-    else if (value < 0) penalty += -value;
-  }
-  return { manual_attack_bonus: bonus, manual_attack_penalty: penalty };
-}
-function requireId(value, message) {
-  const id = String(value || "").trim();
-  if (!id) throw new ValidationError(message);
-  return id;
-}
-function buildAttackPayload(ctx = {}) {
-  const mode = ctx.mode === "skill" ? "skill" : "weapon";
-  const payload = {
-    attacker_character_id: requireId(ctx.attackerCharacterId, "No attacker selected."),
-    target_character_id: requireId(ctx.targetCharacterId, "No target selected."),
-    target_body_part_id: requireId(ctx.targetBodyPartId, "No target body part selected."),
-    distance_m: Math.max(Number(ctx.distanceM) || 0, 0),
-    attack_context: splitManualModifiers(ctx.modifiers)
-  };
-  if (mode === "skill") {
-    payload.character_ability_id = requireId(ctx.abilityId, "No ability selected.");
-  } else {
-    payload.weapon_id = requireId(ctx.weaponId, "No weapon selected.");
-  }
-  for (const [key, value] of Object.entries({
-    room_id: ctx.roomId,
-    campaign_id: ctx.campaignId,
-    scene_id: ctx.sceneId,
-    encounter_id: ctx.encounterId,
-    actor_token_id: ctx.actorTokenId,
-    target_token_id: ctx.targetTokenId
-  })) {
-    const trimmed = String(value ?? "").trim();
-    if (trimmed) payload[key] = trimmed;
-  }
-  return payload;
-}
-function firstDefined(...values) {
-  for (const v of values) if (v !== void 0 && v !== null) return v;
-  return null;
-}
-function asArray(v) {
-  return Array.isArray(v) ? v : [];
-}
-function normalizeResult(raw) {
-  const r = raw && typeof raw === "object" ? raw : {};
-  const attack = r.attack && typeof r.attack === "object" ? r.attack : {};
-  const defense = r.defense && typeof r.defense === "object" ? r.defense : {};
-  const damage = r.damage && typeof r.damage === "object" ? r.damage : {};
-  const bodyPart = r.body_part && typeof r.body_part === "object" ? r.body_part : {};
-  const magazine = r.magazine && typeof r.magazine === "object" ? r.magazine : {};
-  const resource = r.resource && typeof r.resource === "object" ? r.resource : {};
-  const targetState = r.target_state && typeof r.target_state === "object" ? r.target_state : {};
-  return {
-    ok: r.ok !== false,
-    hit: typeof r.hit === "boolean" ? r.hit : null,
-    auto: firstDefined(r.auto),
-    // 'crit' | 'fail' | null
-    attackType: firstDefined(r.attack_type),
-    attackRoll: firstDefined(attack.roll, r.attack_roll),
-    attackTotal: firstDefined(attack.total, r.attack_total),
-    defenseTotal: firstDefined(defense.total, r.defense_total),
-    damageLevel: firstDefined(damage.level, r.damage_level),
-    damageDiff: firstDefined(damage.diff, r.damage_diff),
-    criticalDelta: firstDefined(damage.critical_delta, r.critical_delta),
-    bodyCriticalDelta: firstDefined(damage.body_critical_delta, r.body_critical_delta),
-    targetBodyPartName: firstDefined(bodyPart.name, r.target_body_part_name),
-    bodyPart: Object.keys(bodyPart).length ? bodyPart : null,
-    ammoSpent: firstDefined(magazine.bullets_spent, r.bullets_spent),
-    ammoRemaining: firstDefined(magazine.remaining_rounds, r.remaining_magazine_rounds),
-    energySpent: firstDefined(resource.spent, resource.cost, resource.amount_spent),
-    energyRemaining: firstDefined(resource.remaining, resource.current_value),
-    feature: firstDefined(r.feature),
-    armor: firstDefined(bodyPart.effective_armor, r.effective_armor, r.armor),
-    pendingChecks: asArray(firstDefined(r.pending_checks, r.pending_saves, [])),
-    targetAlive: typeof targetState.is_alive === "boolean" ? targetState.is_alive : null,
-    targetConscious: typeof targetState.is_conscious === "boolean" ? targetState.is_conscious : null,
-    combatLogId: firstDefined(r.log_id, r.combat_log_id)
-  };
-}
-async function resolveAttack(ctx, deps) {
-  const payload = buildAttackPayload(ctx);
-  let raw;
-  try {
-    raw = await deps.performAttack(payload);
-  } catch (error) {
-    return {
-      ok: false,
-      payload,
-      raw: error?.details ?? null,
-      normalized: null,
-      code: error?.code ?? null,
-      error: error?.message || "Network or RPC error."
-    };
-  }
-  if (!raw || raw.ok === false) {
-    const code = raw?.error ?? null;
-    return {
-      ok: false,
-      payload,
-      raw: raw ?? null,
-      normalized: raw ? normalizeResult(raw) : null,
-      code,
-      error: raw?.message || describeError(code)
-    };
-  }
-  return { ok: true, payload, raw, normalized: normalizeResult(raw), code: null, error: null };
-}
-
 // screens/resolveAttack/resolveAttackScreen.js
 var PART_GEOMETRY = {
   head: { x: 31, y: 6, w: 18, h: 18, r: "50%" },
@@ -34021,18 +32297,18 @@ var PART_ALIASES = {
 };
 var DOLL_SCALE = 1.5;
 var OBR_TIMEOUT_MS = 1500;
-var dash2 = (v) => v === null || v === void 0 || v === "" ? "-" : v;
-var esc2 = (v) => escapeHtml(v);
+var dash = (v) => v === null || v === void 0 || v === "" ? "-" : v;
+var esc = (v) => escapeHtml(v);
 var fmt = (v) => (Number(v) > 0 ? "+" : "") + (Number(v) || 0);
-var arr3 = (v) => Array.isArray(v) ? v : [];
+var arr = (v) => Array.isArray(v) ? v : [];
 function bodyPartKey(part) {
   const code = normPartCode(part);
   if (code) return code;
   return String(part?.name || part?.id || "").trim().toLowerCase();
 }
-function dedupeBodyParts2(parts) {
+function dedupeBodyParts(parts) {
   const byKey = /* @__PURE__ */ new Map();
-  for (const part of arr3(parts)) {
+  for (const part of arr(parts)) {
     const key = bodyPartKey(part);
     const prev = byKey.get(key);
     if (!prev) {
@@ -34053,7 +32329,7 @@ function dedupeBodyParts2(parts) {
   }
   return Array.from(byKey.values());
 }
-function injectStylesOnce2() {
+function injectStylesOnce() {
   if (document.getElementById("ra-screen-styles")) return;
   const style = document.createElement("style");
   style.id = "ra-screen-styles";
@@ -34079,7 +32355,7 @@ function isTargetable(p) {
   return p && p.can_be_targeted !== false && !p.destroyed;
 }
 function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
-  injectStylesOnce2();
+  injectStylesOnce();
   const api = runtime2?.api ?? {};
   const bridges = runtime2?.bridges ?? {};
   const state = {
@@ -34141,7 +32417,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       settings(),
       "Unable to read items."
     );
-    return arr3(rows).map((r) => ({
+    return arr(rows).map((r) => ({
       id: r.id,
       name: r.custom_name || r.item_def?.name || r.item_def?.code || "item",
       item_code: r.item_def?.code || null,
@@ -34159,7 +32435,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       settings(),
       "Unable to read ammo stock."
     );
-    return arr3(rows).map((r) => ({
+    return arr(rows).map((r) => ({
       id: r.id,
       character_id: r.character_id,
       display_name: r.display_name,
@@ -34200,7 +32476,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       const result = await bridges.supabase.testSupabaseConnection(settings());
       banner(refs.cfgStatus, "ok", `Connected (source: ${state.settingsSource}). Sample rows: ${result.sampleRowCount}.`);
     } catch (e) {
-      banner(refs.cfgStatus, "err", `Connection failed: ${esc2(e.message)}`);
+      banner(refs.cfgStatus, "err", `Connection failed: ${esc(e.message)}`);
     }
   }
   refs.useAttacker.addEventListener("click", () => useSelectedToken("attacker"));
@@ -34297,13 +32573,13 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (!sheet || sheet.ok === false || !sheet.character) throw new Error("Target not found: check target character_id.");
       state.attacker.id = attackerId;
       state.attacker.armory = armory;
-      state.attacker.abilities = arr3(abilitiesRes?.abilities).filter((a) => a.is_enabled !== false);
-      state.attacker.pools = arr3(abilitiesRes?.resource_pools);
+      state.attacker.abilities = arr(abilitiesRes?.abilities).filter((a) => a.is_enabled !== false);
+      state.attacker.pools = arr(abilitiesRes?.resource_pools);
       state.target.id = targetId;
       state.target.sheet = sheet;
-      state.target.bodyParts = dedupeBodyParts2(sheet?.body_parts);
+      state.target.bodyParts = dedupeBodyParts(sheet?.body_parts);
       state.target.effectSummary = await loadEffectSummary(targetId);
-      const weapons = arr3(armory?.weapons);
+      const weapons = arr(armory?.weapons);
       state.attacker.weaponId = weapons[0]?.id || "";
       const atkAbilities = attackAbilities();
       state.attacker.abilityId = atkAbilities[0]?.id || "";
@@ -34318,14 +32594,14 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       );
       renderAll();
     } catch (e) {
-      banner(refs.loadStatus, "err", `Load error: ${esc2(e.message)}`);
+      banner(refs.loadStatus, "err", `Load error: ${esc(e.message)}`);
     }
   }
   function attackAbilities() {
     return state.attacker.abilities.filter((a) => a.attack_type && a.attack_type !== "none");
   }
   function currentWeapon() {
-    return arr3(state.attacker.armory?.weapons).find((w) => w.id === state.attacker.weaponId) || null;
+    return arr(state.attacker.armory?.weapons).find((w) => w.id === state.attacker.weaponId) || null;
   }
   function currentAbility() {
     return state.attacker.abilities.find((a) => a.id === state.attacker.abilityId) || null;
@@ -34353,12 +32629,12 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     refs.skillPick.classList.toggle("ra-hidden", state.mode !== "skill");
   }
   function renderWeaponSelect() {
-    const weapons = arr3(state.attacker.armory?.weapons);
-    refs.weaponSelect.innerHTML = weapons.length ? weapons.map((w) => `<option value="${esc2(w.id)}" ${w.id === state.attacker.weaponId ? "selected" : ""}>${esc2(w.name)} - ${esc2(w.model?.weapon_class_name || w.model?.weapon_class || "")}</option>`).join("") : `<option value="">- no weapons -</option>`;
+    const weapons = arr(state.attacker.armory?.weapons);
+    refs.weaponSelect.innerHTML = weapons.length ? weapons.map((w) => `<option value="${esc(w.id)}" ${w.id === state.attacker.weaponId ? "selected" : ""}>${esc(w.name)} - ${esc(w.model?.weapon_class_name || w.model?.weapon_class || "")}</option>`).join("") : `<option value="">- no weapons -</option>`;
   }
   function renderAbilitySelect() {
     const abilities = attackAbilities();
-    refs.abilitySelect.innerHTML = abilities.length ? abilities.map((a) => `<option value="${esc2(a.id)}" ${a.id === state.attacker.abilityId ? "selected" : ""}>${esc2(a.name)} - lvl ${dash2(a.effective_level)}</option>`).join("") : `<option value="">- no attack abilities -</option>`;
+    refs.abilitySelect.innerHTML = abilities.length ? abilities.map((a) => `<option value="${esc(a.id)}" ${a.id === state.attacker.abilityId ? "selected" : ""}>${esc(a.name)} - lvl ${dash(a.effective_level)}</option>`).join("") : `<option value="">- no attack abilities -</option>`;
   }
   function renderProfileAndFireMode() {
     const w = currentWeapon();
@@ -34366,18 +32642,18 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       refs.profileRow.innerHTML = "";
       return;
     }
-    const profiles = arr3(w.profiles);
-    const fireModes = arr3(w.available_fire_modes.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
+    const profiles = arr(w.profiles);
+    const fireModes = arr(w.available_fire_modes.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
     const selFmId = (w.selected_fire_mode || w.active_profile?.selected_fire_mode)?.id || "";
     let html = "";
     if (profiles.length > 1) {
-      html += `<label class="ra-field"><span>Weapon profile</span><select data-sel="profile">${profiles.map((p) => `<option value="${esc2(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc2(p.name || p.code || "profile")}${p.attack_type ? " - " + esc2(p.attack_type) : ""}</option>`).join("")}</select></label>`;
+      html += `<label class="ra-field"><span>Weapon profile</span><select data-sel="profile">${profiles.map((p) => `<option value="${esc(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc(p.name || p.code || "profile")}${p.attack_type ? " - " + esc(p.attack_type) : ""}</option>`).join("")}</select></label>`;
     } else if (profiles.length === 1) {
       const p = profiles[0];
-      html += `<label class="ra-field"><span>Weapon profile</span><div class="ra-chip">${esc2(p.name || p.code || "default")}${p.attack_type ? " - " + esc2(p.attack_type) : ""}</div></label>`;
+      html += `<label class="ra-field"><span>Weapon profile</span><div class="ra-chip">${esc(p.name || p.code || "default")}${p.attack_type ? " - " + esc(p.attack_type) : ""}</div></label>`;
     }
     if (fireModes.length) {
-      html += `<label class="ra-field"><span>Fire mode</span><select data-sel="fireMode">${fireModes.map((f) => `<option value="${esc2(f.id)}" ${f.id === selFmId ? "selected" : ""}>${esc2(f.name || f.code || "fire mode")}</option>`).join("")}</select></label>`;
+      html += `<label class="ra-field"><span>Fire mode</span><select data-sel="fireMode">${fireModes.map((f) => `<option value="${esc(f.id)}" ${f.id === selFmId ? "selected" : ""}>${esc(f.name || f.code || "fire mode")}</option>`).join("")}</select></label>`;
     }
     refs.profileRow.innerHTML = html;
   }
@@ -34395,11 +32671,11 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (isMelee) {
         chips += `<span class="ra-chip">melee - str-based</span>`;
       } else {
-        chips += fm ? `<span class="ra-chip">mode: ${esc2(fm.name || fm.code)}</span>` : `<span class="ra-chip neg">no fire mode</span>`;
+        chips += fm ? `<span class="ra-chip">mode: ${esc(fm.name || fm.code)}</span>` : `<span class="ra-chip neg">no fire mode</span>`;
         if (mag) {
           const ammo = mag.ammo_type_name || mag.ammo_type?.name || mag.ammo_type || "-";
           const cal = mag.magazine_def?.caliber_name || mag.caliber_name || mag.caliber || "";
-          chips += `<span class="ra-chip">mag ${dash2(mag.current_rounds)} / ${dash2(mag.capacity || mag.magazine_def?.capacity)} - ${esc2(ammo)}${cal ? " - " + esc2(cal) : ""}</span>`;
+          chips += `<span class="ra-chip">mag ${dash(mag.current_rounds)} / ${dash(mag.capacity || mag.magazine_def?.capacity)} - ${esc(ammo)}${cal ? " - " + esc(cal) : ""}</span>`;
           if ((mag.current_rounds ?? 0) <= 0) chips += `<span class="ra-chip neg">magazine empty</span>`;
         } else {
           chips += `<span class="ra-chip neg">no magazine loaded</span>`;
@@ -34419,16 +32695,16 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       const ignore = a.level_data?.ignore_armor;
       const cd = a.current_cooldown_rounds;
       refs.attackBlock.innerHTML = `<div class="ra-block">
-        <span class="ra-chip">cost k:${esc2(cost)}</span>
-        ${pool ? `<span class="ra-row" style="gap:6px"><span class="ra-muted">${esc2(pool.name || "Energy")}</span><span class="ra-ebar"><span style="width:${pct}%"></span></span><span class="ra-mono">${cur} / ${max}</span></span>` : `<span class="ra-chip neg">resource pool not found</span>`}
-        ${cd ? `<span class="ra-chip neg">cooldown ${esc2(cd)}</span>` : ""}
+        <span class="ra-chip">cost k:${esc(cost)}</span>
+        ${pool ? `<span class="ra-row" style="gap:6px"><span class="ra-muted">${esc(pool.name || "Energy")}</span><span class="ra-ebar"><span style="width:${pct}%"></span></span><span class="ra-mono">${cur} / ${max}</span></span>` : `<span class="ra-chip neg">resource pool not found</span>`}
+        ${cd ? `<span class="ra-chip neg">cooldown ${esc(cd)}</span>` : ""}
         ${ignore ? `<span class="ra-chip">ignores armor</span>` : ""}
       </div>`;
     }
   }
   function renderFeatures() {
     const w = currentWeapon();
-    const features = arr3(w?.features);
+    const features = arr(w?.features);
     if (state.mode !== "weapon" || !features.length) {
       refs.features.innerHTML = "";
       return;
@@ -34441,7 +32717,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (f.requires_reload) bits.push("needs reload");
       if (f.current_cooldown_rounds) bits.push(`cd ${f.current_cooldown_rounds}`);
       if (f.uses_left !== void 0 && f.uses_left !== null) bits.push(`uses ${f.uses_left}`);
-      return `<div class="ra-feature"><span>${esc2(f.name || f.code || "feature")}</span><span class="${active ? "on" : "off"}">${active ? "active" : "inactive"}${bits.length ? " - " + esc2(bits.join(" - ")) : ""}</span></div>`;
+      return `<div class="ra-feature"><span>${esc(f.name || f.code || "feature")}</span><span class="${active ? "on" : "off"}">${active ? "active" : "inactive"}${bits.length ? " - " + esc(bits.join(" - ")) : ""}</span></div>`;
     }).join("");
   }
   function makeDoll() {
@@ -34453,7 +32729,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (!g) continue;
       const rad = g.r === "50%" ? "50%" : g.r * s + "px";
       const sel = p.id === state.target.partId ? "sel" : "";
-      h += `<div class="ra-part ${sel}" data-part="${esc2(p.id)}" title="${esc2(p.name)}" style="left:${g.x * s}px;top:${g.y * s}px;width:${g.w * s}px;height:${g.h * s}px;border-radius:${rad};background:${partColor(p)}"></div>`;
+      h += `<div class="ra-part ${sel}" data-part="${esc(p.id)}" title="${esc(p.name)}" style="left:${g.x * s}px;top:${g.y * s}px;width:${g.w * s}px;height:${g.h * s}px;border-radius:${rad};background:${partColor(p)}"></div>`;
     }
     h += `</div>`;
     return h;
@@ -34470,13 +32746,13 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (p.id === state.target.partId) cls.push("active");
       if (!drawable) cls.push("custom");
       if (!targetable) cls.push("disabled");
-      const aim = p.aim_difficulty ? ` <span class="ra-mono ra-muted">-${esc2(p.aim_difficulty)}</span>` : "";
+      const aim = p.aim_difficulty ? ` <span class="ra-mono ra-muted">-${esc(p.aim_difficulty)}</span>` : "";
       const reason = p.destroyed ? " (destroyed)" : p.can_be_targeted === false ? " (untargetable)" : "";
-      return `<span class="${cls.join(" ")}" data-part="${esc2(p.id)}" data-targetable="${targetable}">${esc2(p.name)}${aim}${reason}</span>`;
+      return `<span class="${cls.join(" ")}" data-part="${esc(p.id)}" data-targetable="${targetable}">${esc(p.name)}${aim}${reason}</span>`;
     }).join("");
   }
   function renderMods() {
-    refs.modRow.innerHTML = state.modifiers.map((m) => `<span class="ra-mc ${m.on ? "on" : ""}" data-mod="${esc2(m.id)}">${esc2(m.label)} <span class="ra-mono ${m.value < 0 ? "ra-neg" : "ra-pos"}">${fmt(m.value)}</span></span>`).join("");
+    refs.modRow.innerHTML = state.modifiers.map((m) => `<span class="ra-mc ${m.on ? "on" : ""}" data-mod="${esc(m.id)}">${esc(m.label)} <span class="ra-mono ${m.value < 0 ? "ra-neg" : "ra-pos"}">${fmt(m.value)}</span></span>`).join("");
     const total = state.modifiers.reduce((a, m) => a + (m.on ? m.value : 0), 0);
     refs.modTotal.textContent = fmt(total);
   }
@@ -34489,13 +32765,13 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       ["actor_token_id", o.actorTokenId],
       ["target_token_id", o.targetTokenId]
     ].filter(([, v]) => v);
-    refs.obrContext.innerHTML = rows.length ? rows.map(([k, v]) => `<span class="ra-chip"><span class="ra-muted">${k}</span> <span class="ra-mono">${esc2(String(v).slice(0, 12))}...</span></span>`).join("") : `<span class="ra-muted">No Owlbear context captured (manual/dev mode).</span>`;
+    refs.obrContext.innerHTML = rows.length ? rows.map(([k, v]) => `<span class="ra-chip"><span class="ra-muted">${k}</span> <span class="ra-mono">${esc(String(v).slice(0, 12))}...</span></span>`).join("") : `<span class="ra-muted">No Owlbear context captured (manual/dev mode).</span>`;
   }
   function storeInventory(inventory, armory) {
     const inv = inventory && inventory.ok !== false ? inventory : null;
-    state.attacker.inventory.magazines = arr3(inv?.magazines?.length ? inv.magazines : armory?.magazines);
-    state.attacker.inventory.ammoStock = arr3(inv?.ammo_stock);
-    state.attacker.inventory.items = arr3(inv?.items);
+    state.attacker.inventory.magazines = arr(inv?.magazines?.length ? inv.magazines : armory?.magazines);
+    state.attacker.inventory.ammoStock = arr(inv?.ammo_stock);
+    state.attacker.inventory.items = arr(inv?.items);
     state.attacker.inventory.fallback = Boolean(inv?._fallback);
   }
   const characterMagazines = () => state.attacker.inventory.magazines;
@@ -34503,7 +32779,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
   const magById = (id) => characterMagazines().find((m) => m.id === id) || null;
   const magCaliberCode = (mag) => mag?.magazine_def?.caliber || mag?.caliber || null;
   function magLoadedInWeaponName(magId) {
-    const w = arr3(state.attacker.armory?.weapons).find(
+    const w = arr(state.attacker.armory?.weapons).find(
       (wp) => (wp.loaded_magazine?.id || wp.active_profile?.loaded_magazine?.id) === magId
     );
     return w ? w.name : null;
@@ -34540,17 +32816,17 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const cap = m.magazine_def?.capacity ?? m.capacity;
     const ammoName = m.ammo_type?.name || m.ammo_type_name || "-";
     const loaded = magLoadedInWeaponName(m.id);
-    return `<option value="${esc2(m.id)}" ${m.id === selId ? "selected" : ""}>${esc2(m.name)} - ${dash2(m.current_rounds)}/${dash2(cap)} - ${esc2(ammoName)}${loaded ? " - in " + esc2(loaded) : ""}</option>`;
+    return `<option value="${esc(m.id)}" ${m.id === selId ? "selected" : ""}>${esc(m.name)} - ${dash(m.current_rounds)}/${dash(cap)} - ${esc(ammoName)}${loaded ? " - in " + esc(loaded) : ""}</option>`;
   }
   function ammoOption(a, selId) {
-    return `<option value="${esc2(a.id)}" ${a.id === selId ? "selected" : ""}>${esc2(a.display_name)} - ${esc2(a.ammo_type_name || a.ammo_type_code || "")} - x${dash2(a.quantity)}</option>`;
+    return `<option value="${esc(a.id)}" ${a.id === selId ? "selected" : ""}>${esc(a.display_name)} - ${esc(a.ammo_type_name || a.ammo_type_code || "")} - x${dash(a.quantity)}</option>`;
   }
   function magRow(m) {
     const inW = magLoadedInWeaponName(m.id);
-    return `<div class="ra-feature"><span>${esc2(m.name)}</span><span class="ra-mono">${dash2(m.current_rounds)}/${dash2(m.magazine_def?.capacity ?? m.capacity)} - ${esc2(m.ammo_type?.name || m.ammo_type_name || "empty")} - ${esc2(m.magazine_def?.caliber_name || m.magazine_def?.caliber || "")}${inW ? " - in " + esc2(inW) : ""}</span></div>`;
+    return `<div class="ra-feature"><span>${esc(m.name)}</span><span class="ra-mono">${dash(m.current_rounds)}/${dash(m.magazine_def?.capacity ?? m.capacity)} - ${esc(m.ammo_type?.name || m.ammo_type_name || "empty")} - ${esc(m.magazine_def?.caliber_name || m.magazine_def?.caliber || "")}${inW ? " - in " + esc(inW) : ""}</span></div>`;
   }
   function ammoRow(a) {
-    return `<div class="ra-feature"><span>${esc2(a.display_name)}</span><span class="ra-mono">${esc2(a.ammo_type_name || a.ammo_type_code || "")} - ${esc2(a.caliber_name || a.caliber_code || "")} - x${dash2(a.quantity)}</span></div>`;
+    return `<div class="ra-feature"><span>${esc(a.display_name)}</span><span class="ra-mono">${esc(a.ammo_type_name || a.ammo_type_code || "")} - ${esc(a.caliber_name || a.caliber_code || "")} - x${dash(a.quantity)}</span></div>`;
   }
   function renderInventory() {
     const w = currentWeapon();
@@ -34567,7 +32843,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       ${state.attacker.inventory.fallback ? `<div class="ra-banner warn">Ammo stock read via fallback (backend get_character_inventory error 25006). Magazines/ammo shown are still server truth.</div>` : ""}
       <div class="ra-section-title" style="margin-top:0">Reload weapon - insert / replace magazine</div>
       <div class="ra-block" style="flex-direction:column;align-items:stretch;gap:8px">
-        <div class="ra-muted">${w ? esc2(w.name) : "-"} - profile ${esc2(profileName)} - loaded ${loadedMag ? `<span class="ra-mono">${dash2(loadedMag.current_rounds)}/${dash2(loadedMag.capacity || loadedMag.magazine_def?.capacity)}</span> ${esc2(loadedMag.ammo_type_name || loadedMag.ammo_type?.name || "")}` : "-"}</div>
+        <div class="ra-muted">${w ? esc(w.name) : "-"} - profile ${esc(profileName)} - loaded ${loadedMag ? `<span class="ra-mono">${dash(loadedMag.current_rounds)}/${dash(loadedMag.capacity || loadedMag.magazine_def?.capacity)}</span> ${esc(loadedMag.ammo_type_name || loadedMag.ammo_type?.name || "")}` : "-"}</div>
         <div class="ra-row">
           <label class="ra-field"><span>Magazine to insert</span><select data-inv="reloadMag">${reloadOpts}</select></label>
           <button data-inv-action="reload" type="button" style="align-self:flex-end">Reload weapon</button>
@@ -34634,13 +32910,13 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       } catch (e) {
         state.debug.inventory = { thrown: e.message, code: e.code ?? null, details: e.details ?? null };
         renderDebug();
-        banner(refs.invStatus, "err", esc2(describeError(e.code, e.message)));
+        banner(refs.invStatus, "err", esc(describeError(e.code, e.message)));
         return null;
       }
       state.debug.inventory = result;
       renderDebug();
       if (result && result.ok === false) {
-        banner(refs.invStatus, "err", `${esc2(describeError(result.error, result.message))}${result.error ? ` <span class="ra-mono">[${esc2(result.error)}]</span>` : ""}`);
+        banner(refs.invStatus, "err", `${esc(describeError(result.error, result.message))}${result.error ? ` <span class="ra-mono">[${esc(result.error)}]</span>` : ""}`);
         return null;
       }
       return result;
@@ -34665,7 +32941,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       renderInventory();
       renderPayloadPreview();
     } catch (e) {
-      banner(refs.invStatus, "warn", `Action applied, but refresh failed: ${esc2(e.message)}`);
+      banner(refs.invStatus, "warn", `Action applied, but refresh failed: ${esc(e.message)}`);
     }
   }
   async function onReloadWeapon() {
@@ -34701,7 +32977,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     );
     if (!result) return;
     await refreshAttackerArmoryInventory();
-    banner(refs.invStatus, "ok", `Loaded ${dash2(result.loaded_quantity)} round(s).`);
+    banner(refs.invStatus, "ok", `Loaded ${dash(result.loaded_quantity)} round(s).`);
   }
   async function onUnloadRounds() {
     if (!state.inv.opsMagId) {
@@ -34711,7 +32987,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const result = await runInventoryAction(() => rpcUnloadRounds({ character_magazine_id: state.inv.opsMagId }));
     if (!result) return;
     await refreshAttackerArmoryInventory();
-    banner(refs.invStatus, "ok", `Unloaded ${dash2(result.unloaded_quantity)} round(s).`);
+    banner(refs.invStatus, "ok", `Unloaded ${dash(result.unloaded_quantity)} round(s).`);
   }
   const allItems = () => state.attacker.inventory.items;
   const healItems = () => allItems().filter((i) => i.use_action_type === "heal" || i.item_code === "basic_medkit");
@@ -34735,16 +33011,16 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     return `${p.name || p.part_key} \xB7 ${dmg.length ? dmg.join(", ") : "intact"}`;
   }
   function itemRow(i) {
-    const act = i.use_action_type && i.use_action_type !== "none" ? " \xB7 " + esc2(i.use_action_type) : "";
-    return `<div class="ra-feature"><span>${esc2(i.name)}</span><span class="ra-mono">${esc2(i.item_type || "")}${act} \xB7 x${dash2(i.quantity)}</span></div>`;
+    const act = i.use_action_type && i.use_action_type !== "none" ? " \xB7 " + esc(i.use_action_type) : "";
+    return `<div class="ra-feature"><span>${esc(i.name)}</span><span class="ra-mono">${esc(i.item_type || "")}${act} \xB7 x${dash(i.quantity)}</span></div>`;
   }
   function healItemOption(i) {
-    return `<option value="${esc2(i.id)}" ${i.id === state.heal.itemId ? "selected" : ""}>${esc2(i.name)} \xB7 x${dash2(i.quantity)}</option>`;
+    return `<option value="${esc(i.id)}" ${i.id === state.heal.itemId ? "selected" : ""}>${esc(i.name)} \xB7 x${dash(i.quantity)}</option>`;
   }
   function healPartOptions() {
     const parts = healBodyParts();
     if (!parts.length) return `<option value="">\u2014 no body parts \u2014</option>`;
-    return parts.map((p) => `<option value="${esc2(p.id)}" ${p.id === state.heal.partId ? "selected" : ""} ${p.destroyed ? "disabled" : ""}>${esc2(healPartLabel(p))}${p.destroyed ? " (destroyed)" : ""}</option>`).join("");
+    return parts.map((p) => `<option value="${esc(p.id)}" ${p.id === state.heal.partId ? "selected" : ""} ${p.destroyed ? "disabled" : ""}>${esc(healPartLabel(p))}${p.destroyed ? " (destroyed)" : ""}</option>`).join("");
   }
   async function refreshAfterHeal() {
     try {
@@ -34757,10 +33033,10 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (healedSheet && healedSheet.ok !== false && healedSheet.character) {
         if (who === "attacker") {
           state.attacker.sheet = healedSheet;
-          state.attacker.bodyParts = dedupeBodyParts2(healedSheet.body_parts);
+          state.attacker.bodyParts = dedupeBodyParts(healedSheet.body_parts);
         } else {
           state.target.sheet = healedSheet;
-          state.target.bodyParts = dedupeBodyParts2(healedSheet.body_parts);
+          state.target.bodyParts = dedupeBodyParts(healedSheet.body_parts);
           if (!state.target.bodyParts.some((p) => p.id === state.target.partId && isTargetable(p))) selectFirstTargetablePart();
         }
       }
@@ -34771,7 +33047,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       renderInventory();
       renderPayloadPreview();
     } catch (e) {
-      banner(refs.invStatus, "warn", `Heal applied, but refresh failed: ${esc2(e.message)}`);
+      banner(refs.invStatus, "warn", `Heal applied, but refresh failed: ${esc(e.message)}`);
     }
   }
   async function onUseMedkit() {
@@ -34790,8 +33066,8 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     await refreshAfterHeal();
     const HEAL_TXT = { serious_reduced: "serious \u22121", critical_to_serious: "crit \u2192 serious", minor_cleared: "minor cleared", none: "no change" };
     const healed = HEAL_TXT[result.healing_action] || result.healing_action || "applied";
-    const eff = arr3(result.removed_effect_ids).length ? " \xB7 unconscious removed" : "";
-    banner(refs.invStatus, "ok", `Medkit used: ${esc2(healed)}${eff}. Remaining: ${dash2(result.remaining_quantity)}.`);
+    const eff = arr(result.removed_effect_ids).length ? " \xB7 unconscious removed" : "";
+    banner(refs.invStatus, "ok", `Medkit used: ${esc(healed)}${eff}. Remaining: ${dash(result.remaining_quantity)}.`);
   }
   async function refreshSheetFor(which) {
     const id = which === "attacker" ? state.attacker.id : state.target.id;
@@ -34799,10 +33075,10 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     if (sheet && sheet.ok !== false && sheet.character) {
       if (which === "attacker") {
         state.attacker.sheet = sheet;
-        state.attacker.bodyParts = dedupeBodyParts2(sheet.body_parts);
+        state.attacker.bodyParts = dedupeBodyParts(sheet.body_parts);
       } else {
         state.target.sheet = sheet;
-        state.target.bodyParts = dedupeBodyParts2(sheet.body_parts);
+        state.target.bodyParts = dedupeBodyParts(sheet.body_parts);
         if (!state.target.bodyParts.some((p) => p.id === state.target.partId && isTargetable(p))) selectFirstTargetablePart();
       }
     }
@@ -34822,8 +33098,8 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const result = await runInventoryAction(() => rpcGmHeal(id));
     if (!result) return;
     await refreshSheetFor(which);
-    const excl = arr3(result.excluded_parts).length ? ` (excluded: ${esc2(arr3(result.excluded_parts).join(", "))})` : "";
-    banner(refs.invStatus, "ok", `GM heal (${which}): ${dash2(result.healed_parts)} part(s) healed${excl}.`);
+    const excl = arr(result.excluded_parts).length ? ` (excluded: ${esc(arr(result.excluded_parts).join(", "))})` : "";
+    banner(refs.invStatus, "ok", `GM heal (${which}): ${dash(result.healed_parts)} part(s) healed${excl}.`);
   }
   async function onGmRepair() {
     const which = state.gmTarget;
@@ -34835,8 +33111,8 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const result = await runInventoryAction(() => rpcGmRepair(id));
     if (!result) return;
     await refreshSheetFor(which);
-    const excl = arr3(result.excluded_parts).length ? ` (excluded: ${esc2(arr3(result.excluded_parts).join(", "))})` : "";
-    banner(refs.invStatus, "ok", `GM repair (${which}): ${dash2(result.repaired_parts)} armor section(s) repaired${excl}.`);
+    const excl = arr(result.excluded_parts).length ? ` (excluded: ${esc(arr(result.excluded_parts).join(", "))})` : "";
+    banner(refs.invStatus, "ok", `GM repair (${which}): ${dash(result.repaired_parts)} armor section(s) repaired${excl}.`);
   }
   function buildCtx() {
     return {
@@ -34880,8 +33156,8 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       renderDebug();
       if (!outcome.ok) {
         const human = describeError(outcome.code, outcome.error);
-        banner(refs.resolveStatus, "err", `${esc2(human)}${outcome.code ? ` <span class="ra-mono">[${esc2(outcome.code)}]</span>` : ""}`);
-        pushLog(`<span class="ra-muted">attack failed: ${esc2(human)}${outcome.code ? ` [${esc2(outcome.code)}]` : ""}</span>`);
+        banner(refs.resolveStatus, "err", `${esc(human)}${outcome.code ? ` <span class="ra-mono">[${esc(outcome.code)}]</span>` : ""}`);
+        pushLog(`<span class="ra-muted">attack failed: ${esc(human)}${outcome.code ? ` [${esc(outcome.code)}]` : ""}</span>`);
         renderSummary(outcome.normalized);
         return;
       }
@@ -34890,9 +33166,9 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       await refreshAfterAttack();
     } catch (e) {
       if (e instanceof ValidationError) {
-        banner(refs.resolveStatus, "err", esc2(e.message));
+        banner(refs.resolveStatus, "err", esc(e.message));
       } else {
-        banner(refs.resolveStatus, "err", `Unexpected error: ${esc2(e.message)}`);
+        banner(refs.resolveStatus, "err", `Unexpected error: ${esc(e.message)}`);
         state.debug.error = { message: e.message };
         renderDebug();
       }
@@ -34908,18 +33184,18 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const hitCls = data.hit === true ? "hit" : data.hit === false ? "miss" : "";
     const autoTxt = data.auto === "crit" ? "auto-crit" : data.auto === "fail" ? "auto-fail" : "-";
     const stat = (k, v, cls = "") => `<div class="ra-stat"><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>`;
-    const pending = arr3(data.pendingChecks).map((c) => c.skill_code || c.type || "check").join(", ");
+    const pending = arr(data.pendingChecks).map((c) => c.skill_code || c.type || "check").join(", ");
     refs.summary.innerHTML = [
-      stat("Result", esc2(hitTxt), hitCls),
-      stat("Auto", esc2(autoTxt), data.auto === "crit" ? "crit" : ""),
-      stat("Attack total", esc2(dash2(data.attackTotal))),
-      stat("Defense total", esc2(dash2(data.defenseTotal))),
-      stat("Damage", `${esc2(dash2(data.damageLevel))}${data.damageDiff != null ? ` <span class="ra-mono">D${esc2(data.damageDiff)}</span>` : ""}`, data.damageLevel === "critical" ? "crit" : ""),
-      stat("Body part", esc2(dash2(data.targetBodyPartName))),
-      stat("Ammo spent", esc2(dash2(data.ammoSpent))),
-      stat("Energy spent", esc2(dash2(data.energySpent))),
-      stat("Pending", esc2(pending || "-")),
-      stat("Combat log id", `<span class="ra-mono">${esc2(data.combatLogId ? String(data.combatLogId).slice(0, 8) + "..." : "-")}</span>`),
+      stat("Result", esc(hitTxt), hitCls),
+      stat("Auto", esc(autoTxt), data.auto === "crit" ? "crit" : ""),
+      stat("Attack total", esc(dash(data.attackTotal))),
+      stat("Defense total", esc(dash(data.defenseTotal))),
+      stat("Damage", `${esc(dash(data.damageLevel))}${data.damageDiff != null ? ` <span class="ra-mono">D${esc(data.damageDiff)}</span>` : ""}`, data.damageLevel === "critical" ? "crit" : ""),
+      stat("Body part", esc(dash(data.targetBodyPartName))),
+      stat("Ammo spent", esc(dash(data.ammoSpent))),
+      stat("Energy spent", esc(dash(data.energySpent))),
+      stat("Pending", esc(pending || "-")),
+      stat("Combat log id", `<span class="ra-mono">${esc(data.combatLogId ? String(data.combatLogId).slice(0, 8) + "..." : "-")}</span>`),
       stat("Target", data.targetAlive === false ? "dead" : data.targetConscious === false ? "unconscious" : "-", data.targetAlive === false ? "danger" : "")
     ].join("");
     refs.summaryCard.classList.remove("ra-hidden");
@@ -34955,8 +33231,8 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       return;
     }
     const autoTxt = n.auto === "crit" ? " \xB7 auto-crit" : n.auto === "fail" ? " \xB7 auto-fail" : "";
-    pushLog(`<span class="who">accuracy</span> \xB7 <span class="ra-mono">${dash2(n.attackRoll)} \u2192 ${dash2(n.attackTotal)}</span> vs <span class="ra-mono">${dash2(n.defenseTotal)}</span> \xB7 ${n.hit ? "hit" : "miss"}${autoTxt}`);
-    if (n.hit) pushLog(`<span class="who">damage</span> \xB7 ${esc2(dash2(n.targetBodyPartName))} \xB7 <span class="ra-mono">\u0394 ${dash2(n.damageDiff)}</span> \xB7 ${esc2(dash2(n.damageLevel))}`);
+    pushLog(`<span class="who">accuracy</span> \xB7 <span class="ra-mono">${dash(n.attackRoll)} \u2192 ${dash(n.attackTotal)}</span> vs <span class="ra-mono">${dash(n.defenseTotal)}</span> \xB7 ${n.hit ? "hit" : "miss"}${autoTxt}`);
+    if (n.hit) pushLog(`<span class="who">damage</span> \xB7 ${esc(dash(n.targetBodyPartName))} \xB7 <span class="ra-mono">\u0394 ${dash(n.damageDiff)}</span> \xB7 ${esc(dash(n.damageLevel))}`);
     if (n.targetAlive === false) pushLog(`<span class="ra-neg">target is dead</span>`);
     else if (n.targetConscious === false) pushLog(`<span class="ra-neg">target is unconscious</span>`);
   }
@@ -34974,13 +33250,13 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
         summary.armory = true;
       }
       if (abilitiesRes) {
-        state.attacker.abilities = arr3(abilitiesRes.abilities).filter((a) => a.is_enabled !== false);
-        state.attacker.pools = arr3(abilitiesRes.resource_pools);
+        state.attacker.abilities = arr(abilitiesRes.abilities).filter((a) => a.is_enabled !== false);
+        state.attacker.pools = arr(abilitiesRes.resource_pools);
         summary.abilities = true;
       }
       if (sheet && sheet.ok !== false && sheet.character) {
         state.target.sheet = sheet;
-        state.target.bodyParts = dedupeBodyParts2(sheet.body_parts);
+        state.target.bodyParts = dedupeBodyParts(sheet.body_parts);
         if (!state.target.bodyParts.some((p) => p.id === state.target.partId && isTargetable(p))) {
           selectFirstTargetablePart();
         }
@@ -35008,12 +33284,12 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     return v === null || v === void 0 || v === "" ? "-" : v;
   }
   function renderWeaponSelect() {
-    const weapons = arr3(state.attacker.armory?.weapons);
-    refs.weaponSelect.innerHTML = weapons.length ? weapons.map((w) => `<option value="${esc2(w.id)}" ${w.id === state.attacker.weaponId ? "selected" : ""}>${esc2(w.name)} - ${esc2(w.model?.weapon_class_name || w.model?.weapon_class || "")}</option>`).join("") : `<option value="">- no weapons -</option>`;
+    const weapons = arr(state.attacker.armory?.weapons);
+    refs.weaponSelect.innerHTML = weapons.length ? weapons.map((w) => `<option value="${esc(w.id)}" ${w.id === state.attacker.weaponId ? "selected" : ""}>${esc(w.name)} - ${esc(w.model?.weapon_class_name || w.model?.weapon_class || "")}</option>`).join("") : `<option value="">- no weapons -</option>`;
   }
   function renderAbilitySelect() {
     const abilities = attackAbilities();
-    refs.abilitySelect.innerHTML = abilities.length ? abilities.map((a) => `<option value="${esc2(a.id)}" ${a.id === state.attacker.abilityId ? "selected" : ""}>${esc2(a.name)} - lvl ${uiDash(a.effective_level)}</option>`).join("") : `<option value="">- no attack abilities -</option>`;
+    refs.abilitySelect.innerHTML = abilities.length ? abilities.map((a) => `<option value="${esc(a.id)}" ${a.id === state.attacker.abilityId ? "selected" : ""}>${esc(a.name)} - lvl ${uiDash(a.effective_level)}</option>`).join("") : `<option value="">- no attack abilities -</option>`;
   }
   function renderProfileAndFireMode() {
     const w = currentWeapon();
@@ -35021,18 +33297,18 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       refs.profileRow.innerHTML = "";
       return;
     }
-    const profiles = arr3(w.profiles);
-    const fireModes = arr3(w.available_fire_modes.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
+    const profiles = arr(w.profiles);
+    const fireModes = arr(w.available_fire_modes.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
     const selFmId = (w.selected_fire_mode || w.active_profile?.selected_fire_mode)?.id || "";
     let html = "";
     if (profiles.length > 1) {
-      html += `<label class="ra-field"><span>Weapon profile</span><select data-sel="profile">${profiles.map((p) => `<option value="${esc2(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc2(p.name || p.code || "profile")}${p.attack_type ? " - " + esc2(p.attack_type) : ""}</option>`).join("")}</select></label>`;
+      html += `<label class="ra-field"><span>Weapon profile</span><select data-sel="profile">${profiles.map((p) => `<option value="${esc(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc(p.name || p.code || "profile")}${p.attack_type ? " - " + esc(p.attack_type) : ""}</option>`).join("")}</select></label>`;
     } else if (profiles.length === 1) {
       const p = profiles[0];
-      html += `<label class="ra-field"><span>Weapon profile</span><div class="ra-chip">${esc2(p.name || p.code || "default")}${p.attack_type ? " - " + esc2(p.attack_type) : ""}</div></label>`;
+      html += `<label class="ra-field"><span>Weapon profile</span><div class="ra-chip">${esc(p.name || p.code || "default")}${p.attack_type ? " - " + esc(p.attack_type) : ""}</div></label>`;
     }
     if (fireModes.length) {
-      html += `<label class="ra-field"><span>Fire mode</span><select data-sel="fireMode">${fireModes.map((f) => `<option value="${esc2(f.id)}" ${f.id === selFmId ? "selected" : ""}>${esc2(f.name || f.code || "fire mode")}</option>`).join("")}</select></label>`;
+      html += `<label class="ra-field"><span>Fire mode</span><select data-sel="fireMode">${fireModes.map((f) => `<option value="${esc(f.id)}" ${f.id === selFmId ? "selected" : ""}>${esc(f.name || f.code || "fire mode")}</option>`).join("")}</select></label>`;
     }
     refs.profileRow.innerHTML = html;
   }
@@ -35050,11 +33326,11 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (isMelee) {
         chips += `<span class="ra-chip">melee - str-based</span>`;
       } else {
-        chips += fm ? `<span class="ra-chip">mode: ${esc2(fm.name || fm.code)}</span>` : `<span class="ra-chip neg">no fire mode</span>`;
+        chips += fm ? `<span class="ra-chip">mode: ${esc(fm.name || fm.code)}</span>` : `<span class="ra-chip neg">no fire mode</span>`;
         if (mag) {
           const ammo = mag.ammo_type_name || mag.ammo_type?.name || mag.ammo_type || "-";
           const cal = mag.magazine_def?.caliber_name || mag.caliber_name || mag.caliber || "";
-          chips += `<span class="ra-chip">mag ${uiDash(mag.current_rounds)} / ${uiDash(mag.capacity || mag.magazine_def?.capacity)} - ${esc2(ammo)}${cal ? " - " + esc2(cal) : ""}</span>`;
+          chips += `<span class="ra-chip">mag ${uiDash(mag.current_rounds)} / ${uiDash(mag.capacity || mag.magazine_def?.capacity)} - ${esc(ammo)}${cal ? " - " + esc(cal) : ""}</span>`;
           if ((mag.current_rounds ?? 0) <= 0) chips += `<span class="ra-chip neg">magazine empty</span>`;
         } else {
           chips += `<span class="ra-chip neg">no magazine loaded</span>`;
@@ -35076,15 +33352,15 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const ignore = a.level_data?.ignore_armor;
     const cd = a.current_cooldown_rounds;
     refs.attackBlock.innerHTML = `<div class="ra-block">
-      <span class="ra-chip">cost k:${esc2(cost)}</span>
-      ${pool ? `<span class="ra-row" style="gap:6px"><span class="ra-muted">${esc2(pool.name || "Energy")}</span><span class="ra-ebar"><span style="width:${pct}%"></span></span><span class="ra-mono">${cur} / ${max}</span></span>` : `<span class="ra-chip neg">resource pool not found</span>`}
-      ${cd ? `<span class="ra-chip neg">cooldown ${esc2(cd)}</span>` : ""}
+      <span class="ra-chip">cost k:${esc(cost)}</span>
+      ${pool ? `<span class="ra-row" style="gap:6px"><span class="ra-muted">${esc(pool.name || "Energy")}</span><span class="ra-ebar"><span style="width:${pct}%"></span></span><span class="ra-mono">${cur} / ${max}</span></span>` : `<span class="ra-chip neg">resource pool not found</span>`}
+      ${cd ? `<span class="ra-chip neg">cooldown ${esc(cd)}</span>` : ""}
       ${ignore ? `<span class="ra-chip">ignores armor</span>` : ""}
     </div>`;
   }
   function renderFeatures() {
     const w = currentWeapon();
-    const features = arr3(w?.features);
+    const features = arr(w?.features);
     if (state.mode !== "weapon" || !features.length) {
       refs.features.innerHTML = "";
       return;
@@ -35097,7 +33373,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (f.requires_reload) bits.push("needs reload");
       if (f.current_cooldown_rounds) bits.push(`cd ${f.current_cooldown_rounds}`);
       if (f.uses_left !== void 0 && f.uses_left !== null) bits.push(`uses ${f.uses_left}`);
-      return `<div class="ra-feature"><span>${esc2(f.name || f.code || "feature")}</span><span class="${active ? "on" : "off"}">${active ? "active" : "inactive"}${bits.length ? " - " + esc2(bits.join(" - ")) : ""}</span></div>`;
+      return `<div class="ra-feature"><span>${esc(f.name || f.code || "feature")}</span><span class="${active ? "on" : "off"}">${active ? "active" : "inactive"}${bits.length ? " - " + esc(bits.join(" - ")) : ""}</span></div>`;
     }).join("");
   }
   function renderDoll() {
@@ -35105,33 +33381,33 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     refs.doll.innerHTML = makeDoll();
   }
   function renderParts() {
-    refs.parts.innerHTML = dedupeBodyParts2(state.target.bodyParts).map((p) => {
+    refs.parts.innerHTML = dedupeBodyParts(state.target.bodyParts).map((p) => {
       const cls = ["ra-partchip"];
       const targetable = isTargetable(p);
       const drawable = Boolean(PART_GEOMETRY[normPartCode(p)]);
       if (p.id === state.target.partId) cls.push("active");
       if (!drawable) cls.push("custom");
       if (!targetable) cls.push("disabled");
-      const aim = p.aim_difficulty ? ` <span class="ra-mono ra-muted">-${esc2(p.aim_difficulty)}</span>` : "";
+      const aim = p.aim_difficulty ? ` <span class="ra-mono ra-muted">-${esc(p.aim_difficulty)}</span>` : "";
       const reason = p.destroyed ? " (destroyed)" : p.can_be_targeted === false ? " (untargetable)" : "";
-      return `<span class="${cls.join(" ")}" data-part="${esc2(p.id)}" data-targetable="${targetable}">${esc2(p.name)}${aim}${reason}</span>`;
+      return `<span class="${cls.join(" ")}" data-part="${esc(p.id)}" data-targetable="${targetable}">${esc(p.name)}${aim}${reason}</span>`;
     }).join("");
   }
   function magOption(m, selId) {
     const cap = m.magazine_def?.capacity ?? m.capacity;
     const ammoName = m.ammo_type?.name || m.ammo_type_name || "-";
     const loaded = magLoadedInWeaponName(m.id);
-    return `<option value="${esc2(m.id)}" ${m.id === selId ? "selected" : ""}>${esc2(m.name)} - ${uiDash(m.current_rounds)}/${uiDash(cap)} - ${esc2(ammoName)}${loaded ? " - in " + esc2(loaded) : ""}</option>`;
+    return `<option value="${esc(m.id)}" ${m.id === selId ? "selected" : ""}>${esc(m.name)} - ${uiDash(m.current_rounds)}/${uiDash(cap)} - ${esc(ammoName)}${loaded ? " - in " + esc(loaded) : ""}</option>`;
   }
   function ammoOption(a, selId) {
-    return `<option value="${esc2(a.id)}" ${a.id === selId ? "selected" : ""}>${esc2(a.display_name)} - ${esc2(a.ammo_type_name || a.ammo_type_code || "")} - x${uiDash(a.quantity)}</option>`;
+    return `<option value="${esc(a.id)}" ${a.id === selId ? "selected" : ""}>${esc(a.display_name)} - ${esc(a.ammo_type_name || a.ammo_type_code || "")} - x${uiDash(a.quantity)}</option>`;
   }
   function magRow(m) {
     const inW = magLoadedInWeaponName(m.id);
-    return `<div class="ra-feature"><span>${esc2(m.name)}</span><span class="ra-mono">${uiDash(m.current_rounds)}/${uiDash(m.magazine_def?.capacity ?? m.capacity)} - ${esc2(m.ammo_type?.name || m.ammo_type_name || "empty")} - ${esc2(m.magazine_def?.caliber_name || m.magazine_def?.caliber || "")}${inW ? " - in " + esc2(inW) : ""}</span></div>`;
+    return `<div class="ra-feature"><span>${esc(m.name)}</span><span class="ra-mono">${uiDash(m.current_rounds)}/${uiDash(m.magazine_def?.capacity ?? m.capacity)} - ${esc(m.ammo_type?.name || m.ammo_type_name || "empty")} - ${esc(m.magazine_def?.caliber_name || m.magazine_def?.caliber || "")}${inW ? " - in " + esc(inW) : ""}</span></div>`;
   }
   function ammoRow(a) {
-    return `<div class="ra-feature"><span>${esc2(a.display_name)}</span><span class="ra-mono">${esc2(a.ammo_type_name || a.ammo_type_code || "")} - ${esc2(a.caliber_name || a.caliber_code || "")} - x${uiDash(a.quantity)}</span></div>`;
+    return `<div class="ra-feature"><span>${esc(a.display_name)}</span><span class="ra-mono">${esc(a.ammo_type_name || a.ammo_type_code || "")} - ${esc(a.caliber_name || a.caliber_code || "")} - x${uiDash(a.quantity)}</span></div>`;
   }
   function renderInventory() {
     const w = currentWeapon();
@@ -35148,7 +33424,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       ${state.attacker.inventory.fallback ? `<div class="ra-banner warn">Ammo stock read via fallback (backend get_character_inventory error 25006). Magazines/ammo shown are still server truth.</div>` : ""}
       <div class="ra-section-title" style="margin-top:0">Reload weapon - insert / replace magazine</div>
       <div class="ra-block" style="flex-direction:column;align-items:stretch;gap:8px">
-        <div class="ra-muted">${w ? esc2(w.name) : "-"} - profile ${esc2(profileName)} - loaded ${loadedMag ? `<span class="ra-mono">${uiDash(loadedMag.current_rounds)}/${uiDash(loadedMag.capacity || loadedMag.magazine_def?.capacity)}</span> ${esc2(loadedMag.ammo_type_name || loadedMag.ammo_type?.name || "")}` : "-"}</div>
+        <div class="ra-muted">${w ? esc(w.name) : "-"} - profile ${esc(profileName)} - loaded ${loadedMag ? `<span class="ra-mono">${uiDash(loadedMag.current_rounds)}/${uiDash(loadedMag.capacity || loadedMag.magazine_def?.capacity)}</span> ${esc(loadedMag.ammo_type_name || loadedMag.ammo_type?.name || "")}` : "-"}</div>
         <div class="ra-row">
           <label class="ra-field"><span>Magazine to insert</span><select data-inv="reloadMag">${reloadOpts}</select></label>
           <button data-inv-action="reload" type="button" style="align-self:flex-end">Reload weapon</button>
@@ -35205,18 +33481,18 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const hitCls = data.hit === true ? "hit" : data.hit === false ? "miss" : "";
     const autoTxt = data.auto === "crit" ? "auto-crit" : data.auto === "fail" ? "auto-fail" : "-";
     const stat = (k, v, cls = "") => `<div class="ra-stat"><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>`;
-    const pending = arr3(data.pendingChecks).map((c) => c.skill_code || c.type || "check").join(", ");
+    const pending = arr(data.pendingChecks).map((c) => c.skill_code || c.type || "check").join(", ");
     refs.summary.innerHTML = [
-      stat("Result", esc2(hitTxt), hitCls),
-      stat("Auto", esc2(autoTxt), data.auto === "crit" ? "crit" : ""),
-      stat("Attack total", esc2(uiDash(data.attackTotal))),
-      stat("Defense total", esc2(uiDash(data.defenseTotal))),
-      stat("Damage", `${esc2(uiDash(data.damageLevel))}${data.damageDiff != null ? ` <span class="ra-mono">D${esc2(data.damageDiff)}</span>` : ""}`, data.damageLevel === "critical" ? "crit" : ""),
-      stat("Body part", esc2(uiDash(data.targetBodyPartName))),
-      stat("Ammo spent", esc2(uiDash(data.ammoSpent))),
-      stat("Energy spent", esc2(uiDash(data.energySpent))),
-      stat("Pending", esc2(pending || "-")),
-      stat("Combat log id", `<span class="ra-mono">${esc2(data.combatLogId ? `${String(data.combatLogId).slice(0, 8)}...` : "-")}</span>`),
+      stat("Result", esc(hitTxt), hitCls),
+      stat("Auto", esc(autoTxt), data.auto === "crit" ? "crit" : ""),
+      stat("Attack total", esc(uiDash(data.attackTotal))),
+      stat("Defense total", esc(uiDash(data.defenseTotal))),
+      stat("Damage", `${esc(uiDash(data.damageLevel))}${data.damageDiff != null ? ` <span class="ra-mono">D${esc(data.damageDiff)}</span>` : ""}`, data.damageLevel === "critical" ? "crit" : ""),
+      stat("Body part", esc(uiDash(data.targetBodyPartName))),
+      stat("Ammo spent", esc(uiDash(data.ammoSpent))),
+      stat("Energy spent", esc(uiDash(data.energySpent))),
+      stat("Pending", esc(pending || "-")),
+      stat("Combat log id", `<span class="ra-mono">${esc(data.combatLogId ? `${String(data.combatLogId).slice(0, 8)}...` : "-")}</span>`),
       stat("Target", data.targetAlive === false ? "dead" : data.targetConscious === false ? "unconscious" : "-", data.targetAlive === false ? "danger" : "")
     ].join("");
     refs.summaryCard.classList.remove("ra-hidden");
@@ -35228,7 +33504,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     }
     const autoTxt = n.auto === "crit" ? " - auto-crit" : n.auto === "fail" ? " - auto-fail" : "";
     pushLog(`<span class="who">accuracy</span> - <span class="ra-mono">${uiDash(n.attackRoll)} -> ${uiDash(n.attackTotal)}</span> vs <span class="ra-mono">${uiDash(n.defenseTotal)}</span> - ${n.hit ? "hit" : "miss"}${autoTxt}`);
-    if (n.hit) pushLog(`<span class="who">damage</span> - ${esc2(uiDash(n.targetBodyPartName))} - <span class="ra-mono">D ${uiDash(n.damageDiff)}</span> - ${esc2(uiDash(n.damageLevel))}`);
+    if (n.hit) pushLog(`<span class="who">damage</span> - ${esc(uiDash(n.targetBodyPartName))} - <span class="ra-mono">D ${uiDash(n.damageDiff)}</span> - ${esc(uiDash(n.damageLevel))}`);
     if (n.targetAlive === false) pushLog(`<span class="ra-neg">target is dead</span>`);
     else if (n.targetConscious === false) pushLog(`<span class="ra-neg">target is unconscious</span>`);
   }
@@ -35277,7 +33553,7 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       renderFeatures();
       renderPayloadPreview();
     } catch (err) {
-      banner(refs.resolveStatus, "err", `Switch failed: ${esc2(err.message)}`);
+      banner(refs.resolveStatus, "err", `Switch failed: ${esc(err.message)}`);
       renderProfileAndFireMode();
     }
   });
@@ -35361,8 +33637,8 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
       if (isAttacker) {
         const abilitiesRes = await loadAbilities(state.attacker.id).catch(() => null);
         if (abilitiesRes) {
-          state.attacker.abilities = arr3(abilitiesRes.abilities).filter((a) => a.is_enabled !== false);
-          state.attacker.pools = arr3(abilitiesRes.resource_pools);
+          state.attacker.abilities = arr(abilitiesRes.abilities).filter((a) => a.is_enabled !== false);
+          state.attacker.pools = arr(abilitiesRes.resource_pools);
           renderAll();
         }
       }
@@ -35485,7 +33761,7 @@ function queryRefs(root2) {
 }
 
 // screens/character/characterStyles.css
-var characterStyles_default = '/* Character Panel \u2014 scoped styles (prefix .cp-). Reuses shell design tokens. */\r\n.cp-screen { display: flex; flex-direction: column; gap: 14px; }\r\n.cp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\r\n.cp-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }\r\n.cp-field > span { font-size: 11px; color: var(--muted); }\r\n.cp-mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }\r\n.cp-muted { color: var(--muted); font-size: 12px; }\r\n.cp-hidden { display: none !important; }\r\n.cp-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 2px; }\r\nselect, .cp-screen input { font: inherit; }\r\n.cp-screen select { width: 100%; border-radius: 10px; border: 1px solid rgba(61,92,129,.9); background: rgba(8,17,28,.9); color: var(--text); padding: 9px 11px; }\r\n\r\n/* banners */\r\n.cp-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\r\n.cp-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\r\n.cp-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\r\n.cp-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\r\n.cp-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\r\n\r\n/* header */\r\n.cp-head { display: flex; gap: 12px; align-items: center; }\r\n.cp-head-actions { display: flex; gap: 6px; align-items: center; }\r\n.cp-head-btn { cursor: pointer; }\r\n.cp-head-btn:hover { border-color: var(--accent); color: #d8eeff; }\r\n.cp-avatar { width: 46px; height: 46px; border-radius: 10px; background: var(--panel-soft); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; flex: none; overflow: hidden; }\r\n.cp-avatar img { width: 100%; height: 100%; object-fit: cover; }\r\n.cp-name { font-size: 15px; font-weight: 700; }\r\n\r\n/* sub-nav */\r\n.cp-nav { display: flex; gap: 6px; flex-wrap: wrap; }\r\n.cp-tab { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--text); cursor: pointer; font-size: 12px; }\r\n.cp-tab.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; font-weight: 700; }\r\n.cp-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* overview layout: doll left, characteristics right (same level) */\r\n.cp-overview { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }\r\n.cp-doll-col { flex: none; }\r\n.cp-attrs-col { flex: 1; min-width: 150px; }\r\n\r\n/* clickable cards (skills, additional body parts) \u2014 clear button affordance */\r\n.cp-card[role="button"] { cursor: pointer; transition: border-color .12s, background .12s; }\r\n.cp-card[role="button"]:hover { border-color: var(--accent); background: rgba(62,166,255,.10); }\r\n.cp-card[role="button"]:active { background: rgba(62,166,255,.16); }\r\n.cp-card[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* 3x3 characteristics \u2014 fluid squares that fill the available column */\r\n.cp-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }\r\n.cp-attr { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 6px; padding: 2px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; }\r\n.cp-attr:hover { border-color: var(--accent); }\r\n.cp-attr:active { background: rgba(62,166,255,.1); }\r\n.cp-attr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n.cp-attr[aria-disabled="true"] { opacity: .6; cursor: progress; }\r\n.cp-attr .cp-attr-val { font-size: 26px; font-weight: 700; font-family: "JetBrains Mono", ui-monospace, monospace; line-height: 1; margin: 0 0 1px; }\r\n.cp-attr .cp-attr-code { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\r\n.cp-attr .cp-attr-mod { position: absolute; right: 3px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; font-weight: 700; line-height: 1; padding: 1px 4px; border-radius: 999px; border: 1px solid transparent; }\r\n.cp-attr .cp-attr-mod-pos { top: 3px; color: #d9ffe4; background: rgba(74, 180, 104, .18); border-color: rgba(74, 180, 104, .45); }\r\n.cp-attr .cp-attr-mod-neg { bottom: 15px; color: #ffd9de; background: rgba(201,75,88,.18); border-color: rgba(201,75,88,.45); }\r\n.cp-attr .cp-attr-edit { position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; padding: 0; }\r\n.cp-attr .cp-attr-edit:hover { color: #d8eeff; border-color: var(--accent); }\r\n.cp-attr .cp-attr-pending { position: absolute; bottom: 1px; left: 0; right: 0; font-size: 7px; color: var(--accent); }\r\n.cp-skill-edit { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; flex: none; }\r\n.cp-skill-edit:hover { color: #d8eeff; border-color: var(--accent); }\r\n\r\n/* doll */\r\n.cp-doll-wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }\r\n.cp-doll { position: relative; flex: none; }\r\n.cp-doll .cp-part { position: absolute; cursor: pointer; border: 1px solid rgba(0,0,0,.4); }\r\n.cp-doll .cp-part:hover, .cp-doll .cp-part:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }\r\n.cp-doll .cp-part.pinned { outline: 2px solid #d8eeff; outline-offset: 2px; }\r\n.cp-doll .cp-base { position: absolute; border-radius: 50%; background: rgba(21,34,53,.9); border: 1px solid var(--line); }\r\n/* state colors */\r\n.cp-c-intact { background: #33425e; }\r\n.cp-c-warn { background: #b07e2a; }\r\n.cp-c-danger { background: #7a2a32; }\r\n\r\n/* tooltip */\r\n.cp-tip { position: absolute; z-index: 30; min-width: 180px; max-width: 240px; background: rgba(7,14,24,.98); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 11px; line-height: 1.5; pointer-events: none; box-shadow: 0 8px 30px rgba(0,0,0,.5); }\r\n.cp-tip b { font-size: 12px; }\r\n.cp-tip .cp-kv { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }\r\n.cp-tip .cp-kv span:last-child { color: var(--text); font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-statebadge { display: inline-block; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; }\r\n.cp-sb-intact { background: rgba(62,166,255,.16); color: #cfe6ff; }\r\n.cp-sb-warn { background: rgba(255,194,75,.18); color: #ffe6b3; }\r\n.cp-sb-danger { background: rgba(201,75,88,.2); color: #ffd2d8; }\r\n\r\n/* inspector */\r\n.cp-inspector { flex: 1; min-width: 200px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-inspector .cp-ins-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }\r\n.cp-inspector .cp-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(39,65,95,.4); }\r\n.cp-inspector .cp-kv span:last-child { font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-close { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; cursor: pointer; padding: 3px 8px; font-size: 12px; }\r\n\r\n/* cards / lists */\r\n.cp-card { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-list { display: flex; flex-direction: column; gap: 8px; }\r\n.cp-rowitem { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 12px; }\r\n.cp-pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\r\n.cp-pill.good { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\r\n.cp-pill.bad { border-color: rgba(201,75,88,.4); color: #ffd2d8; background: rgba(201,75,88,.12); }\r\n.cp-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(8,17,28,.7); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 11px; }\r\n.cp-chip.bad { border-color: rgba(201,75,88,.5); color: #ffd9de; }\r\n.cp-skill-mod { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; font-size: 10px; font-family: "JetBrains Mono", ui-monospace, monospace; border: 1px solid transparent; }\r\n.cp-skill-mod-pos { color: #d9ffe4; background: rgba(74, 180, 104, .16); border-color: rgba(74, 180, 104, .4); }\r\n.cp-skill-mod-neg { color: #ffd9de; background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.4); }\r\n\r\n/* pips for skills */\r\n.cp-pips { display: inline-flex; gap: 3px; }\r\n.cp-pip { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }\r\n.cp-pip.on { background: var(--accent); }\r\n\r\n/* buttons reuse shell .button; small variant */\r\n.cp-btn-sm { padding: 6px 10px; font-size: 12px; }\r\n\r\n/* skeleton */\r\n.cp-skel { border-radius: 10px; background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 37%, rgba(255,255,255,.04) 63%); background-size: 400% 100%; animation: cp-shimmer 1.3s ease infinite; }\r\n@keyframes cp-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }\r\n.cp-skel-line { height: 12px; margin: 6px 0; }\r\n.cp-skel-card { height: 64px; margin: 6px 0; }\r\n@media (prefers-reduced-motion: reduce) { .cp-skel { animation: none; } }\r\n\r\n/* dialog/popover */\r\n.cp-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.6); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\r\n.cp-dialog { width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }\r\n.cp-dialog h3 { margin: 0 0 10px; font-size: 14px; }\r\n\r\n.cp-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\r\n.cp-additional { margin-top: 8px; }\r\n\r\n/* pool chip with GM +/- buttons */\r\n.cp-chip.cp-pool-gm { padding: 2px 4px; gap: 3px; }\r\n.cp-pool-adj { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; cursor: pointer; width: 20px; height: 20px; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; }\r\n.cp-pool-adj:hover:not(:disabled) { color: #d8eeff; border-color: var(--accent); }\r\n.cp-pool-adj:disabled { opacity: .4; cursor: default; }\r\n\r\n/* edit dialog stepper */\r\n.cp-dlg-stepper { display: flex; gap: 6px; align-items: center; justify-content: center; margin-bottom: 2px; }\r\n.cp-dlg-input { width: 64px; flex: none; text-align: center; border: 1px solid var(--line); background: rgba(8,17,28,.9); color: var(--text); border-radius: 8px; padding: 7px 6px; font-size: 15px; }\r\n.cp-dlg-step { width: 36px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; border-radius: 8px; }\r\n';
+var characterStyles_default = '/* Character Panel \u2014 scoped styles (prefix .cp-). Reuses shell design tokens. */\r\n.cp-screen { display: flex; flex-direction: column; gap: 14px; }\r\n.cp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\r\n.cp-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }\r\n.cp-field > span { font-size: 11px; color: var(--muted); }\r\n.cp-mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }\r\n.cp-muted { color: var(--muted); font-size: 12px; }\r\n.cp-hidden { display: none !important; }\r\n.cp-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 2px; }\r\nselect, .cp-screen input { font: inherit; }\r\n.cp-screen select { width: 100%; border-radius: 10px; border: 1px solid rgba(61,92,129,.9); background: rgba(8,17,28,.9); color: var(--text); padding: 9px 11px; }\r\n\r\n/* banners */\r\n.cp-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\r\n.cp-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\r\n.cp-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\r\n.cp-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\r\n.cp-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\r\n\r\n/* header */\r\n.cp-head { display: flex; gap: 12px; align-items: center; }\n.cp-head-actions { display: flex; gap: 6px; align-items: center; }\n.cp-head-btn { cursor: pointer; }\n.cp-head-btn:hover { border-color: var(--accent); color: #d8eeff; }\n.cp-avatar { width: 46px; height: 46px; border-radius: 10px; background: var(--panel-soft); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; flex: none; overflow: hidden; }\n.cp-avatar img { width: 100%; height: 100%; object-fit: cover; }\r\n.cp-name { font-size: 15px; font-weight: 700; }\r\n\r\n/* sub-nav */\r\n.cp-nav { display: flex; gap: 6px; flex-wrap: wrap; }\r\n.cp-tab { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--text); cursor: pointer; font-size: 12px; }\r\n.cp-tab.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; font-weight: 700; }\r\n.cp-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* overview layout: doll left, characteristics right (same level) */\r\n.cp-overview { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }\r\n.cp-doll-col { flex: none; }\r\n.cp-attrs-col { flex: 1; min-width: 150px; }\r\n\r\n/* clickable cards (skills, additional body parts) \u2014 clear button affordance */\r\n.cp-card[role="button"] { cursor: pointer; transition: border-color .12s, background .12s; }\r\n.cp-card[role="button"]:hover { border-color: var(--accent); background: rgba(62,166,255,.10); }\r\n.cp-card[role="button"]:active { background: rgba(62,166,255,.16); }\r\n.cp-card[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* 3x3 characteristics \u2014 fluid squares that fill the available column */\r\n.cp-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }\r\n.cp-attr { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 6px; padding: 2px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; }\n.cp-attr:hover { border-color: var(--accent); }\n.cp-attr:active { background: rgba(62,166,255,.1); }\n.cp-attr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.cp-attr[aria-disabled="true"] { opacity: .6; cursor: progress; }\n.cp-attr .cp-attr-val { font-size: 26px; font-weight: 700; font-family: "JetBrains Mono", ui-monospace, monospace; line-height: 1; margin: 0 0 1px; }\n.cp-attr .cp-attr-code { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n.cp-attr .cp-attr-mod { position: absolute; right: 3px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; font-weight: 700; line-height: 1; padding: 1px 4px; border-radius: 999px; border: 1px solid transparent; }\n.cp-attr .cp-attr-mod-pos { top: 3px; color: #d9ffe4; background: rgba(74, 180, 104, .18); border-color: rgba(74, 180, 104, .45); }\n.cp-attr .cp-attr-mod-neg { bottom: 15px; color: #ffd9de; background: rgba(201,75,88,.18); border-color: rgba(201,75,88,.45); }\n.cp-attr .cp-attr-edit { position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; padding: 0; }\n.cp-attr .cp-attr-edit:hover { color: #d8eeff; border-color: var(--accent); }\n.cp-attr .cp-attr-pending { position: absolute; bottom: 1px; left: 0; right: 0; font-size: 7px; color: var(--accent); }\n.cp-skill-edit { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; flex: none; }\n.cp-skill-edit:hover { color: #d8eeff; border-color: var(--accent); }\n\r\n/* doll */\r\n.cp-doll-wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }\r\n.cp-doll { position: relative; flex: none; }\r\n.cp-doll .cp-part { position: absolute; cursor: pointer; border: 1px solid rgba(0,0,0,.4); }\r\n.cp-doll .cp-part:hover, .cp-doll .cp-part:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }\r\n.cp-doll .cp-part.pinned { outline: 2px solid #d8eeff; outline-offset: 2px; }\r\n.cp-doll .cp-base { position: absolute; border-radius: 50%; background: rgba(21,34,53,.9); border: 1px solid var(--line); }\r\n/* state colors */\r\n.cp-c-intact { background: #33425e; }\r\n.cp-c-warn { background: #b07e2a; }\r\n.cp-c-danger { background: #7a2a32; }\r\n\r\n/* tooltip */\r\n.cp-tip { position: absolute; z-index: 30; min-width: 180px; max-width: 240px; background: rgba(7,14,24,.98); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 11px; line-height: 1.5; pointer-events: none; box-shadow: 0 8px 30px rgba(0,0,0,.5); }\r\n.cp-tip b { font-size: 12px; }\r\n.cp-tip .cp-kv { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }\r\n.cp-tip .cp-kv span:last-child { color: var(--text); font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-statebadge { display: inline-block; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; }\r\n.cp-sb-intact { background: rgba(62,166,255,.16); color: #cfe6ff; }\r\n.cp-sb-warn { background: rgba(255,194,75,.18); color: #ffe6b3; }\r\n.cp-sb-danger { background: rgba(201,75,88,.2); color: #ffd2d8; }\r\n\r\n/* inspector */\r\n.cp-inspector { flex: 1; min-width: 200px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-inspector .cp-ins-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }\r\n.cp-inspector .cp-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(39,65,95,.4); }\r\n.cp-inspector .cp-kv span:last-child { font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-close { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; cursor: pointer; padding: 3px 8px; font-size: 12px; }\r\n\r\n/* cards / lists */\r\n.cp-card { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-list { display: flex; flex-direction: column; gap: 8px; }\r\n.cp-rowitem { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 12px; }\r\n.cp-pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\r\n.cp-pill.good { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\n.cp-pill.bad { border-color: rgba(201,75,88,.4); color: #ffd2d8; background: rgba(201,75,88,.12); }\n.cp-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(8,17,28,.7); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 11px; }\n.cp-chip.bad { border-color: rgba(201,75,88,.5); color: #ffd9de; }\n.cp-skill-mod { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; font-size: 10px; font-family: "JetBrains Mono", ui-monospace, monospace; border: 1px solid transparent; }\n.cp-skill-mod-pos { color: #d9ffe4; background: rgba(74, 180, 104, .16); border-color: rgba(74, 180, 104, .4); }\n.cp-skill-mod-neg { color: #ffd9de; background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.4); }\n\r\n/* pips for skills */\r\n.cp-pips { display: inline-flex; gap: 3px; }\r\n.cp-pip { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }\r\n.cp-pip.on { background: var(--accent); }\r\n\r\n/* buttons reuse shell .button; small variant */\r\n.cp-btn-sm { padding: 6px 10px; font-size: 12px; }\r\n\r\n/* skeleton */\r\n.cp-skel { border-radius: 10px; background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 37%, rgba(255,255,255,.04) 63%); background-size: 400% 100%; animation: cp-shimmer 1.3s ease infinite; }\r\n@keyframes cp-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }\r\n.cp-skel-line { height: 12px; margin: 6px 0; }\r\n.cp-skel-card { height: 64px; margin: 6px 0; }\r\n@media (prefers-reduced-motion: reduce) { .cp-skel { animation: none; } }\r\n\r\n/* dialog/popover */\r\n.cp-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.6); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\r\n.cp-dialog { width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }\r\n.cp-dialog h3 { margin: 0 0 10px; font-size: 14px; }\r\n\r\n.cp-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\r\n.cp-additional { margin-top: 8px; }\r\n\r\n/* pool chip with GM +/- buttons */\r\n.cp-chip.cp-pool-gm { padding: 2px 4px; gap: 3px; }\r\n.cp-pool-adj { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; cursor: pointer; width: 20px; height: 20px; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; }\r\n.cp-pool-adj:hover:not(:disabled) { color: #d8eeff; border-color: var(--accent); }\r\n.cp-pool-adj:disabled { opacity: .4; cursor: default; }\r\n\r\n/* edit dialog stepper */\r\n.cp-dlg-stepper { display: flex; gap: 6px; align-items: center; justify-content: center; margin-bottom: 2px; }\r\n.cp-dlg-input { width: 64px; flex: none; text-align: center; border: 1px solid var(--line); background: rgba(8,17,28,.9); color: var(--text); border-radius: 8px; padding: 7px 6px; font-size: 15px; }\r\n.cp-dlg-step { width: 36px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; border-radius: 8px; }\r\n';
 
 // screens/character/characterScreen.js
 var ATTR_RU = {
@@ -35530,17 +33806,17 @@ var DOLL_SCALE2 = 1.7;
 var OBR_TIMEOUT = 1500;
 var ARMOR_TYPES = /* @__PURE__ */ new Set(["armor", "shield", "special_protection"]);
 var IMPLANT_TYPES = /* @__PURE__ */ new Set(["implant", "prosthetic", "device"]);
-var esc3 = (v) => escapeHtml(v);
-var arr4 = (v) => Array.isArray(v) ? v : [];
-var dash3 = (v) => v === null || v === void 0 || v === "" ? "-" : v;
-var normalizeBodyPartCode2 = (value) => {
+var esc2 = (v) => escapeHtml(v);
+var arr2 = (v) => Array.isArray(v) ? v : [];
+var dash2 = (v) => v === null || v === void 0 || v === "" ? "-" : v;
+var normalizeBodyPartCode = (value) => {
   const code = String(value || "").trim().toLowerCase().replace(/[\s.-]+/g, "_").replace(/__+/g, "_");
   return PART_ALIASES2[code] || code;
 };
-var normPart = (p) => normalizeBodyPartCode2(p?.code || p?.part_key || "");
+var normPart = (p) => normalizeBodyPartCode(p?.code || p?.part_key || "");
 var isShieldPart = (p) => normPart(p) === "shield";
 var isSpecialPart = (p) => normPart(p) === "special";
-function injectStylesOnce3() {
+function injectStylesOnce2() {
   if (document.getElementById("cp-screen-styles")) return;
   const s = document.createElement("style");
   s.id = "cp-screen-styles";
@@ -35557,7 +33833,7 @@ function banner2(kind, html) {
   return `<div class="cp-banner ${kind}">${html}</div>`;
 }
 function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
-  injectStylesOnce3();
+  injectStylesOnce2();
   const api = runtime2?.api ?? {};
   const bridges = runtime2?.bridges ?? {};
   const state = {
@@ -35621,7 +33897,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       settings(),
       "Unable to read item defs."
     );
-    return arr4(rows);
+    return arr2(rows);
   }
   async function fetchAmmoAndMagazineDefs() {
     const safe = (p) => p.catch(() => []);
@@ -35629,8 +33905,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       safe(bridges.supabase.fetchSupabaseRows("odyssey_magazine_defs?select=id,code,name,capacity,caliber_id,caliber:caliber_id(id,code,name)&order=name", settings(), "")),
       safe(bridges.supabase.fetchSupabaseRows("odyssey_ammo_type_defs?select=id,code,name,caliber_id,caliber:caliber_id(id,code,name)&order=name", settings(), ""))
     ]);
-    state.magazineDefs = arr4(magazines);
-    state.ammoDefs = arr4(ammo);
+    state.magazineDefs = arr2(magazines);
+    state.ammoDefs = arr2(ammo);
   }
   async function fetchGmDefs() {
     const safe = (p) => p.catch(() => []);
@@ -35639,9 +33915,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       safe(bridges.supabase.fetchSupabaseRows("odyssey_weapon_model_defs?select=id,code,name&order=name", settings(), "")),
       safe(bridges.supabase.fetchSupabaseRows("odyssey_equipment_model_defs?select=id,code,name,item_type&order=name", settings(), ""))
     ]);
-    state.skillDefs = arr4(skills);
-    state.weaponDefs = arr4(weapons);
-    state.equipmentDefs = arr4(equipment);
+    state.skillDefs = arr2(skills);
+    state.weaponDefs = arr2(weapons);
+    state.equipmentDefs = arr2(equipment);
   }
   async function refreshGmCatalogs() {
     await Promise.all([
@@ -35650,7 +33926,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       fetchGmDefs().catch(() => {
       }),
       fetchItemDefs().then((rows) => {
-        state.itemDefs = arr4(rows);
+        state.itemDefs = arr2(rows);
       }).catch(() => {
       })
     ]);
@@ -35661,16 +33937,16 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const s = bundle.sections ?? {};
     const combat = s.combat && typeof s.combat === "object" ? s.combat : null;
     const patch = { character: bundle.character };
-    if (s.attributes !== void 0) patch.attributes = arr4(s.attributes);
+    if (s.attributes !== void 0) patch.attributes = arr2(s.attributes);
     if (combat !== null) {
-      patch.body_parts = arr4(combat.body_parts);
+      patch.body_parts = arr2(combat.body_parts);
       patch.is_alive = combat.is_alive ?? true;
       patch.is_conscious = combat.is_conscious ?? true;
       patch.armor_summary = combat.armor_summary ?? null;
       patch.combat_flags = combat.combat_flags ?? {};
     }
-    if (s.skills !== void 0) patch.skills = arr4(s.skills);
-    if (s.abilities?.resource_pools !== void 0) patch.resource_pools = arr4(s.abilities.resource_pools);
+    if (s.skills !== void 0) patch.skills = arr2(s.skills);
+    if (s.abilities?.resource_pools !== void 0) patch.resource_pools = arr2(s.abilities.resource_pools);
     if (bundle.state?.status_summary !== void 0) patch.status_summary = bundle.state.status_summary;
     state.sheet = state.sheet ? { ...state.sheet, ...patch } : {
       attributes: [],
@@ -35685,14 +33961,14 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       ...patch
     };
     if (s.abilities) {
-      state.abilities = arr4(s.abilities.abilities);
-      state.pools = arr4(s.abilities.resource_pools);
+      state.abilities = arr2(s.abilities.abilities);
+      state.pools = arr2(s.abilities.resource_pools);
     }
     if (s.perks !== void 0) {
-      state.perks = arr4(s.perks);
+      state.perks = arr2(s.perks);
     }
     if (s.equipment !== void 0) {
-      state.equipment = arr4(s.equipment).map((it) => {
+      state.equipment = arr2(s.equipment).map((it) => {
         const model = it.model && typeof it.model === "object" ? it.model : {
           id: it.equipment_model_id ?? null,
           code: it.equipment_model_code ?? null,
@@ -35704,7 +33980,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
           can_equip_to_body_part: it.can_equip_to_body_part !== false,
           effect_data: it.effect_data ?? {},
           flags: it.flags ?? {},
-          tags: arr4(it.tags)
+          tags: arr2(it.tags)
         };
         return {
           ...it,
@@ -35716,9 +33992,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
     if (s.inventory) {
       state.inv = {
-        ammoStock: arr4(s.inventory.ammo_stock),
-        magazines: arr4(s.inventory.magazines),
-        items: arr4(s.inventory.items),
+        ammoStock: arr2(s.inventory.ammo_stock),
+        magazines: arr2(s.inventory.magazines),
+        items: arr2(s.inventory.items),
         fallback: false
       };
     }
@@ -35775,11 +34051,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       }
       if (!bundle || bundle.ok === false || !bundle.character) throw new Error("Character not found: check character_id.");
       state.characterId = id;
-      state.itemDefs = arr4(itemDefs);
+      state.itemDefs = arr2(itemDefs);
       if (armoryData) state.armory = armoryData;
       applyBundle(bundle);
-      if (perksResult?.ok) state.perks = arr4(perksResult.perks);
-      state.perkAvailability = gmMode && availablePerksResult?.ok ? arr4(availablePerksResult.perks) : [];
+      if (perksResult?.ok) state.perks = arr2(perksResult.perks);
+      state.perkAvailability = gmMode && availablePerksResult?.ok ? arr2(availablePerksResult.perks) : [];
       state.pinnedPartId = "";
       setupRealtimeSubscriptions(id);
     } catch (e) {
@@ -35807,9 +34083,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const [bundle, armoryData, perksResult, availablePerksResult] = await Promise.all([bundlePromise, armoryPromise, perksPromise, availablePerksPromise]);
     if (bundle) applyBundle(bundle);
     if (armoryData) state.armory = armoryData;
-    if (perksResult?.ok) state.perks = arr4(perksResult.perks);
+    if (perksResult?.ok) state.perks = arr2(perksResult.perks);
     if (perkAvailability) {
-      state.perkAvailability = isGM() && availablePerksResult?.ok ? arr4(availablePerksResult.perks) : [];
+      state.perkAvailability = isGM() && availablePerksResult?.ok ? arr2(availablePerksResult.perks) : [];
     }
     render();
   }
@@ -35959,19 +34235,19 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         result = await fn();
       } catch (e) {
         state.notice = "";
-        setNotice("err", `${esc3(describeError(e.code, e.message))}`);
+        setNotice("err", `${esc2(describeError(e.code, e.message))}`);
         state.busy = false;
         render();
         return null;
       }
       if (result && result.ok === false) {
-        setNotice("err", `${esc3(describeError(result.error, result.message))}${result.error ? ` <span class="cp-mono">[${esc3(result.error)}]</span>` : ""}`);
+        setNotice("err", `${esc2(describeError(result.error, result.message))}${result.error ? ` <span class="cp-mono">[${esc2(result.error)}]</span>` : ""}`);
         state.busy = false;
         render();
         return null;
       }
       if (after) await after(result);
-      setNotice("ok", `${esc3(label)} done.`);
+      setNotice("ok", `${esc2(label)} done.`);
       return result;
     } finally {
       state.busy = false;
@@ -35985,7 +34261,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     if (!state.notice) return "";
     const m = state.notice.match(/^__(ok|err|warn|info)__(.*)$/s);
     if (m) return banner2(m[1], m[2]);
-    return banner2("info", esc3(state.notice));
+    return banner2("info", esc2(state.notice));
   }
   function render() {
     root2.innerHTML = `<div class="cp-screen">${topBar()}${body()}</div>`;
@@ -35997,10 +34273,10 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <section class="panel">
         <div class="panel-title">Character</div>
         <div class="cp-row">
-          <label class="cp-field"><span>character_id</span><input data-ref="charId" class="cp-mono" placeholder="uuid" autocomplete="off" value="${esc3(state.characterId)}"></label>
+          <label class="cp-field"><span>character_id</span><input data-ref="charId" class="cp-mono" placeholder="uuid" autocomplete="off" value="${esc2(state.characterId)}"></label>
           <label class="cp-field" style="max-width:170px"><span>View as (dev)</span>
             <select data-ref="devRole">
-              <option value="auto" ${state.devRole === "auto" ? "selected" : ""}>Auto (${esc3(state.role)})</option>
+              <option value="auto" ${state.devRole === "auto" ? "selected" : ""}>Auto (${esc2(state.role)})</option>
               <option value="PLAYER" ${state.devRole === "PLAYER" ? "selected" : ""}>Player</option>
               <option value="GM" ${state.devRole === "GM" ? "selected" : ""}>GM</option>
             </select></label>
@@ -36015,7 +34291,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function body() {
     if (state.loading) return skeleton2();
     if (state.error) {
-      return `<section class="panel">${banner2("err", esc3(state.error))}
+      return `<section class="panel">${banner2("err", esc2(state.error))}
         <div class="button-row"><button data-ref="retry" type="button">Retry</button></div></section>`;
     }
     if (!state.sheet) {
@@ -36040,25 +34316,25 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const res = ch.resources && typeof ch.resources === "object" ? ch.resources : {};
     const portrait = res.portrait || res.avatar_url || res.image || "";
     const meta = [];
-    if (res.faction) meta.push(`Faction: ${esc3(res.faction)}`);
-    if (res.age) meta.push(`Age: ${esc3(res.age)}`);
-    if (ch.character_bucket) meta.push(esc3(ch.character_bucket));
+    if (res.faction) meta.push(`Faction: ${esc2(res.faction)}`);
+    if (res.age) meta.push(`Age: ${esc2(res.age)}`);
+    if (ch.character_bucket) meta.push(esc2(ch.character_bucket));
     const poolChips = state.pools.filter((p) => p && (p.max_value ?? 0) > 0).map((p) => {
       if (isGM()) {
         const cur = p.current_value ?? 0;
         const max = p.max_value ?? 0;
         return `<span class="cp-chip cp-pool-gm">
-            <button class="cp-pool-adj" data-pool-adjust="-1" data-pool-code="${esc3(p.code)}" ${cur <= 0 ? "disabled" : ""} aria-label="Decrease ${esc3(p.name || p.code)}">-</button>
-            <span>${esc3(p.name || p.code)} <span class="cp-mono">${dash3(cur)}/${dash3(max)}</span></span>
-            <button class="cp-pool-adj" data-pool-adjust="1" data-pool-code="${esc3(p.code)}" ${cur >= max ? "disabled" : ""} aria-label="Increase ${esc3(p.name || p.code)}">+</button>
+            <button class="cp-pool-adj" data-pool-adjust="-1" data-pool-code="${esc2(p.code)}" ${cur <= 0 ? "disabled" : ""} aria-label="Decrease ${esc2(p.name || p.code)}">-</button>
+            <span>${esc2(p.name || p.code)} <span class="cp-mono">${dash2(cur)}/${dash2(max)}</span></span>
+            <button class="cp-pool-adj" data-pool-adjust="1" data-pool-code="${esc2(p.code)}" ${cur >= max ? "disabled" : ""} aria-label="Increase ${esc2(p.name || p.code)}">+</button>
           </span>`;
       }
-      return `<span class="cp-chip">${esc3(p.name || p.code)} <span class="cp-mono">${dash3(p.current_value)}/${dash3(p.max_value)}</span></span>`;
+      return `<span class="cp-chip">${esc2(p.name || p.code)} <span class="cp-mono">${dash2(p.current_value)}/${dash2(p.max_value)}</span></span>`;
     }).join("");
     return `<div class="cp-head">
-      <div class="cp-avatar">${portrait ? `<img src="${esc3(portrait)}" alt="">` : esc3((ch.name || "?").slice(0, 1).toUpperCase())}</div>
+      <div class="cp-avatar">${portrait ? `<img src="${esc2(portrait)}" alt="">` : esc2((ch.name || "?").slice(0, 1).toUpperCase())}</div>
       <div style="flex:1;min-width:120px">
-        <div class="cp-name">${esc3(ch.name || ch.character_key || "Character")}</div>
+        <div class="cp-name">${esc2(ch.name || ch.character_key || "Character")}</div>
         <div class="cp-muted">${meta.join(" - ") || "&nbsp;"}</div>
       </div>
       <div class="cp-head-actions">
@@ -36100,7 +34376,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
   }
   function renderOverview() {
-    const attrs = arr4(state.sheet.attributes);
+    const attrs = arr2(state.sheet.attributes);
     const base = BASE_ATTR_CODES.map((code) => attrs.find((a) => a.code === code)).filter(Boolean);
     const customs = attrs.filter((a) => !BASE_ATTR_CODES.includes(a.code));
     return `
@@ -36111,7 +34387,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
           <div class="cp-attrs">${base.map(attrCard).join("")}</div>
         </div>
       </div>
-      ${customs.length ? `<div class="cp-section-title">Additional attributes</div><div class="cp-row">${customs.map((a) => `<span class="cp-chip">${esc3(a.name || a.code)} <span class="cp-mono">${dash3(a.value)}</span></span>`).join("")}</div>` : ""}
+      ${customs.length ? `<div class="cp-section-title">Additional attributes</div><div class="cp-row">${customs.map((a) => `<span class="cp-chip">${esc2(a.name || a.code)} <span class="cp-mono">${dash2(a.value)}</span></span>`).join("")}</div>` : ""}
       ${renderAdditionalParts()}
       ${isGM() ? gmToolsBlock() : ""}`;
   }
@@ -36124,13 +34400,13 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const effectiveValue = Number(
       a?.effective_value ?? (Number(a?.value ?? a?.base_value ?? 0) || 0) + modifier
     ) || 0;
-    const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc3(a.code)}" aria-label="Edit ${esc3(label)} (GM)" title="Edit (GM)">E</button>` : "";
-    return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc3(a.code)}" aria-label="Roll ${esc3(label)}" aria-disabled="${pending}" title="Roll ${esc3(label)}">
+    const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc2(a.code)}" aria-label="Edit ${esc2(label)} (GM)" title="Edit (GM)">E</button>` : "";
+    return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc2(a.code)}" aria-label="Roll ${esc2(label)}" aria-disabled="${pending}" title="Roll ${esc2(label)}">
       ${editBtn}
-      ${bonus > 0 ? `<div class="cp-attr-mod cp-attr-mod-pos">+${esc3(bonus)}</div>` : modifier > 0 ? `<div class="cp-attr-mod cp-attr-mod-pos">+${esc3(modifier)}</div>` : ""}
-      ${penalty > 0 ? `<div class="cp-attr-mod cp-attr-mod-neg">-${esc3(penalty)}</div>` : modifier < 0 ? `<div class="cp-attr-mod cp-attr-mod-neg">${esc3(modifier)}</div>` : ""}
-      <div class="cp-attr-val">${dash3(effectiveValue)}</div>
-      <div class="cp-attr-code">${esc3(a.code)}</div>
+      ${bonus > 0 ? `<div class="cp-attr-mod cp-attr-mod-pos">+${esc2(bonus)}</div>` : modifier > 0 ? `<div class="cp-attr-mod cp-attr-mod-pos">+${esc2(modifier)}</div>` : ""}
+      ${penalty > 0 ? `<div class="cp-attr-mod cp-attr-mod-neg">-${esc2(penalty)}</div>` : modifier < 0 ? `<div class="cp-attr-mod cp-attr-mod-neg">${esc2(modifier)}</div>` : ""}
+      <div class="cp-attr-val">${dash2(effectiveValue)}</div>
+      <div class="cp-attr-code">${esc2(a.code)}</div>
       ${pending ? `<div class="cp-attr-pending">Rolling...</div>` : ""}
     </div>`;
   }
@@ -36181,15 +34457,15 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     };
   }
   function bodyPartCodes(part) {
-    return [part?.code, part?.part_key].map((value) => normalizeBodyPartCode2(value)).filter(Boolean);
+    return [part?.code, part?.part_key].map((value) => normalizeBodyPartCode(value)).filter(Boolean);
   }
   function collectAllowedBodyPartCodes(item) {
     const allowedCodes = /* @__PURE__ */ new Set();
     const knownBodyPartCodes = new Set(
-      arr4(state.sheet?.body_parts).flatMap((part) => bodyPartCodes(part))
+      arr2(state.sheet?.body_parts).flatMap((part) => bodyPartCodes(part))
     );
     const pushCode = (value) => {
-      const normalized = normalizeBodyPartCode2(value);
+      const normalized = normalizeBodyPartCode(value);
       if (normalized) allowedCodes.add(normalized);
     };
     const pushCodes = (value) => {
@@ -36224,13 +34500,13 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       pushCode(item?.model?.default_body_part_code);
     }
     if (!allowedCodes.size) {
-      arr4(item?.effective_flags?.allowed_body_part_tags).forEach(pushCode);
-      arr4(item?.flags?.allowed_body_part_tags).forEach(pushCode);
-      arr4(item?.model?.flags?.allowed_body_part_tags).forEach(pushCode);
+      arr2(item?.effective_flags?.allowed_body_part_tags).forEach(pushCode);
+      arr2(item?.flags?.allowed_body_part_tags).forEach(pushCode);
+      arr2(item?.model?.flags?.allowed_body_part_tags).forEach(pushCode);
     }
     if (!allowedCodes.size) {
-      arr4(item?.model?.tags || item?.tags || []).forEach((tag) => {
-        const normalized = normalizeBodyPartCode2(tag);
+      arr2(item?.model?.tags || item?.tags || []).forEach((tag) => {
+        const normalized = normalizeBodyPartCode(tag);
         if (knownBodyPartCodes.has(normalized)) allowedCodes.add(normalized);
       });
     }
@@ -36238,7 +34514,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function compatibleBodyParts(item) {
     const allowedCodes = collectAllowedBodyPartCodes(item);
-    const parts = arr4(state.sheet?.body_parts).filter((part) => !!part?.id);
+    const parts = arr2(state.sheet?.body_parts).filter((part) => !!part?.id);
     if (!allowedCodes.length) return [];
     return parts.filter((part) => bodyPartCodes(part).some((code) => allowedCodes.includes(code)));
   }
@@ -36251,7 +34527,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     return true;
   }
   function renderDoll() {
-    const parts = arr4(state.sheet.body_parts);
+    const parts = arr2(state.sheet.body_parts);
     const s = DOLL_SCALE2, W = 96 * s, H = 104 * s;
     let doll = `<div class="cp-doll" style="width:${W}px;height:${H}px">`;
     doll += `<div class="cp-base" style="left:${22 * s}px;top:${84 * s}px;width:${36 * s}px;height:${9 * s}px"></div>`;
@@ -36260,38 +34536,38 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       if (!g) continue;
       const rad = g.r === "50%" ? "50%" : g.r * s + "px";
       const pinned = p.id === state.pinnedPartId ? "pinned" : "";
-      doll += `<div class="cp-part ${partColorClass(p)} ${pinned}" tabindex="0" role="button" data-part="${esc3(p.id)}" aria-label="${esc3(p.name)}: ${bodyStatusText(p)[0]}"
+      doll += `<div class="cp-part ${partColorClass(p)} ${pinned}" tabindex="0" role="button" data-part="${esc2(p.id)}" aria-label="${esc2(p.name)}: ${bodyStatusText(p)[0]}"
         style="left:${g.x * s}px;top:${g.y * s}px;width:${g.w * s}px;height:${g.h * s}px;border-radius:${rad}"></div>`;
     }
     doll += `<div data-ref="tip"></div></div>`;
     return doll;
   }
   function renderAdditionalParts() {
-    const additional = arr4(state.sheet.body_parts).filter(shouldShowAdditionalPart);
+    const additional = arr2(state.sheet.body_parts).filter(shouldShowAdditionalPart);
     if (!additional.length) return "";
     return `<div class="cp-section-title">Additional body parts / modules</div><div class="cp-list">${additional.map((p) => {
       const [bs, bcls] = bodyStatusText(p);
-      return `<div class="cp-card cp-rowitem" tabindex="0" role="button" data-part="${esc3(p.id)}" aria-label="${esc3(p.name)}">
-        <span>${esc3(p.name)}</span><span class="cp-statebadge ${bcls}">${bs} - crit ${dash3(p.critical)}/${dash3(p.max_critical)}</span></div>`;
+      return `<div class="cp-card cp-rowitem" tabindex="0" role="button" data-part="${esc2(p.id)}" aria-label="${esc2(p.name)}">
+        <span>${esc2(p.name)}</span><span class="cp-statebadge ${bcls}">${bs} - crit ${dash2(p.critical)}/${dash2(p.max_critical)}</span></div>`;
     }).join("")}</div>`;
   }
   function partTipHtml(p) {
     const armor = armorInfoForPart(p);
     const [bs, bcls] = bodyStatusText(p);
     const [as, acls] = armorStatusText(p);
-    return `<b>${esc3(p.name)}</b>
+    return `<b>${esc2(p.name)}</b>
       <div class="cp-kv"><span>Status</span><span class="cp-statebadge ${bcls}">${bs}</span></div>
-      <div class="cp-kv"><span>Minor injuries</span><span>${dash3(p.minor)}</span></div>
-      <div class="cp-kv"><span>Serious injuries</span><span>${dash3(p.serious)}</span></div>
-      <div class="cp-kv"><span>Critical injuries</span><span>${dash3(p.critical)}/${dash3(p.max_critical)}</span></div>
+      <div class="cp-kv"><span>Minor injuries</span><span>${dash2(p.minor)}</span></div>
+      <div class="cp-kv"><span>Serious injuries</span><span>${dash2(p.serious)}</span></div>
+      <div class="cp-kv"><span>Critical injuries</span><span>${dash2(p.critical)}/${dash2(p.max_critical)}</span></div>
       <div class="cp-kv"><span>Armor</span><span class="cp-statebadge ${acls}">${as}</span></div>
-      <div class="cp-kv"><span>Armor value</span><span>${dash3(armor.armor_value)}</span></div>
-      <div class="cp-kv"><span>Armor critical</span><span>${dash3(armor.armor_critical)}/${dash3(armor.armor_max_critical)}</span></div>
-      ${armor.source ? `<div class="cp-kv"><span>Armor item</span><span>${esc3(armor.source.name || armor.source.model?.name || "Armor")}</span></div>` : ""}`;
+      <div class="cp-kv"><span>Armor value</span><span>${dash2(armor.armor_value)}</span></div>
+      <div class="cp-kv"><span>Armor critical</span><span>${dash2(armor.armor_critical)}/${dash2(armor.armor_max_critical)}</span></div>
+      ${armor.source ? `<div class="cp-kv"><span>Armor item</span><span>${esc2(armor.source.name || armor.source.model?.name || "Armor")}</span></div>` : ""}`;
   }
   function renderSkills() {
     var _a;
-    const skills = arr4(state.sheet.skills).filter((s) => {
+    const skills = arr2(state.sheet.skills).filter((s) => {
       const eff = s.effective_level ?? s.level ?? 0;
       return eff > 0;
     });
@@ -36300,7 +34576,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const byCat = {};
     for (const s of skills) (byCat[_a = s.category || "other"] || (byCat[_a] = [])).push(s);
     return Object.entries(byCat).map(([cat, list]) => `
-      <div class="cp-section-title">${esc3(cat)}</div>
+      <div class="cp-section-title">${esc2(cat)}</div>
       <div class="cp-list">${list.map(skillRow).join("")}</div>`).join("") + gmBlock;
   }
   function skillDisplayMaxLevel(s) {
@@ -36321,33 +34597,33 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const rollBonusTotal = rollBonusBase + rollBonusModifier;
     const pips = Array.from({ length: max }).map((_, i) => `<span class="cp-pip ${i < eff ? "on" : ""}"></span>`).join("");
     const attrs = [s.main_attribute, s.secondary_attribute].filter(Boolean).join(" - ");
-    const perks = arr4(s.perks).map((p) => `<span class="cp-pill good">${esc3(p.name || p.code || p)}</span>`).join("");
+    const perks = arr2(s.perks).map((p) => `<span class="cp-pill good">${esc2(p.name || p.code || p)}</span>`).join("");
     const locked = s.locked || s.is_locked;
     const passive = s.is_passive || s.category === "passive";
     const isPsionics = s.category?.toLowerCase() === "psionics";
     const isClickable = !passive && !isPsionics;
-    const attrs_str = attrs ? ` <span class="cp-muted">(${esc3(attrs)})</span>` : "";
-    const levelModChip = levelModifier > 0 ? `<span class="cp-skill-mod cp-skill-mod-pos">lvl +${esc3(levelModifier)}</span>` : levelModifier < 0 ? `<span class="cp-skill-mod cp-skill-mod-neg">lvl ${esc3(levelModifier)}</span>` : "";
-    const rollModChip = rollBonusModifier > 0 ? `<span class="cp-skill-mod cp-skill-mod-pos">roll +${esc3(rollBonusModifier)}</span>` : rollBonusModifier < 0 ? `<span class="cp-skill-mod cp-skill-mod-neg">roll ${esc3(rollBonusModifier)}</span>` : "";
-    const totalRollChip = rollBonusTotal !== 0 ? `<span class="cp-chip"><span class="cp-mono">roll ${rollBonusTotal > 0 ? `+${esc3(rollBonusTotal)}` : esc3(rollBonusTotal)}</span></span>` : "";
-    const capStr = max > baseMax ? `<span class="cp-chip">base ${dash3(baseMax)} / GM ${dash3(max)}</span>` : "";
-    const editBtn = isGM() ? `<button class="cp-skill-edit" data-skill-edit="${esc3(s.id)}" aria-label="Edit ${esc3(s.name)} (GM)" title="Edit ${esc3(s.name)} (GM)" type="button">E</button>` : "";
+    const attrs_str = attrs ? ` <span class="cp-muted">(${esc2(attrs)})</span>` : "";
+    const levelModChip = levelModifier > 0 ? `<span class="cp-skill-mod cp-skill-mod-pos">lvl +${esc2(levelModifier)}</span>` : levelModifier < 0 ? `<span class="cp-skill-mod cp-skill-mod-neg">lvl ${esc2(levelModifier)}</span>` : "";
+    const rollModChip = rollBonusModifier > 0 ? `<span class="cp-skill-mod cp-skill-mod-pos">roll +${esc2(rollBonusModifier)}</span>` : rollBonusModifier < 0 ? `<span class="cp-skill-mod cp-skill-mod-neg">roll ${esc2(rollBonusModifier)}</span>` : "";
+    const totalRollChip = rollBonusTotal !== 0 ? `<span class="cp-chip"><span class="cp-mono">roll ${rollBonusTotal > 0 ? `+${esc2(rollBonusTotal)}` : esc2(rollBonusTotal)}</span></span>` : "";
+    const capStr = max > baseMax ? `<span class="cp-chip">base ${dash2(baseMax)} / GM ${dash2(max)}</span>` : "";
+    const editBtn = isGM() ? `<button class="cp-skill-edit" data-skill-edit="${esc2(s.id)}" aria-label="Edit ${esc2(s.name)} (GM)" title="Edit ${esc2(s.name)} (GM)" type="button">E</button>` : "";
     const deleteSkillId = s.character_skill_id || s.id;
-    return `<div class="cp-card"${isClickable ? ` role="button" tabindex="0" data-skill-roll="${esc3(s.code)}"` : ""} aria-label="Skill ${esc3(s.name)}" ${isClickable ? 'title="Skill check"' : ""}>
+    return `<div class="cp-card"${isClickable ? ` role="button" tabindex="0" data-skill-roll="${esc2(s.code)}"` : ""} aria-label="Skill ${esc2(s.name)}" ${isClickable ? 'title="Skill check"' : ""}>
       <div class="cp-rowitem">
-        <span>${esc3(s.name)}${attrs_str}
+        <span>${esc2(s.name)}${attrs_str}
           <span class="cp-pill">${passive ? "passive" : "trained"}</span></span>
-        <span class="cp-row" style="gap:6px">${perks}${levelModChip}${rollModChip}${totalRollChip}<span class="cp-pips" title="${dash3(eff)}/${max}">${pips}</span>${locked ? `<span class="cp-pill bad">locked</span>` : ""}${editBtn}</span>
+        <span class="cp-row" style="gap:6px">${perks}${levelModChip}${rollModChip}${totalRollChip}<span class="cp-pips" title="${dash2(eff)}/${max}">${pips}</span>${locked ? `<span class="cp-pill bad">locked</span>` : ""}${editBtn}</span>
       </div>
       ${capStr ? `<div class="cp-row" style="gap:6px;margin-top:6px">${capStr}</div>` : ""}
-      ${isGM() ? `<div class="button-row" style="margin-top:4px"><button class="cp-btn-sm secondary" data-gmdel="skill" data-id="${esc3(deleteSkillId)}" type="button">GM delete</button></div>` : ""}
+      ${isGM() ? `<div class="button-row" style="margin-top:4px"><button class="cp-btn-sm secondary" data-gmdel="skill" data-id="${esc2(deleteSkillId)}" type="button">GM delete</button></div>` : ""}
     </div>`;
   }
   function perkRequiresWeapon(perk) {
-    return arr4(perk?.effect_data?.requires_weapon_tags).length > 0 || perk?.code === "not_full_auto";
+    return arr2(perk?.effect_data?.requires_weapon_tags).length > 0 || perk?.code === "not_full_auto";
   }
   function perkWeaponOptions(perk) {
-    const weapons = arr4(state.armory?.weapons);
+    const weapons = arr2(state.armory?.weapons);
     if (!weapons.length) return `<option value="">-- no weapons --</option>`;
     return weapons.map((w) => {
       const activeProfile = w.active_profile || {};
@@ -36355,11 +34631,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         w.name || "Weapon",
         activeProfile.name || activeProfile.code || w.model?.weapon_class_name || ""
       ].filter(Boolean).join(" - ");
-      return `<option value="${esc3(w.id)}">${esc3(label)}</option>`;
+      return `<option value="${esc2(w.id)}">${esc2(label)}</option>`;
     }).join("");
   }
   function renderPerks() {
-    const perks = arr4(state.perks);
+    const perks = arr2(state.perks);
     const gmBlock = isGM() ? gmPerksBlock() : "";
     if (!perks.length) return `<div class="cp-empty">No perks.</div>${gmBlock}`;
     const groups = {
@@ -36389,24 +34665,24 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const requiresWeapon = perkRequiresWeapon(perk);
     const hint = perk.ui_hint || perk.description || "";
     const canUse = !passive && perk.can_use !== false;
-    return `<div class="cp-card" data-perk="${esc3(perk.id)}">
+    return `<div class="cp-card" data-perk="${esc2(perk.id)}">
       <div class="cp-rowitem">
-        <span><b>${esc3(perk.name)}</b> <span class="cp-pill">${esc3(perk.linked_skill_name || perk.linked_skill_code || "perk")}</span></span>
+        <span><b>${esc2(perk.name)}</b> <span class="cp-pill">${esc2(perk.linked_skill_name || perk.linked_skill_code || "perk")}</span></span>
         <span class="cp-row" style="gap:6px">
-          <span class="cp-pill">${esc3(perk.perk_type || "perk")}</span>
-          <span class="cp-pill ${passive ? "" : "good"}">${esc3(perk.resolution_mode || "backend")}</span>
+          <span class="cp-pill">${esc2(perk.perk_type || "perk")}</span>
+          <span class="cp-pill ${passive ? "" : "good"}">${esc2(perk.resolution_mode || "backend")}</span>
         </span>
       </div>
       <div class="cp-row" style="gap:6px;margin-top:6px">
-        <span class="cp-chip">req lvl ${dash3(perk.required_skill_level)}</span>
-        <span class="cp-chip">${esc3(perk.activation_type || "manual")}</span>
+        <span class="cp-chip">req lvl ${dash2(perk.required_skill_level)}</span>
+        <span class="cp-chip">${esc2(perk.activation_type || "manual")}</span>
       </div>
-      ${perk.description ? `<div class="cp-muted" style="margin-top:6px">${esc3(perk.description)}</div>` : ""}
-      ${hint && hint !== perk.description ? `<div class="cp-muted" style="margin-top:6px">${esc3(hint)}</div>` : ""}
+      ${perk.description ? `<div class="cp-muted" style="margin-top:6px">${esc2(perk.description)}</div>` : ""}
+      ${hint && hint !== perk.description ? `<div class="cp-muted" style="margin-top:6px">${esc2(hint)}</div>` : ""}
       ${requiresWeapon ? `<div class="cp-row" style="gap:8px;margin-top:8px">
-        <label class="cp-field" style="min-width:170px"><span>Weapon</span><select data-perk-weapon="${esc3(perk.id)}">${perkWeaponOptions(perk)}</select></label>
+        <label class="cp-field" style="min-width:170px"><span>Weapon</span><select data-perk-weapon="${esc2(perk.id)}">${perkWeaponOptions(perk)}</select></label>
       </div>` : ""}
-      ${canUse ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-perk-use="${esc3(perk.id)}" type="button">Use perk</button></div>` : ""}
+      ${canUse ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-perk-use="${esc2(perk.id)}" type="button">Use perk</button></div>` : ""}
     </div>`;
   }
   function renderAbilities() {
@@ -36431,24 +34707,24 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const cd = a.current_cooldown_rounds;
     const effect = a.level_data?.effect_data?.summary || a.description || "";
     const canUse = !passive && !cd;
-    return `<div class="cp-card"${canUse ? ` role="button" tabindex="0" data-ability-use="${esc3(a.id)}"` : ""} aria-label="Ability ${esc3(a.name)}">
-      <div class="cp-rowitem"><span><b>${esc3(a.name)}</b> <span class="cp-pill">${esc3(a.source_type || "ability")}</span></span>
+    return `<div class="cp-card"${canUse ? ` role="button" tabindex="0" data-ability-use="${esc2(a.id)}"` : ""} aria-label="Ability ${esc2(a.name)}">
+      <div class="cp-rowitem"><span><b>${esc2(a.name)}</b> <span class="cp-pill">${esc2(a.source_type || "ability")}</span></span>
       <span class="cp-pill ${passive ? "" : "good"}">${passive ? "passive" : cd ? "cooldown" : "active"}</span></div>
       <div class="cp-row" style="gap:6px;margin-top:6px">
-        ${a.effective_level != null ? `<span class="cp-chip">lvl ${dash3(a.effective_level)}</span>` : ""}
-        ${cost != null ? `<span class="cp-chip">cost \u0420\u0454:${esc3(cost)}</span>` : ""}
-        ${cd ? `<span class="cp-chip bad">cooldown ${esc3(cd)}</span>` : ""}
-        ${a.attack_type && a.attack_type !== "none" ? `<span class="cp-chip">attack: ${esc3(a.attack_type)}</span>` : ""}
+        ${a.effective_level != null ? `<span class="cp-chip">lvl ${dash2(a.effective_level)}</span>` : ""}
+        ${cost != null ? `<span class="cp-chip">cost \u0420\u0454:${esc2(cost)}</span>` : ""}
+        ${cd ? `<span class="cp-chip bad">cooldown ${esc2(cd)}</span>` : ""}
+        ${a.attack_type && a.attack_type !== "none" ? `<span class="cp-chip">attack: ${esc2(a.attack_type)}</span>` : ""}
       </div>
-      ${effect ? `<div class="cp-muted" style="margin-top:6px">${esc3(effect)}</div>` : ""}
+      ${effect ? `<div class="cp-muted" style="margin-top:6px">${esc2(effect)}</div>` : ""}
     </div>`;
   }
   function renderInventory() {
     const armory = state.armory;
-    const weapons = arr4(armory?.weapons);
-    const mags = arr4(state.armory?.magazines);
-    const ammo = arr4(state.inv.ammoStock);
-    const items = arr4(state.inv.items);
+    const weapons = arr2(armory?.weapons);
+    const mags = arr2(state.armory?.magazines);
+    const ammo = arr2(state.inv.ammoStock);
+    const items = arr2(state.inv.items);
     return `
       ${state.inv.fallback ? banner2("warn", "Ammo/items read via fallback (backend get_character_inventory error 25006).") : ""}
       <div class="cp-section-title" style="margin-top:0">Weapons</div>
@@ -36456,7 +34732,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <div class="cp-section-title">Magazines</div>
       <div class="cp-list">${mags.length ? mags.map(magCard).join("") : `<div class="cp-empty">No magazines.</div>`}</div>
       <div class="cp-section-title">Ammo stock</div>
-      <div class="cp-list">${ammo.length ? ammo.map((a) => `<div class="cp-card"><div class="cp-rowitem"><span>${esc3(a.display_name)}</span><span class="cp-mono">${esc3(getAmmoStockTypeName(a))} \xB7 ${esc3(getAmmoStockCaliberName(a))} \xB7 x${dash3(a.quantity)}</span></div>${isGM() ? `<div class="cp-row" style="gap:6px;margin-top:6px;align-items:center"><input data-gmammoqty="${esc3(a.id)}" type="number" min="1" max="${a.quantity}" value="1" class="cp-mono" style="width:46px;padding:3px 4px;font-size:11px"><button class="cp-btn-sm secondary" data-gmammo="removeqty" data-ammo="${esc3(a.id)}" type="button">GM -N</button><button class="cp-btn-sm secondary" data-gmammo="removeall" data-ammo="${esc3(a.id)}" data-maxqty="${a.quantity}" type="button">GM -all</button></div>` : ""}</div>`).join("") : `<div class="cp-empty">No ammo.</div>`}</div>
+      <div class="cp-list">${ammo.length ? ammo.map((a) => `<div class="cp-card"><div class="cp-rowitem"><span>${esc2(a.display_name)}</span><span class="cp-mono">${esc2(getAmmoStockTypeName(a))} \xB7 ${esc2(getAmmoStockCaliberName(a))} \xB7 x${dash2(a.quantity)}</span></div>${isGM() ? `<div class="cp-row" style="gap:6px;margin-top:6px;align-items:center"><input data-gmammoqty="${esc2(a.id)}" type="number" min="1" max="${a.quantity}" value="1" class="cp-mono" style="width:46px;padding:3px 4px;font-size:11px"><button class="cp-btn-sm secondary" data-gmammo="removeqty" data-ammo="${esc2(a.id)}" type="button">GM -N</button><button class="cp-btn-sm secondary" data-gmammo="removeall" data-ammo="${esc2(a.id)}" data-maxqty="${a.quantity}" type="button">GM -all</button></div>` : ""}</div>`).join("") : `<div class="cp-empty">No ammo.</div>`}</div>
       <div class="cp-section-title">Active items</div>
       <div class="cp-list">${items.length ? items.map(itemCard).join("") : `<div class="cp-empty">No items.</div>`}</div>
       ${isGM() ? gmInventoryBlock() : ""}`;
@@ -36514,28 +34790,28 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const isMelee = !w.model?.caliber;
     const mag = w.loaded_magazine || w.active_profile?.loaded_magazine || null;
     const fm = w.selected_fire_mode || w.active_profile?.selected_fire_mode || null;
-    const profiles = arr4(w.profiles);
-    const fireModes = arr4(w.available_fire_modes?.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
-    const compatMags = arr4(state.armory?.magazines).filter((m) => !w.model?.caliber || (m.magazine_def?.caliber || m.caliber) === w.model.caliber);
-    const ammoChips = isMelee ? `<span class="cp-chip">melee</span>` : mag ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash3(mag.current_rounds)}/${dash3(mag.capacity || mag.magazine_def?.capacity)} - ${esc3(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>` : `<span class="cp-chip bad">no magazine</span>`;
-    return `<div class="cp-card" data-weapon="${esc3(w.id)}">
-      <div class="cp-rowitem"><span><b>${esc3(w.name)}</b> <span class="cp-pill">${esc3(w.model?.weapon_class_name || w.model?.weapon_class || "")}</span></span>
-        <span class="cp-row" style="gap:6px">${w.model?.caliber_name ? `<span class="cp-chip">${esc3(w.model.caliber_name)}</span>` : ""}${ammoChips}</span></div>
+    const profiles = arr2(w.profiles);
+    const fireModes = arr2(w.available_fire_modes?.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
+    const compatMags = arr2(state.armory?.magazines).filter((m) => !w.model?.caliber || (m.magazine_def?.caliber || m.caliber) === w.model.caliber);
+    const ammoChips = isMelee ? `<span class="cp-chip">melee</span>` : mag ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash2(mag.current_rounds)}/${dash2(mag.capacity || mag.magazine_def?.capacity)} - ${esc2(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>` : `<span class="cp-chip bad">no magazine</span>`;
+    return `<div class="cp-card" data-weapon="${esc2(w.id)}">
+      <div class="cp-rowitem"><span><b>${esc2(w.name)}</b> <span class="cp-pill">${esc2(w.model?.weapon_class_name || w.model?.weapon_class || "")}</span></span>
+        <span class="cp-row" style="gap:6px">${w.model?.caliber_name ? `<span class="cp-chip">${esc2(w.model.caliber_name)}</span>` : ""}${ammoChips}</span></div>
       <div class="cp-row" style="gap:8px;margin-top:8px">
-        ${profiles.length > 1 ? `<label class="cp-field" style="min-width:130px"><span>Profile</span><select data-wact="profile" data-weapon="${esc3(w.id)}">${profiles.map((p) => `<option value="${esc3(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc3(p.name || p.code)}</option>`).join("")}</select></label>` : ""}
-        ${fireModes.length && !isMelee ? `<label class="cp-field" style="min-width:130px"><span>Fire mode</span><select data-wact="firemode" data-weapon="${esc3(w.id)}">${fireModes.map((f) => `<option value="${esc3(f.id)}" ${f.id === fm?.id ? "selected" : ""}>${esc3(f.name || f.code)}</option>`).join("")}</select></label>` : ""}
-        ${!isMelee ? `<label class="cp-field" style="min-width:150px"><span>Insert magazine</span><select data-wact="reloadmag" data-weapon="${esc3(w.id)}">${compatMags.length ? compatMags.map((m) => `<option value="${esc3(m.id)}">${esc3(m.name)} - ${dash3(m.current_rounds)}/${dash3(m.magazine_def?.capacity ?? m.capacity)}</option>`).join("") : `<option value="">-- none --</option>`}</select></label>` : ""}
+        ${profiles.length > 1 ? `<label class="cp-field" style="min-width:130px"><span>Profile</span><select data-wact="profile" data-weapon="${esc2(w.id)}">${profiles.map((p) => `<option value="${esc2(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc2(p.name || p.code)}</option>`).join("")}</select></label>` : ""}
+        ${fireModes.length && !isMelee ? `<label class="cp-field" style="min-width:130px"><span>Fire mode</span><select data-wact="firemode" data-weapon="${esc2(w.id)}">${fireModes.map((f) => `<option value="${esc2(f.id)}" ${f.id === fm?.id ? "selected" : ""}>${esc2(f.name || f.code)}</option>`).join("")}</select></label>` : ""}
+        ${!isMelee ? `<label class="cp-field" style="min-width:150px"><span>Insert magazine</span><select data-wact="reloadmag" data-weapon="${esc2(w.id)}">${compatMags.length ? compatMags.map((m) => `<option value="${esc2(m.id)}">${esc2(m.name)} - ${dash2(m.current_rounds)}/${dash2(m.magazine_def?.capacity ?? m.capacity)}</option>`).join("") : `<option value="">-- none --</option>`}</select></label>` : ""}
       </div>
-      ${!isMelee ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="reload" data-weapon="${esc3(w.id)}" type="button" ${compatMags.length ? "" : "disabled"}>Reload (insert magazine)</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc3(w.id)}" type="button">GM delete</button>` : ""}</div>${compatMags.length ? "" : `<div class="cp-muted">No compatible magazine to insert.</div>`}` : `${isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc3(w.id)}" type="button">GM delete</button></div>` : ""}`}
+      ${!isMelee ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="reload" data-weapon="${esc2(w.id)}" type="button" ${compatMags.length ? "" : "disabled"}>Reload (insert magazine)</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button>` : ""}</div>${compatMags.length ? "" : `<div class="cp-muted">No compatible magazine to insert.</div>`}` : `${isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button></div>` : ""}`}
     </div>`;
   }
   function magCard(m) {
-    const inW = arr4(state.armory?.weapons).find((w) => (w.loaded_magazine?.id || w.active_profile?.loaded_magazine?.id) === m.id);
+    const inW = arr2(state.armory?.weapons).find((w) => (w.loaded_magazine?.id || w.active_profile?.loaded_magazine?.id) === m.id);
     const cap = m.magazine_def?.capacity ?? m.capacity;
     const ammoName = m.ammo_type?.name || m.ammo_type_name || "empty";
     const caliberCode = getMagazineCaliberCode(m);
     const currentAmmoTypeCode = getMagazineCurrentAmmoTypeCode(m);
-    const compatAmmo = arr4(state.inv.ammoStock).filter((a) => {
+    const compatAmmo = arr2(state.inv.ammoStock).filter((a) => {
       const ammoCaliberCode = getAmmoStockCaliberCode(a);
       const ammoTypeCode = getAmmoStockTypeCode(a);
       if (caliberCode && ammoCaliberCode !== caliberCode) return false;
@@ -36543,46 +34819,46 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       return true;
     });
     const empty = (m.current_rounds ?? 0) <= 0;
-    return `<div class="cp-card" data-mag="${esc3(m.id)}">
-      <div class="cp-rowitem"><span><b>${esc3(m.name)}</b> ${inW ? `<span class="cp-pill good">Inserted in ${esc3(inW.name)}</span>` : `<span class="cp-pill">not inserted</span>`}</span>
-        <span class="cp-mono">${dash3(m.current_rounds)}/${dash3(cap)} - ${esc3(ammoName)}</span></div>
+    return `<div class="cp-card" data-mag="${esc2(m.id)}">
+      <div class="cp-rowitem"><span><b>${esc2(m.name)}</b> ${inW ? `<span class="cp-pill good">Inserted in ${esc2(inW.name)}</span>` : `<span class="cp-pill">not inserted</span>`}</span>
+        <span class="cp-mono">${dash2(m.current_rounds)}/${dash2(cap)} - ${esc2(ammoName)}</span></div>
       <div class="cp-row" style="gap:8px;margin-top:8px">
-        <label class="cp-field" style="min-width:150px"><span>Ammo to load</span><select data-mact="ammo" data-mag="${esc3(m.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc3(a.id)}">${esc3(a.display_name)} - ${esc3(getAmmoStockTypeName(a))} - x${dash3(a.quantity)}</option>`).join("") : `<option value="">-- no compatible ammo --</option>`}</select></label>
+        <label class="cp-field" style="min-width:150px"><span>Ammo to load</span><select data-mact="ammo" data-mag="${esc2(m.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc2(a.id)}">${esc2(a.display_name)} - ${esc2(getAmmoStockTypeName(a))} - x${dash2(a.quantity)}</option>`).join("") : `<option value="">-- no compatible ammo --</option>`}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end">
-          <button class="cp-btn-sm" data-mbtn="load" data-mag="${esc3(m.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load / Top up</button>
-          <button class="cp-btn-sm secondary" data-mbtn="unload" data-mag="${esc3(m.id)}" type="button" ${empty ? "disabled" : ""}>Unload all</button>
+          <button class="cp-btn-sm" data-mbtn="load" data-mag="${esc2(m.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load / Top up</button>
+          <button class="cp-btn-sm secondary" data-mbtn="unload" data-mag="${esc2(m.id)}" type="button" ${empty ? "disabled" : ""}>Unload all</button>
         </div>
       </div>
       ${compatAmmo.length ? "" : `<div class="cp-muted">No compatible ammo in stock.</div>`}
-      ${isGM() ? `<div class="button-row" style="margin-top:6px"><button class="cp-btn-sm secondary" data-gmdel="mag" data-id="${esc3(m.id)}" type="button">GM delete</button></div>` : ""}
+      ${isGM() ? `<div class="button-row" style="margin-top:6px"><button class="cp-btn-sm secondary" data-gmdel="mag" data-id="${esc2(m.id)}" type="button">GM delete</button></div>` : ""}
     </div>`;
   }
   function itemCard(i) {
     const healable = i.use_action_type === "heal" || i.code === "basic_medkit";
-    return `<div class="cp-card" data-item="${esc3(i.id)}">
-      <div class="cp-rowitem"><span><b>${esc3(i.name)}</b> <span class="cp-pill">${esc3(i.item_type || "")}</span></span><span class="cp-mono">x${dash3(i.quantity)}</span></div>
+    return `<div class="cp-card" data-item="${esc2(i.id)}">
+      <div class="cp-rowitem"><span><b>${esc2(i.name)}</b> <span class="cp-pill">${esc2(i.item_type || "")}</span></span><span class="cp-mono">x${dash2(i.quantity)}</span></div>
       ${healable ? `<div class="cp-row" style="gap:8px;margin-top:8px">
-        <label class="cp-field" style="min-width:160px"><span>Heal body part</span><select data-iact="part" data-item="${esc3(i.id)}">${arr4(state.sheet.body_parts).map((p) => `<option value="${esc3(p.id)}" ${p.destroyed ? "disabled" : ""}>${esc3(p.name)}${p.destroyed ? " (destroyed)" : ""}</option>`).join("")}</select></label>
-        <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-ibtn="use" data-item="${esc3(i.id)}" type="button">Use</button></div>
+        <label class="cp-field" style="min-width:160px"><span>Heal body part</span><select data-iact="part" data-item="${esc2(i.id)}">${arr2(state.sheet.body_parts).map((p) => `<option value="${esc2(p.id)}" ${p.destroyed ? "disabled" : ""}>${esc2(p.name)}${p.destroyed ? " (destroyed)" : ""}</option>`).join("")}</select></label>
+        <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-ibtn="use" data-item="${esc2(i.id)}" type="button">Use</button></div>
       </div>` : ""}
       ${isGM() ? `<div class="cp-row" style="gap:6px;margin-top:6px;align-items:center">
-        <input data-gmqty="${esc3(i.id)}" type="number" min="1" max="${i.quantity}" value="1" class="cp-mono" style="width:46px;padding:3px 4px;font-size:11px">
-        <button class="cp-btn-sm secondary" data-gmitem="removeqty" data-item="${esc3(i.id)}" data-code="${esc3(i.code || "")}" type="button">GM -N</button>
-        <button class="cp-btn-sm secondary" data-gmitem="removeall" data-item="${esc3(i.id)}" data-code="${esc3(i.code || "")}" data-maxqty="${i.quantity}" type="button">GM -all</button>
+        <input data-gmqty="${esc2(i.id)}" type="number" min="1" max="${i.quantity}" value="1" class="cp-mono" style="width:46px;padding:3px 4px;font-size:11px">
+        <button class="cp-btn-sm secondary" data-gmitem="removeqty" data-item="${esc2(i.id)}" data-code="${esc2(i.code || "")}" type="button">GM -N</button>
+        <button class="cp-btn-sm secondary" data-gmitem="removeall" data-item="${esc2(i.id)}" data-code="${esc2(i.code || "")}" data-maxqty="${i.quantity}" type="button">GM -all</button>
       </div>` : ""}
     </div>`;
   }
   function gmInventoryBlock() {
-    const itemOpts = state.itemDefs.length ? state.itemDefs.map((d) => `<option value="${esc3(d.code)}">${esc3(d.name)}${d.item_type ? ` - ${esc3(d.item_type)}` : ""}</option>`).join("") : `<option value="">-- no item defs --</option>`;
-    const weaponOpts = state.weaponDefs.length ? state.weaponDefs.map((d) => `<option value="${esc3(d.id)}">${esc3(d.name)}</option>`).join("") : `<option value="">-- no weapon models --</option>`;
+    const itemOpts = state.itemDefs.length ? state.itemDefs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)}${d.item_type ? ` - ${esc2(d.item_type)}` : ""}</option>`).join("") : `<option value="">-- no item defs --</option>`;
+    const weaponOpts = state.weaponDefs.length ? state.weaponDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)}</option>`).join("") : `<option value="">-- no weapon models --</option>`;
     const curMagId = root2?.querySelector('[data-ref="gmMagDef"]')?.value || state.magazineDefs[0]?.id || "";
     const curMag = state.magazineDefs.find((d) => d.id === curMagId);
     const magAmmoOpts = (() => {
       const compatible = curMag ? state.ammoDefs.filter((a) => a.caliber_id === curMag.caliber_id) : state.ammoDefs;
-      return compatible.length ? compatible.map((a) => `<option value="${esc3(a.id)}">${esc3(a.name)}</option>`).join("") : `<option value="">-- no compatible ammo --</option>`;
+      return compatible.length ? compatible.map((a) => `<option value="${esc2(a.id)}">${esc2(a.name)}</option>`).join("") : `<option value="">-- no compatible ammo --</option>`;
     })();
-    const magOpts = state.magazineDefs.length ? state.magazineDefs.map((d) => `<option value="${esc3(d.id)}" ${d.id === curMagId ? "selected" : ""}>${esc3(d.name)} (x${esc3(d.capacity)})</option>`).join("") : `<option value="">-- no magazine defs --</option>`;
-    const ammoOpts = state.ammoDefs.length ? state.ammoDefs.map((d) => `<option value="${esc3(d.id)}">${esc3(d.name)}${d.caliber?.name ? ` - ${esc3(d.caliber.name)}` : ""}</option>`).join("") : `<option value="">-- no ammo types --</option>`;
+    const magOpts = state.magazineDefs.length ? state.magazineDefs.map((d) => `<option value="${esc2(d.id)}" ${d.id === curMagId ? "selected" : ""}>${esc2(d.name)} (x${esc2(d.capacity)})</option>`).join("") : `<option value="">-- no magazine defs --</option>`;
+    const ammoOpts = state.ammoDefs.length ? state.ammoDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)}${d.caliber?.name ? ` - ${esc2(d.caliber.name)}` : ""}</option>`).join("") : `<option value="">-- no ammo types --</option>`;
     return `
       <div class="cp-section-title">GM - add weapon</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
@@ -36609,7 +34885,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       </div></div>`;
   }
   function gmSkillsBlock() {
-    const opts = state.skillDefs.length ? state.skillDefs.map((d) => `<option value="${esc3(d.id)}">${esc3(d.name)} - ${esc3(d.category)}</option>`).join("") : `<option value="">-- no skill defs --</option>`;
+    const opts = state.skillDefs.length ? state.skillDefs.map((d) => `<option value="${esc2(d.id)}">${esc2(d.name)} - ${esc2(d.category)}</option>`).join("") : `<option value="">-- no skill defs --</option>`;
     return `<div class="cp-section-title">GM - add skill</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Skill</span><select data-ref="gmSkillDef">${opts}</select></label>
@@ -36618,7 +34894,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       </div></div>`;
   }
   function gmPerkGrantOptions() {
-    const items = arr4(state.perkAvailability).filter((perk) => perk && perk.owned !== true).sort((a, b) => {
+    const items = arr2(state.perkAvailability).filter((perk) => perk && perk.owned !== true).sort((a, b) => {
       const aLocked = a.available === true ? 0 : 1;
       const bLocked = b.available === true ? 0 : 1;
       if (aLocked !== bLocked) return aLocked - bLocked;
@@ -36631,12 +34907,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       const cur = Number(perk.current_skill_level ?? 0);
       const locked = perk.available !== true;
       const lockSuffix = locked ? ` [locked ${cur}/${req}${perk.lock_reason ? ` ${perk.lock_reason}` : ""}]` : ` [ready ${cur}/${req}]`;
-      return `<option value="${esc3(perk.code)}" ${locked ? "disabled" : ""}>${esc3(perk.name)} - ${esc3(skillName)} ${esc3(lockSuffix)}</option>`;
+      return `<option value="${esc2(perk.code)}" ${locked ? "disabled" : ""}>${esc2(perk.name)} - ${esc2(skillName)} ${esc2(lockSuffix)}</option>`;
     }).join("");
   }
   function gmPerksBlock() {
-    const availableCount = arr4(state.perkAvailability).filter((perk) => perk.available === true).length;
-    const totalCount = arr4(state.perkAvailability).filter((perk) => perk.owned !== true).length;
+    const availableCount = arr2(state.perkAvailability).filter((perk) => perk.available === true).length;
+    const totalCount = arr2(state.perkAvailability).filter((perk) => perk.owned !== true).length;
     return `<div class="cp-section-title">GM - add perk</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px;flex-wrap:wrap">
         <label class="cp-field" style="min-width:260px"><span>Perk</span><select data-ref="gmPerkCode">${gmPerkGrantOptions()}</select></label>
@@ -36648,7 +34924,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function gmArmorBlock() {
     const defs = state.equipmentDefs.filter((d) => ARMOR_TYPES.has(d.item_type));
-    const opts = defs.length ? defs.map((d) => `<option value="${esc3(d.code)}">${esc3(d.name)} - ${esc3(d.item_type)}</option>`).join("") : `<option value="">-- no armor models --</option>`;
+    const opts = defs.length ? defs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)} - ${esc2(d.item_type)}</option>`).join("") : `<option value="">-- no armor models --</option>`;
     return `<div class="cp-section-title">GM - add armor</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Model</span><select data-ref="gmArmorDef">${opts}</select></label>
@@ -36657,7 +34933,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function gmImplantsBlock() {
     const defs = state.equipmentDefs.filter((d) => IMPLANT_TYPES.has(d.item_type));
-    const opts = defs.length ? defs.map((d) => `<option value="${esc3(d.code)}">${esc3(d.name)} - ${esc3(d.item_type)}</option>`).join("") : `<option value="">-- no implant models --</option>`;
+    const opts = defs.length ? defs.map((d) => `<option value="${esc2(d.code)}">${esc2(d.name)} - ${esc2(d.item_type)}</option>`).join("") : `<option value="">-- no implant models --</option>`;
     return `<div class="cp-section-title">GM - add implant</div>
       <div class="cp-card"><div class="cp-row" style="gap:8px">
         <label class="cp-field"><span>Model</span><select data-ref="gmImplantDef">${opts}</select></label>
@@ -36670,7 +34946,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <button class="cp-btn-sm secondary" data-gmbtn="repair" type="button">Repair armor</button></div>`;
   }
   function equipmentItems() {
-    return arr4(state.equipment);
+    return arr2(state.equipment);
   }
   function renderArmor() {
     const items = equipmentItems().filter((it) => ARMOR_TYPES.has(it.model?.item_type) || (it.armor_max_critical || 0) > 0 || (it.armor_value || 0) > 0);
@@ -36686,20 +34962,20 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const hasMinor = (it.armor_minor || 0) > 0;
     const status = dest ? ["Destroyed", "bad"] : hasCrit ? ["Damaged", ""] : hasSerious ? ["Damaged", ""] : hasMinor ? ["Minor damage", ""] : ["OK", "good"];
     const slot = it.body_part?.name || it.equipped_body_part_name || it.default_body_part_code || it.model?.default_body_part_code || "-";
-    return `<div class="cp-card" data-equip="${esc3(it.id)}">
-      <div class="cp-rowitem"><span><b>${esc3(it.name)}</b> <span class="cp-pill">${esc3(it.model?.item_type || "armor")}</span></span>
+    return `<div class="cp-card" data-equip="${esc2(it.id)}">
+      <div class="cp-rowitem"><span><b>${esc2(it.name)}</b> <span class="cp-pill">${esc2(it.model?.item_type || "armor")}</span></span>
       <span class="cp-pill ${status[1]}">${status[0]}</span></div>
       <div class="cp-row" style="gap:6px;margin-top:6px">
-        <span class="cp-chip">${it.is_equipped ? `Equipped - ${esc3(slot)}` : "Unequipped"}</span>
-        <span class="cp-chip">AV ${dash3(it.armor_value)}</span>
-        <span class="cp-chip${(it.armor_minor || 0) > 0 ? " warn" : ""}">Minor ${dash3(it.armor_minor)}/${dash3(it.armor_max_minor)}</span>
-        <span class="cp-chip${(it.armor_serious || 0) > 0 ? " warn" : ""}">Serious ${dash3(it.armor_serious)}/${dash3(it.armor_max_serious)}</span>
-        <span class="cp-chip${hasCrit ? " bad" : ""}">Crit ${dash3(it.armor_critical)}/${dash3(it.armor_max_critical)}</span>
+        <span class="cp-chip">${it.is_equipped ? `Equipped - ${esc2(slot)}` : "Unequipped"}</span>
+        <span class="cp-chip">AV ${dash2(it.armor_value)}</span>
+        <span class="cp-chip${(it.armor_minor || 0) > 0 ? " warn" : ""}">Minor ${dash2(it.armor_minor)}/${dash2(it.armor_max_minor)}</span>
+        <span class="cp-chip${(it.armor_serious || 0) > 0 ? " warn" : ""}">Serious ${dash2(it.armor_serious)}/${dash2(it.armor_max_serious)}</span>
+        <span class="cp-chip${hasCrit ? " bad" : ""}">Crit ${dash2(it.armor_critical)}/${dash2(it.armor_max_critical)}</span>
       </div>
-      ${it.is_equipped ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-armorbtn="unequip" data-equip="${esc3(it.id)}" type="button">Unequip</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc3(it.id)}" type="button">GM delete</button>` : ""}</div>` : `<div class="cp-row" style="gap:8px;margin-top:8px">
+      ${it.is_equipped ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-armorbtn="unequip" data-equip="${esc2(it.id)}" type="button">Unequip</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc2(it.id)}" type="button">GM delete</button>` : ""}</div>` : `<div class="cp-row" style="gap:8px;margin-top:8px">
             <label class="cp-field" style="min-width:150px"><span>Equip to body part</span>
-              <select data-equip-part="${esc3(it.id)}">${armorSlotOptions(it)}</select></label>
-            <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-armorbtn="equip" data-equip="${esc3(it.id)}" type="button" ${it.model?.can_equip === false ? "disabled" : ""}>Equip</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc3(it.id)}" type="button">GM delete</button>` : ""}</div>
+              <select data-equip-part="${esc2(it.id)}">${armorSlotOptions(it)}</select></label>
+            <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-armorbtn="equip" data-equip="${esc2(it.id)}" type="button" ${it.model?.can_equip === false ? "disabled" : ""}>Equip</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc2(it.id)}" type="button">GM delete</button>` : ""}</div>
           </div>`}
     </div>`;
   }
@@ -36719,18 +34995,18 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const slotOptions = equipmentSlotOptions(it);
     const hasCompatiblePart = compatibleBodyParts(it).length > 0;
     return `<div class="cp-card">
-      <div class="cp-rowitem"><span><b>${esc3(it.name)}</b> <span class="cp-pill">${esc3(it.model?.item_type || "implant")}</span></span>
+      <div class="cp-rowitem"><span><b>${esc2(it.name)}</b> <span class="cp-pill">${esc2(it.model?.item_type || "implant")}</span></span>
       <span class="cp-pill ${active ? "good" : ""}">${active ? "installed" : "inactive"}</span></div>
-      ${it.model?.description ? `<div class="cp-muted" style="margin-top:6px">${esc3(it.model.description)}</div>` : ""}
+      ${it.model?.description ? `<div class="cp-muted" style="margin-top:6px">${esc2(it.model.description)}</div>` : ""}
       <div class="cp-row" style="gap:6px;margin-top:6px">
-        <span class="cp-chip">${active ? `Installed - ${esc3(slot)}` : "Not installed"}</span>
-        ${it.max_charges ? `<span class="cp-chip">charges ${dash3(it.current_charges)}/${dash3(it.max_charges)}</span>` : ""}
-        ${effTxt ? `<span class="cp-chip">${esc3(effTxt)}</span>` : ""}
+        <span class="cp-chip">${active ? `Installed - ${esc2(slot)}` : "Not installed"}</span>
+        ${it.max_charges ? `<span class="cp-chip">charges ${dash2(it.current_charges)}/${dash2(it.max_charges)}</span>` : ""}
+        ${effTxt ? `<span class="cp-chip">${esc2(effTxt)}</span>` : ""}
       </div>
-      ${isGM() && active ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-armorbtn="unequip" data-equip="${esc3(it.id)}" type="button">Uninstall</button><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc3(it.id)}" type="button">GM delete</button></div>` : isGM() && canInstall ? `<div class="cp-row" style="gap:8px;margin-top:8px">
-              <label class="cp-field" style="min-width:150px"><span>Install to body part</span><select data-equip-part="${esc3(it.id)}">${slotOptions}</select></label>
-              <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-armorbtn="equip" data-equip="${esc3(it.id)}" type="button" ${hasCompatiblePart ? "" : "disabled"}>Install</button><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc3(it.id)}" type="button">GM delete</button></div>
-            </div>` : isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc3(it.id)}" type="button">GM delete</button></div>` : ""}
+      ${isGM() && active ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-armorbtn="unequip" data-equip="${esc2(it.id)}" type="button">Uninstall</button><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc2(it.id)}" type="button">GM delete</button></div>` : isGM() && canInstall ? `<div class="cp-row" style="gap:8px;margin-top:8px">
+              <label class="cp-field" style="min-width:150px"><span>Install to body part</span><select data-equip-part="${esc2(it.id)}">${slotOptions}</select></label>
+              <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-armorbtn="equip" data-equip="${esc2(it.id)}" type="button" ${hasCompatiblePart ? "" : "disabled"}>Install</button><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc2(it.id)}" type="button">GM delete</button></div>
+            </div>` : isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc2(it.id)}" type="button">GM delete</button></div>` : ""}
     </div>`;
   }
   function bindStaticEvents() {
@@ -36838,7 +35114,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
   }
   function showTip(el) {
-    const p = arr4(state.sheet?.body_parts).find((x) => x.id === el.dataset.part);
+    const p = arr2(state.sheet?.body_parts).find((x) => x.id === el.dataset.part);
     const host = root2.querySelector('[data-ref="tip"]');
     if (!p || !host || !PART_GEOMETRY2[normPart(p)]) return;
     host.className = "cp-tip";
@@ -36978,10 +35254,10 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     render();
     try {
       const r = await api.checks.rollCharacteristic({ character_id: state.characterId, attribute_code: code }, settings());
-      if (!r || r.ok === false) setNotice("err", esc3(describeError(r?.error, r?.message || "Roll failed.")));
+      if (!r || r.ok === false) setNotice("err", esc2(describeError(r?.error, r?.message || "Roll failed.")));
       else setNotice(r.result?.success ? "ok" : "warn", rollResultText(r));
     } catch (e) {
-      setNotice("err", `Roll error: ${esc3(e.message)}`);
+      setNotice("err", `Roll error: ${esc2(e.message)}`);
     } finally {
       state.rollingAttr = "";
       render();
@@ -36991,7 +35267,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const a = r.attribute || {}, roll = r.roll || {}, res = r.result || {};
     const crit = res.is_critical_success ? " - CRIT SUCCESS" : res.is_critical_failure ? " - CRIT FAIL" : "";
     const name = ATTR_RU[a.code] || a.name || a.code;
-    return `${esc3(name)} check - d20 <span class="cp-mono">${dash3(roll.natural_roll)} <= ${dash3(roll.target_value)}</span> -> <b>${res.success ? "SUCCESS" : "FAILURE"}</b>${crit}`;
+    return `${esc2(name)} check - d20 <span class="cp-mono">${dash2(roll.natural_roll)} <= ${dash2(roll.target_value)}</span> -> <b>${res.success ? "SUCCESS" : "FAILURE"}</b>${crit}`;
   }
   async function onRollSkill(code) {
     if (state.busy || state.rollingAttr) return;
@@ -36999,13 +35275,13 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     render();
     try {
       const r = await api.checks.rollSkill({ character_id: state.characterId, skill_code: code }, settings());
-      if (!r || r.ok === false) setNotice("err", esc3(describeError(r?.error, r?.message || "Skill check failed.")));
+      if (!r || r.ok === false) setNotice("err", esc2(describeError(r?.error, r?.message || "Skill check failed.")));
       else {
         const res = r.result || {};
-        setNotice(res.success ? "ok" : "warn", `Skill check - ${esc3(code)} -> <b>${esc3(res.outcome || (res.success ? "success" : "failure"))}</b>`);
+        setNotice(res.success ? "ok" : "warn", `Skill check - ${esc2(code)} -> <b>${esc2(res.outcome || (res.success ? "success" : "failure"))}</b>`);
       }
     } catch (e) {
-      setNotice("err", `Skill check error: ${esc3(e.message)}`);
+      setNotice("err", `Skill check error: ${esc2(e.message)}`);
     } finally {
       state.rollingAttr = "";
       render();
@@ -37029,7 +35305,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       );
       await refresh({ sheet: false, armory: false, equipment: false, inventory: false, abilities: true });
     } catch (e) {
-      setNotice("err", `Pool update failed: ${esc3(e.message)}`);
+      setNotice("err", `Pool update failed: ${esc2(e.message)}`);
       render();
     } finally {
       state.busy = false;
@@ -37037,11 +35313,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
   }
   function onAttrEdit(code) {
-    const a = arr4(state.sheet.attributes).find((x) => x.code === code) || {};
+    const a = arr2(state.sheet.attributes).find((x) => x.code === code) || {};
     const name = a.name || code;
     openForm({
       title: `Edit ${name} (GM)`,
-      note: a.default_value != null || a.max_value != null ? `Allowed: ${dash3(a.default_value)} - ${dash3(a.max_value)}` : "",
+      note: a.default_value != null || a.max_value != null ? `Allowed: ${dash2(a.default_value)} - ${dash2(a.max_value)}` : "",
       current: a.value,
       min: a.default_value,
       max: a.max_value,
@@ -37053,7 +35329,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     });
   }
   function onSkillEdit(skillId) {
-    const skill = arr4(state.sheet?.skills).find((entry) => entry.id === skillId);
+    const skill = arr2(state.sheet?.skills).find((entry) => entry.id === skillId);
     if (!skill) return;
     const current2 = Number(skill.level ?? skill.effective_level ?? 0) || 0;
     const max = skillDisplayMaxLevel(skill);
@@ -37083,7 +35359,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     runMutation("Switch fire mode", () => api.weapon.switchWeaponFireMode(state.characterId, weaponId, fireModeId, settings()), () => refresh({ equipment: false }));
   }
   function onReloadWeapon(weaponId) {
-    const w = arr4(state.armory?.weapons).find((x) => x.id === weaponId);
+    const w = arr2(state.armory?.weapons).find((x) => x.id === weaponId);
     const profileId = w?.active_profile?.id || w?.active_profile_id;
     const magId = root2.querySelector(`select[data-wact="reloadmag"][data-weapon="${CSS.escape(weaponId)}"]`)?.value;
     if (!profileId || !magId) {
@@ -37114,7 +35390,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
       return;
     }
-    setNotice("info", `Ability activation: ${esc3(ability.name)} - ready to use (no RPC yet).`);
+    setNotice("info", `Ability activation: ${esc2(ability.name)} - ready to use (no RPC yet).`);
     render();
   }
   async function onUsePerk(perkId) {
@@ -37145,15 +35421,15 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     try {
       const result = await api.perk.useCharacterPerk(payload, settings());
       if (!result || result.ok === false) {
-        setNotice("err", `${esc3(describeError(result?.error, result?.message || "Perk use failed."))}${result?.error ? ` <span class="cp-mono">[${esc3(result.error)}]</span>` : ""}`);
+        setNotice("err", `${esc2(describeError(result?.error, result?.message || "Perk use failed."))}${result?.error ? ` <span class="cp-mono">[${esc2(result.error)}]</span>` : ""}`);
         return;
       }
       await refresh({ sheet: true, armory: true, equipment: false, inventory: false, abilities: false });
       const message = result.message || `${perk.name} used.`;
-      const hint = result.gm_hint ? `<div class="cp-muted" style="margin-top:4px">${esc3(result.gm_hint)}</div>` : "";
-      setNotice("ok", `${esc3(message)}${hint}`);
+      const hint = result.gm_hint ? `<div class="cp-muted" style="margin-top:4px">${esc2(result.gm_hint)}</div>` : "";
+      setNotice("ok", `${esc2(message)}${hint}`);
     } catch (e) {
-      setNotice("err", `Perk use failed: ${esc3(e.message)}`);
+      setNotice("err", `Perk use failed: ${esc2(e.message)}`);
     } finally {
       state.busy = false;
       render();
@@ -37169,14 +35445,14 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     runMutation("Use item", () => api.inventory.useCharacterItem({ character_item_id: itemId, target_body_part_id: partId, used_by_character_id: state.characterId }, settings()), () => refresh());
   }
   function equipmentSlotOptions(it) {
-    const def = normalizeBodyPartCode2(it?.default_body_part_code || it?.model?.default_body_part_code || "");
+    const def = normalizeBodyPartCode(it?.default_body_part_code || it?.model?.default_body_part_code || "");
     const lastId = state.lastSlot[it.id];
     let parts = compatibleBodyParts(it);
     if (!parts.length) return `<option value="">This item has no configured installation slot.</option>`;
     const selected = parts.find((b) => b.id === lastId) || parts.find((b) => def && bodyPartCodes(b).includes(def)) || parts[0];
     return parts.map((b) => {
       const sel = b.id === selected?.id ? "selected" : "";
-      return `<option value="${esc3(b.id)}" ${sel}>${esc3(b.name)}</option>`;
+      return `<option value="${esc2(b.id)}" ${sel}>${esc2(b.name)}</option>`;
     }).join("");
   }
   function armorSlotOptions(it) {
@@ -37231,7 +35507,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
       return;
     }
-    const def = arr4(state.skillDefs).find((entry) => String(entry?.id || "") === defId);
+    const def = arr2(state.skillDefs).find((entry) => String(entry?.id || "") === defId);
     const baseMax = Number(def?.max_level ?? 0) || 5;
     const manualMax = baseMax >= 5 ? 10 : baseMax === 3 ? 5 : baseMax;
     const level = Math.max(1, Math.min(manualMax, Number(root2.querySelector('[data-ref="gmSkillLevel"]')?.value) || 1));
@@ -37249,7 +35525,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
       return;
     }
-    const perk = arr4(state.perkAvailability).find((entry) => String(entry?.code || "").trim() === perkCode);
+    const perk = arr2(state.perkAvailability).find((entry) => String(entry?.code || "").trim() === perkCode);
     if (!perk) {
       setNotice("err", "Perk definition not found.");
       render();
@@ -37257,7 +35533,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
     if (perk.available !== true) {
       const skillName = perk.linked_skill_name || perk.linked_skill_code || "linked skill";
-      setNotice("err", `Cannot add perk: ${esc3(perk.name || perkCode)} requires ${esc3(skillName)} ${dash3(perk.required_skill_level)}, current ${dash3(perk.current_skill_level)}.`);
+      setNotice("err", `Cannot add perk: ${esc2(perk.name || perkCode)} requires ${esc2(skillName)} ${dash2(perk.required_skill_level)}, current ${dash2(perk.current_skill_level)}.`);
       render();
       return;
     }
@@ -37434,12 +35710,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function openForm({ title, note, current: current2, min, max, onSave }) {
     const overlay = document.createElement("div");
     overlay.className = "cp-overlay";
-    overlay.innerHTML = `<div class="cp-dialog" role="dialog" aria-modal="true" aria-label="${esc3(title)}">
-      <h3>${esc3(title)}</h3>
-      ${note ? `<div class="cp-muted" style="font-size:11px;margin-bottom:8px">${esc3(note)}</div>` : ""}
+    overlay.innerHTML = `<div class="cp-dialog" role="dialog" aria-modal="true" aria-label="${esc2(title)}">
+      <h3>${esc2(title)}</h3>
+      ${note ? `<div class="cp-muted" style="font-size:11px;margin-bottom:8px">${esc2(note)}</div>` : ""}
       <div class="cp-dlg-stepper">
         <button data-dlg-dec type="button" class="secondary cp-dlg-step">-</button>
-        <input data-dlg-input type="text" inputmode="numeric" value="${esc3(current2 ?? "")}" class="cp-mono cp-dlg-input">
+        <input data-dlg-input type="text" inputmode="numeric" value="${esc2(current2 ?? "")}" class="cp-mono cp-dlg-input">
         <button data-dlg-inc type="button" class="secondary cp-dlg-step">+</button>
       </div>
       <div class="button-row" style="margin-top:8px"><button data-dlg-save type="button">Save</button><button data-dlg-cancel type="button" class="secondary">Cancel</button></div>
@@ -37505,29 +35781,20 @@ if (!(root instanceof HTMLElement)) {
 }
 root.innerHTML = `
   <nav class="app-nav">
-    <button class="app-tab active" type="button" data-view="hud">Combat HUD</button>
-    <button class="app-tab" type="button" data-view="resolve">Combat \xB7 Resolve Attack</button>
+    <button class="app-tab active" type="button" data-view="resolve">Combat \xB7 Resolve Attack</button>
     <button class="app-tab" type="button" data-view="character">Character</button>
     <button class="app-tab" type="button" data-view="shell">Bridge Shell</button>
   </nav>
-  <div class="app-view" data-view-host="hud"></div>
-  <div class="app-view hidden" data-view-host="resolve"></div>
+  <div class="app-view" data-view-host="resolve"></div>
   <div class="app-view hidden" data-view-host="character"></div>
   <div class="app-view hidden" data-view-host="shell"></div>
 `;
 var hosts = {
-  hud: root.querySelector('[data-view-host="hud"]'),
   resolve: root.querySelector('[data-view-host="resolve"]'),
   character: root.querySelector('[data-view-host="character"]'),
   shell: root.querySelector('[data-view-host="shell"]')
 };
 var views = {
-  hud: {
-    mounted: false,
-    mount() {
-      mountCombatHudScreen({ root: hosts.hud, runtime });
-    }
-  },
   resolve: {
     mounted: false,
     mount() {
@@ -37575,4 +35842,4 @@ function show(view) {
 root.querySelectorAll("[data-view]").forEach((button) => {
   button.addEventListener("click", () => show(button.dataset.view));
 });
-show("hud");
+show("resolve");
