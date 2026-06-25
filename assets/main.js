@@ -34148,7 +34148,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       ).catch(() => null);
       const participants = arr2(runtimeRes?.visible_participants);
       const participant = participants.find((row) => String(row?.character_id ?? "").trim() === state.characterId) ?? null;
-      if (!runtimeRes?.encounter?.id || !participant) {
+      if (!runtimeRes?.encounter?.id) {
         state.tacticalSnapshot = null;
       } else {
         state.tacticalSnapshot = {
@@ -34740,6 +34740,21 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function getLoadedCharacterParticipant() {
     return state.tacticalSnapshot?.participant ?? null;
   }
+  function getActiveEncounterSummary() {
+    const snapshot = state.tacticalSnapshot;
+    if (!snapshot?.encounterId) return null;
+    const runtime3 = snapshot.runtime ?? {};
+    const encounter = runtime3.encounter ?? {};
+    const participants = arr2(runtime3.visible_participants);
+    return {
+      id: snapshot.encounterId,
+      name: encounter.name || "Combat",
+      round: Number(encounter.current_round ?? runtime3.current_round ?? 0) || 0,
+      stateVersion: snapshot.stateVersion,
+      participantCount: participants.length,
+      hasLoadedCharacterParticipant: !!snapshot.participant
+    };
+  }
   function getSelectedTokenForLoadedCharacter() {
     if (!state.selectedToken) return null;
     return String(state.selectedToken?.link?.characterId ?? "").trim() === state.characterId ? state.selectedToken : null;
@@ -34856,6 +34871,115 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
     }
   }
+  async function startCombatForScene() {
+    if (!isGM()) {
+      setNotice("err", "Only the GM can start combat.");
+      render();
+      return;
+    }
+    state.busy = true;
+    render();
+    try {
+      await ensureSettings();
+      const [context, player, sceneItems] = await Promise.all([
+        withTimeout3(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null),
+        withTimeout3(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null),
+        withTimeout3(bridges.obr?.getSceneItems?.(), OBR_TIMEOUT, [])
+      ]);
+      if (!context?.campaignId || !context?.roomId || !context?.sceneId) {
+        throw new Error("Unable to resolve Owlbear room or scene context.");
+      }
+      const hiddenTokenIds = arr2(sceneItems).filter((item) => String(item?.type ?? "").toUpperCase() === "IMAGE" && item?.visible === false).map((item) => String(item?.id ?? "").trim()).filter(Boolean);
+      const result = await api.combat.startEncounter(
+        {
+          campaign_id: context.campaignId,
+          room_id: context.roomId,
+          scene_id: context.sceneId,
+          actor_player_id: player?.id ?? "",
+          actor_is_gm: true,
+          name: "Combat",
+          hidden_token_ids: hiddenTokenIds
+        },
+        settings()
+      );
+      if (!result || result.ok === false) {
+        throw new Error(result?.message || result?.error || "Unable to start combat.");
+      }
+      setNotice("ok", "Combat started.");
+      await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
+      await refreshSelectedTokenContext();
+    } catch (error) {
+      setNotice("err", esc2(toErrorMessage(error, "Unable to start combat.")));
+      render();
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
+  async function endCombatForScene() {
+    if (!isGM()) {
+      setNotice("err", "Only the GM can end combat.");
+      render();
+      return;
+    }
+    const encounter = getActiveEncounterSummary();
+    if (!encounter?.id) {
+      setNotice("err", "No active combat was found for this scene.");
+      render();
+      return;
+    }
+    state.busy = true;
+    render();
+    try {
+      await ensureSettings();
+      const player = await withTimeout3(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null);
+      const result = await api.combat.endEncounter(
+        {
+          encounter_id: encounter.id,
+          actor_player_id: player?.id ?? "",
+          actor_is_gm: true
+        },
+        settings()
+      );
+      if (!result || result.ok === false) {
+        throw new Error(result?.message || result?.error || "Unable to end combat.");
+      }
+      state.tacticalSnapshot = null;
+      state.moveToolStatus = null;
+      setNotice("ok", "Combat ended.");
+      await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
+      await refreshSelectedTokenContext();
+    } catch (error) {
+      setNotice("err", esc2(toErrorMessage(error, "Unable to end combat.")));
+      render();
+    } finally {
+      state.busy = false;
+      render();
+    }
+  }
+  function renderCombatSessionCard() {
+    const encounter = getActiveEncounterSummary();
+    const hasActiveEncounter = !!encounter?.id;
+    return `
+      <div class="cp-section-title">Combat session</div>
+      <div class="cp-card">
+        <div class="cp-rowitem">
+          <span>${hasActiveEncounter ? esc2(encounter.name || "Combat") : "No active combat"}</span>
+          <span class="cp-row" style="gap:6px">
+            <span class="cp-pill ${hasActiveEncounter ? "good" : ""}">${hasActiveEncounter ? "active" : "inactive"}</span>
+            ${hasActiveEncounter ? `<span class="cp-chip">round ${dash2(encounter.round)}</span>` : ""}
+          </span>
+        </div>
+        <div class="cp-muted" style="margin-top:6px">
+          ${hasActiveEncounter ? `${encounter.participantCount} participant(s) on this scene${encounter.hasLoadedCharacterParticipant ? " \xB7 loaded character is in combat" : " \xB7 loaded character is not in combat"}` : "Start combat for the current Owlbear scene to enable tactical movement and turn flow."}
+        </div>
+        <div class="button-row" style="margin-top:8px">
+          ${isGM() ? `<button type="button" data-ref="startCombat" ${!hasActiveEncounter && !state.busy ? "" : "disabled"}>Start combat</button>` : ""}
+          ${isGM() ? `<button type="button" class="secondary" data-ref="endCombat" ${hasActiveEncounter && !state.busy ? "" : "disabled"}>End combat</button>` : ""}
+        </div>
+      </div>
+    `;
+  }
   function renderTacticalMoveCard() {
     const participant = getLoadedCharacterParticipant();
     if (!participant) return "";
@@ -34904,6 +35028,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
           <div class="cp-attrs">${base.map(attrCard).join("")}</div>
         </div>
       </div>
+      ${renderCombatSessionCard()}
       ${renderTacticalMoveCard()}
       ${customs.length ? `<div class="cp-section-title">Additional attributes</div><div class="cp-row">${customs.map((a) => `<span class="cp-chip">${esc2(a.name || a.code)} <span class="cp-mono">${dash2(a.value)}</span></span>`).join("")}</div>` : ""}
       ${renderAdditionalParts()}
@@ -35546,6 +35671,14 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }));
     $("startMove")?.addEventListener("click", async () => {
       await sendMoveToolCommand(MOVE_TOOL_COMMANDS.ActivateSelected).catch(() => {
+      });
+    });
+    $("startCombat")?.addEventListener("click", () => {
+      startCombatForScene().catch(() => {
+      });
+    });
+    $("endCombat")?.addEventListener("click", () => {
+      endCombatForScene().catch(() => {
       });
     });
     $("cancelMove")?.addEventListener("click", async () => {
