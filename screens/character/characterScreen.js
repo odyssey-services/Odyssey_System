@@ -128,6 +128,7 @@ export function mountCharacterScreen({ root, runtime }) {
     rollingAttr: "",
     busy: false,
     isStartingCombat: false,
+    combatStartStage: "",
     notice: "",
     realtimeSubscriptions: [], // Real-Time listeners for auto-refresh
     catalogSubscriptions: [],
@@ -143,6 +144,11 @@ export function mountCharacterScreen({ root, runtime }) {
 
   const settings = () => state.settings;
   const isGM = () => (state.devRole === "GM" ? true : state.devRole === "PLAYER" ? false : state.role === "GM");
+
+  function setCombatStartStage(stage) {
+    state.combatStartStage = stage;
+    console.info("[Odyssey combat]", stage);
+  }
 
   async function refreshSelectedTokenContext() {
     const tokens = await withTimeout(bridges.obr?.getSelectedOwlbearTokens?.(), OBR_TIMEOUT, []);
@@ -952,6 +958,43 @@ export function mountCharacterScreen({ root, runtime }) {
     }
   }
 
+  async function refreshAfterCombatStart() {
+    setCombatStartStage("Refreshing character sheet...");
+    const results = await Promise.allSettled([
+      withTimeout(
+        refresh({
+          sheet: true,
+          armory: false,
+          equipment: false,
+          inventory: false,
+          abilities: false,
+          perkAvailability: false,
+        }),
+        5000,
+        { __timedOut: "refresh" },
+      ),
+      withTimeout(
+        (async () => {
+          setCombatStartStage("Refreshing selected token...");
+          return refreshSelectedTokenContext();
+        })(),
+        5000,
+        { __timedOut: "selectedTokenContext" },
+      ),
+    ]);
+
+    for (const result of results) {
+      if (result.status === "rejected") {
+        console.error("[Odyssey] Post-start refresh failed:", result.reason);
+      }
+      if (result.status === "fulfilled" && result.value?.__timedOut) {
+        console.warn(`[Odyssey] Post-start step timed out: ${result.value.__timedOut}`);
+      }
+    }
+    setCombatStartStage("Ready.");
+    render();
+  }
+
   async function startCombatForScene() {
     if (!isGM()) {
       setNotice("err", "Only the GM can start combat.");
@@ -960,6 +1003,7 @@ export function mountCharacterScreen({ root, runtime }) {
     }
     state.busy = true;
     state.isStartingCombat = true;
+    setCombatStartStage("Creating encounter...");
     setNotice("info", "Starting combat...");
     render();
     try {
@@ -1005,9 +1049,12 @@ export function mountCharacterScreen({ root, runtime }) {
       if (!result || result.ok === false) {
         throw new Error(result?.message || result?.error || "Unable to start combat.");
       }
+      setCombatStartStage("Combat created.");
+      state.isStartingCombat = false;
+      state.busy = false;
       setNotice("ok", result.__resolvedByPoll ? "Combat started. Runtime was confirmed by follow-up check." : "Combat started.");
-      await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
-      await refreshSelectedTokenContext();
+      render();
+      void refreshAfterCombatStart();
     } catch (error) {
       setNotice("err", esc(toErrorMessage(error, "Unable to start combat.")));
       render();
@@ -1078,6 +1125,7 @@ export function mountCharacterScreen({ root, runtime }) {
             ? `${encounter.participantCount} participant(s) on this scene${encounter.hasLoadedCharacterParticipant ? " · loaded character is in combat" : " · loaded character is not in combat"}`
             : "Start combat for the current Owlbear scene to enable tactical movement and turn flow."}
         </div>
+        <div class="cp-muted" style="margin-top:6px">Debug: ${esc(state.combatStartStage || "idle")}</div>
         <div class="button-row" style="margin-top:8px">
           ${isGM() ? `<button type="button" data-ref="startCombat" ${!hasActiveEncounter && !state.isStartingCombat && !state.busy ? "" : "disabled"}>${state.isStartingCombat ? "Starting combat..." : "Start combat"}</button>` : ""}
           ${isGM() ? `<button type="button" class="secondary" data-ref="endCombat" ${hasActiveEncounter && !state.busy ? "" : "disabled"}>End combat</button>` : ""}
