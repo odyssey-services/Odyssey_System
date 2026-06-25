@@ -33347,6 +33347,32 @@ as $$
                     0
                   )
                 end,
+              'effect_bonus',
+                case
+                  when d.code is null then 0
+                  else coalesce(
+                    (
+                      select sum(greatest(coalesce(nullif(trim(coalesce(modifier->>'value', '')), '')::integer, 0), 0))::integer
+                      from jsonb_array_elements(coalesce(effect_summary.effect_summary->'modifier_rows', '[]'::jsonb)) modifier
+                      where lower(coalesce(modifier->>'target', '')) = 'attribute'
+                        and lower(coalesce(modifier->>'attribute', '')) = lower(d.code)
+                    ),
+                    0
+                  )
+                end,
+              'effect_penalty',
+                case
+                  when d.code is null then 0
+                  else coalesce(
+                    (
+                      select sum(abs(least(coalesce(nullif(trim(coalesce(modifier->>'value', '')), '')::integer, 0), 0)))::integer
+                      from jsonb_array_elements(coalesce(effect_summary.effect_summary->'modifier_rows', '[]'::jsonb)) modifier
+                      where lower(coalesce(modifier->>'target', '')) = 'attribute'
+                        and lower(coalesce(modifier->>'attribute', '')) = lower(d.code)
+                    ),
+                    0
+                  )
+                end,
               'effective_value',
                 coalesce(a.value, d.default_value, 0)
                 + case

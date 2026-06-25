@@ -33782,7 +33782,24 @@ var PART_GEOMETRY2 = {
   l_leg: { x: 28, y: 58, w: 9, h: 24, r: 5 },
   r_leg: { x: 42, y: 58, w: 9, h: 24, r: 5 }
 };
-var PART_ALIASES2 = { arm_l: "l_arm", arm_r: "r_arm", leg_l: "l_leg", leg_r: "r_leg" };
+var PART_ALIASES2 = {
+  arm_l: "l_arm",
+  arm_r: "r_arm",
+  leg_l: "l_leg",
+  leg_r: "r_leg",
+  larm: "l_arm",
+  rarm: "r_arm",
+  lleg: "l_leg",
+  rleg: "r_leg",
+  left_arm: "l_arm",
+  right_arm: "r_arm",
+  left_leg: "l_leg",
+  right_leg: "r_leg",
+  leftarm: "l_arm",
+  rightarm: "r_arm",
+  leftleg: "l_leg",
+  rightleg: "r_leg"
+};
 var DOLL_SCALE2 = 1.7;
 var OBR_TIMEOUT = 1500;
 var ARMOR_TYPES = /* @__PURE__ */ new Set(["armor", "shield", "special_protection", "exoskeleton", "closed_suit"]);
@@ -33791,7 +33808,7 @@ var esc2 = (v) => escapeHtml(v);
 var arr2 = (v) => Array.isArray(v) ? v : [];
 var dash2 = (v) => v === null || v === void 0 || v === "" ? "-" : v;
 var normalizeBodyPartCode = (value) => {
-  const code = String(value || "").trim().toLowerCase();
+  const code = String(value || "").trim().toLowerCase().replace(/[\s.-]+/g, "_").replace(/__+/g, "_");
   return PART_ALIASES2[code] || code;
 };
 var normPart = (p) => normalizeBodyPartCode(p?.code || p?.part_key || "");
@@ -34376,14 +34393,16 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const label = a.name || a.code;
     const pending = state.rollingAttr === a.code;
     const modifier = Number(a?.effect_modifier ?? a?.modifier ?? 0) || 0;
+    const bonus = Math.max(0, Number(a?.effect_bonus ?? 0) || 0);
+    const penalty = Math.max(0, Number(a?.effect_penalty ?? 0) || 0);
     const effectiveValue = Number(
       a?.effective_value ?? (Number(a?.value ?? a?.base_value ?? 0) || 0) + modifier
     ) || 0;
     const editBtn = isGM() ? `<button class="cp-attr-edit" data-attr-edit="${esc2(a.code)}" aria-label="Edit ${esc2(label)} (GM)" title="Edit (GM)">E</button>` : "";
     return `<div class="cp-attr" role="button" tabindex="${pending ? -1 : 0}" data-attr-roll="${esc2(a.code)}" aria-label="Roll ${esc2(label)}" aria-disabled="${pending}" title="Roll ${esc2(label)}">
       ${editBtn}
-      ${modifier > 0 ? `<div class="cp-attr-mod cp-attr-mod-pos">+${esc2(modifier)}</div>` : ""}
-      ${modifier < 0 ? `<div class="cp-attr-mod cp-attr-mod-neg">${esc2(modifier)}</div>` : ""}
+      ${bonus > 0 ? `<div class="cp-attr-mod cp-attr-mod-pos">+${esc2(bonus)}</div>` : modifier > 0 ? `<div class="cp-attr-mod cp-attr-mod-pos">+${esc2(modifier)}</div>` : ""}
+      ${penalty > 0 ? `<div class="cp-attr-mod cp-attr-mod-neg">-${esc2(penalty)}</div>` : modifier < 0 ? `<div class="cp-attr-mod cp-attr-mod-neg">${esc2(modifier)}</div>` : ""}
       <div class="cp-attr-val">${dash2(effectiveValue)}</div>
       <div class="cp-attr-code">${esc2(a.code)}</div>
       ${pending ? `<div class="cp-attr-pending">Rolling...</div>` : ""}
@@ -34440,6 +34459,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function collectAllowedBodyPartCodes(item) {
     const allowedCodes = /* @__PURE__ */ new Set();
+    const knownBodyPartCodes = new Set(
+      arr2(state.sheet?.body_parts).flatMap((part) => bodyPartCodes(part))
+    );
     const pushCode = (value) => {
       const normalized = normalizeBodyPartCode(value);
       if (normalized) allowedCodes.add(normalized);
@@ -34462,16 +34484,28 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     pushCodes(item?.effective_flags?.allowed_body_part_codes);
     pushCodes(item?.flags?.allowed_body_part_codes);
     pushCodes(item?.model?.flags?.allowed_body_part_codes);
+    pushCodes(item?.effective_flags?.allowedBodyPartCodes);
+    pushCodes(item?.flags?.allowedBodyPartCodes);
+    pushCodes(item?.model?.flags?.allowedBodyPartCodes);
     if (!allowedCodes.size) {
       pushCode(item?.default_body_part_code);
       pushCode(item?.model?.default_body_part_code);
+    }
+    if (!allowedCodes.size) {
+      arr2(item?.model?.tags || item?.tags || []).forEach((tag) => {
+        const normalized = normalizeBodyPartCode(tag);
+        if (knownBodyPartCodes.has(normalized)) allowedCodes.add(normalized);
+      });
+    }
+    if (!allowedCodes.size && ["exoskeleton", "closed_suit"].includes(String(item?.model?.item_type || item?.item_type || "").toLowerCase())) {
+      allowedCodes.add("torso");
     }
     return [...allowedCodes];
   }
   function compatibleBodyParts(item) {
     const allowedCodes = collectAllowedBodyPartCodes(item);
     const parts = arr2(state.sheet?.body_parts).filter((part) => !!part?.id);
-    if (!allowedCodes.length) return parts;
+    if (!allowedCodes.length) return [];
     return parts.filter((part) => bodyPartCodes(part).some((code) => allowedCodes.includes(code)));
   }
   function shouldShowAdditionalPart(p) {
@@ -34564,6 +34598,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const totalRollChip = rollBonusTotal !== 0 ? `<span class="cp-chip"><span class="cp-mono">roll ${rollBonusTotal > 0 ? `+${esc2(rollBonusTotal)}` : esc2(rollBonusTotal)}</span></span>` : "";
     const capStr = max > baseMax ? `<span class="cp-chip">base ${dash2(baseMax)} / GM ${dash2(max)}</span>` : "";
     const editBtn = isGM() ? `<button class="cp-skill-edit" data-skill-edit="${esc2(s.id)}" aria-label="Edit ${esc2(s.name)} (GM)" title="Edit ${esc2(s.name)} (GM)" type="button">E</button>` : "";
+    const deleteSkillId = s.character_skill_id || s.id;
     return `<div class="cp-card"${isClickable ? ` role="button" tabindex="0" data-skill-roll="${esc2(s.code)}"` : ""} aria-label="Skill ${esc2(s.name)}" ${isClickable ? 'title="Skill check"' : ""}>
       <div class="cp-rowitem">
         <span>${esc2(s.name)}${attrs_str}
@@ -34571,7 +34606,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         <span class="cp-row" style="gap:6px">${perks}${levelModChip}${rollModChip}${totalRollChip}<span class="cp-pips" title="${dash2(eff)}/${max}">${pips}</span>${locked ? `<span class="cp-pill bad">locked</span>` : ""}${editBtn}</span>
       </div>
       ${capStr ? `<div class="cp-row" style="gap:6px;margin-top:6px">${capStr}</div>` : ""}
-      ${isGM() ? `<div class="button-row" style="margin-top:4px"><button class="cp-btn-sm secondary" data-gmdel="skill" data-id="${esc2(s.id)}" type="button">GM delete</button></div>` : ""}
+      ${isGM() ? `<div class="button-row" style="margin-top:4px"><button class="cp-btn-sm secondary" data-gmdel="skill" data-id="${esc2(deleteSkillId)}" type="button">GM delete</button></div>` : ""}
     </div>`;
   }
   function perkRequiresWeapon(perk) {
