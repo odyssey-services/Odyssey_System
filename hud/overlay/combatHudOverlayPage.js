@@ -13,6 +13,7 @@
 import OBR from "@owlbear-rodeo/sdk";
 import tokenStyles from "../styles/combatHudTokens.css";
 import overlayStyles from "./combatHudOverlay.css";
+import layoutStyles from "../components/combatHudLayout.css";
 import { mountCombatHudOverlay } from "./mountCombatHudOverlay.js";
 import { BC_HUD_UI_STATE, parseHudUiState } from "./overlayConstants.js";
 
@@ -20,6 +21,7 @@ function injectStyles() {
   for (const [id, css] of [
     ["ohud-tokens", tokenStyles],
     ["ohud-overlay-styles", overlayStyles],
+    ["ohud-layout-styles", layoutStyles],
   ]) {
     if (document.getElementById(id)) continue;
     const el = document.createElement("style");

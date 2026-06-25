@@ -1,0 +1,482 @@
+/*
+ * Combat HUD — Phase 2 layout & module styles.
+ *
+ * Scoped under the overlay (.odyssey-hud / .ohud-hud). Consumes semantic tokens
+ * from hud/styles/combatHudTokens.css; no raw colours from JS. Composition uses
+ * CSS grid + clamp() + grid-template-areas so proportions hold across widths.
+ *
+ * Breakpoints mirror hud/overlay/overlayConstants.js:
+ *   wide ≥1280 · medium ≥960 · compact ≥620 · mini <620
+ */
+
+/* ===================== Shell ===================== */
+.ohud-hud {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 4px 4px 2px;
+  color: var(--odyssey-hud-text);
+  font-size: 12px;
+}
+
+/* ---- top control row (thin) ---- */
+.ohud-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 22px;
+  padding: 0 6px;
+}
+.ohud-brand { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.ohud-brand-mark { color: var(--odyssey-purple); display: inline-flex; }
+.ohud-brand-text { font-weight: 800; letter-spacing: 2px; font-size: 11px; color: var(--odyssey-hud-text); }
+.ohud-brand-sub {
+  font-size: 10px; color: var(--odyssey-hud-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+}
+.ohud-fallback {
+  font-size: 10px; font-weight: 700; color: var(--odyssey-hud-warning);
+  border: 1px dashed var(--odyssey-hud-warning); border-radius: 6px; padding: 1px 7px;
+}
+.ohud-controls-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* ---- dev controls (collapsed by default) ---- */
+.ohud-dev { display: flex; align-items: center; gap: 8px; }
+.ohud-dev-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--odyssey-hud-muted); cursor: pointer;
+  background: var(--odyssey-hud-panel-raised);
+  border: 1px solid var(--odyssey-hud-border); border-radius: 7px; padding: 3px 8px;
+}
+.ohud-dev-btn:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }
+.ohud-dev.is-open .ohud-dev-btn { color: var(--odyssey-purple); border-color: var(--odyssey-purple); }
+.ohud-dev-strip {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--odyssey-hud-panel-raised);
+  border: 1px solid var(--odyssey-hud-border); border-radius: 8px; padding: 3px 8px;
+}
+.ohud-dev-field { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--odyssey-hud-dim); }
+.ohud-dev-roles { display: inline-flex; gap: 4px; }
+.ohud-select {
+  font: inherit; font-size: 11px; color: var(--odyssey-hud-text);
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);
+  border-radius: 6px; padding: 2px 6px; cursor: pointer;
+}
+.ohud-chip {
+  font: inherit; font-size: 11px; color: var(--odyssey-hud-muted);
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);
+  border-radius: 12px; padding: 2px 10px; cursor: pointer;
+}
+.ohud-chip.is-on { background: var(--odyssey-purple-strong); border-color: var(--odyssey-purple-strong); color: #fff; }
+.ohud-collapse {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+  color: var(--odyssey-hud-muted); background: var(--odyssey-hud-panel-raised);
+  border: 1px solid var(--odyssey-hud-border);
+}
+.ohud-collapse:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }
+
+/* ===================== Grid composition ===================== */
+.ohud-grid {
+  display: grid;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* wide: one visual row; mod/action stack in their column; log own column */
+.ohud-grid--wide {
+  grid-template-columns:
+    minmax(150px, 168px)
+    minmax(206px, 240px)
+    minmax(320px, 1fr)
+    minmax(140px, 172px)
+    minmax(150px, 182px)
+    minmax(184px, 214px);
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas:
+    "player gun skills target mod    log"
+    "player gun skills target action log";
+}
+
+/* medium: drop the log column (log floats as a button) */
+.ohud-grid--medium {
+  grid-template-columns:
+    minmax(138px, 158px)
+    minmax(186px, 224px)
+    minmax(250px, 1fr)
+    minmax(128px, 160px)
+    minmax(146px, 178px);
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas:
+    "player gun skills target mod"
+    "player gun skills target action";
+}
+
+/* compact / mini: two module rows */
+.ohud-grid--compact,
+.ohud-grid--mini {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "player gun target"
+    "skills mod action";
+}
+
+.ohud-panel--player { grid-area: player; }
+.ohud-panel--gun { grid-area: gun; }
+.ohud-panel--skills { grid-area: skills; }
+.ohud-panel--target { grid-area: target; }
+.ohud-panel--mod { grid-area: mod; }
+.ohud-panel--action { grid-area: action; }
+.ohud-panel--log { grid-area: log; }
+
+/* ===================== Panel frame ===================== */
+.ohud-panel {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0;
+  background: var(--odyssey-hud-panel);
+  border: 1px solid var(--odyssey-hud-border);
+  border-radius: var(--odyssey-hud-radius);
+  box-shadow: var(--odyssey-hud-shadow-soft);
+  padding: 8px 10px;
+}
+.ohud-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 12px; }
+.ohud-panel-label {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--odyssey-hud-dim);
+}
+.ohud-panel-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ohud-muted-fill { color: var(--odyssey-hud-dim); font-size: 11px; display: grid; place-items: center; flex: 1; }
+
+/* accent label colours */
+.ohud-accent--attack { color: var(--odyssey-hud-attack); }
+.ohud-accent--psionic { color: var(--odyssey-hud-psionic); }
+.ohud-accent--implant { color: var(--odyssey-hud-implant); }
+.ohud-accent--intervention { color: var(--odyssey-hud-intervention); }
+.ohud-accent--positive { color: var(--odyssey-hud-positive); }
+.ohud-accent--negative { color: var(--odyssey-hud-negative); }
+.ohud-accent--neutral { color: var(--odyssey-hud-neutral); }
+
+/* ===================== Body zones (silhouettes) ===================== */
+.ohud-silhouette { display: block; }
+.ohud-zone { transition: fill 120ms ease; }
+.ohud-zone--healthy { fill: var(--odyssey-hud-zone-healthy); }
+.ohud-zone--wounded { fill: var(--odyssey-hud-zone-wounded); }
+.ohud-zone--serious { fill: var(--odyssey-hud-zone-serious); }
+.ohud-zone--critical { fill: var(--odyssey-hud-zone-critical); }
+.ohud-zone--disabled { fill: var(--odyssey-hud-zone-disabled); }
+.ohud-zone.is-target { stroke: var(--odyssey-cyan); stroke-width: 2.5; }
+
+/* ===================== Player block ===================== */
+.ohud-turn {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.6px; padding: 2px 7px; border-radius: 8px;
+  border: 1px solid transparent;
+}
+.ohud-turn--active { color: #06210f; background: var(--odyssey-hud-state-active); }
+.ohud-turn--waiting { color: #2a1c00; background: var(--odyssey-hud-warning); }
+.ohud-turn--gm { color: #fff; background: var(--odyssey-purple-strong); }
+.ohud-turn--idle { color: var(--odyssey-hud-muted); border-color: var(--odyssey-hud-border); }
+
+.ohud-player-grid { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: center; flex: 1; min-height: 0; }
+.ohud-figure { position: relative; width: clamp(40px, 4vw, 54px); height: 100%; min-height: 56px; display: grid; place-items: center; }
+.ohud-figure-svg { width: 100%; height: 100%; }
+.ohud-figure-shield {
+  position: absolute; right: -4px; bottom: 0; width: 18px; height: 20px;
+  color: var(--odyssey-hud-shield); opacity: 0.85;
+}
+.ohud-figure--ghost { opacity: 0.4; }
+
+.ohud-player-stats { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.ohud-player-name {
+  font-size: 13px; font-weight: 700; color: var(--odyssey-hud-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.ohud-res { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 6px; }
+.ohud-res-label { font-size: 8.5px; font-weight: 700; letter-spacing: 0.5px; color: var(--odyssey-hud-dim); }
+.ohud-res-track { height: 7px; border-radius: 4px; background: var(--odyssey-line-soft); overflow: hidden; }
+.ohud-res-fill { display: block; height: 100%; border-radius: 4px; }
+.ohud-res--shield .ohud-res-fill { background: var(--odyssey-hud-shield); }
+.ohud-res--psi .ohud-res-fill { background: var(--odyssey-hud-psi); }
+.ohud-res-num { font-size: 11px; font-weight: 700; color: var(--odyssey-hud-text); font-variant-numeric: tabular-nums; }
+.ohud-res-max { color: var(--odyssey-hud-dim); font-weight: 600; }
+
+.ohud-pips { display: flex; gap: 5px; }
+.ohud-pip {
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 6px;
+  border: 1px solid var(--odyssey-hud-border);
+}
+.ohud-pip.is-on { color: #06210f; background: var(--odyssey-hud-state-active); border-color: transparent; }
+.ohud-pip.is-off { color: var(--odyssey-hud-dim); background: transparent; }
+
+.ohud-pilot {
+  display: flex; align-items: center; gap: 6px; padding: 3px 7px; border-radius: 8px;
+  background: var(--odyssey-purple-panel); border: 1px solid rgba(167, 139, 250, 0.4);
+}
+.ohud-pilot-tag { font-size: 8px; font-weight: 800; letter-spacing: 1px; color: var(--odyssey-purple); }
+.ohud-pilot-name { font-size: 11px; color: var(--odyssey-hud-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ohud-pilot-psi { margin-left: auto; font-size: 10px; color: var(--odyssey-purple); }
+
+.ohud-statuses { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ohud-chip-status {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  font-size: 9.5px; padding: 1px 6px 1px 2px; border-radius: 9px;
+  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base);
+  color: var(--odyssey-hud-muted);
+}
+.ohud-chip-dot {
+  width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 8px; font-weight: 800; color: #0a0e18;
+}
+.ohud-chip-status--positive .ohud-chip-dot { background: var(--odyssey-hud-positive); }
+.ohud-chip-status--negative .ohud-chip-dot { background: var(--odyssey-hud-negative); }
+.ohud-chip-status--neutral .ohud-chip-dot { background: var(--odyssey-hud-neutral); }
+.ohud-chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ohud-chip-status--more { color: var(--odyssey-hud-dim); padding: 1px 7px; font-weight: 700; }
+
+/* ===================== Gun block ===================== */
+.ohud-gun { display: grid; grid-template-columns: 1fr 84px; gap: 8px; flex: 1; min-height: 0; }
+.ohud-gun.is-disabled { opacity: 0.55; }
+.ohud-gun-main {
+  position: relative; border-radius: var(--odyssey-hud-radius-inner);
+  border: 1.5px solid var(--odyssey-hud-border-strong);
+  background: var(--odyssey-bg-deep); padding: 6px 8px; min-width: 0; overflow: hidden;
+}
+.ohud-gun-name { position: absolute; top: 5px; left: 9px; font-size: 9.5px; color: var(--odyssey-hud-muted); }
+.ohud-gun-caret { position: absolute; top: 4px; right: 6px; color: var(--odyssey-hud-muted); display: inline-flex; }
+.ohud-gun-silhouette { position: absolute; inset: 14px 10px 12px; color: var(--odyssey-hud-weapon); display: block; }
+.ohud-gun-silhouette svg { width: 100%; height: 100%; }
+.ohud-firemode {
+  position: absolute; right: 8px; bottom: 7px;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px 2px 4px; border-radius: 12px;
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);
+}
+.ohud-firemode-knob { width: 12px; height: 12px; border-radius: 50%; background: var(--odyssey-hud-muted); }
+.ohud-firemode-letter { font-size: 10px; font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-gun-secondary {
+  position: absolute; left: 8px; bottom: 7px; font-size: 9px; font-weight: 700;
+  color: var(--odyssey-hud-muted); border: 1px solid var(--odyssey-hud-border);
+  border-radius: 8px; padding: 1px 6px;
+}
+
+.ohud-gun-side { display: grid; grid-template-rows: 1fr 1fr; gap: 8px; min-width: 0; }
+.ohud-mag-card {
+  position: relative; display: flex; align-items: center; gap: 4px;
+  border-radius: var(--odyssey-hud-radius-inner);
+  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base);
+  padding: 4px 6px;
+}
+.ohud-mag-icon { width: 16px; height: 26px; color: var(--odyssey-steel); display: inline-flex; }
+.ohud-mag-icon svg { width: 100%; height: 100%; }
+.ohud-mag-caret { position: absolute; top: 3px; right: 4px; color: var(--odyssey-hud-muted); }
+.ohud-mag-type { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-ammo-card {
+  display: flex; flex-direction: column; justify-content: center;
+  border-radius: var(--odyssey-hud-radius-inner);
+  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base);
+  padding: 3px 7px;
+}
+.ohud-ammo-head { display: flex; align-items: center; justify-content: space-between; }
+.ohud-ammo-label { font-size: 8.5px; letter-spacing: 1px; color: var(--odyssey-hud-dim); text-transform: uppercase; }
+.ohud-ammo-reload { color: var(--odyssey-hud-muted); display: inline-flex; }
+.ohud-ammo-reload.is-off { opacity: 0.35; }
+.ohud-ammo-count { font-weight: 800; line-height: 1; color: var(--odyssey-hud-text); font-variant-numeric: tabular-nums; }
+.ohud-ammo-cur { font-size: clamp(20px, 2.4vw, 30px); }
+.ohud-ammo-max { font-size: 12px; color: var(--odyssey-hud-dim); }
+.ohud-ammo-count--empty .ohud-ammo-cur { color: var(--odyssey-hud-negative); }
+.ohud-ammo-count--empty { border-radius: 6px; }
+
+/* ===================== Skill block ===================== */
+.ohud-slots {
+  display: grid; gap: 8px; flex: 1; min-height: 0;
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+  grid-auto-rows: 1fr; align-content: center;
+}
+.ohud-slot {
+  position: relative; aspect-ratio: 1 / 1; min-height: 44px;
+  border-radius: var(--odyssey-hud-radius-inner);
+  border: 1.5px solid var(--odyssey-hud-border);
+  background: var(--odyssey-bg-deep);
+  display: grid; place-items: center; color: var(--odyssey-hud-neutral);
+}
+.ohud-slot--empty { border-style: dashed; opacity: 0.4; background: transparent; }
+.ohud-slot-icon { width: 56%; height: 56%; display: inline-flex; }
+.ohud-slot-icon svg { width: 100%; height: 100%; }
+.ohud-accent--attack.ohud-slot { border-color: var(--odyssey-hud-attack); color: var(--odyssey-hud-attack); }
+.ohud-accent--psionic.ohud-slot { border-color: var(--odyssey-purple); color: var(--odyssey-purple); }
+.ohud-accent--implant.ohud-slot { border-color: var(--odyssey-cyan); color: var(--odyssey-cyan); }
+.ohud-accent--positive.ohud-slot { border-color: var(--odyssey-green); color: var(--odyssey-green); }
+.ohud-accent--neutral.ohud-slot { border-color: var(--odyssey-hud-border-strong); color: var(--odyssey-hud-neutral); }
+.ohud-slot.is-disabled { opacity: 0.42; filter: grayscale(0.4); }
+.ohud-slot.is-selected { box-shadow: 0 0 0 2px var(--odyssey-cyan); }
+.ohud-slot.is-toggled { background: rgba(167, 139, 250, 0.16); }
+.ohud-slot-cost {
+  position: absolute; left: 4px; bottom: 3px; font-size: 8px; font-weight: 800;
+  color: var(--odyssey-hud-dim);
+}
+.ohud-slot-res {
+  position: absolute; right: 4px; bottom: 3px; font-size: 8px; font-weight: 800;
+  color: var(--odyssey-purple);
+}
+.ohud-slot-cd {
+  position: absolute; top: 3px; right: 4px; font-size: 9px; font-weight: 800;
+  color: var(--odyssey-hud-warning);
+}
+.ohud-slot-toggle { position: absolute; top: 4px; left: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--odyssey-purple); }
+
+/* ===================== Target block ===================== */
+.ohud-target { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-height: 0; justify-content: center; }
+.ohud-target .ohud-figure { width: clamp(40px, 4.5vw, 56px); }
+.ohud-target-meta { text-align: center; min-width: 0; width: 100%; }
+.ohud-target-name {
+  font-size: 11px; font-weight: 700; color: var(--odyssey-hud-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ohud-target-zone {
+  display: inline-block; margin-top: 2px; font-size: 9px; font-weight: 800; letter-spacing: 0.8px;
+  color: var(--odyssey-cyan); border: 1px solid rgba(52, 225, 214, 0.4); border-radius: 7px; padding: 1px 7px;
+}
+.ohud-target.is-empty .ohud-target-hint {
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.6px; text-align: center;
+  color: var(--odyssey-hud-dim); line-height: 1.3;
+}
+
+/* ===================== Modifier block ===================== */
+.ohud-mods { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-content: start; flex: 1; min-height: 0; overflow: hidden; }
+.ohud-mod {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px;
+  font-size: 9.5px; padding: 3px 8px; border-radius: var(--odyssey-hud-radius-chip);
+  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base);
+  color: var(--odyssey-hud-muted); min-width: 0;
+}
+.ohud-mod-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ohud-mod-val { font-weight: 800; flex: 0 0 auto; }
+.ohud-mod--positive { border-color: rgba(74, 222, 128, 0.55); color: var(--odyssey-green); }
+.ohud-mod--negative { border-color: rgba(255, 92, 108, 0.6); color: var(--odyssey-red); }
+.ohud-mod--intervention { border-color: rgba(255, 194, 75, 0.6); color: var(--odyssey-yellow); }
+.ohud-mod--narrative { border-color: rgba(167, 139, 250, 0.55); color: var(--odyssey-purple); }
+.ohud-mod--neutral { color: var(--odyssey-hud-muted); }
+.ohud-mod.is-selected { box-shadow: 0 0 0 1.5px var(--odyssey-cyan); }
+.ohud-mod.is-passive { opacity: 0.85; background: var(--odyssey-bg-deep); }
+.ohud-mod--empty { border-style: dashed; opacity: 0.3; background: transparent; }
+
+/* ===================== Action block ===================== */
+.ohud-panel--action { gap: 5px; justify-content: center; }
+.ohud-action-btn {
+  width: 100%; flex: 1 1 auto; min-height: 40px;
+  display: grid; place-items: center; cursor: pointer; font: inherit;
+  border-radius: var(--odyssey-hud-radius-inner);
+  border: 1.5px solid var(--odyssey-purple);
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.22), rgba(38, 33, 92, 0.4));
+  color: var(--odyssey-purple);
+}
+.ohud-action-btn .ohud-action-label { font-size: clamp(15px, 1.6vw, 20px); font-weight: 800; letter-spacing: 2px; }
+.ohud-action-btn.is-ready:hover { background: rgba(139, 92, 246, 0.32); color: #fff; }
+.ohud-action-btn.is-disabled {
+  cursor: not-allowed; border-color: var(--odyssey-hud-border);
+  background: var(--odyssey-panel-base); color: var(--odyssey-hud-dim);
+}
+.ohud-action-econ { display: flex; gap: 5px; justify-content: center; }
+.ohud-econ-pip {
+  font-size: 8px; font-weight: 800; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 6px;
+  color: var(--odyssey-hud-dim); border: 1px solid var(--odyssey-hud-border);
+}
+.ohud-econ-pip.is-spend { color: var(--odyssey-cyan); border-color: var(--odyssey-cyan); }
+.ohud-action-reason { font-size: 9px; text-align: center; color: var(--odyssey-hud-negative); min-height: 11px; }
+.ohud-action-reason--ok { color: var(--odyssey-hud-dim); }
+
+/* ===================== Battle log ===================== */
+.ohud-panel--log { overflow: hidden; }
+.ohud-log-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex: 1; min-height: 0; }
+.ohud-log-list::-webkit-scrollbar { width: 5px; }
+.ohud-log-list::-webkit-scrollbar-thumb { background: var(--odyssey-line); border-radius: 3px; }
+.ohud-log-row {
+  font-size: 10px; line-height: 1.25; color: var(--odyssey-hud-muted);
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline;
+  padding: 2px 4px; border-radius: 5px; background: var(--odyssey-bg-deep);
+}
+.ohud-log-row--system { color: var(--odyssey-hud-dim); background: transparent; font-style: italic; }
+.ohud-log-row--narr { color: var(--odyssey-purple); background: transparent; font-style: italic; }
+.ohud-log-actor { font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-log-act { color: var(--odyssey-hud-muted); }
+.ohud-log-arrow { color: var(--odyssey-hud-dim); }
+.ohud-log-target { color: var(--odyssey-hud-text); }
+.ohud-log-delta { margin-left: auto; font-weight: 700; font-size: 9.5px; }
+.ohud-log-delta--hit { color: var(--odyssey-green); }
+.ohud-log-delta--miss { color: var(--odyssey-hud-dim); }
+.ohud-log-delta--neutral { color: var(--odyssey-hud-muted); }
+.ohud-log-empty { font-size: 10px; color: var(--odyssey-hud-dim); display: grid; place-items: center; flex: 1; }
+.ohud-log-collapse {
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  width: 20px; height: 20px; border-radius: 5px; color: var(--odyssey-hud-muted);
+  background: transparent; border: 1px solid var(--odyssey-hud-border);
+}
+.ohud-log-collapse:hover { color: var(--odyssey-hud-text); }
+
+/* log floating button / panel (medium / compact / mini) */
+.ohud-log-float { position: absolute; top: 0; right: 6px; z-index: 6; }
+.ohud-log--button { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.ohud-log-toggle {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px; color: var(--odyssey-hud-muted);
+  background: var(--odyssey-hud-panel-raised); border: 1px solid var(--odyssey-hud-border);
+  border-radius: 8px; padding: 3px 9px;
+}
+.ohud-log-toggle:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }
+.ohud-log-toggle-icon { display: inline-flex; }
+.ohud-log-badge {
+  font-size: 9px; font-weight: 800; color: #0a0e18; background: var(--odyssey-cyan);
+  border-radius: 8px; padding: 0 5px;
+}
+.ohud-log-float .ohud-log--expanded {
+  position: absolute; top: 26px; right: 0; width: 248px; max-height: 168px;
+  box-shadow: var(--odyssey-hud-shadow);
+}
+
+/* ===================== Empty / error / loading ===================== */
+.ohud-state-wrap {
+  flex: 1 1 auto; display: grid; place-items: center;
+  background: var(--odyssey-hud-panel); border: 1px solid var(--odyssey-hud-border);
+  border-radius: var(--odyssey-hud-radius); box-shadow: var(--odyssey-hud-shadow-soft);
+}
+.ohud-empty { text-align: center; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ohud-empty-mark { color: var(--odyssey-purple); opacity: 0.8; }
+.ohud-empty-title { font-size: 14px; font-weight: 800; letter-spacing: 1.5px; color: var(--odyssey-hud-text); }
+.ohud-empty-hint { font-size: 11px; color: var(--odyssey-hud-muted); max-width: 420px; }
+.ohud-empty--error .ohud-empty-title { color: var(--odyssey-hud-negative); }
+
+/* ===================== Toast ===================== */
+.ohud-toast {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  font-size: 11px; color: var(--odyssey-hud-text);
+  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border-strong);
+  border-radius: 8px; padding: 5px 12px; box-shadow: var(--odyssey-hud-shadow); z-index: 10;
+}
+.ohud-toast[hidden] { display: none; }
+
+/* ===================== Tooltip ===================== */
+.ohud-tooltip {
+  position: fixed; z-index: 50; pointer-events: none; max-width: 240px;
+  background: var(--odyssey-bg-deep); border: 1px solid var(--odyssey-hud-border-strong);
+  border-radius: 8px; padding: 6px 9px; box-shadow: var(--odyssey-hud-shadow);
+}
+.ohud-tooltip[hidden] { display: none; }
+.ohud-tooltip-title { font-size: 11px; font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-tooltip-line { font-size: 10px; color: var(--odyssey-hud-muted); margin-top: 2px; }
+
+/* ===================== Compact text trims ===================== */
+.ohud-controls { flex-wrap: wrap; row-gap: 4px; }
+.ohud-brand-text { white-space: nowrap; }
+.ohud-hud[data-mode="compact"] .ohud-brand-sub,
+.ohud-hud[data-mode="mini"] .ohud-brand-sub { display: none; }
+.ohud-hud[data-mode="mini"] .ohud-res-label,
+.ohud-hud[data-mode="mini"] .ohud-dev-btn-label,
+.ohud-hud[data-mode="mini"] .ohud-fallback,
+.ohud-hud[data-mode="compact"] .ohud-fallback { display: none; }
+.ohud-hud[data-mode="mini"] .ohud-player-name { font-size: 11px; }

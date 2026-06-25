@@ -36,3 +36,11 @@ await build({
   entryPoints: ["background.js"],
   outfile: "assets/background.js",
 });
+
+// Phase 1A/2: persistent Combat HUD overlay popover page (loaded by
+// combat-hud-overlay.html inside the OBR popover iframe).
+await build({
+  ...shared,
+  entryPoints: ["hud/overlay/combatHudOverlayPage.js"],
+  outfile: "assets/combat-hud-overlay.js",
+});

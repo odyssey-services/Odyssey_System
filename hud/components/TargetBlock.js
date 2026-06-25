@@ -1,0 +1,39 @@
+// Combat HUD — Target block (Phase 2, read-only).
+//
+// Shows the prospective target derived from the mock combat queue (no real map
+// selection in Phase 2). Renders a neutral silhouette with the currently
+// selected body zone highlighted, plus a shield indicator. When there is no
+// target it shows a calm "PICK TARGET ON MAP" placeholder — it never toggles
+// real OBR targeting modes.
+
+import { selectTargetView } from "../core/combatHudSelectors.js";
+import { humanoidSvg, ICON_SHIELD } from "./hudIcons.js";
+import { panel } from "./HudPanel.js";
+import { esc, tipAttr } from "./hudDom.js";
+
+export function renderTargetBlock(state) {
+  const tv = selectTargetView(state);
+
+  if (!tv.hasTarget) {
+    const body = `<div class="ohud-target is-empty">
+      <div class="ohud-figure ohud-figure--ghost">
+        <div class="ohud-figure-svg">${humanoidSvg({ neutral: true })}</div>
+      </div>
+      <div class="ohud-target-hint">PICK TARGET<br>ON MAP</div>
+    </div>`;
+    return panel({ key: "target", label: "TARGET", bodyHtml: body });
+  }
+
+  const body = `<div class="ohud-target">
+    <div class="ohud-figure">
+      <div class="ohud-figure-svg">${humanoidSvg({ neutral: true, highlight: tv.bodyPartId })}</div>
+      <div class="ohud-figure-shield" aria-hidden="true"${tipAttr("Target shield", ["Detail hidden for non-owned entity"])}>${ICON_SHIELD}</div>
+    </div>
+    <div class="ohud-target-meta">
+      <div class="ohud-target-name" title="${esc(tv.name)}">${esc(tv.name)}</div>
+      <div class="ohud-target-zone"${tipAttr("Aimed zone", ["Body-part targeting arrives in a later phase"])}>${esc(tv.bodyPartLabel)}</div>
+    </div>
+  </div>`;
+
+  return panel({ key: "target", label: "TARGET", bodyHtml: body });
+}

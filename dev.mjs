@@ -12,6 +12,7 @@ const buildConfigs = [
   { entry: "gm-extension/main.js", out: "gm-extension/assets/main.js" },
   { entry: "character-sheet-extension/main.js", out: "character-sheet-extension/assets/main.js" },
   { entry: "background.js", out: "assets/background.js" },
+  { entry: "hud/overlay/combatHudOverlayPage.js", out: "assets/combat-hud-overlay.js" },
 ];
 
 const buildSettings = {
@@ -42,7 +43,7 @@ async function startServer() {
   await runBuild();
 
   // File watcher for auto-rebuild
-  const watchPaths = ["main.js", "gm-extension", "character-sheet-extension", "background.js", "screens", "bridge", "api", "constants", "runtime", "utils", "shell", "styles.css"];
+  const watchPaths = ["main.js", "gm-extension", "character-sheet-extension", "background.js", "screens", "bridge", "api", "constants", "runtime", "utils", "shell", "styles.css", "hud"];
 
   watchPaths.forEach((path) => {
     watch(path, { recursive: true }, async (event, file) => {
@@ -54,8 +55,17 @@ async function startServer() {
   });
 
   const server = createServer(async (req, res) => {
-    let filePath = req.url === "/" ? "index.html" : req.url.replace(/^\//, "");
-    filePath = join(process.cwd(), filePath);
+    // Strip the query string (assets are referenced as `?v=1.7.x`) and decode
+    // the path; otherwise readFile would look for "background.js?v=1.7.8" → 404.
+    // This is what lets the dev manifest's background/popover/overlay scripts
+    // actually load locally.
+    let pathname = "/";
+    try {
+      pathname = decodeURIComponent(new URL(req.url, `http://${HOST}:${PORT}`).pathname);
+    } catch {
+      pathname = "/";
+    }
+    const filePath = join(process.cwd(), pathname === "/" ? "index.html" : pathname.replace(/^\//, ""));
 
     try {
       const content = await fs.readFile(filePath);
@@ -68,7 +78,11 @@ async function startServer() {
         png: "image/png",
         svg: "image/svg+xml",
       };
-      res.writeHead(200, { "Content-Type": contentTypes[ext] || "text/plain" });
+      res.writeHead(200, {
+        "Content-Type": contentTypes[ext] || "text/plain",
+        // Always serve fresh local builds — avoids stale assets after a rebuild.
+        "Cache-Control": "no-store",
+      });
       res.end(content);
     } catch {
       res.writeHead(404, { "Content-Type": "text/plain" });
@@ -76,9 +90,26 @@ async function startServer() {
     }
   });
 
+  // Surface a clear hint if the local dev manifest is missing.
+  const manifestUrl = `http://${HOST}:${PORT}/manifest.dev.json`;
+  let hasDevManifest = true;
+  try {
+    await fs.access(join(process.cwd(), "manifest.dev.json"));
+  } catch {
+    hasDevManifest = false;
+  }
+
   server.listen(PORT, HOST, () => {
     console.log(`\n✓ Dev server running at http://${HOST}:${PORT}`);
-    console.log(`✓ Load http://${HOST}:${PORT}/index.html in OBR as Local Extension\n`);
+    if (hasDevManifest) {
+      console.log("\n  Owlbear → Add Extension → paste this LOCAL MANIFEST URL:");
+      console.log(`    ${manifestUrl}`);
+    } else {
+      console.log("\n  ⚠ manifest.dev.json not found at project root.");
+      console.log("    Create it (see docs/local-dev-owlbear.md), then it will be served at:");
+      console.log(`    ${manifestUrl}`);
+    }
+    console.log(`\n  Standalone HUD preview (no Owlbear): http://${HOST}:${PORT}/combat-hud-overlay.html\n`);
   });
 }
 

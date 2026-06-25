@@ -23,19 +23,71 @@ export const BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 
 /* ----------------- sizing ----------------- */
 
-/** Max expanded width; clamps down on narrow viewports. */
-export const EXPANDED_MAX_WIDTH = 1180;
+/** Max expanded width; clamps down on narrow viewports (Phase 2 target). */
+export const EXPANDED_MAX_WIDTH = 1480;
 /** Total horizontal safe margin (12px each side). */
 export const EDGE_MARGIN = 24;
-/** Expanded shell height (placeholder shell; real blocks arrive in Phase 2). */
-export const EXPANDED_HEIGHT = 132;
+/**
+ * Expanded HUD height for the WIDE/MEDIUM single-row layout. This stays the
+ * canonical `EXPANDED_HEIGHT` so the Phase 1A geometry tests (which sample
+ * wide viewports) keep passing; compact two-row layouts use a taller height
+ * via computeExpandedHeight().
+ */
+export const EXPANDED_HEIGHT = 184;
+/** Taller height for the COMPACT/MINI two-row layout (< MEDIUM_BREAKPOINT). */
+export const COMPACT_EXPANDED_HEIGHT = 324;
 /** Collapsed pill size (just the reopen button). */
 export const COLLAPSED_WIDTH = 156;
 export const COLLAPSED_HEIGHT = 46;
 /** Gap between the popover's bottom edge and the viewport bottom. */
 export const BOTTOM_INSET = 14;
-/** Below this viewport width the shell switches to a compact layout (CSS). */
-export const COMPACT_BREAKPOINT = 720;
+
+/* ----------------- responsive layout modes ----------------- */
+//
+// Breakpoints are evaluated against the HUD/iframe width (which tracks the
+// viewport width closely: width ≈ min(EXPANDED_MAX_WIDTH, vw - EDGE_MARGIN)).
+// Both the CSS (media queries) and the controller (popover height) use these.
+
+/** ≥ this → full single-row "wide" layout. */
+export const WIDE_BREAKPOINT = 1280;
+/** ≥ this (and < WIDE) → "medium" single-row layout (blocks compress). */
+export const MEDIUM_BREAKPOINT = 960;
+/** ≥ this (and < MEDIUM) → "compact" two-row layout. Below → "mini". */
+export const MINI_BREAKPOINT = 620;
+/** Back-compat alias (Phase 1A). The shell switched layout below this width. */
+export const COMPACT_BREAKPOINT = MEDIUM_BREAKPOINT;
+
+/**
+ * Resolve the responsive layout mode for a given width.
+ * Pure; used by both CSS-mode decisions and the popover height calc.
+ * @param {number} width  HUD/iframe width in px
+ * @returns {"wide"|"medium"|"compact"|"mini"}
+ */
+export function resolveLayoutMode(width) {
+  const w = Math.max(0, Number(width) || 0);
+  if (w >= WIDE_BREAKPOINT) return "wide";
+  if (w >= MEDIUM_BREAKPOINT) return "medium";
+  if (w >= MINI_BREAKPOINT) return "compact";
+  return "mini";
+}
+
+/** True when the layout mode stacks the HUD into two rows. */
+export function isTwoRowMode(mode) {
+  return mode === "compact" || mode === "mini";
+}
+
+/**
+ * Expanded popover height for a given viewport width. Two-row (compact/mini)
+ * layouts need more vertical space than the single-row wide/medium layouts.
+ * The width is what drives the layout mode (see resolveLayoutMode), so the
+ * mode is resolved from the post-clamp HUD width.
+ * @param {number} vw
+ * @returns {number}
+ */
+export function computeExpandedHeight(vw) {
+  const hudWidth = computeExpandedWidth(vw);
+  return isTwoRowMode(resolveLayoutMode(hudWidth)) ? COMPACT_EXPANDED_HEIGHT : EXPANDED_HEIGHT;
+}
 
 /** Origins that pin the popover's bottom-center to the anchor point, so
  *  resizing width/height keeps it bottom-centered without re-anchoring. */
@@ -63,7 +115,7 @@ export function computeOverlaySize(collapsed, vw) {
   if (collapsed) {
     return { width: COLLAPSED_WIDTH, height: COLLAPSED_HEIGHT };
   }
-  return { width: computeExpandedWidth(vw), height: EXPANDED_HEIGHT };
+  return { width: computeExpandedWidth(vw), height: computeExpandedHeight(vw) };
 }
 
 /**

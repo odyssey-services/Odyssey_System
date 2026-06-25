@@ -53,7 +53,12 @@ export function mountCombatHudOverlay(options = {}) {
   // first refresh already reflects the restored selection. (These notify the
   // adapter's listeners, but the store hasn't subscribed yet — safe no-ops.)
   adapter.setViewerRole(restored.viewerRole);
-  if (restored.selectedTokenId !== undefined) {
+  // Only override the scenario's own default token when a concrete token was
+  // restored. A null/empty restored value means "no explicit selection yet"
+  // (the default), so we must NOT force-deselect — otherwise the scenario's
+  // default character (e.g. Vega in scenario A) would be cleared and the HUD
+  // would render empty. Real token selection arrives in a later phase.
+  if (restored.selectedTokenId) {
     adapter.selectToken(restored.selectedTokenId);
   }
 

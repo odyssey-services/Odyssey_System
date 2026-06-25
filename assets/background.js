@@ -3606,6 +3606,195 @@ function addDiagnosticEntry(level, title, details2 = "") {
   return entry;
 }
 
+// hud/overlay/overlayConstants.js
+var OVERLAY_POPOVER_ID = "com.odyssey.combat-hud/overlay";
+var OVERLAY_HTML = "combat-hud-overlay.html";
+var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
+var EXPANDED_MAX_WIDTH = 1480;
+var EDGE_MARGIN = 24;
+var EXPANDED_HEIGHT = 184;
+var COMPACT_EXPANDED_HEIGHT = 324;
+var COLLAPSED_WIDTH = 156;
+var COLLAPSED_HEIGHT = 46;
+var BOTTOM_INSET = 14;
+var WIDE_BREAKPOINT = 1280;
+var MEDIUM_BREAKPOINT = 960;
+var MINI_BREAKPOINT = 620;
+function resolveLayoutMode(width) {
+  const w = Math.max(0, Number(width) || 0);
+  if (w >= WIDE_BREAKPOINT) return "wide";
+  if (w >= MEDIUM_BREAKPOINT) return "medium";
+  if (w >= MINI_BREAKPOINT) return "compact";
+  return "mini";
+}
+function isTwoRowMode(mode) {
+  return mode === "compact" || mode === "mini";
+}
+function computeExpandedHeight(vw) {
+  const hudWidth = computeExpandedWidth(vw);
+  return isTwoRowMode(resolveLayoutMode(hudWidth)) ? COMPACT_EXPANDED_HEIGHT : EXPANDED_HEIGHT;
+}
+var ANCHOR_ORIGIN = Object.freeze({ horizontal: "CENTER", vertical: "BOTTOM" });
+var TRANSFORM_ORIGIN = Object.freeze({ horizontal: "CENTER", vertical: "BOTTOM" });
+function computeExpandedWidth(vw) {
+  const available = Math.max(0, Number(vw) || 0) - EDGE_MARGIN;
+  return Math.max(0, Math.min(EXPANDED_MAX_WIDTH, available));
+}
+function computeOverlaySize(collapsed, vw) {
+  if (collapsed) {
+    return { width: COLLAPSED_WIDTH, height: COLLAPSED_HEIGHT };
+  }
+  return { width: computeExpandedWidth(vw), height: computeExpandedHeight(vw) };
+}
+function computeAnchorPosition(vw, vh) {
+  const w = Math.max(0, Number(vw) || 0);
+  const h = Math.max(0, Number(vh) || 0);
+  return {
+    left: Math.round(w / 2),
+    top: Math.max(0, Math.round(h - BOTTOM_INSET))
+  };
+}
+var DEFAULT_HUD_UI_STATE = Object.freeze({
+  isHudCollapsed: false,
+  mockScenarioId: "A",
+  viewerRole: "player",
+  selectedTokenId: null
+});
+var HUD_UI_PARAM_KEYS = Object.freeze({
+  collapsed: "collapsed",
+  scenario: "scenario",
+  role: "role",
+  token: "token"
+});
+function serializeHudUiState(ui) {
+  const src = ui && typeof ui === "object" ? ui : {};
+  const params = new URLSearchParams();
+  params.set(HUD_UI_PARAM_KEYS.collapsed, src.isHudCollapsed ? "1" : "0");
+  params.set(HUD_UI_PARAM_KEYS.scenario, src.mockScenarioId != null ? String(src.mockScenarioId) : "");
+  params.set(HUD_UI_PARAM_KEYS.role, src.viewerRole === "gm" ? "gm" : "player");
+  params.set(HUD_UI_PARAM_KEYS.token, src.selectedTokenId == null ? "" : String(src.selectedTokenId));
+  return params.toString();
+}
+function normalizeHudUiState(partial) {
+  const p = partial && typeof partial === "object" ? partial : {};
+  return {
+    isHudCollapsed: typeof p.isHudCollapsed === "boolean" ? p.isHudCollapsed : DEFAULT_HUD_UI_STATE.isHudCollapsed,
+    mockScenarioId: p.mockScenarioId != null && p.mockScenarioId !== "" ? String(p.mockScenarioId) : DEFAULT_HUD_UI_STATE.mockScenarioId,
+    viewerRole: p.viewerRole === "gm" ? "gm" : "player",
+    selectedTokenId: Object.prototype.hasOwnProperty.call(p, "selectedTokenId") ? p.selectedTokenId : DEFAULT_HUD_UI_STATE.selectedTokenId
+  };
+}
+function buildOverlayPopoverParams({ vw, vh, collapsed }) {
+  const { width, height } = computeOverlaySize(collapsed, vw);
+  return {
+    width,
+    height,
+    anchorReference: "POSITION",
+    anchorPosition: computeAnchorPosition(vw, vh),
+    anchorOrigin: { ...ANCHOR_ORIGIN },
+    transformOrigin: { ...TRANSFORM_ORIGIN },
+    hidePaper: true,
+    disableClickAway: true
+  };
+}
+
+// hud/overlay/combatHudOverlayController.js
+var VIEWPORT_POLL_MS = 600;
+var started = false;
+var lastUiState = { ...DEFAULT_HUD_UI_STATE };
+var lastVW = 0;
+var lastVH = 0;
+var pollTimer = null;
+var cleanups = [];
+function isCollapsed() {
+  return Boolean(lastUiState.isHudCollapsed);
+}
+function resolveOverlayUrl() {
+  const query = serializeHudUiState(lastUiState);
+  try {
+    const base = typeof window !== "undefined" ? window.location.href : "";
+    const url = new URL(OVERLAY_HTML, base);
+    url.search = query;
+    return url.toString();
+  } catch {
+    return `${OVERLAY_HTML}?${query}`;
+  }
+}
+async function readViewport() {
+  const [vw, vh] = await Promise.all([
+    lib_default.viewport.getWidth(),
+    lib_default.viewport.getHeight()
+  ]);
+  return { vw, vh };
+}
+async function openOrReanchor() {
+  const { vw, vh } = await readViewport();
+  lastVW = vw;
+  lastVH = vh;
+  const params = buildOverlayPopoverParams({ vw, vh, collapsed: isCollapsed() });
+  const url = resolveOverlayUrl();
+  await lib_default.popover.open({ id: OVERLAY_POPOVER_ID, url, ...params });
+}
+async function applyCollapsedSize() {
+  try {
+    const { width, height } = buildOverlayPopoverParams({
+      vw: lastVW,
+      vh: lastVH,
+      collapsed: isCollapsed()
+    });
+    await lib_default.popover.setWidth(OVERLAY_POPOVER_ID, width);
+    await lib_default.popover.setHeight(OVERLAY_POPOVER_ID, height);
+  } catch (error) {
+    try {
+      await openOrReanchor();
+    } catch (_e) {
+    }
+    void error;
+  }
+}
+function startViewportPoll() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    try {
+      const { vw, vh } = await readViewport();
+      if (vw === lastVW && vh === lastVH) return;
+      await openOrReanchor();
+    } catch (_e) {
+    }
+  }, VIEWPORT_POLL_MS);
+  cleanups.push(() => {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  });
+}
+function setupCombatHudOverlay() {
+  if (started) return;
+  if (typeof lib_default === "undefined" || lib_default.isAvailable === false) {
+    return;
+  }
+  started = true;
+  lib_default.onReady(async () => {
+    try {
+      await openOrReanchor();
+      startViewportPoll();
+      const unsubUiState = lib_default.broadcast.onMessage(BC_HUD_UI_STATE, async (event) => {
+        const next = normalizeHudUiState(event?.data);
+        const collapseChanged = next.isHudCollapsed !== lastUiState.isHudCollapsed;
+        lastUiState = next;
+        if (collapseChanged) {
+          await applyCollapsedSize();
+        }
+      });
+      cleanups.push(unsubUiState);
+    } catch (error) {
+      console.error("[combatHud/overlay] setup failed", error);
+      started = false;
+    }
+  });
+}
+
 // background.js
 async function bootstrapBackgroundShell() {
   await waitForObrReady();
@@ -3634,3 +3823,12 @@ void bootstrapBackgroundShell().catch((error) => {
   );
   throw error;
 });
+try {
+  setupCombatHudOverlay();
+} catch (error) {
+  addDiagnosticEntry(
+    "error",
+    "Combat HUD overlay setup failed",
+    String(error?.message ?? error)
+  );
+}

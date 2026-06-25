@@ -190,3 +190,116 @@ export function selectEmptyReason(state) {
   if (state?.status !== HUD_STATUS.empty) return null;
   return state?.access?.reason ?? null;
 }
+
+/* ===================== Phase 2 view-model selectors ===================== */
+//
+// These derive view-ready values so the DOM components stay thin and free of
+// business logic. They are pure and read-only (no targeting/combat side-effects).
+
+const BODY_PART_LABELS = Object.freeze({
+  head: "HEAD", torso: "TORSO",
+  l_arm: "L.ARM", r_arm: "R.ARM", l_leg: "L.LEG", r_leg: "R.LEG",
+});
+
+/** Display label for a body-part id (falls back to the upper-cased id). */
+export function selectBodyPartLabel(bodyPartId) {
+  if (!bodyPartId) return "";
+  return BODY_PART_LABELS[bodyPartId] ?? String(bodyPartId).toUpperCase();
+}
+
+/**
+ * The verb shown on the primary Action button, derived from the drafted skill
+ * (or a basic weapon attack when none is selected). Read-only label only.
+ * @returns {"ATTACK"|"THROW"|"CAST"|"USE"|"ACTIVATE"}
+ */
+export function selectActionLabel(state) {
+  const skill = selectSelectedSkill(state);
+  if (!skill) return "ATTACK";
+  switch (skill.type) {
+    case "attackTechnique": return "ATTACK";
+    case "itemAction": return skill.usesPoint ? "THROW" : "USE";
+    case "targetedAbility": return skill.source === "psionic" ? "CAST" : "ACTIVATE";
+    case "instantAbility": return skill.source === "item" ? "USE" : "ACTIVATE";
+    case "toggleAbility": return "ACTIVATE";
+    default: return "ATTACK";
+  }
+}
+
+/**
+ * High-level player turn/role label for the Player block.
+ * @returns {"YOUR TURN"|"WAITING"|"GM VIEW"|"READY"}
+ */
+export function selectPlayerStatusLabel(state) {
+  const controlled = selectControlledCharacter(state);
+  if (state?.viewer?.role === "gm" && !controlled) return "GM VIEW";
+  const session = selectCombatSession(state);
+  if (session && session.status === "active") {
+    return selectIsViewerTurn(state) ? "YOUR TURN" : "WAITING";
+  }
+  return "READY";
+}
+
+/**
+ * Status chips to show, capped to a maximum with an overflow count.
+ * Combines statuses + effects (statuses first).
+ * @returns {{shown:import("../models/combatHudContracts.js").EntityStatus[], overflow:number}}
+ */
+export function selectVisibleStatuses(state, limit = 5) {
+  const entity = selectCurrentEntity(state);
+  if (!entity) return { shown: [], overflow: 0 };
+  const all = [
+    ...(Array.isArray(entity.statuses) ? entity.statuses : []),
+    ...(Array.isArray(entity.effects) ? entity.effects : []),
+  ];
+  if (all.length <= limit) return { shown: all, overflow: 0 };
+  return { shown: all.slice(0, limit), overflow: all.length - limit };
+}
+
+/**
+ * Derived prospective target for the Target block. Phase 2 is read-only: there
+ * is no real map selection, so we surface the first active combat participant
+ * that is NOT the controlled character (the visible "enemy" in the queue) from
+ * the mock snapshot. No body-part targeting is performed.
+ * @returns {{
+ *   hasTarget:boolean, name:(string|null), kind:string,
+ *   bodyPartId:string, bodyPartLabel:string,
+ * }}
+ */
+export function selectTargetView(state) {
+  const bodyPartId = selectSelectedBodyPart(state);
+  const empty = {
+    hasTarget: false, name: null, kind: "humanoid",
+    bodyPartId, bodyPartLabel: selectBodyPartLabel(bodyPartId),
+  };
+  const session = selectCombatSession(state);
+  if (!session || session.status !== "active") return empty;
+  const selfId = state?.selectedCharacterId ?? null;
+  const participants = Array.isArray(session.participants) ? session.participants : [];
+  const enemy =
+    participants.find((p) => p.id !== selfId && !p.isPlayer && p.condition === "active") ??
+    participants.find((p) => p.id !== selfId && p.condition === "active") ??
+    null;
+  if (!enemy) return empty;
+  return {
+    hasTarget: true,
+    name: enemy.name,
+    kind: "humanoid",
+    bodyPartId,
+    bodyPartLabel: selectBodyPartLabel(bodyPartId),
+  };
+}
+
+/**
+ * Flattened, ordered modifier chips for the Modifier block: passive first,
+ * then active, then narrative. Each carries the polarity/selected/flags needed
+ * to pick a CSS accent. Read-only (no toggling).
+ * @returns {import("../models/combatHudContracts.js").HudModifier[]}
+ */
+export function selectModifierChips(state) {
+  const groups = selectModifierGroups(state);
+  return [
+    ...(groups.passive ?? []),
+    ...(groups.active ?? []),
+    ...(groups.narrative ?? []),
+  ];
+}

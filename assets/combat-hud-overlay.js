@@ -3515,10 +3515,13 @@ var OBR = {
 var lib_default = OBR;
 
 // hud/styles/combatHudTokens.css
-var combatHudTokens_default = "/*\n * Combat HUD \u2014 design tokens (Phase 0).\n *\n * Semantic custom properties ONLY. No layout, no component rules \u2014 those\n * arrive in Phase 1. JavaScript must never hard-code colours; it stores\n * semantic state names (see hud/models/combatHudContracts.js) and the UI\n * maps state \u2192 token here.\n *\n * Scope: variables are declared on a `.odyssey-hud` root class so the HUD's\n * theme cannot leak into the existing popup screens (Resolve Attack, etc.).\n */\n\n.odyssey-hud {\n  /* Surfaces */\n  --odyssey-hud-bg: rgba(10, 12, 20, 0.92);\n  --odyssey-hud-panel: rgba(22, 26, 40, 0.95);\n  --odyssey-hud-panel-raised: rgba(32, 38, 56, 0.96);\n  --odyssey-hud-border: rgba(255, 255, 255, 0.12);\n  --odyssey-hud-border-strong: rgba(255, 255, 255, 0.28);\n\n  /* Text */\n  --odyssey-hud-text: #e8ecf4;\n  --odyssey-hud-muted: #9aa3b8;\n\n  /* Generic valence */\n  --odyssey-hud-positive: #2ecc71;\n  --odyssey-hud-negative: #e74c3c;\n  --odyssey-hud-warning: #f5a623;\n\n  /* Action / ability semantics (spec \xA73 colour language) */\n  --odyssey-hud-attack: #e94560;       /* red \u2014 attacking / hostile        */\n  --odyssey-hud-neutral: #5a6076;      /* grey \u2014 neutral / defensive / util */\n  --odyssey-hud-psionic: #9b59b6;      /* purple \u2014 psionics                 */\n  --odyssey-hud-implant: #1abc9c;      /* cyan/teal \u2014 implants / tech       */\n  --odyssey-hud-intervention: #f1c40f; /* yellow/gold \u2014 intervention        */\n\n  /* State / availability */\n  --odyssey-hud-state-active: #2ecc71;    /* green/cyan \u2014 active positive    */\n  --odyssey-hud-state-unavailable: #d35400;/* red/orange \u2014 negative/blocked  */\n  --odyssey-hud-disabled: rgba(255, 255, 255, 0.28);\n\n  /* Body zone condition scale (healthy \u2192 disabled) */\n  --odyssey-hud-zone-healthy: #2ecc71;\n  --odyssey-hud-zone-wounded: #f1c40f;\n  --odyssey-hud-zone-serious: #e67e22;\n  --odyssey-hud-zone-critical: #e74c3c;\n  --odyssey-hud-zone-disabled: #5a5f6b;\n\n  /* Resources */\n  --odyssey-hud-shield: #3aa0ff;\n  --odyssey-hud-psi: #9b59b6;\n\n  /* Elevation */\n  --odyssey-hud-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);\n  --odyssey-hud-radius: 8px;\n}\n";
+var combatHudTokens_default = "/*\n * Combat HUD \u2014 design tokens (Phase 0, palette refreshed for Phase 2).\n *\n * Semantic custom properties ONLY. No layout, no component rules \u2014 those live\n * in hud/components/combatHudLayout.css and hud/overlay/combatHudOverlay.css.\n * JavaScript must never hard-code colours; it stores semantic state names\n * (see hud/models/combatHudContracts.js) and the UI maps state \u2192 token here.\n *\n * Scope: variables are declared on a `.odyssey-hud` root class so the HUD's\n * theme cannot leak into the existing popup screens (Resolve Attack, etc.).\n *\n * The palette follows the approved Phase 2 references: a dark sci-fi MMORPG\n * panel \u2014 deep navy surfaces, thin blue-grey borders, bright colours reserved\n * for game-state accents only.\n */\n\n.odyssey-hud {\n  /* ---- Raw palette (approved Phase 2 reference) ---- */\n  --odyssey-bg-deep: #0e1320;\n  --odyssey-panel-base: #16203a;\n  --odyssey-panel-raised: #1a2236;\n  --odyssey-panel-hover: #232e47;\n  --odyssey-line: #3a4a66;\n  --odyssey-line-soft: #283448;\n\n  --odyssey-ink: #eaf0ff;\n  --odyssey-ink-muted: #9fb0d0;\n  --odyssey-ink-dim: #6b7a9c;\n\n  --odyssey-purple: #a78bfa;\n  --odyssey-purple-strong: #8b5cf6;\n  --odyssey-purple-panel: #26215c;\n  --odyssey-cyan: #34e1d6;\n  --odyssey-yellow: #ffc24b;\n  --odyssey-orange: #f59042;\n  --odyssey-red: #ff5c6c;\n  --odyssey-green: #4ade80;\n  --odyssey-steel: #aecbf0;     /* light cool blue \u2014 weapon / vehicle silhouettes */\n\n  /* ---- Semantic surfaces (names kept stable since Phase 0/1A) ---- */\n  --odyssey-hud-bg: rgba(14, 19, 32, 0.94);\n  --odyssey-hud-panel: rgba(22, 32, 58, 0.96);\n  --odyssey-hud-panel-raised: rgba(26, 34, 54, 0.98);\n  --odyssey-hud-panel-hover: #232e47;\n  --odyssey-hud-border: rgba(120, 142, 184, 0.30);\n  --odyssey-hud-border-strong: rgba(150, 172, 214, 0.55);\n\n  /* ---- Text ---- */\n  --odyssey-hud-text: var(--odyssey-ink);\n  --odyssey-hud-muted: var(--odyssey-ink-muted);\n  --odyssey-hud-dim: var(--odyssey-ink-dim);\n\n  /* ---- Generic valence ---- */\n  --odyssey-hud-positive: var(--odyssey-green);\n  --odyssey-hud-negative: var(--odyssey-red);\n  --odyssey-hud-warning: var(--odyssey-yellow);\n\n  /* ---- Action / ability semantics (spec colour language) ---- */\n  --odyssey-hud-attack: var(--odyssey-red);          /* red \u2014 attacking / hostile     */\n  --odyssey-hud-neutral: #8593b0;                    /* cool grey \u2014 defensive / util  */\n  --odyssey-hud-psionic: var(--odyssey-purple);      /* purple \u2014 psionics             */\n  --odyssey-hud-implant: var(--odyssey-cyan);        /* cyan \u2014 implants / tech        */\n  --odyssey-hud-intervention: var(--odyssey-yellow); /* gold \u2014 intervention           */\n\n  /* ---- State / availability ---- */\n  --odyssey-hud-state-active: var(--odyssey-green);\n  --odyssey-hud-state-unavailable: var(--odyssey-red);\n  --odyssey-hud-disabled: rgba(159, 176, 208, 0.22);\n\n  /* ---- Body zone condition scale (healthy \u2192 disabled) ---- */\n  /* healthy is a MUTED COOL tone (not green) per the spec. */\n  --odyssey-hud-zone-healthy: #6e7da0;\n  --odyssey-hud-zone-wounded: var(--odyssey-yellow);\n  --odyssey-hud-zone-serious: var(--odyssey-orange);\n  --odyssey-hud-zone-critical: var(--odyssey-red);\n  --odyssey-hud-zone-disabled: #39414f;\n\n  /* ---- Resources ---- */\n  --odyssey-hud-shield: #5b9be0;\n  --odyssey-hud-psi: var(--odyssey-purple);\n  --odyssey-hud-weapon: var(--odyssey-steel);\n\n  /* ---- Elevation & geometry ---- */\n  --odyssey-hud-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);\n  --odyssey-hud-shadow-soft: 0 4px 14px rgba(0, 0, 0, 0.35);\n  --odyssey-hud-radius: 14px;       /* outer panels */\n  --odyssey-hud-radius-inner: 10px; /* nested cards / tiles */\n  --odyssey-hud-radius-chip: 9px;\n}\n";
 
 // hud/overlay/combatHudOverlay.css
-var combatHudOverlay_default = '/*\n * Combat HUD overlay \u2014 Phase 1A placeholder shell styles.\n *\n * Consumes the semantic tokens from hud/styles/combatHudTokens.css (injected\n * alongside this file). No raw colours are referenced from JavaScript. This is\n * a compact, restrained sci-fi panel \u2014 not a full-screen modal.\n */\n\n*,\n*::before,\n*::after { box-sizing: border-box; }\n\nhtml, body { height: 100%; }\nbody {\n  margin: 0;\n  background: transparent;\n  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;\n  color: var(--odyssey-hud-text, #e8ecf4);\n}\n\n#root { height: 100%; }\n\n/* The .odyssey-hud class (from this element) scopes the token variables. */\n.ohud-overlay {\n  height: 100%;\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  /* The iframe rect IS the HUD footprint; keep transparent so the map shows\n     through any padding and clicks outside the panel are not visually implied. */\n  background: transparent;\n  padding: 0;\n}\n\n/* ===================== Expanded shell ===================== */\n.ohud-shell {\n  width: 100%;\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n  padding: 10px 14px 8px;\n  background: var(--odyssey-hud-bg);\n  border: 1px solid var(--odyssey-hud-border);\n  border-radius: var(--odyssey-hud-radius);\n  box-shadow: var(--odyssey-hud-shadow);\n  backdrop-filter: blur(6px);\n  -webkit-backdrop-filter: blur(6px);\n}\n\n.ohud-shell-row {\n  display: flex;\n  align-items: center;\n  gap: 12px;\n}\n\n/* Brand */\n.ohud-brand { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 0 auto; }\n.ohud-mark { color: var(--odyssey-hud-attack); font-size: 16px; line-height: 1; }\n.ohud-titles { display: flex; flex-direction: column; min-width: 0; }\n.ohud-title {\n  font-size: 12px; font-weight: 700; letter-spacing: 1.2px;\n  color: var(--odyssey-hud-text); white-space: nowrap;\n}\n.ohud-subtitle {\n  font-size: 10px; color: var(--odyssey-hud-muted);\n  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;\n}\n\n/* Center status */\n.ohud-center {\n  flex: 1 1 auto; display: flex; align-items: center; gap: 10px;\n  justify-content: center; min-width: 0;\n}\n.ohud-char {\n  font-size: 12px; color: var(--odyssey-hud-text);\n  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px;\n}\n.ohud-char--none { color: var(--odyssey-hud-muted); font-style: italic; }\n\n.ohud-badge {\n  font-size: 10px; font-weight: 700; letter-spacing: 0.6px;\n  padding: 3px 9px; border-radius: 10px; white-space: nowrap;\n  border: 1px solid var(--odyssey-hud-border);\n}\n.ohud-badge--ready { color: #06210f; background: var(--odyssey-hud-state-active); border-color: transparent; }\n.ohud-badge--waiting { color: #2a1c00; background: var(--odyssey-hud-warning); border-color: transparent; }\n.ohud-badge--empty { color: var(--odyssey-hud-muted); background: var(--odyssey-hud-panel); }\n.ohud-badge--error { color: #fff; background: var(--odyssey-hud-state-unavailable); border-color: transparent; }\n.ohud-badge--muted { color: var(--odyssey-hud-muted); background: var(--odyssey-hud-panel); }\n\n/* Right-side actions */\n.ohud-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }\n\n.ohud-dev-bar { display: flex; align-items: center; gap: 6px; }\n.ohud-dev-label { font-size: 10px; color: var(--odyssey-hud-muted); }\n.ohud-dev-sep { width: 1px; height: 18px; background: var(--odyssey-hud-border); }\n.ohud-select {\n  font: inherit; font-size: 11px; color: var(--odyssey-hud-text);\n  background: var(--odyssey-hud-panel-raised); border: 1px solid var(--odyssey-hud-border);\n  border-radius: 5px; padding: 3px 6px; cursor: pointer;\n}\n.ohud-chip {\n  font: inherit; font-size: 11px; color: var(--odyssey-hud-text);\n  background: var(--odyssey-hud-panel-raised); border: 1px solid var(--odyssey-hud-border);\n  border-radius: 12px; padding: 3px 10px; cursor: pointer;\n}\n.ohud-chip.is-on { background: var(--odyssey-hud-attack); border-color: var(--odyssey-hud-attack); color: #fff; }\n\n.ohud-collapse {\n  display: inline-flex; align-items: center; justify-content: center;\n  width: 28px; height: 28px; border-radius: 6px; cursor: pointer;\n  color: var(--odyssey-hud-muted); background: var(--odyssey-hud-panel-raised);\n  border: 1px solid var(--odyssey-hud-border); font-size: 14px; line-height: 1;\n}\n.ohud-collapse:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }\n\n.ohud-placeholder-note {\n  font-size: 10px; color: var(--odyssey-hud-muted); text-align: center; opacity: 0.8;\n}\n\n.ohud-fallback {\n  font-size: 11px; font-weight: 600; text-align: center;\n  color: var(--odyssey-hud-warning);\n  border: 1px dashed var(--odyssey-hud-warning); border-radius: 6px;\n  padding: 3px 8px; margin-bottom: 4px;\n}\n\n/* ===================== Collapsed pill ===================== */\n.ohud-overlay.is-collapsed { align-items: flex-end; }\n.ohud-pill {\n  display: inline-flex; align-items: center; gap: 8px;\n  padding: 9px 16px; cursor: pointer;\n  font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 1px;\n  color: var(--odyssey-hud-text);\n  background: var(--odyssey-hud-bg); border: 1px solid var(--odyssey-hud-border-strong);\n  border-radius: 22px; box-shadow: var(--odyssey-hud-shadow);\n  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);\n}\n.ohud-pill:hover { border-color: var(--odyssey-hud-attack); }\n.ohud-pill-label { line-height: 1; }\n\n/* ===================== Compact layout (narrow viewports) ===================== */\n@media (max-width: 720px) {\n  .ohud-title { letter-spacing: 0.6px; }\n  .ohud-subtitle { max-width: 120px; }\n  .ohud-dev-bar { display: none; } /* hide dev controls when cramped */\n  .ohud-char { max-width: 160px; }\n}\n';
+var combatHudOverlay_default = '/*\n * Combat HUD overlay \u2014 frame + collapsed pill (Phase 1A, trimmed for Phase 2).\n *\n * Only the overlay container and the collapsed reopen pill live here. All the\n * expanded module/layout styling is in hud/components/combatHudLayout.css.\n * Consumes the semantic tokens from hud/styles/combatHudTokens.css.\n */\n\n*,\n*::before,\n*::after { box-sizing: border-box; }\n\nhtml, body { height: 100%; }\nbody {\n  margin: 0;\n  background: transparent;\n  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;\n  color: var(--odyssey-hud-text, #eaf0ff);\n}\n\n#root { height: 100%; }\n\n/* The iframe rect IS the HUD footprint. The container bottom-aligns the HUD so\n   any spare height sits above it (transparent), and the map shows through. */\n.ohud-overlay {\n  height: 100%;\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  background: transparent;\n  padding: 0;\n}\n\n/* ===================== Collapsed pill ===================== */\n.ohud-overlay.is-collapsed { align-items: flex-end; }\n.ohud-pill {\n  display: inline-flex; align-items: center; gap: 8px;\n  margin-bottom: 6px;\n  padding: 9px 16px; cursor: pointer;\n  font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 1px;\n  color: var(--odyssey-hud-text);\n  background: var(--odyssey-hud-bg); border: 1px solid var(--odyssey-hud-border-strong);\n  border-radius: 22px; box-shadow: var(--odyssey-hud-shadow);\n  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);\n}\n.ohud-pill:hover { border-color: var(--odyssey-purple); }\n.ohud-pill .ohud-mark { color: var(--odyssey-purple); display: inline-flex; }\n.ohud-pill-label { line-height: 1; }\n';
+
+// hud/components/combatHudLayout.css
+var combatHudLayout_default = '/*\n * Combat HUD \u2014 Phase 2 layout & module styles.\n *\n * Scoped under the overlay (.odyssey-hud / .ohud-hud). Consumes semantic tokens\n * from hud/styles/combatHudTokens.css; no raw colours from JS. Composition uses\n * CSS grid + clamp() + grid-template-areas so proportions hold across widths.\n *\n * Breakpoints mirror hud/overlay/overlayConstants.js:\n *   wide \u22651280 \xB7 medium \u2265960 \xB7 compact \u2265620 \xB7 mini <620\n */\n\n/* ===================== Shell ===================== */\n.ohud-hud {\n  position: relative;\n  width: 100%;\n  height: 100%;\n  display: flex;\n  flex-direction: column;\n  justify-content: flex-end;\n  gap: 6px;\n  padding: 4px 4px 2px;\n  color: var(--odyssey-hud-text);\n  font-size: 12px;\n}\n\n/* ---- top control row (thin) ---- */\n.ohud-controls {\n  display: flex;\n  align-items: center;\n  gap: 10px;\n  min-height: 22px;\n  padding: 0 6px;\n}\n.ohud-brand { display: flex; align-items: center; gap: 7px; min-width: 0; }\n.ohud-brand-mark { color: var(--odyssey-purple); display: inline-flex; }\n.ohud-brand-text { font-weight: 800; letter-spacing: 2px; font-size: 11px; color: var(--odyssey-hud-text); }\n.ohud-brand-sub {\n  font-size: 10px; color: var(--odyssey-hud-dim);\n  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;\n}\n.ohud-fallback {\n  font-size: 10px; font-weight: 700; color: var(--odyssey-hud-warning);\n  border: 1px dashed var(--odyssey-hud-warning); border-radius: 6px; padding: 1px 7px;\n}\n.ohud-controls-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }\n\n/* ---- dev controls (collapsed by default) ---- */\n.ohud-dev { display: flex; align-items: center; gap: 8px; }\n.ohud-dev-btn {\n  display: inline-flex; align-items: center; gap: 5px;\n  font: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;\n  color: var(--odyssey-hud-muted); cursor: pointer;\n  background: var(--odyssey-hud-panel-raised);\n  border: 1px solid var(--odyssey-hud-border); border-radius: 7px; padding: 3px 8px;\n}\n.ohud-dev-btn:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }\n.ohud-dev.is-open .ohud-dev-btn { color: var(--odyssey-purple); border-color: var(--odyssey-purple); }\n.ohud-dev-strip {\n  display: inline-flex; align-items: center; gap: 10px;\n  background: var(--odyssey-hud-panel-raised);\n  border: 1px solid var(--odyssey-hud-border); border-radius: 8px; padding: 3px 8px;\n}\n.ohud-dev-field { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--odyssey-hud-dim); }\n.ohud-dev-roles { display: inline-flex; gap: 4px; }\n.ohud-select {\n  font: inherit; font-size: 11px; color: var(--odyssey-hud-text);\n  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);\n  border-radius: 6px; padding: 2px 6px; cursor: pointer;\n}\n.ohud-chip {\n  font: inherit; font-size: 11px; color: var(--odyssey-hud-muted);\n  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);\n  border-radius: 12px; padding: 2px 10px; cursor: pointer;\n}\n.ohud-chip.is-on { background: var(--odyssey-purple-strong); border-color: var(--odyssey-purple-strong); color: #fff; }\n.ohud-collapse {\n  display: inline-flex; align-items: center; justify-content: center;\n  width: 26px; height: 26px; border-radius: 7px; cursor: pointer;\n  color: var(--odyssey-hud-muted); background: var(--odyssey-hud-panel-raised);\n  border: 1px solid var(--odyssey-hud-border);\n}\n.ohud-collapse:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }\n\n/* ===================== Grid composition ===================== */\n.ohud-grid {\n  display: grid;\n  gap: 10px;\n  flex: 1 1 auto;\n  min-height: 0;\n}\n\n/* wide: one visual row; mod/action stack in their column; log own column */\n.ohud-grid--wide {\n  grid-template-columns:\n    minmax(150px, 168px)\n    minmax(206px, 240px)\n    minmax(320px, 1fr)\n    minmax(140px, 172px)\n    minmax(150px, 182px)\n    minmax(184px, 214px);\n  grid-template-rows: 1fr 1fr;\n  grid-template-areas:\n    "player gun skills target mod    log"\n    "player gun skills target action log";\n}\n\n/* medium: drop the log column (log floats as a button) */\n.ohud-grid--medium {\n  grid-template-columns:\n    minmax(138px, 158px)\n    minmax(186px, 224px)\n    minmax(250px, 1fr)\n    minmax(128px, 160px)\n    minmax(146px, 178px);\n  grid-template-rows: 1fr 1fr;\n  grid-template-areas:\n    "player gun skills target mod"\n    "player gun skills target action";\n}\n\n/* compact / mini: two module rows */\n.ohud-grid--compact,\n.ohud-grid--mini {\n  grid-template-columns: repeat(3, minmax(0, 1fr));\n  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);\n  grid-template-areas:\n    "player gun target"\n    "skills mod action";\n}\n\n.ohud-panel--player { grid-area: player; }\n.ohud-panel--gun { grid-area: gun; }\n.ohud-panel--skills { grid-area: skills; }\n.ohud-panel--target { grid-area: target; }\n.ohud-panel--mod { grid-area: mod; }\n.ohud-panel--action { grid-area: action; }\n.ohud-panel--log { grid-area: log; }\n\n/* ===================== Panel frame ===================== */\n.ohud-panel {\n  display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0;\n  background: var(--odyssey-hud-panel);\n  border: 1px solid var(--odyssey-hud-border);\n  border-radius: var(--odyssey-hud-radius);\n  box-shadow: var(--odyssey-hud-shadow-soft);\n  padding: 8px 10px;\n}\n.ohud-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 12px; }\n.ohud-panel-label {\n  font-size: 9.5px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase;\n  color: var(--odyssey-hud-dim);\n}\n.ohud-panel-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }\n.ohud-muted-fill { color: var(--odyssey-hud-dim); font-size: 11px; display: grid; place-items: center; flex: 1; }\n\n/* accent label colours */\n.ohud-accent--attack { color: var(--odyssey-hud-attack); }\n.ohud-accent--psionic { color: var(--odyssey-hud-psionic); }\n.ohud-accent--implant { color: var(--odyssey-hud-implant); }\n.ohud-accent--intervention { color: var(--odyssey-hud-intervention); }\n.ohud-accent--positive { color: var(--odyssey-hud-positive); }\n.ohud-accent--negative { color: var(--odyssey-hud-negative); }\n.ohud-accent--neutral { color: var(--odyssey-hud-neutral); }\n\n/* ===================== Body zones (silhouettes) ===================== */\n.ohud-silhouette { display: block; }\n.ohud-zone { transition: fill 120ms ease; }\n.ohud-zone--healthy { fill: var(--odyssey-hud-zone-healthy); }\n.ohud-zone--wounded { fill: var(--odyssey-hud-zone-wounded); }\n.ohud-zone--serious { fill: var(--odyssey-hud-zone-serious); }\n.ohud-zone--critical { fill: var(--odyssey-hud-zone-critical); }\n.ohud-zone--disabled { fill: var(--odyssey-hud-zone-disabled); }\n.ohud-zone.is-target { stroke: var(--odyssey-cyan); stroke-width: 2.5; }\n\n/* ===================== Player block ===================== */\n.ohud-turn {\n  font-size: 9px; font-weight: 800; letter-spacing: 0.6px; padding: 2px 7px; border-radius: 8px;\n  border: 1px solid transparent;\n}\n.ohud-turn--active { color: #06210f; background: var(--odyssey-hud-state-active); }\n.ohud-turn--waiting { color: #2a1c00; background: var(--odyssey-hud-warning); }\n.ohud-turn--gm { color: #fff; background: var(--odyssey-purple-strong); }\n.ohud-turn--idle { color: var(--odyssey-hud-muted); border-color: var(--odyssey-hud-border); }\n\n.ohud-player-grid { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: center; flex: 1; min-height: 0; }\n.ohud-figure { position: relative; width: clamp(40px, 4vw, 54px); height: 100%; min-height: 56px; display: grid; place-items: center; }\n.ohud-figure-svg { width: 100%; height: 100%; }\n.ohud-figure-shield {\n  position: absolute; right: -4px; bottom: 0; width: 18px; height: 20px;\n  color: var(--odyssey-hud-shield); opacity: 0.85;\n}\n.ohud-figure--ghost { opacity: 0.4; }\n\n.ohud-player-stats { display: flex; flex-direction: column; gap: 5px; min-width: 0; }\n.ohud-player-name {\n  font-size: 13px; font-weight: 700; color: var(--odyssey-hud-text);\n  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n}\n\n.ohud-res { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 6px; }\n.ohud-res-label { font-size: 8.5px; font-weight: 700; letter-spacing: 0.5px; color: var(--odyssey-hud-dim); }\n.ohud-res-track { height: 7px; border-radius: 4px; background: var(--odyssey-line-soft); overflow: hidden; }\n.ohud-res-fill { display: block; height: 100%; border-radius: 4px; }\n.ohud-res--shield .ohud-res-fill { background: var(--odyssey-hud-shield); }\n.ohud-res--psi .ohud-res-fill { background: var(--odyssey-hud-psi); }\n.ohud-res-num { font-size: 11px; font-weight: 700; color: var(--odyssey-hud-text); font-variant-numeric: tabular-nums; }\n.ohud-res-max { color: var(--odyssey-hud-dim); font-weight: 600; }\n\n.ohud-pips { display: flex; gap: 5px; }\n.ohud-pip {\n  font-size: 8.5px; font-weight: 800; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 6px;\n  border: 1px solid var(--odyssey-hud-border);\n}\n.ohud-pip.is-on { color: #06210f; background: var(--odyssey-hud-state-active); border-color: transparent; }\n.ohud-pip.is-off { color: var(--odyssey-hud-dim); background: transparent; }\n\n.ohud-pilot {\n  display: flex; align-items: center; gap: 6px; padding: 3px 7px; border-radius: 8px;\n  background: var(--odyssey-purple-panel); border: 1px solid rgba(167, 139, 250, 0.4);\n}\n.ohud-pilot-tag { font-size: 8px; font-weight: 800; letter-spacing: 1px; color: var(--odyssey-purple); }\n.ohud-pilot-name { font-size: 11px; color: var(--odyssey-hud-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n.ohud-pilot-psi { margin-left: auto; font-size: 10px; color: var(--odyssey-purple); }\n\n.ohud-statuses { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }\n.ohud-chip-status {\n  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;\n  font-size: 9.5px; padding: 1px 6px 1px 2px; border-radius: 9px;\n  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base);\n  color: var(--odyssey-hud-muted);\n}\n.ohud-chip-dot {\n  width: 14px; height: 14px; border-radius: 50%; display: grid; place-items: center;\n  font-size: 8px; font-weight: 800; color: #0a0e18;\n}\n.ohud-chip-status--positive .ohud-chip-dot { background: var(--odyssey-hud-positive); }\n.ohud-chip-status--negative .ohud-chip-dot { background: var(--odyssey-hud-negative); }\n.ohud-chip-status--neutral .ohud-chip-dot { background: var(--odyssey-hud-neutral); }\n.ohud-chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n.ohud-chip-status--more { color: var(--odyssey-hud-dim); padding: 1px 7px; font-weight: 700; }\n\n/* ===================== Gun block ===================== */\n.ohud-gun { display: grid; grid-template-columns: 1fr 84px; gap: 8px; flex: 1; min-height: 0; }\n.ohud-gun.is-disabled { opacity: 0.55; }\n.ohud-gun-main {\n  position: relative; border-radius: var(--odyssey-hud-radius-inner);\n  border: 1.5px solid var(--odyssey-hud-border-strong);\n  background: var(--odyssey-bg-deep); padding: 6px 8px; min-width: 0; overflow: hidden;\n}\n.ohud-gun-name { position: absolute; top: 5px; left: 9px; font-size: 9.5px; color: var(--odyssey-hud-muted); }\n.ohud-gun-caret { position: absolute; top: 4px; right: 6px; color: var(--odyssey-hud-muted); display: inline-flex; }\n.ohud-gun-silhouette { position: absolute; inset: 14px 10px 12px; color: var(--odyssey-hud-weapon); display: block; }\n.ohud-gun-silhouette svg { width: 100%; height: 100%; }\n.ohud-firemode {\n  position: absolute; right: 8px; bottom: 7px;\n  display: inline-flex; align-items: center; gap: 5px;\n  padding: 2px 8px 2px 4px; border-radius: 12px;\n  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border);\n}\n.ohud-firemode-knob { width: 12px; height: 12px; border-radius: 50%; background: var(--odyssey-hud-muted); }\n.ohud-firemode-letter { font-size: 10px; font-weight: 700; color: var(--odyssey-hud-text); }\n.ohud-gun-secondary {\n  position: absolute; left: 8px; bottom: 7px; font-size: 9px; font-weight: 700;\n  color: var(--odyssey-hud-muted); border: 1px solid var(--odyssey-hud-border);\n  border-radius: 8px; padding: 1px 6px;\n}\n\n.ohud-gun-side { display: grid; grid-template-rows: 1fr 1fr; gap: 8px; min-width: 0; }\n.ohud-mag-card {\n  position: relative; display: flex; align-items: center; gap: 4px;\n  border-radius: var(--odyssey-hud-radius-inner);\n  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base);\n  padding: 4px 6px;\n}\n.ohud-mag-icon { width: 16px; height: 26px; color: var(--odyssey-steel); display: inline-flex; }\n.ohud-mag-icon svg { width: 100%; height: 100%; }\n.ohud-mag-caret { position: absolute; top: 3px; right: 4px; color: var(--odyssey-hud-muted); }\n.ohud-mag-type { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--odyssey-hud-text); }\n.ohud-ammo-card {\n  display: flex; flex-direction: column; justify-content: center;\n  border-radius: var(--odyssey-hud-radius-inner);\n  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base);\n  padding: 3px 7px;\n}\n.ohud-ammo-head { display: flex; align-items: center; justify-content: space-between; }\n.ohud-ammo-label { font-size: 8.5px; letter-spacing: 1px; color: var(--odyssey-hud-dim); text-transform: uppercase; }\n.ohud-ammo-reload { color: var(--odyssey-hud-muted); display: inline-flex; }\n.ohud-ammo-reload.is-off { opacity: 0.35; }\n.ohud-ammo-count { font-weight: 800; line-height: 1; color: var(--odyssey-hud-text); font-variant-numeric: tabular-nums; }\n.ohud-ammo-cur { font-size: clamp(20px, 2.4vw, 30px); }\n.ohud-ammo-max { font-size: 12px; color: var(--odyssey-hud-dim); }\n.ohud-ammo-count--empty .ohud-ammo-cur { color: var(--odyssey-hud-negative); }\n.ohud-ammo-count--empty { border-radius: 6px; }\n\n/* ===================== Skill block ===================== */\n.ohud-slots {\n  display: grid; gap: 8px; flex: 1; min-height: 0;\n  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));\n  grid-auto-rows: 1fr; align-content: center;\n}\n.ohud-slot {\n  position: relative; aspect-ratio: 1 / 1; min-height: 44px;\n  border-radius: var(--odyssey-hud-radius-inner);\n  border: 1.5px solid var(--odyssey-hud-border);\n  background: var(--odyssey-bg-deep);\n  display: grid; place-items: center; color: var(--odyssey-hud-neutral);\n}\n.ohud-slot--empty { border-style: dashed; opacity: 0.4; background: transparent; }\n.ohud-slot-icon { width: 56%; height: 56%; display: inline-flex; }\n.ohud-slot-icon svg { width: 100%; height: 100%; }\n.ohud-accent--attack.ohud-slot { border-color: var(--odyssey-hud-attack); color: var(--odyssey-hud-attack); }\n.ohud-accent--psionic.ohud-slot { border-color: var(--odyssey-purple); color: var(--odyssey-purple); }\n.ohud-accent--implant.ohud-slot { border-color: var(--odyssey-cyan); color: var(--odyssey-cyan); }\n.ohud-accent--positive.ohud-slot { border-color: var(--odyssey-green); color: var(--odyssey-green); }\n.ohud-accent--neutral.ohud-slot { border-color: var(--odyssey-hud-border-strong); color: var(--odyssey-hud-neutral); }\n.ohud-slot.is-disabled { opacity: 0.42; filter: grayscale(0.4); }\n.ohud-slot.is-selected { box-shadow: 0 0 0 2px var(--odyssey-cyan); }\n.ohud-slot.is-toggled { background: rgba(167, 139, 250, 0.16); }\n.ohud-slot-cost {\n  position: absolute; left: 4px; bottom: 3px; font-size: 8px; font-weight: 800;\n  color: var(--odyssey-hud-dim);\n}\n.ohud-slot-res {\n  position: absolute; right: 4px; bottom: 3px; font-size: 8px; font-weight: 800;\n  color: var(--odyssey-purple);\n}\n.ohud-slot-cd {\n  position: absolute; top: 3px; right: 4px; font-size: 9px; font-weight: 800;\n  color: var(--odyssey-hud-warning);\n}\n.ohud-slot-toggle { position: absolute; top: 4px; left: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--odyssey-purple); }\n\n/* ===================== Target block ===================== */\n.ohud-target { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; min-height: 0; justify-content: center; }\n.ohud-target .ohud-figure { width: clamp(40px, 4.5vw, 56px); }\n.ohud-target-meta { text-align: center; min-width: 0; width: 100%; }\n.ohud-target-name {\n  font-size: 11px; font-weight: 700; color: var(--odyssey-hud-text);\n  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n}\n.ohud-target-zone {\n  display: inline-block; margin-top: 2px; font-size: 9px; font-weight: 800; letter-spacing: 0.8px;\n  color: var(--odyssey-cyan); border: 1px solid rgba(52, 225, 214, 0.4); border-radius: 7px; padding: 1px 7px;\n}\n.ohud-target.is-empty .ohud-target-hint {\n  font-size: 9.5px; font-weight: 700; letter-spacing: 0.6px; text-align: center;\n  color: var(--odyssey-hud-dim); line-height: 1.3;\n}\n\n/* ===================== Modifier block ===================== */\n.ohud-mods { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-content: start; flex: 1; min-height: 0; overflow: hidden; }\n.ohud-mod {\n  display: flex; align-items: center; justify-content: space-between; gap: 4px;\n  font-size: 9.5px; padding: 3px 8px; border-radius: var(--odyssey-hud-radius-chip);\n  border: 1px solid var(--odyssey-hud-border); background: var(--odyssey-panel-base);\n  color: var(--odyssey-hud-muted); min-width: 0;\n}\n.ohud-mod-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n.ohud-mod-val { font-weight: 800; flex: 0 0 auto; }\n.ohud-mod--positive { border-color: rgba(74, 222, 128, 0.55); color: var(--odyssey-green); }\n.ohud-mod--negative { border-color: rgba(255, 92, 108, 0.6); color: var(--odyssey-red); }\n.ohud-mod--intervention { border-color: rgba(255, 194, 75, 0.6); color: var(--odyssey-yellow); }\n.ohud-mod--narrative { border-color: rgba(167, 139, 250, 0.55); color: var(--odyssey-purple); }\n.ohud-mod--neutral { color: var(--odyssey-hud-muted); }\n.ohud-mod.is-selected { box-shadow: 0 0 0 1.5px var(--odyssey-cyan); }\n.ohud-mod.is-passive { opacity: 0.85; background: var(--odyssey-bg-deep); }\n.ohud-mod--empty { border-style: dashed; opacity: 0.3; background: transparent; }\n\n/* ===================== Action block ===================== */\n.ohud-panel--action { gap: 5px; justify-content: center; }\n.ohud-action-btn {\n  width: 100%; flex: 1 1 auto; min-height: 40px;\n  display: grid; place-items: center; cursor: pointer; font: inherit;\n  border-radius: var(--odyssey-hud-radius-inner);\n  border: 1.5px solid var(--odyssey-purple);\n  background: linear-gradient(180deg, rgba(139, 92, 246, 0.22), rgba(38, 33, 92, 0.4));\n  color: var(--odyssey-purple);\n}\n.ohud-action-btn .ohud-action-label { font-size: clamp(15px, 1.6vw, 20px); font-weight: 800; letter-spacing: 2px; }\n.ohud-action-btn.is-ready:hover { background: rgba(139, 92, 246, 0.32); color: #fff; }\n.ohud-action-btn.is-disabled {\n  cursor: not-allowed; border-color: var(--odyssey-hud-border);\n  background: var(--odyssey-panel-base); color: var(--odyssey-hud-dim);\n}\n.ohud-action-econ { display: flex; gap: 5px; justify-content: center; }\n.ohud-econ-pip {\n  font-size: 8px; font-weight: 800; letter-spacing: 0.5px; padding: 1px 6px; border-radius: 6px;\n  color: var(--odyssey-hud-dim); border: 1px solid var(--odyssey-hud-border);\n}\n.ohud-econ-pip.is-spend { color: var(--odyssey-cyan); border-color: var(--odyssey-cyan); }\n.ohud-action-reason { font-size: 9px; text-align: center; color: var(--odyssey-hud-negative); min-height: 11px; }\n.ohud-action-reason--ok { color: var(--odyssey-hud-dim); }\n\n/* ===================== Battle log ===================== */\n.ohud-panel--log { overflow: hidden; }\n.ohud-log-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex: 1; min-height: 0; }\n.ohud-log-list::-webkit-scrollbar { width: 5px; }\n.ohud-log-list::-webkit-scrollbar-thumb { background: var(--odyssey-line); border-radius: 3px; }\n.ohud-log-row {\n  font-size: 10px; line-height: 1.25; color: var(--odyssey-hud-muted);\n  display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline;\n  padding: 2px 4px; border-radius: 5px; background: var(--odyssey-bg-deep);\n}\n.ohud-log-row--system { color: var(--odyssey-hud-dim); background: transparent; font-style: italic; }\n.ohud-log-row--narr { color: var(--odyssey-purple); background: transparent; font-style: italic; }\n.ohud-log-actor { font-weight: 700; color: var(--odyssey-hud-text); }\n.ohud-log-act { color: var(--odyssey-hud-muted); }\n.ohud-log-arrow { color: var(--odyssey-hud-dim); }\n.ohud-log-target { color: var(--odyssey-hud-text); }\n.ohud-log-delta { margin-left: auto; font-weight: 700; font-size: 9.5px; }\n.ohud-log-delta--hit { color: var(--odyssey-green); }\n.ohud-log-delta--miss { color: var(--odyssey-hud-dim); }\n.ohud-log-delta--neutral { color: var(--odyssey-hud-muted); }\n.ohud-log-empty { font-size: 10px; color: var(--odyssey-hud-dim); display: grid; place-items: center; flex: 1; }\n.ohud-log-collapse {\n  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;\n  width: 20px; height: 20px; border-radius: 5px; color: var(--odyssey-hud-muted);\n  background: transparent; border: 1px solid var(--odyssey-hud-border);\n}\n.ohud-log-collapse:hover { color: var(--odyssey-hud-text); }\n\n/* log floating button / panel (medium / compact / mini) */\n.ohud-log-float { position: absolute; top: 0; right: 6px; z-index: 6; }\n.ohud-log--button { padding: 0; border: 0; background: transparent; box-shadow: none; }\n.ohud-log-toggle {\n  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;\n  font-size: 10px; font-weight: 700; letter-spacing: 0.5px; color: var(--odyssey-hud-muted);\n  background: var(--odyssey-hud-panel-raised); border: 1px solid var(--odyssey-hud-border);\n  border-radius: 8px; padding: 3px 9px;\n}\n.ohud-log-toggle:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }\n.ohud-log-toggle-icon { display: inline-flex; }\n.ohud-log-badge {\n  font-size: 9px; font-weight: 800; color: #0a0e18; background: var(--odyssey-cyan);\n  border-radius: 8px; padding: 0 5px;\n}\n.ohud-log-float .ohud-log--expanded {\n  position: absolute; top: 26px; right: 0; width: 248px; max-height: 168px;\n  box-shadow: var(--odyssey-hud-shadow);\n}\n\n/* ===================== Empty / error / loading ===================== */\n.ohud-state-wrap {\n  flex: 1 1 auto; display: grid; place-items: center;\n  background: var(--odyssey-hud-panel); border: 1px solid var(--odyssey-hud-border);\n  border-radius: var(--odyssey-hud-radius); box-shadow: var(--odyssey-hud-shadow-soft);\n}\n.ohud-empty { text-align: center; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; }\n.ohud-empty-mark { color: var(--odyssey-purple); opacity: 0.8; }\n.ohud-empty-title { font-size: 14px; font-weight: 800; letter-spacing: 1.5px; color: var(--odyssey-hud-text); }\n.ohud-empty-hint { font-size: 11px; color: var(--odyssey-hud-muted); max-width: 420px; }\n.ohud-empty--error .ohud-empty-title { color: var(--odyssey-hud-negative); }\n\n/* ===================== Toast ===================== */\n.ohud-toast {\n  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);\n  font-size: 11px; color: var(--odyssey-hud-text);\n  background: var(--odyssey-panel-base); border: 1px solid var(--odyssey-hud-border-strong);\n  border-radius: 8px; padding: 5px 12px; box-shadow: var(--odyssey-hud-shadow); z-index: 10;\n}\n.ohud-toast[hidden] { display: none; }\n\n/* ===================== Tooltip ===================== */\n.ohud-tooltip {\n  position: fixed; z-index: 50; pointer-events: none; max-width: 240px;\n  background: var(--odyssey-bg-deep); border: 1px solid var(--odyssey-hud-border-strong);\n  border-radius: 8px; padding: 6px 9px; box-shadow: var(--odyssey-hud-shadow);\n}\n.ohud-tooltip[hidden] { display: none; }\n.ohud-tooltip-title { font-size: 11px; font-weight: 700; color: var(--odyssey-hud-text); }\n.ohud-tooltip-line { font-size: 10px; color: var(--odyssey-hud-muted); margin-top: 2px; }\n\n/* ===================== Compact text trims ===================== */\n.ohud-controls { flex-wrap: wrap; row-gap: 4px; }\n.ohud-brand-text { white-space: nowrap; }\n.ohud-hud[data-mode="compact"] .ohud-brand-sub,\n.ohud-hud[data-mode="mini"] .ohud-brand-sub { display: none; }\n.ohud-hud[data-mode="mini"] .ohud-res-label,\n.ohud-hud[data-mode="mini"] .ohud-dev-btn-label,\n.ohud-hud[data-mode="mini"] .ohud-fallback,\n.ohud-hud[data-mode="compact"] .ohud-fallback { display: none; }\n.ohud-hud[data-mode="mini"] .ohud-player-name { font-size: 11px; }\n';
 
 // hud/adapters/combatHudAdapter.js
 var REQUIRED_METHODS = Object.freeze([
@@ -4424,10 +4427,6 @@ function computeAccess(viewer, entity) {
   }
   return { canView: false, reason: EMPTY_REASONS.notOwner };
 }
-function describeEmptyReason(reasonCode) {
-  if (!reasonCode) return "";
-  return EMPTY_REASON_TEXT[reasonCode] ?? reasonCode;
-}
 function applyViewer(state, viewer) {
   return {
     ...state,
@@ -4714,158 +4713,18 @@ function createCombatHudStore({ adapter }) {
   };
 }
 
-// hud/core/combatHudSelectors.js
-function selectHudMode(state) {
-  if (state?.ui?.isHudCollapsed) return "collapsed";
-  return state?.status ?? HUD_STATUS.idle;
-}
-function selectCurrentEntity(state) {
-  return state?.snapshot?.entity ?? null;
-}
-function selectIsViewerTurn(state) {
-  return Boolean(state?.snapshot?.combatSession?.isViewerTurn);
-}
-function selectEmptyReason(state) {
-  if (state?.status !== HUD_STATUS.empty) return null;
-  return state?.access?.reason ?? null;
-}
-
-// utils/json.js
-function escapeHtml(value) {
-  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
-}
-
-// hud/overlay/combatHudOverlayView.js
-function statusBadge(state) {
-  const mode = selectHudMode(state);
-  if (state.status === "error") return { label: "ERROR", cls: "error" };
-  if (state.status === "ready") {
-    return selectIsViewerTurn(state) ? { label: "READY", cls: "ready" } : { label: "WAITING", cls: "waiting" };
-  }
-  if (state.status === "empty") return { label: "EMPTY", cls: "empty" };
-  if (mode === "loading") return { label: "\u2026", cls: "muted" };
-  return { label: "IDLE", cls: "muted" };
-}
-function createCombatHudOverlayView(cfg) {
-  const {
-    root,
-    store,
-    obrAvailable = true,
-    devControls = true,
-    onCollapse,
-    onScenario,
-    onRole
-  } = cfg;
-  const host = document.createElement("div");
-  host.className = "odyssey-hud ohud-overlay";
-  root.appendChild(host);
-  let currentScenarioId = cfg.scenarioId ?? "A";
-  function renderShell(state) {
-    const entity = selectCurrentEntity(state);
-    const badge = statusBadge(state);
-    const emptyReason = selectEmptyReason(state);
-    const charName = entity ? entity.summary.name : null;
-    const role = state?.viewer?.role === "gm" ? "gm" : "player";
-    const scenarioOptions = listScenarios().map((s) => `<option value="${escapeHtml(s.id)}" ${s.id === currentScenarioId ? "selected" : ""}>${escapeHtml(s.label)}</option>`).join("");
-    const fallbackBanner = obrAvailable ? "" : `<div class="ohud-fallback">OBR unavailable \u2014 local HUD preview</div>`;
-    const charLine = charName ? `<span class="ohud-char">${escapeHtml(charName)}</span>` : `<span class="ohud-char ohud-char--none">${escapeHtml(describeEmptyReason(emptyReason) || "No controlled character selected")}</span>`;
-    const devBar = devControls ? `<div class="ohud-dev-bar">
-           <label class="ohud-dev-label">Scenario</label>
-           <select class="ohud-select" data-ohud="scenario">${scenarioOptions}</select>
-           <span class="ohud-dev-sep"></span>
-           <button class="ohud-chip ${role === "player" ? "is-on" : ""}" data-ohud="role" data-value="player">Player</button>
-           <button class="ohud-chip ${role === "gm" ? "is-on" : ""}" data-ohud="role" data-value="gm">GM</button>
-         </div>` : "";
-    host.innerHTML = `
-      <section class="ohud-shell" role="region" aria-label="Odyssey Combat HUD">
-        ${fallbackBanner}
-        <div class="ohud-shell-row">
-          <div class="ohud-brand">
-            <span class="ohud-mark" aria-hidden="true">\u25C6</span>
-            <span class="ohud-titles">
-              <span class="ohud-title">ODYSSEY COMBAT HUD</span>
-              <span class="ohud-subtitle">${escapeHtml(scenarioLabel(currentScenarioId))}</span>
-            </span>
-          </div>
-
-          <div class="ohud-center">
-            <span class="ohud-badge ohud-badge--${badge.cls}">${escapeHtml(badge.label)}</span>
-            ${charLine}
-          </div>
-
-          <div class="ohud-actions">
-            ${devBar}
-            <button class="ohud-collapse" data-ohud="collapse" title="Collapse HUD" aria-label="Collapse HUD">
-              <span aria-hidden="true">\u25BE</span>
-            </button>
-          </div>
-        </div>
-        <div class="ohud-placeholder-note">Placeholder shell \u2014 Player / Gun / Skill / Target blocks arrive in Phase 2.</div>
-      </section>
-    `;
-  }
-  function renderPill() {
-    host.innerHTML = `
-      <button class="ohud-pill" data-ohud="reopen" title="Open Odyssey Combat HUD" aria-label="Open Odyssey Combat HUD">
-        <span class="ohud-mark" aria-hidden="true">\u25C6</span>
-        <span class="ohud-pill-label">ODYSSEY</span>
-      </button>
-    `;
-  }
-  function render(state) {
-    const collapsed = state?.ui?.isHudCollapsed;
-    host.classList.toggle("is-collapsed", Boolean(collapsed));
-    if (collapsed) {
-      renderPill();
-    } else {
-      renderShell(state);
-    }
-  }
-  function scenarioLabel(id) {
-    const found = listScenarios().find((s) => s.id === id);
-    return found ? found.label : `Scenario ${id}`;
-  }
-  function onClick(e) {
-    const el = e.target.closest("[data-ohud]");
-    if (!el) return;
-    const kind = el.getAttribute("data-ohud");
-    if (kind === "collapse") {
-      onCollapse(true);
-    } else if (kind === "reopen") {
-      onCollapse(false);
-    } else if (kind === "role") {
-      onRole(el.getAttribute("data-value"));
-    }
-  }
-  function onChange(e) {
-    const el = e.target.closest("[data-ohud]");
-    if (!el) return;
-    if (el.getAttribute("data-ohud") === "scenario") {
-      currentScenarioId = el.value;
-      onScenario(currentScenarioId);
-    }
-  }
-  host.addEventListener("click", onClick);
-  host.addEventListener("change", onChange);
-  const unsubscribe = store.subscribe(render);
-  render(store.getState());
-  return {
-    render,
-    setScenarioId(id) {
-      currentScenarioId = id;
-      render(store.getState());
-    },
-    destroy() {
-      unsubscribe();
-      host.removeEventListener("click", onClick);
-      host.removeEventListener("change", onChange);
-      host.remove();
-    }
-  };
-}
-
 // hud/overlay/overlayConstants.js
 var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
+var WIDE_BREAKPOINT = 1280;
+var MEDIUM_BREAKPOINT = 960;
+var MINI_BREAKPOINT = 620;
+function resolveLayoutMode(width) {
+  const w = Math.max(0, Number(width) || 0);
+  if (w >= WIDE_BREAKPOINT) return "wide";
+  if (w >= MEDIUM_BREAKPOINT) return "medium";
+  if (w >= MINI_BREAKPOINT) return "compact";
+  return "mini";
+}
 var ANCHOR_ORIGIN = Object.freeze({ horizontal: "CENTER", vertical: "BOTTOM" });
 var TRANSFORM_ORIGIN = Object.freeze({ horizontal: "CENTER", vertical: "BOTTOM" });
 var DEFAULT_HUD_UI_STATE = Object.freeze({
@@ -4911,6 +4770,1074 @@ function normalizeHudUiState(partial) {
   };
 }
 
+// hud/components/hudLayoutModel.js
+function resolveBattleLogMode(mode, expanded) {
+  if (mode === "wide") return expanded ? "expanded" : "card";
+  if (mode === "medium") return expanded ? "expanded" : "button";
+  return expanded ? "expanded" : "button";
+}
+function battleLogIsColumn(mode) {
+  return mode === "wide";
+}
+function buildEmptyStateModel(state) {
+  const reason = state?.access?.reason ?? null;
+  switch (reason) {
+    case EMPTY_REASONS.notOwner:
+      return {
+        title: "SELECT YOUR CHARACTER",
+        hint: "You do not control this token. Choose a controlled token on the map."
+      };
+    case EMPTY_REASONS.noCharacterLink:
+      return {
+        title: "NO CHARACTER LINKED",
+        hint: "This token is not linked to a character sheet."
+      };
+    case EMPTY_REASONS.noToken:
+    default:
+      return {
+        title: "SELECT YOUR CHARACTER",
+        hint: "Choose a controlled token on the map."
+      };
+  }
+}
+function resolveBodyMode(state) {
+  switch (state?.status) {
+    case HUD_STATUS.ready:
+      return "ready";
+    case HUD_STATUS.empty:
+      return "empty";
+    case HUD_STATUS.error:
+      return "error";
+    default:
+      return "loading";
+  }
+}
+function zoneStateClass(stateName) {
+  switch (stateName) {
+    case ZONE_STATES.wounded:
+      return "wounded";
+    case ZONE_STATES.serious:
+      return "serious";
+    case ZONE_STATES.critical:
+      return "critical";
+    case ZONE_STATES.disabled:
+      return "disabled";
+    case ZONE_STATES.healthy:
+    default:
+      return "healthy";
+  }
+}
+function accentClass(colorSemantic) {
+  switch (colorSemantic) {
+    case "attack":
+      return "attack";
+    case "psionic":
+      return "psionic";
+    case "implant":
+      return "implant";
+    case "intervention":
+      return "intervention";
+    case "positive":
+      return "positive";
+    case "negative":
+      return "negative";
+    case "neutral":
+    default:
+      return "neutral";
+  }
+}
+
+// hud/core/combatHudSelectors.js
+var COMPACT_LOG_LIMIT = 5;
+function selectCurrentEntity(state) {
+  return state?.snapshot?.entity ?? null;
+}
+function selectControlledCharacter(state) {
+  if (state?.status !== HUD_STATUS.ready) return null;
+  if (!state?.access?.canViewSelectedCharacter) return null;
+  const entity = state?.snapshot?.entity ?? null;
+  if (!entity) return null;
+  const type = entity.summary?.characterType;
+  if (state.viewer?.role === "player") return entity;
+  if (type === TOKEN_KINDS.player || type === TOKEN_KINDS.mech) return entity;
+  return null;
+}
+function selectCombatSession(state) {
+  return state?.snapshot?.combatSession ?? null;
+}
+function selectIsViewerTurn(state) {
+  return Boolean(state?.snapshot?.combatSession?.isViewerTurn);
+}
+function selectCanAct(state) {
+  const entity = selectCurrentEntity(state);
+  if (!entity) return false;
+  if (!entity.flags?.conscious || !entity.flags?.alive) return false;
+  const session = selectCombatSession(state);
+  if (session && session.status === "active" && !session.isViewerTurn) return false;
+  return Boolean(entity.actions?.main || entity.actions?.move);
+}
+function selectSelectedSkill(state) {
+  const id = state?.ui?.selectedTechniqueId ?? state?.ui?.selectedAbilityId ?? null;
+  if (!id) return null;
+  const library = state?.snapshot?.skills?.library ?? [];
+  return library.find((s) => s.id === id) ?? null;
+}
+function selectCurrentActionCost(state) {
+  const skill2 = selectSelectedSkill(state);
+  if (skill2) return skill2.actionCost;
+  return "MAIN";
+}
+function selectDisabledReason(state) {
+  if (state?.status !== HUD_STATUS.ready) return "No character loaded.";
+  const entity = selectCurrentEntity(state);
+  if (!entity) return "No character loaded.";
+  if (!entity.flags?.alive) return "Character is dead.";
+  if (!entity.flags?.conscious) return "Character is unconscious.";
+  const session = selectCombatSession(state);
+  if (session && session.status === "active" && !session.isViewerTurn) {
+    return "Not your turn.";
+  }
+  const skill2 = selectSelectedSkill(state);
+  if (skill2?.disabledReason) return skill2.disabledReason;
+  const cost = selectCurrentActionCost(state);
+  if (cost === "MAIN" && !entity.actions?.main) return "MAIN action already spent.";
+  if (cost === "MOVE" && !entity.actions?.move) return "MOVE action already spent.";
+  if (skill2 && skill2.targeting !== "none") {
+    const targeting = state?.ui?.targeting ?? {};
+    if (skill2.usesPoint && !targeting.selectedPoint) return "Pick a target point.";
+    if (!skill2.usesPoint && (targeting.selectedTargetIds?.length ?? 0) === 0) {
+      return "Pick a target on the map.";
+    }
+  }
+  return null;
+}
+function selectVisibleReserveMagazines(state) {
+  const weapon = state?.snapshot?.weapon?.primary ?? null;
+  if (!weapon || !weapon.usesMagazine) return [];
+  const loaded = weapon.loadedMagazine ?? null;
+  const loadedId = loaded?.id ?? null;
+  const loadedCaliber = loaded?.caliber ?? null;
+  const reserve = Array.isArray(weapon.reserveMagazines) ? weapon.reserveMagazines : [];
+  return reserve.filter((mag) => {
+    if (!mag) return false;
+    if (mag.id === loadedId) return false;
+    if ((mag.current ?? 0) <= 0) return false;
+    if (loadedCaliber && mag.caliber !== loadedCaliber) return false;
+    return true;
+  });
+}
+function selectCompactBattleLog(state) {
+  const entries = state?.snapshot?.battleLog?.entries ?? [];
+  if (entries.length <= COMPACT_LOG_LIMIT) return entries.slice();
+  return entries.slice(entries.length - COMPACT_LOG_LIMIT);
+}
+function selectQuickSlots(state) {
+  return state?.snapshot?.skills?.quickSlots ?? [];
+}
+function selectSkillById(state, skillId) {
+  if (!skillId) return null;
+  const library = state?.snapshot?.skills?.library ?? [];
+  return library.find((s) => s.id === skillId) ?? null;
+}
+function selectModifierGroups(state) {
+  return state?.snapshot?.modifiers ?? { passive: [], active: [], narrative: [] };
+}
+function selectSelectedBodyPart(state) {
+  return state?.ui?.targeting?.selectedBodyPartId ?? DEFAULT_BODY_PART_ID;
+}
+var BODY_PART_LABELS = Object.freeze({
+  head: "HEAD",
+  torso: "TORSO",
+  l_arm: "L.ARM",
+  r_arm: "R.ARM",
+  l_leg: "L.LEG",
+  r_leg: "R.LEG"
+});
+function selectBodyPartLabel(bodyPartId) {
+  if (!bodyPartId) return "";
+  return BODY_PART_LABELS[bodyPartId] ?? String(bodyPartId).toUpperCase();
+}
+function selectActionLabel(state) {
+  const skill2 = selectSelectedSkill(state);
+  if (!skill2) return "ATTACK";
+  switch (skill2.type) {
+    case "attackTechnique":
+      return "ATTACK";
+    case "itemAction":
+      return skill2.usesPoint ? "THROW" : "USE";
+    case "targetedAbility":
+      return skill2.source === "psionic" ? "CAST" : "ACTIVATE";
+    case "instantAbility":
+      return skill2.source === "item" ? "USE" : "ACTIVATE";
+    case "toggleAbility":
+      return "ACTIVATE";
+    default:
+      return "ATTACK";
+  }
+}
+function selectPlayerStatusLabel(state) {
+  const controlled = selectControlledCharacter(state);
+  if (state?.viewer?.role === "gm" && !controlled) return "GM VIEW";
+  const session = selectCombatSession(state);
+  if (session && session.status === "active") {
+    return selectIsViewerTurn(state) ? "YOUR TURN" : "WAITING";
+  }
+  return "READY";
+}
+function selectVisibleStatuses(state, limit = 5) {
+  const entity = selectCurrentEntity(state);
+  if (!entity) return { shown: [], overflow: 0 };
+  const all = [
+    ...Array.isArray(entity.statuses) ? entity.statuses : [],
+    ...Array.isArray(entity.effects) ? entity.effects : []
+  ];
+  if (all.length <= limit) return { shown: all, overflow: 0 };
+  return { shown: all.slice(0, limit), overflow: all.length - limit };
+}
+function selectTargetView(state) {
+  const bodyPartId = selectSelectedBodyPart(state);
+  const empty = {
+    hasTarget: false,
+    name: null,
+    kind: "humanoid",
+    bodyPartId,
+    bodyPartLabel: selectBodyPartLabel(bodyPartId)
+  };
+  const session = selectCombatSession(state);
+  if (!session || session.status !== "active") return empty;
+  const selfId = state?.selectedCharacterId ?? null;
+  const participants = Array.isArray(session.participants) ? session.participants : [];
+  const enemy = participants.find((p) => p.id !== selfId && !p.isPlayer && p.condition === "active") ?? participants.find((p) => p.id !== selfId && p.condition === "active") ?? null;
+  if (!enemy) return empty;
+  return {
+    hasTarget: true,
+    name: enemy.name,
+    kind: "humanoid",
+    bodyPartId,
+    bodyPartLabel: selectBodyPartLabel(bodyPartId)
+  };
+}
+function selectModifierChips(state) {
+  const groups = selectModifierGroups(state);
+  return [
+    ...groups.passive ?? [],
+    ...groups.active ?? [],
+    ...groups.narrative ?? []
+  ];
+}
+
+// hud/components/hudIcons.js
+var ICON_MARK = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 2l8 10-8 10-8-10z" fill="currentColor"/></svg>`;
+var ICON_CARET_DOWN = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 7 6-7z" fill="currentColor"/></svg>`;
+var ICON_CARET_UP = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 15l6-7 6 7z" fill="currentColor"/></svg>`;
+var ICON_PENCIL = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M4 16.5L15 5.5l3.5 3.5L7.5 20H4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M13.5 7l3.5 3.5" stroke="currentColor" stroke-width="1.6"/></svg>`;
+var ICON_RELOAD = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+var ICON_LOG = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M5 4h14v16H5z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 9h8M8 12h8M8 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+var ICON_SHIELD = `<svg viewBox="0 0 24 28" width="100%" height="100%" aria-hidden="true"><path d="M12 2l9 3v8c0 6-4 9-9 11-5-2-9-5-9-11V5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+var ICON_MAGAZINE = `<svg viewBox="0 0 40 64" width="100%" height="100%" aria-hidden="true"><rect x="9" y="6" width="22" height="50" rx="5" fill="currentColor"/><rect x="13" y="2" width="14" height="7" rx="2.5" fill="currentColor"/></svg>`;
+function weaponSvg(svgRef) {
+  if (svgRef === "pistol") {
+    return `<svg viewBox="0 0 200 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <path d="M18 40h140l12 6v16h-58l-6 10-18 0-4-10H40l-6 22H18l4-30-4-2z" fill="currentColor"/>
+    </svg>`;
+  }
+  return `<svg viewBox="0 0 360 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+    <!-- receiver + barrel -->
+    <rect x="40" y="58" width="250" height="20" rx="5" fill="currentColor"/>
+    <rect x="280" y="62" width="70" height="9" rx="4" fill="currentColor"/>
+    <!-- stock -->
+    <path d="M10 56h40v26H22l-12-8z" fill="currentColor"/>
+    <!-- optic -->
+    <rect x="150" y="40" width="60" height="14" rx="4" fill="currentColor"/>
+    <rect x="170" y="30" width="22" height="12" rx="3" fill="currentColor"/>
+    <!-- magazine -->
+    <path d="M150 78l8 34h26l4-34z" fill="currentColor"/>
+    <!-- grip -->
+    <path d="M96 78l-10 34h22l6-34z" fill="currentColor"/>
+    <!-- handguard underline -->
+    <rect x="210" y="78" width="70" height="8" rx="4" fill="currentColor"/>
+  </svg>`;
+}
+var SKILL_ICONS = {
+  star: `<path d="M12 3l2.6 5.6 6.1.7-4.5 4.1 1.2 6L12 16.9 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="currentColor"/>`,
+  burst: `<path d="M12 2l1.8 4.4L18 4.5l-1.5 4.2 4.5 1L17 12l4 2.3-4.5 1L18 19.5l-4.2-1.9L12 22l-1.8-4.4L6 19.5l1.5-4.2-4.5-1L7 12 3 9.7l4.5-1L6 4.5l4.2 1.9z" fill="currentColor"/><circle cx="12" cy="12" r="3" fill="var(--odyssey-bg-deep)"/>`,
+  scope: `<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`,
+  psi: `<path d="M7 4h2v6a3 3 0 1 0 6 0V4h2v6a5 5 0 0 1-4 4.9V20h-2v-5.1A5 5 0 0 1 7 10z" fill="currentColor"/>`,
+  cube: `<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 3v18M4 7.5l8 4.5 8-4.5" fill="none" stroke="currentColor" stroke-width="1.6"/>`,
+  arrowup: `<path d="M12 4v13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7 9l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="19" r="2.4" fill="currentColor"/>`,
+  grenade: `<circle cx="12" cy="14" r="6.5" fill="currentColor"/><rect x="10" y="3" width="4" height="4" rx="1" fill="currentColor"/><path d="M14 4h4v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>`,
+  injector: `<path d="M5 19l8-8 3 3-8 8H5z" fill="currentColor"/><path d="M14 8l4-4 2 2-4 4z" fill="currentColor"/>`,
+  cloak: `<path d="M12 3c4 2 6 5 6 9 0 5-3 8-6 9-3-1-6-4-6-9 0-4 2-7 6-9z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 11c1.5 1.5 4.5 1.5 6 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>`,
+  bolt: `<path d="M13 2L4 14h6l-1 8 9-12h-6z" fill="currentColor"/>`,
+  shieldtri: `<path d="M12 4l7 3v6c0 4-3 6-7 7-4-1-7-3-7-7V7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>`,
+  arc: `<path d="M12 5a7 7 0 1 1-5 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="2.4" fill="currentColor"/>`
+};
+function skillIconSvg(name) {
+  const key = String(name || "").toLowerCase();
+  const alias = {
+    "arrow-up": "arrowup",
+    "mind": "psi",
+    "psionic": "psi",
+    "explosion": "burst",
+    "sunburst": "burst",
+    "shield": "shieldtri",
+    "cooldown": "arc",
+    "reload": "arc"
+  };
+  const inner = SKILL_ICONS[key] ?? SKILL_ICONS[alias[key]] ?? `<circle cx="12" cy="12" r="6" fill="currentColor"/>`;
+  return `<svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">${inner}</svg>`;
+}
+function zoneAttr(zoneId, zonesMap2, neutral) {
+  const stateName = neutral ? "healthy" : zonesMap2?.[zoneId] ?? "healthy";
+  return zoneStateClass(stateName);
+}
+function humanoidSvg(opts = {}) {
+  const { zones = {}, highlight = null, neutral = false } = opts;
+  const z = (id) => `ohud-zone ohud-zone--${zoneAttr(id, zones, neutral)}${highlight === id ? " is-target" : ""}`;
+  return `<svg viewBox="0 0 120 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" class="ohud-silhouette">
+    <circle cx="60" cy="24" r="16" class="${z("head")}" data-zone="head"/>
+    <rect x="42" y="44" width="36" height="46" rx="11" class="${z("torso")}" data-zone="torso"/>
+    <rect x="24" y="48" width="14" height="40" rx="7" class="${z("l_arm")}" data-zone="l_arm"/>
+    <rect x="82" y="48" width="14" height="40" rx="7" class="${z("r_arm")}" data-zone="r_arm"/>
+    <rect x="45" y="94" width="14" height="44" rx="7" class="${z("l_leg")}" data-zone="l_leg"/>
+    <rect x="61" y="94" width="14" height="44" rx="7" class="${z("r_leg")}" data-zone="r_leg"/>
+  </svg>`;
+}
+function mechSvg(opts = {}) {
+  const { zones = {} } = opts;
+  const z = (id) => `ohud-zone ohud-zone--${zoneAttr(id, zones, false)}`;
+  return `<svg viewBox="0 0 120 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" class="ohud-silhouette">
+    <rect x="46" y="10" width="28" height="20" rx="5" class="${z("m_head")}" data-zone="m_head"/>
+    <path d="M36 34h48l6 40H30z" class="${z("m_core")}" data-zone="m_core"/>
+    <rect x="14" y="38" width="18" height="46" rx="6" class="${z("m_l_arm")}" data-zone="m_l_arm"/>
+    <rect x="88" y="38" width="18" height="46" rx="6" class="${z("m_r_arm")}" data-zone="m_r_arm"/>
+    <path d="M40 78h16v60H38z" class="${z("m_legs")}" data-zone="m_legs"/>
+    <path d="M64 78h16l-2 60H64z" class="${z("m_legs")}"/>
+  </svg>`;
+}
+function turretSvg(opts = {}) {
+  const { zones = {} } = opts;
+  const z = (id) => `ohud-zone ohud-zone--${zoneAttr(id, zones, false)}`;
+  return `<svg viewBox="0 0 120 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" class="ohud-silhouette">
+    <ellipse cx="60" cy="132" rx="38" ry="10" class="${z("base")}" data-zone="base"/>
+    <rect x="50" y="78" width="20" height="50" rx="6" class="${z("base")}"/>
+    <rect x="34" y="50" width="52" height="34" rx="10" class="${z("housing")}" data-zone="housing"/>
+    <rect x="80" y="58" width="34" height="10" rx="5" class="${z("barrel")}" data-zone="barrel"/>
+    <circle cx="48" cy="44" r="8" class="${z("sensor")}" data-zone="sensor"/>
+  </svg>`;
+}
+function entitySilhouetteSvg(summary, opts = {}) {
+  const ref = summary?.svgRef ?? "humanoid";
+  if (ref === "mech") return mechSvg(opts);
+  if (ref === "turret") return turretSvg(opts);
+  return humanoidSvg(opts);
+}
+
+// utils/json.js
+function escapeHtml(value) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+
+// hud/components/hudDom.js
+var esc = escapeHtml;
+function cls(...names) {
+  return names.filter(Boolean).join(" ");
+}
+var TIP_SEP = "\u2016";
+function tipAttr(title, lines = []) {
+  if (!title) return "";
+  const body = lines.filter(Boolean).join(TIP_SEP);
+  const t = esc(String(title));
+  const l = esc(body);
+  return ` data-tip-title="${t}"${body ? ` data-tip-lines="${l}"` : ""}`;
+}
+
+// hud/components/StatusChip.js
+function polarityClass(polarity) {
+  if (polarity === "positive") return "positive";
+  if (polarity === "negative") return "negative";
+  return "neutral";
+}
+function statusChip(status2) {
+  if (!status2) return "";
+  const dur = status2.durationTurns == null ? "Ongoing" : `${status2.durationTurns}t`;
+  const tip = tipAttr(status2.name, [
+    status2.description || "",
+    `Duration: ${dur}`
+  ]);
+  const initial = esc((status2.name || "?").trim().charAt(0).toUpperCase());
+  return `<span class="ohud-chip-status ohud-chip-status--${polarityClass(status2.polarity)}"${tip}>
+    <span class="ohud-chip-dot" aria-hidden="true">${initial}</span>
+    <span class="ohud-chip-name">${esc(status2.name)}</span>
+  </span>`;
+}
+function overflowChip(n) {
+  if (!n || n <= 0) return "";
+  return `<span class="ohud-chip-status ohud-chip-status--more" data-tip-title="More statuses" data-tip-lines="${n} more active">+${n}</span>`;
+}
+
+// hud/components/HudPanel.js
+function panel(cfg) {
+  const { key, label, accent, bodyHtml, className, headerRightHtml } = cfg;
+  const header = label || headerRightHtml ? `<div class="ohud-panel-head">
+         ${label ? `<span class="ohud-panel-label ${accent ? `ohud-accent--${accent}` : ""}">${esc(label)}</span>` : "<span></span>"}
+         ${headerRightHtml ?? ""}
+       </div>` : "";
+  return `<section class="${cls("ohud-panel", `ohud-panel--${key}`, className)}" data-block="${esc(key)}">
+    ${header}
+    <div class="ohud-panel-body">${bodyHtml}</div>
+  </section>`;
+}
+
+// hud/components/PlayerBlock.js
+function zonesMap(entity) {
+  const map = {};
+  for (const z of entity.zones ?? []) map[z.id] = z.state;
+  return map;
+}
+function resourceBar(kind, label, res) {
+  const max = Math.max(0, Number(res?.max) || 0);
+  const cur = Math.max(0, Number(res?.current) || 0);
+  const pct = max > 0 ? Math.round(cur / max * 100) : 0;
+  return `<div class="ohud-res ohud-res--${kind}"${tipAttr(label, [`${cur} / ${max}`])}>
+    <span class="ohud-res-label">${esc(label)}</span>
+    <span class="ohud-res-track"><span class="ohud-res-fill" style="width:${pct}%"></span></span>
+    <span class="ohud-res-num">${cur}<span class="ohud-res-max">/${max}</span></span>
+  </div>`;
+}
+function actionPips(actions) {
+  const pip = (on, name) => `<span class="${cls("ohud-pip", on ? "is-on" : "is-off")}"${tipAttr(`${name} action`, [on ? "Available" : "Spent"])}>${name}</span>`;
+  return `<div class="ohud-pips">${pip(Boolean(actions?.main), "MAIN")}${pip(Boolean(actions?.move), "MOVE")}</div>`;
+}
+function pilotStrip(pilot) {
+  if (!pilot) return "";
+  const psi = pilot.psi ? `${pilot.psi.current}/${pilot.psi.max}` : "";
+  return `<div class="ohud-pilot"${tipAttr(`Pilot: ${pilot.name}`, [psi ? `Psi ${psi}` : ""])}>
+    <span class="ohud-pilot-tag">PILOT</span>
+    <span class="ohud-pilot-name">${esc(pilot.name)}</span>
+    ${psi ? `<span class="ohud-pilot-psi">\u03A8 ${esc(psi)}</span>` : ""}
+  </div>`;
+}
+function renderPlayerBlock(state) {
+  const entity = selectCurrentEntity(state);
+  if (!entity) {
+    return panel({ key: "player", label: "PLAYER", bodyHtml: `<div class="ohud-muted-fill">\u2014</div>` });
+  }
+  const turn = selectPlayerStatusLabel(state);
+  const turnClass = turn === "YOUR TURN" ? "active" : turn === "WAITING" ? "waiting" : turn === "GM VIEW" ? "gm" : "idle";
+  const { shown, overflow } = selectVisibleStatuses(state, 5);
+  const isMech = entity.summary?.svgRef === "mech";
+  const headerRight = `<span class="ohud-turn ohud-turn--${turnClass}">${esc(turn)}</span>`;
+  const body = `
+    <div class="ohud-player-grid">
+      <div class="ohud-figure">
+        <div class="ohud-figure-svg">${entitySilhouetteSvg(entity.summary, { zones: zonesMap(entity) })}</div>
+        <div class="ohud-figure-shield" aria-hidden="true">${ICON_SHIELD}</div>
+      </div>
+      <div class="ohud-player-stats">
+        <div class="ohud-player-name" title="${esc(entity.summary.name)}">${esc(entity.summary.name)}</div>
+        ${resourceBar("shield", "SHIELD", entity.shield)}
+        ${entity.psi && entity.psi.max > 0 ? resourceBar("psi", "PSI", entity.psi) : ""}
+        ${actionPips(entity.actions)}
+      </div>
+    </div>
+    ${isMech ? pilotStrip(entity.pilot) : ""}
+    <div class="ohud-statuses">
+      ${shown.map(statusChip).join("")}
+      ${overflowChip(overflow)}
+    </div>
+  `;
+  return panel({
+    key: "player",
+    label: isMech ? "MECH" : "YOU",
+    bodyHtml: body,
+    headerRightHtml: headerRight
+  });
+}
+
+// hud/components/GunBlock.js
+function fireModeLetter(mode) {
+  if (!mode) return "\u2014";
+  const m = String(mode).toLowerCase();
+  if (m.startsWith("semi")) return "S";
+  if (m.startsWith("burst")) return "B";
+  if (m.startsWith("auto")) return "A";
+  if (m.startsWith("full")) return "F";
+  return String(mode).charAt(0).toUpperCase();
+}
+function emptyGun() {
+  return panel({
+    key: "gun",
+    label: "WEAPON",
+    bodyHtml: `<div class="ohud-gun is-disabled"><div class="ohud-gun-main"><div class="ohud-muted-fill">NO WEAPON</div></div></div>`
+  });
+}
+function renderGunBlock(state) {
+  const weapon = state?.snapshot?.weapon?.primary ?? null;
+  const secondary = state?.snapshot?.weapon?.secondary ?? null;
+  if (!weapon) return emptyGun();
+  const mag = weapon.loadedMagazine ?? null;
+  const usesMag = Boolean(weapon.usesMagazine);
+  const ammoCur = mag ? Number(mag.current ?? 0) : Number(weapon.ammo?.current ?? 0);
+  const ammoMax = mag ? Number(mag.max ?? 0) : Number(weapon.ammo?.max ?? 0);
+  const ammoType = mag?.ammoType ?? (weapon.usesConsumable ? "item" : "\u2014");
+  const isEmpty = weapon.requiresAmmo && ammoCur <= 0;
+  const reserve = selectVisibleReserveMagazines(state);
+  const canReload = Boolean(weapon.canReload) && reserve.length > 0;
+  const disabled = Boolean(weapon.disabledReason) || isEmpty && !canReload;
+  const fm = fireModeLetter(weapon.currentFireMode);
+  const fireModeTip = tipAttr("Fire mode", [
+    `Current: ${weapon.currentFireMode ?? "\u2014"}`,
+    weapon.fireModes?.length ? `Available: ${weapon.fireModes.join(", ")}` : ""
+  ]);
+  const swapTip = tipAttr("Magazine / ammo", [
+    "Swap available in a later phase",
+    reserve.length ? `${reserve.length} compatible magazine(s) in reserve` : "No spare magazines"
+  ]);
+  const mainCard = `
+    <div class="ohud-gun-main"${tipAttr(weapon.name, [weapon.currentFireMode ? `Mode: ${weapon.currentFireMode}` : ""])}>
+      <span class="ohud-gun-name">${esc(weapon.name)}</span>
+      <span class="ohud-gun-caret is-readonly" aria-hidden="true"${swapTip}>${ICON_CARET_DOWN}</span>
+      <span class="ohud-gun-silhouette">${weaponSvg(weapon.svgRef)}</span>
+      <span class="ohud-firemode is-readonly"${fireModeTip}><span class="ohud-firemode-knob"></span><span class="ohud-firemode-letter">${esc(fm)}</span></span>
+      ${secondary ? `<span class="ohud-gun-secondary"${tipAttr("Secondary weapon", [esc(secondary.name || "")])}>2nd</span>` : ""}
+    </div>`;
+  const magCard = `
+    <div class="ohud-mag-card${usesMag ? "" : " is-consumable"}"${swapTip}>
+      <span class="ohud-mag-icon" aria-hidden="true">${usesMag ? ICON_MAGAZINE : ""}</span>
+      ${usesMag ? `<span class="ohud-mag-caret is-readonly" aria-hidden="true">${ICON_CARET_DOWN}</span>` : ""}
+      <span class="ohud-mag-type">${esc(ammoType)}</span>
+    </div>`;
+  const ammoCard = `
+    <div class="ohud-ammo-card">
+      <span class="ohud-ammo-head">
+        <span class="ohud-ammo-label">ammo</span>
+        <span class="${cls("ohud-ammo-reload", "is-readonly", canReload ? "" : "is-off")}" aria-hidden="true"${tipAttr("Reload", [canReload ? "Reserve magazine available" : "No reload available", "Reload arrives in a later phase"])}>${ICON_RELOAD}</span>
+      </span>
+      <span class="${cls("ohud-ammo-count", isEmpty ? "ohud-ammo-count--empty" : "")}">
+        <span class="ohud-ammo-cur">${ammoCur}</span><span class="ohud-ammo-max">/${ammoMax}</span>
+      </span>
+    </div>`;
+  const body = `<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
+    ${mainCard}
+    <div class="ohud-gun-side">${magCard}${ammoCard}</div>
+  </div>`;
+  return panel({ key: "gun", label: "WEAPON", bodyHtml: body });
+}
+
+// hud/components/SkillBlock.js
+var COST_ABBR = { FREE: "F", MOVE: "Mv", MAIN: "M", TURN: "T" };
+function emptyTile(index) {
+  return `<div class="ohud-slot ohud-slot--empty" data-slot="${index}" aria-hidden="true"></div>`;
+}
+function skillTile(skill2, index, selectedId) {
+  const accent = accentClass(skill2.color);
+  const disabled = Boolean(skill2.disabledReason);
+  const selected = skill2.id === selectedId;
+  const cost = COST_ABBR[skill2.actionCost] ?? "";
+  const cd = Number(skill2.cooldownTurns) || 0;
+  const res = skill2.resourceCost ? `${skill2.resourceCost.amount}${String(skill2.resourceCost.type).charAt(0).toUpperCase()}` : "";
+  const tip = tipAttr(skill2.name, [
+    `Source: ${skill2.source}`,
+    `Cost: ${skill2.actionCost}${res ? ` \xB7 ${res}` : ""}`,
+    cd > 0 ? `Cooldown: ${cd} turn(s)` : "",
+    skill2.isToggled ? "Active (toggled on)" : "",
+    skill2.disabledReason ? `Disabled: ${skill2.disabledReason}` : skill2.tooltip || ""
+  ]);
+  return `<div class="${cls(
+    "ohud-slot",
+    `ohud-accent--${accent}`,
+    disabled ? "is-disabled" : "",
+    selected ? "is-selected" : "",
+    skill2.isToggled ? "is-toggled" : ""
+  )}" data-slot="${index}" data-skill="${esc(skill2.id)}"${tip}>
+    <span class="ohud-slot-icon">${skillIconSvg(skill2.icon)}</span>
+    ${cost ? `<span class="ohud-slot-cost">${esc(cost)}</span>` : ""}
+    ${res ? `<span class="ohud-slot-res">${esc(res)}</span>` : ""}
+    ${cd > 0 ? `<span class="ohud-slot-cd">${cd}</span>` : ""}
+    ${skill2.isToggled ? `<span class="ohud-slot-toggle" aria-hidden="true"></span>` : ""}
+  </div>`;
+}
+function renderSkillBlock(state) {
+  const slots = selectQuickSlots(state);
+  const selected = selectSelectedSkill(state);
+  const selectedId = selected?.id ?? null;
+  const tiles = (slots.length ? slots : Array.from({ length: 6 }, (_, i) => ({ index: i, skillId: null }))).map((slot) => {
+    const skill2 = selectSkillById(state, slot.skillId);
+    return skill2 ? skillTile(skill2, slot.index, selectedId) : emptyTile(slot.index);
+  }).join("");
+  return panel({
+    key: "skills",
+    label: "SKILLS",
+    bodyHtml: `<div class="ohud-slots">${tiles}</div>`
+  });
+}
+
+// hud/components/TargetBlock.js
+function renderTargetBlock(state) {
+  const tv = selectTargetView(state);
+  if (!tv.hasTarget) {
+    const body2 = `<div class="ohud-target is-empty">
+      <div class="ohud-figure ohud-figure--ghost">
+        <div class="ohud-figure-svg">${humanoidSvg({ neutral: true })}</div>
+      </div>
+      <div class="ohud-target-hint">PICK TARGET<br>ON MAP</div>
+    </div>`;
+    return panel({ key: "target", label: "TARGET", bodyHtml: body2 });
+  }
+  const body = `<div class="ohud-target">
+    <div class="ohud-figure">
+      <div class="ohud-figure-svg">${humanoidSvg({ neutral: true, highlight: tv.bodyPartId })}</div>
+      <div class="ohud-figure-shield" aria-hidden="true"${tipAttr("Target shield", ["Detail hidden for non-owned entity"])}>${ICON_SHIELD}</div>
+    </div>
+    <div class="ohud-target-meta">
+      <div class="ohud-target-name" title="${esc(tv.name)}">${esc(tv.name)}</div>
+      <div class="ohud-target-zone"${tipAttr("Aimed zone", ["Body-part targeting arrives in a later phase"])}>${esc(tv.bodyPartLabel)}</div>
+    </div>
+  </div>`;
+  return panel({ key: "target", label: "TARGET", bodyHtml: body });
+}
+
+// hud/components/ModifierBlock.js
+var MAX_CHIPS = 6;
+function chipAccent(mod) {
+  if (mod.source === "intervention") return "intervention";
+  if (mod.kind === "narrative" || mod.requiresGMApproval) return "narrative";
+  if (mod.polarity === "negative") return "negative";
+  if (mod.polarity === "positive") return "positive";
+  return "neutral";
+}
+function modChip(mod) {
+  const accent = chipAccent(mod);
+  const sign = mod.value > 0 ? `+${mod.value}` : mod.value < 0 ? `${mod.value}` : "";
+  const tip = tipAttr(mod.name, [
+    mod.description || "",
+    sign ? `Value: ${sign}` : "",
+    `Source: ${mod.source}`,
+    mod.alwaysActive ? "Always active (passive)" : "",
+    mod.requiresGMApproval ? "Requires GM approval" : ""
+  ]);
+  return `<span class="${cls(
+    "ohud-mod",
+    `ohud-mod--${accent}`,
+    mod.selected ? "is-selected" : "",
+    mod.alwaysActive ? "is-passive" : ""
+  )}"${tip}>
+    <span class="ohud-mod-name">${esc(mod.name)}</span>
+    ${sign ? `<span class="ohud-mod-val">${esc(sign)}</span>` : ""}
+  </span>`;
+}
+function renderModifierBlock(state) {
+  const chips = selectModifierChips(state).slice(0, MAX_CHIPS);
+  const filled = chips.map(modChip).join("");
+  const padCount = Math.max(0, Math.min(2, MAX_CHIPS - chips.length));
+  const pads = Array.from({ length: padCount }, () => `<span class="ohud-mod ohud-mod--empty" aria-hidden="true"></span>`).join("");
+  return panel({
+    key: "mod",
+    label: "MOD",
+    bodyHtml: `<div class="ohud-mods">${filled}${pads}</div>`
+  });
+}
+
+// hud/components/ActionBlock.js
+function renderActionBlock(state) {
+  const label = selectActionLabel(state);
+  const can = selectCanAct(state);
+  const reason = selectDisabledReason(state);
+  const disabled = !can || Boolean(reason);
+  const cost = selectCurrentActionCost(state);
+  const costHint = `<span class="ohud-action-econ">
+    <span class="${cls("ohud-econ-pip", cost === "MAIN" ? "is-spend" : "")}">MAIN</span>
+    <span class="${cls("ohud-econ-pip", cost === "MOVE" ? "is-spend" : "")}">MOVE</span>
+  </span>`;
+  const tip = disabled ? tipAttr("Action unavailable", [esc(reason || "Not available")]) : tipAttr(`${label}`, [`Costs: ${cost}`, "Resolution arrives in a later phase"]);
+  const reasonLine = disabled && reason ? `<div class="ohud-action-reason">${esc(reason)}</div>` : `<div class="ohud-action-reason ohud-action-reason--ok">Preview only</div>`;
+  return `<section class="ohud-panel ohud-panel--action" data-block="action">
+    <button type="button" class="${cls("ohud-action-btn", disabled ? "is-disabled" : "is-ready")}"
+      data-action="primary" ${disabled ? 'aria-disabled="true"' : ""}${tip}>
+      <span class="ohud-action-label">${esc(label)}</span>
+    </button>
+    ${costHint}
+    ${reasonLine}
+  </section>`;
+}
+
+// hud/components/BattleLogBlock.js
+function deltaClass(delta) {
+  const d = String(delta || "").toLowerCase();
+  if (!d) return "neutral";
+  if (d.includes("miss")) return "miss";
+  return "hit";
+}
+function entryRow(e) {
+  if (e.kind === "system") {
+    return `<li class="ohud-log-row ohud-log-row--system">\u25B8 ${esc(e.action || e.summary)}</li>`;
+  }
+  if (e.kind === "narrative") {
+    return `<li class="ohud-log-row ohud-log-row--narr">${esc(e.actor ? `${e.actor}: ` : "")}${esc(e.action || e.summary)}</li>`;
+  }
+  return `<li class="ohud-log-row">
+    <span class="ohud-log-actor">${esc(e.actor)}</span>
+    <span class="ohud-log-act">${esc(e.action)}</span>
+    ${e.target ? `<span class="ohud-log-arrow">\u203A</span><span class="ohud-log-target">${esc(e.target)}</span>` : ""}
+    ${e.delta ? `<span class="ohud-log-delta ohud-log-delta--${deltaClass(e.delta)}">${esc(e.delta)}</span>` : ""}
+  </li>`;
+}
+function renderBattleLogBlock(state, logMode) {
+  const entries = selectCompactBattleLog(state);
+  const count = entries.length;
+  if (logMode === "button") {
+    return `<section class="ohud-panel ohud-panel--log ohud-log--button" data-block="log">
+      <button type="button" class="ohud-log-toggle" data-action="toggle-log" data-tip-title="Battle log" data-tip-lines="${count} recent entr${count === 1 ? "y" : "ies"}">
+        <span class="ohud-log-toggle-icon">${ICON_LOG}</span><span>LOG</span>
+        ${count ? `<span class="ohud-log-badge">${count}</span>` : ""}
+      </button>
+    </section>`;
+  }
+  const expanded = logMode === "expanded";
+  const list = entries.length ? `<ul class="ohud-log-list">${entries.map(entryRow).join("")}</ul>` : `<div class="ohud-log-empty">No combat log yet.</div>`;
+  return `<section class="${cls("ohud-panel", "ohud-panel--log", expanded ? "ohud-log--expanded" : "ohud-log--card")}" data-block="log">
+    <div class="ohud-panel-head">
+      <span class="ohud-panel-label">BATTLE LOG</span>
+      <button type="button" class="ohud-log-collapse" data-action="toggle-log" aria-label="${expanded ? "Collapse log" : "Expand log"}">
+        ${expanded ? ICON_CARET_DOWN : ICON_CARET_UP}
+      </button>
+    </div>
+    ${list}
+  </section>`;
+}
+
+// hud/components/EmptyHudState.js
+function renderEmptyState(state) {
+  const { title, hint } = buildEmptyStateModel(state);
+  return `<div class="ohud-empty">
+    <span class="ohud-empty-mark" aria-hidden="true">${ICON_MARK}</span>
+    <div class="ohud-empty-title">${esc(title)}</div>
+    <div class="ohud-empty-hint">${esc(hint)}</div>
+  </div>`;
+}
+function renderErrorState(state) {
+  const msg = state?.error?.message || "Something went wrong.";
+  return `<div class="ohud-empty ohud-empty--error">
+    <div class="ohud-empty-title">HUD ERROR</div>
+    <div class="ohud-empty-hint">${esc(msg)}</div>
+  </div>`;
+}
+function renderLoadingState() {
+  return `<div class="ohud-empty ohud-empty--loading">
+    <div class="ohud-empty-title">LOADING\u2026</div>
+  </div>`;
+}
+
+// hud/components/Tooltip.js
+var MARGIN = 8;
+function createTooltip(host) {
+  const el = document.createElement("div");
+  el.className = "ohud-tooltip";
+  el.setAttribute("role", "tooltip");
+  el.hidden = true;
+  host.appendChild(el);
+  let visible = false;
+  function show(target) {
+    const title = target.getAttribute("data-tip-title");
+    if (!title) return;
+    const lines = (target.getAttribute("data-tip-lines") || "").split(TIP_SEP).filter(Boolean);
+    el.innerHTML = `<div class="ohud-tooltip-title">${title}</div>` + lines.map((l) => `<div class="ohud-tooltip-line">${l}</div>`).join("");
+    el.hidden = false;
+    visible = true;
+  }
+  function hide() {
+    if (!visible) return;
+    el.hidden = true;
+    visible = false;
+  }
+  function place(x, y) {
+    if (!visible) return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const rect = el.getBoundingClientRect();
+    let left = x + 14;
+    let top = y - rect.height - 12;
+    if (top < MARGIN) top = y + 18;
+    left = Math.max(MARGIN, Math.min(left, vw - rect.width - MARGIN));
+    top = Math.max(MARGIN, Math.min(top, vh - rect.height - MARGIN));
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
+  function onOver(e) {
+    const target = e.target.closest("[data-tip-title]");
+    if (!target || !host.contains(target)) return;
+    show(target);
+    place(e.clientX, e.clientY);
+  }
+  function onMove(e) {
+    if (!visible) return;
+    if (!e.target.closest("[data-tip-title]")) {
+      hide();
+      return;
+    }
+    place(e.clientX, e.clientY);
+  }
+  function onOut(e) {
+    const to = e.relatedTarget;
+    if (to && to.closest && to.closest("[data-tip-title]")) return;
+    hide();
+  }
+  host.addEventListener("mouseover", onOver);
+  host.addEventListener("mousemove", onMove);
+  host.addEventListener("mouseout", onOut);
+  return {
+    hide,
+    destroy() {
+      host.removeEventListener("mouseover", onOver);
+      host.removeEventListener("mousemove", onMove);
+      host.removeEventListener("mouseout", onOut);
+      el.remove();
+    }
+  };
+}
+
+// hud/components/CombatHudLayout.js
+function createCombatHudLayout(cfg) {
+  const {
+    store,
+    obrAvailable = true,
+    devControls = true,
+    onScenario,
+    onRole,
+    onCollapse
+  } = cfg;
+  const el = document.createElement("div");
+  el.className = "ohud-hud";
+  let currentScenarioId = cfg.scenarioId ?? "A";
+  let devOpen = false;
+  let battleLogExpanded = false;
+  let toastTimer = null;
+  const tooltip = createTooltip(el);
+  function currentWidth() {
+    return typeof window !== "undefined" && window.innerWidth || el.clientWidth || 1280;
+  }
+  function devStrip(state) {
+    if (!devControls) return "";
+    const role = state?.viewer?.role === "gm" ? "gm" : "player";
+    const options = listScenarios().map((s) => `<option value="${esc(s.id)}" ${s.id === currentScenarioId ? "selected" : ""}>${esc(s.label)}</option>`).join("");
+    return `<div class="${cls("ohud-dev", devOpen ? "is-open" : "")}">
+      <button type="button" class="ohud-dev-btn" data-action="dev-toggle" aria-expanded="${devOpen}" data-tip-title="Developer tools" data-tip-lines="Scenario + role (dev only)">
+        ${ICON_PENCIL}<span class="ohud-dev-btn-label">DEV</span>
+      </button>
+      ${devOpen ? `<div class="ohud-dev-strip">
+        <label class="ohud-dev-field"><span>Scenario</span>
+          <select class="ohud-select" data-action="scenario">${options}</select>
+        </label>
+        <span class="ohud-dev-roles">
+          <button type="button" class="${cls("ohud-chip", role === "player" ? "is-on" : "")}" data-action="role" data-value="player">Player</button>
+          <button type="button" class="${cls("ohud-chip", role === "gm" ? "is-on" : "")}" data-action="role" data-value="gm">GM</button>
+        </span>
+      </div>` : ""}
+    </div>`;
+  }
+  function controls(state) {
+    const fallback = obrAvailable ? "" : `<span class="ohud-fallback">OBR unavailable \u2014 local HUD preview</span>`;
+    const scenarioLabel = (listScenarios().find((s) => s.id === currentScenarioId) || {}).label || "";
+    return `<div class="ohud-controls">
+      <span class="ohud-brand">
+        <span class="ohud-brand-mark" aria-hidden="true">${ICON_MARK}</span>
+        <span class="ohud-brand-text">ODYSSEY</span>
+        <span class="ohud-brand-sub">${esc(scenarioLabel)}</span>
+      </span>
+      ${fallback}
+      <span class="ohud-controls-right">
+        ${devStrip(state)}
+        <button type="button" class="ohud-collapse" data-action="collapse" aria-label="Collapse HUD" data-tip-title="Collapse HUD">${ICON_CARET_DOWN}</button>
+      </span>
+    </div>`;
+  }
+  function readyGrid(state, mode) {
+    const logMode = resolveBattleLogMode(mode, battleLogExpanded);
+    const logInColumn = battleLogIsColumn(mode);
+    const logHtml = renderBattleLogBlock(state, logMode);
+    return `<div class="${cls("ohud-grid", `ohud-grid--${mode}`)}">
+      ${renderPlayerBlock(state)}
+      ${renderGunBlock(state)}
+      ${renderSkillBlock(state)}
+      ${renderTargetBlock(state)}
+      ${renderModifierBlock(state)}
+      ${renderActionBlock(state)}
+      ${logInColumn ? logHtml : ""}
+    </div>
+    ${logInColumn ? "" : `<div class="ohud-log-float">${logHtml}</div>`}`;
+  }
+  function bodyHtml(state, mode) {
+    const bodyMode = resolveBodyMode(state);
+    if (bodyMode === "ready") return readyGrid(state, mode);
+    if (bodyMode === "empty") return `<div class="ohud-state-wrap">${renderEmptyState(state)}</div>`;
+    if (bodyMode === "error") return `<div class="ohud-state-wrap">${renderErrorState(state)}</div>`;
+    return `<div class="ohud-state-wrap">${renderLoadingState()}</div>`;
+  }
+  function render() {
+    const state = store.getState();
+    const mode = resolveLayoutMode(currentWidth());
+    el.setAttribute("data-mode", mode);
+    el.setAttribute("data-body", resolveBodyMode(state));
+    el.innerHTML = `${controls(state)}${bodyHtml(state, mode)}<div class="ohud-toast" hidden></div>`;
+  }
+  function showToast(text) {
+    const toast = el.querySelector(".ohud-toast");
+    if (!toast) return;
+    toast.textContent = text;
+    toast.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      if (toast) toast.hidden = true;
+    }, 1800);
+  }
+  function onClick(e) {
+    const t = e.target.closest("[data-action]");
+    if (!t) return;
+    const action = t.getAttribute("data-action");
+    switch (action) {
+      case "collapse":
+        onCollapse && onCollapse(true);
+        break;
+      case "dev-toggle":
+        devOpen = !devOpen;
+        render();
+        break;
+      case "role":
+        onRole && onRole(t.getAttribute("data-value"));
+        break;
+      case "toggle-log":
+        battleLogExpanded = !battleLogExpanded;
+        render();
+        break;
+      case "primary":
+        if (t.classList.contains("is-disabled")) return;
+        showToast("Action resolution arrives in a later phase");
+        break;
+      default:
+        break;
+    }
+  }
+  function onChange(e) {
+    const t = e.target.closest("[data-action='scenario']");
+    if (!t) return;
+    currentScenarioId = t.value;
+    battleLogExpanded = false;
+    onScenario && onScenario(currentScenarioId);
+  }
+  let resizeRaf = null;
+  function onResize() {
+    if (resizeRaf) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = null;
+      render();
+    });
+  }
+  el.addEventListener("click", onClick);
+  el.addEventListener("change", onChange);
+  if (typeof window !== "undefined") window.addEventListener("resize", onResize);
+  const unsubscribe = store.subscribe(render);
+  render();
+  return {
+    el,
+    setScenarioId(id) {
+      currentScenarioId = id;
+      render();
+    },
+    destroy() {
+      unsubscribe();
+      tooltip.destroy();
+      el.removeEventListener("click", onClick);
+      el.removeEventListener("change", onChange);
+      if (typeof window !== "undefined") window.removeEventListener("resize", onResize);
+      if (toastTimer) clearTimeout(toastTimer);
+      el.remove();
+    }
+  };
+}
+
+// hud/overlay/combatHudOverlayView.js
+function createCombatHudOverlayView(cfg) {
+  const {
+    root,
+    store,
+    obrAvailable = true,
+    devControls = true,
+    onCollapse,
+    onScenario,
+    onRole
+  } = cfg;
+  const host = document.createElement("div");
+  host.className = "odyssey-hud ohud-overlay";
+  root.appendChild(host);
+  let scenarioId = cfg.scenarioId ?? "A";
+  let layout = null;
+  let mode = null;
+  function mountLayout() {
+    if (layout) return;
+    layout = createCombatHudLayout({
+      store,
+      obrAvailable,
+      devControls,
+      scenarioId,
+      onScenario(id) {
+        scenarioId = id;
+        onScenario(id);
+      },
+      onRole,
+      onCollapse
+    });
+    host.appendChild(layout.el);
+  }
+  function unmountLayout() {
+    if (!layout) return;
+    layout.destroy();
+    layout = null;
+  }
+  function showPill() {
+    host.innerHTML = `
+      <button class="ohud-pill" data-ohud="reopen" title="Open Odyssey Combat HUD" aria-label="Open Odyssey Combat HUD">
+        <span class="ohud-mark" aria-hidden="true">${ICON_MARK}</span>
+        <span class="ohud-pill-label">ODYSSEY</span>
+      </button>`;
+  }
+  function render(state) {
+    const collapsed = Boolean(state?.ui?.isHudCollapsed);
+    host.classList.toggle("is-collapsed", collapsed);
+    if (collapsed) {
+      if (mode !== "collapsed") {
+        unmountLayout();
+        showPill();
+        mode = "collapsed";
+      }
+    } else if (mode !== "expanded") {
+      host.innerHTML = "";
+      mountLayout();
+      mode = "expanded";
+    }
+  }
+  function onClick(e) {
+    const el = e.target.closest("[data-ohud='reopen']");
+    if (el) onCollapse(false);
+  }
+  host.addEventListener("click", onClick);
+  const unsubscribe = store.subscribe(render);
+  render(store.getState());
+  return {
+    render,
+    setScenarioId(id) {
+      scenarioId = id;
+      if (layout) layout.setScenarioId(id);
+    },
+    destroy() {
+      unsubscribe();
+      host.removeEventListener("click", onClick);
+      unmountLayout();
+      host.remove();
+    }
+  };
+}
+
 // hud/overlay/mountCombatHudOverlay.js
 function mountCombatHudOverlay(options = {}) {
   if (typeof document === "undefined") {
@@ -4923,7 +5850,7 @@ function mountCombatHudOverlay(options = {}) {
   let scenarioId = restored.mockScenarioId;
   const adapter = createMockCombatHudAdapter({ scenarioId });
   adapter.setViewerRole(restored.viewerRole);
-  if (restored.selectedTokenId !== void 0) {
+  if (restored.selectedTokenId) {
     adapter.selectToken(restored.selectedTokenId);
   }
   const store = createCombatHudStore({ adapter });
@@ -4981,7 +5908,8 @@ function mountCombatHudOverlay(options = {}) {
 function injectStyles() {
   for (const [id, css] of [
     ["ohud-tokens", combatHudTokens_default],
-    ["ohud-overlay-styles", combatHudOverlay_default]
+    ["ohud-overlay-styles", combatHudOverlay_default],
+    ["ohud-layout-styles", combatHudLayout_default]
   ]) {
     if (document.getElementById(id)) continue;
     const el = document.createElement("style");

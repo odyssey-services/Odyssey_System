@@ -1,9 +1,9 @@
 /*
- * Combat HUD overlay — Phase 1A placeholder shell styles.
+ * Combat HUD overlay — frame + collapsed pill (Phase 1A, trimmed for Phase 2).
  *
- * Consumes the semantic tokens from hud/styles/combatHudTokens.css (injected
- * alongside this file). No raw colours are referenced from JavaScript. This is
- * a compact, restrained sci-fi panel — not a full-screen modal.
+ * Only the overlay container and the collapsed reopen pill live here. All the
+ * expanded module/layout styling is in hud/components/combatHudLayout.css.
+ * Consumes the semantic tokens from hud/styles/combatHudTokens.css.
  */
 
 *,
@@ -15,134 +15,34 @@ body {
   margin: 0;
   background: transparent;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: var(--odyssey-hud-text, #e8ecf4);
+  color: var(--odyssey-hud-text, #eaf0ff);
 }
 
 #root { height: 100%; }
 
-/* The .odyssey-hud class (from this element) scopes the token variables. */
+/* The iframe rect IS the HUD footprint. The container bottom-aligns the HUD so
+   any spare height sits above it (transparent), and the map shows through. */
 .ohud-overlay {
   height: 100%;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  /* The iframe rect IS the HUD footprint; keep transparent so the map shows
-     through any padding and clicks outside the panel are not visually implied. */
   background: transparent;
   padding: 0;
-}
-
-/* ===================== Expanded shell ===================== */
-.ohud-shell {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 14px 8px;
-  background: var(--odyssey-hud-bg);
-  border: 1px solid var(--odyssey-hud-border);
-  border-radius: var(--odyssey-hud-radius);
-  box-shadow: var(--odyssey-hud-shadow);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-
-.ohud-shell-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* Brand */
-.ohud-brand { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 0 0 auto; }
-.ohud-mark { color: var(--odyssey-hud-attack); font-size: 16px; line-height: 1; }
-.ohud-titles { display: flex; flex-direction: column; min-width: 0; }
-.ohud-title {
-  font-size: 12px; font-weight: 700; letter-spacing: 1.2px;
-  color: var(--odyssey-hud-text); white-space: nowrap;
-}
-.ohud-subtitle {
-  font-size: 10px; color: var(--odyssey-hud-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
-}
-
-/* Center status */
-.ohud-center {
-  flex: 1 1 auto; display: flex; align-items: center; gap: 10px;
-  justify-content: center; min-width: 0;
-}
-.ohud-char {
-  font-size: 12px; color: var(--odyssey-hud-text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px;
-}
-.ohud-char--none { color: var(--odyssey-hud-muted); font-style: italic; }
-
-.ohud-badge {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.6px;
-  padding: 3px 9px; border-radius: 10px; white-space: nowrap;
-  border: 1px solid var(--odyssey-hud-border);
-}
-.ohud-badge--ready { color: #06210f; background: var(--odyssey-hud-state-active); border-color: transparent; }
-.ohud-badge--waiting { color: #2a1c00; background: var(--odyssey-hud-warning); border-color: transparent; }
-.ohud-badge--empty { color: var(--odyssey-hud-muted); background: var(--odyssey-hud-panel); }
-.ohud-badge--error { color: #fff; background: var(--odyssey-hud-state-unavailable); border-color: transparent; }
-.ohud-badge--muted { color: var(--odyssey-hud-muted); background: var(--odyssey-hud-panel); }
-
-/* Right-side actions */
-.ohud-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
-
-.ohud-dev-bar { display: flex; align-items: center; gap: 6px; }
-.ohud-dev-label { font-size: 10px; color: var(--odyssey-hud-muted); }
-.ohud-dev-sep { width: 1px; height: 18px; background: var(--odyssey-hud-border); }
-.ohud-select {
-  font: inherit; font-size: 11px; color: var(--odyssey-hud-text);
-  background: var(--odyssey-hud-panel-raised); border: 1px solid var(--odyssey-hud-border);
-  border-radius: 5px; padding: 3px 6px; cursor: pointer;
-}
-.ohud-chip {
-  font: inherit; font-size: 11px; color: var(--odyssey-hud-text);
-  background: var(--odyssey-hud-panel-raised); border: 1px solid var(--odyssey-hud-border);
-  border-radius: 12px; padding: 3px 10px; cursor: pointer;
-}
-.ohud-chip.is-on { background: var(--odyssey-hud-attack); border-color: var(--odyssey-hud-attack); color: #fff; }
-
-.ohud-collapse {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
-  color: var(--odyssey-hud-muted); background: var(--odyssey-hud-panel-raised);
-  border: 1px solid var(--odyssey-hud-border); font-size: 14px; line-height: 1;
-}
-.ohud-collapse:hover { color: var(--odyssey-hud-text); border-color: var(--odyssey-hud-border-strong); }
-
-.ohud-placeholder-note {
-  font-size: 10px; color: var(--odyssey-hud-muted); text-align: center; opacity: 0.8;
-}
-
-.ohud-fallback {
-  font-size: 11px; font-weight: 600; text-align: center;
-  color: var(--odyssey-hud-warning);
-  border: 1px dashed var(--odyssey-hud-warning); border-radius: 6px;
-  padding: 3px 8px; margin-bottom: 4px;
 }
 
 /* ===================== Collapsed pill ===================== */
 .ohud-overlay.is-collapsed { align-items: flex-end; }
 .ohud-pill {
   display: inline-flex; align-items: center; gap: 8px;
+  margin-bottom: 6px;
   padding: 9px 16px; cursor: pointer;
   font: inherit; font-size: 12px; font-weight: 700; letter-spacing: 1px;
   color: var(--odyssey-hud-text);
   background: var(--odyssey-hud-bg); border: 1px solid var(--odyssey-hud-border-strong);
   border-radius: 22px; box-shadow: var(--odyssey-hud-shadow);
-  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
 }
-.ohud-pill:hover { border-color: var(--odyssey-hud-attack); }
+.ohud-pill:hover { border-color: var(--odyssey-purple); }
+.ohud-pill .ohud-mark { color: var(--odyssey-purple); display: inline-flex; }
 .ohud-pill-label { line-height: 1; }
-
-/* ===================== Compact layout (narrow viewports) ===================== */
-@media (max-width: 720px) {
-  .ohud-title { letter-spacing: 0.6px; }
-  .ohud-subtitle { max-width: 120px; }
-  .ohud-dev-bar { display: none; } /* hide dev controls when cramped */
-  .ohud-char { max-width: 160px; }
-}
