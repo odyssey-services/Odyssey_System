@@ -6039,11 +6039,6 @@ function createInitialState() {
     previewCreated: false
   };
 }
-var DEV_HOSTS = /* @__PURE__ */ new Set(["127.0.0.1", "localhost"]);
-function isDevelopmentRuntime() {
-  const hostname = String(globalThis?.location?.hostname ?? "").trim().toLowerCase();
-  return DEV_HOSTS.has(hostname);
-}
 function buildStatus(state, extras = {}) {
   const preview = state.preview ?? null;
   return {
@@ -6227,13 +6222,6 @@ function setupTacticalMoveTool({ runtime }) {
       return false;
     }
     try {
-      if (isDevelopmentRuntime()) {
-        console.info("[Odyssey Move] activation requested", {
-          selectedTokenId,
-          commandTokenId: String(commandPayload.tokenId ?? "").trim(),
-          commandCharacterId: String(commandPayload.characterId ?? "").trim()
-        });
-      }
       const { runtimeResponse } = await loadRuntimeForSelection(selectedTokenId);
       const encounter = runtimeResponse?.encounter;
       if (!encounter?.id) {
@@ -6267,15 +6255,6 @@ function setupTacticalMoveTool({ runtime }) {
       const originPosition = participant?.position ?? null;
       if (!originPosition) {
         throw new Error("This token position has not been synced by the GM yet.");
-      }
-      if (isDevelopmentRuntime()) {
-        console.info("[Odyssey Move] participant resolved", {
-          tokenId: selectedTokenId,
-          characterId,
-          encounterId: String(encounter.id ?? "").trim(),
-          isCurrentTurn: !!participant.is_current_turn,
-          controlAllowed: !!participant.control?.allowed
-        });
       }
       state.active = true;
       state.pending = false;
