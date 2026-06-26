@@ -16,12 +16,11 @@ import { computeDistanceCells, normalizeDistanceMode, normalizeObrGridType, norm
 import {
   MOVE_TOOL_COMMANDS,
   MOVE_TOOL_EVENTS,
+  TACTICAL_MOVE_MODE_ID,
+  TACTICAL_MOVE_TOOL_ID,
   publishMoveToolEvent,
   subscribeMoveToolMessages,
 } from "./moveToolBridge.js";
-
-const TOOL_ID = "odyssey-move";
-const MODE_ID = "move-character";
 
 function createToolIcon() {
   const svg = `
@@ -567,8 +566,8 @@ export function setupTacticalMoveTool({ runtime }) {
             message.payload ?? {},
           )
         ) {
-          await OBR.tool.activateTool(TOOL_ID);
-          await OBR.tool.activateMode(TOOL_ID, MODE_ID);
+          await OBR.tool.activateTool(TACTICAL_MOVE_TOOL_ID);
+          await OBR.tool.activateMode(TACTICAL_MOVE_TOOL_ID, TACTICAL_MOVE_MODE_ID);
         }
         break;
       default:
@@ -582,18 +581,18 @@ export function setupTacticalMoveTool({ runtime }) {
     ids.lineId = resolvePreviewIds((await getPlayerInfo())?.id).lineId;
     ids.labelId = resolvePreviewIds((await getPlayerInfo())?.id).labelId;
 
-    try { await OBR.tool.removeMode(MODE_ID); } catch {}
-    try { await OBR.tool.remove(TOOL_ID); } catch {}
+    try { await OBR.tool.removeMode(TACTICAL_MOVE_MODE_ID); } catch {}
+    try { await OBR.tool.remove(TACTICAL_MOVE_TOOL_ID); } catch {}
 
     await OBR.tool.create({
-      id: TOOL_ID,
+      id: TACTICAL_MOVE_TOOL_ID,
       icons: [{ icon: createToolIcon(), label: "Move" }],
-      defaultMode: MODE_ID,
+      defaultMode: TACTICAL_MOVE_MODE_ID,
       defaultMetadata: { extension: "odyssey" },
     });
 
     await OBR.tool.createMode({
-      id: MODE_ID,
+      id: TACTICAL_MOVE_MODE_ID,
       icons: [{ icon: createToolIcon(), label: "Move" }],
       onToolMove: handleToolMove,
       onToolClick: handleToolClick,
@@ -606,7 +605,7 @@ export function setupTacticalMoveTool({ runtime }) {
       },
     });
 
-    addDiagnosticEntry("info", "Tactical move tool ready", `tool=${TOOL_ID} mode=${MODE_ID}`);
+    addDiagnosticEntry("info", "Tactical move tool ready", `tool=${TACTICAL_MOVE_TOOL_ID} mode=${TACTICAL_MOVE_MODE_ID}`);
   }
 
   async function start() {
@@ -630,8 +629,8 @@ export function setupTacticalMoveTool({ runtime }) {
       unsubscribeBroadcast?.();
       unsubscribeSceneItems?.();
       await cancelMove("dispose");
-      try { await OBR.tool.removeMode(MODE_ID); } catch {}
-      try { await OBR.tool.remove(TOOL_ID); } catch {}
+      try { await OBR.tool.removeMode(TACTICAL_MOVE_MODE_ID); } catch {}
+      try { await OBR.tool.remove(TACTICAL_MOVE_TOOL_ID); } catch {}
     },
   };
 }

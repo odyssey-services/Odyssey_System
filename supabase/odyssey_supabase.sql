@@ -56503,4 +56503,380 @@ grant execute on function public.combat_sync_positions_from_owlbear(jsonb) to an
 grant execute on function public.combat_move_character(jsonb) to anon, authenticated;
 -- ===== END 78_tactical_move_and_positions.sql =====
 
+-- ===== BEGIN 81_base_move_10m_no_modifiers.sql =====
+-- Stage 81: base MOVE is always 10 m, with no agility-derived bonus.
+
+alter table public.odyssey_initiative_entries
+  alter column move_max set default 10,
+  alter column move_current set default 10;
+
+create or replace function public.odyssey_get_movement_bonus_from_agility(
+  p_effective_agility integer
+)
+returns integer
+language sql
+immutable
+as $$
+  select 0;
+$$;
+
+create or replace function public.combat_start_encounter(
+  p_payload jsonb
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_campaign_id text := coalesce(nullif(trim(coalesce(p_payload->>'campaign_id', '')), ''), '');
+  v_room_id text := coalesce(nullif(trim(coalesce(p_payload->>'room_id', '')), ''), '');
+  v_scene_id text := coalesce(nullif(trim(coalesce(p_payload->>'scene_id', '')), ''), '');
+  v_name text := coalesce(nullif(trim(coalesce(p_payload->>'name', '')), ''), 'Combat');
+  v_actor_is_gm boolean := coalesce(nullif(trim(coalesce(p_payload->>'actor_is_gm', '')), '')::boolean, false);
+  v_actor_player_id text := coalesce(nullif(trim(coalesce(p_payload->>'actor_player_id', '')), ''), '');
+  v_hidden_token_ids jsonb := coalesce(p_payload->'hidden_token_ids', '[]'::jsonb);
+  v_existing public.odyssey_combat_encounters;
+  v_encounter_id uuid := null;
+  v_entry record;
+  v_roll integer := 0;
+  v_reaction integer := 0;
+begin
+  if not v_actor_is_gm then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'CONTROL_DENIED',
+      'message', 'Only the GM may start an encounter.'
+    );
+  end if;
+
+  if v_campaign_id = '' or v_room_id = '' or v_scene_id = '' then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'INVALID_PAYLOAD',
+      'message', 'campaign_id, room_id and scene_id are required.'
+    );
+  end if;
+
+  select *
+  into v_existing
+  from public.odyssey_get_active_encounter(v_campaign_id, v_room_id, v_scene_id);
+
+  if v_existing.id is not null then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'ENCOUNTER_ALREADY_ACTIVE',
+      'message', 'An active encounter already exists for this scene.',
+      'encounter_id', v_existing.id
+    );
+  end if;
+
+  insert into public.odyssey_combat_encounters (
+    campaign_id,
+    room_id,
+    scene_id,
+    name,
+    status,
+    current_round,
+    created_by,
+    started_at,
+    last_transition_at
+  )
+  values (
+    v_campaign_id,
+    v_room_id,
+    v_scene_id,
+    v_name,
+    'active',
+    1,
+    coalesce(v_actor_player_id, 'gm'),
+    timezone('utc', now()),
+    timezone('utc', now())
+  )
+  returning id into v_encounter_id;
+
+  for v_entry in
+    select
+      t.token_id,
+      t.token_name,
+      t.character_id,
+      c.character_bucket
+    from public.odyssey_token_links t
+    join public.odyssey_characters c on c.id = t.character_id
+    where t.campaign_id = v_campaign_id
+      and t.room_id = v_room_id
+      and t.scene_id = v_scene_id
+      and t.is_active = true
+      and coalesce(c.is_deleted, false) = false
+  loop
+    if v_entry.character_bucket = 'npc_template' then
+      continue;
+    end if;
+
+    if v_entry.character_bucket not in ('player', 'npc_active') then
+      continue;
+    end if;
+
+    v_roll := floor(random() * 20 + 1)::integer;
+    v_reaction := public.odyssey_get_character_reaction_value(v_entry.character_id);
+
+    insert into public.odyssey_initiative_entries (
+      encounter_id,
+      character_id,
+      initiative_value,
+      reaction_value,
+      roll_value,
+      bonus_value,
+      order_index,
+      has_acted,
+      is_active,
+      action_max,
+      action_current,
+      move_max,
+      move_current,
+      reaction_action_max,
+      reaction_action_current,
+      action_converted_to_move,
+      hide_from_initiative_ui,
+      joined_round,
+      movement_version,
+      turn_version
+    )
+    values (
+      v_encounter_id,
+      v_entry.character_id,
+      v_roll + v_reaction,
+      v_reaction,
+      v_roll,
+      0,
+      0,
+      false,
+      true,
+      1,
+      1,
+      10,
+      10,
+      0,
+      0,
+      false,
+      exists (
+        select 1
+        from jsonb_array_elements_text(v_hidden_token_ids) as hidden(token_id)
+        where hidden.token_id = v_entry.token_id
+      ),
+      1,
+      0,
+      0
+    );
+  end loop;
+
+  with ranked as (
+    select
+      e.id,
+      row_number() over (
+        order by
+          e.initiative_value desc,
+          case when c.character_bucket = 'player' then 1 else 0 end desc,
+          e.roll_value desc,
+          e.character_id asc,
+          e.id asc
+      ) - 1 as next_order_index
+    from public.odyssey_initiative_entries e
+    join public.odyssey_characters c on c.id = e.character_id
+    where e.encounter_id = v_encounter_id
+      and e.is_active = true
+  )
+  update public.odyssey_initiative_entries e
+  set order_index = ranked.next_order_index
+  from ranked
+  where ranked.id = e.id;
+
+  perform public.odyssey_combat_log_insert(
+    v_campaign_id,
+    v_room_id,
+    v_scene_id,
+    v_encounter_id,
+    1,
+    null,
+    null,
+    null,
+    'public',
+    'encounter_started',
+    'Encounter started.',
+    jsonb_build_object('name', v_name),
+    jsonb_build_object('name', v_name),
+    coalesce(v_actor_player_id, 'gm')
+  );
+
+  perform public.odyssey_start_next_eligible_turn(v_encounter_id);
+
+  return public.odyssey_build_combat_runtime(
+    v_encounter_id,
+    v_actor_player_id,
+    true,
+    true,
+    5
+  );
+end;
+$$;
+
+create or replace function public.combat_add_participant(
+  p_payload jsonb
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_encounter_id uuid := public.odyssey_try_parse_uuid(p_payload->>'encounter_id');
+  v_token_id text := coalesce(nullif(trim(coalesce(p_payload->>'token_id', '')), ''), '');
+  v_character_id uuid := public.odyssey_try_parse_uuid(p_payload->>'character_id');
+  v_actor_is_gm boolean := coalesce(nullif(trim(coalesce(p_payload->>'actor_is_gm', '')), '')::boolean, false);
+  v_hide boolean := coalesce(nullif(trim(coalesce(p_payload->>'hide_from_initiative_ui', '')), '')::boolean, false);
+  v_encounter public.odyssey_combat_encounters%rowtype;
+  v_link record;
+  v_roll integer := 0;
+  v_reaction integer := 0;
+begin
+  if not v_actor_is_gm then
+    return jsonb_build_object('ok', false, 'error', 'CONTROL_DENIED', 'message', 'Only the GM may add participants.');
+  end if;
+
+  select *
+  into v_encounter
+  from public.odyssey_combat_encounters
+  where id = v_encounter_id
+    and status = 'active'
+    and ended_at is null
+  for update;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'ENCOUNTER_NOT_ACTIVE', 'message', 'Encounter is not active.');
+  end if;
+
+  select
+    t.*,
+    c.character_bucket
+  into v_link
+  from public.odyssey_token_links t
+  join public.odyssey_characters c on c.id = t.character_id
+  where t.room_id = v_encounter.room_id
+    and t.scene_id = v_encounter.scene_id
+    and t.is_active = true
+    and (
+      (v_token_id <> '' and t.token_id = v_token_id)
+      or (v_character_id is not null and t.character_id = v_character_id)
+    )
+  order by t.updated_at desc, t.created_at desc, t.id desc
+  limit 1;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'TOKEN_LINK_REQUIRED', 'message', 'Participant must have an active token link in this scene.');
+  end if;
+
+  if v_link.character_bucket = 'npc_template' then
+    return jsonb_build_object('ok', false, 'error', 'NPC_TEMPLATE_NOT_ALLOWED', 'message', 'NPC templates cannot join encounters directly.');
+  end if;
+
+  if v_link.character_bucket not in ('player', 'npc_active') then
+    return jsonb_build_object('ok', false, 'error', 'PARTICIPANT_NOT_ELIGIBLE', 'message', 'Only linked players and active NPCs can join encounters.');
+  end if;
+
+  if exists (
+    select 1
+    from public.odyssey_initiative_entries e
+    where e.encounter_id = v_encounter_id
+      and e.character_id = v_link.character_id
+      and e.is_active = true
+  ) then
+    return public.odyssey_build_combat_runtime(v_encounter_id, p_payload->>'actor_player_id', true, true, 5);
+  end if;
+
+  v_roll := floor(random() * 20 + 1)::integer;
+  v_reaction := public.odyssey_get_character_reaction_value(v_link.character_id);
+
+  insert into public.odyssey_initiative_entries (
+    encounter_id,
+    character_id,
+    initiative_value,
+    reaction_value,
+    roll_value,
+    bonus_value,
+    order_index,
+    has_acted,
+    is_active,
+    action_max,
+    action_current,
+    move_max,
+    move_current,
+    reaction_action_max,
+    reaction_action_current,
+    action_converted_to_move,
+    hide_from_initiative_ui,
+    joined_round,
+    movement_version,
+    turn_version
+  )
+  values (
+    v_encounter_id,
+    v_link.character_id,
+    v_roll + v_reaction,
+    v_reaction,
+    v_roll,
+    0,
+    9999,
+    false,
+    true,
+    1,
+    1,
+    10,
+    10,
+    0,
+    0,
+    false,
+    v_hide,
+    v_encounter.current_round + 1,
+    0,
+    0
+  );
+
+  with ranked as (
+    select
+      e.id,
+      row_number() over (
+        order by
+          e.initiative_value desc,
+          case when c.character_bucket = 'player' then 1 else 0 end desc,
+          e.roll_value desc,
+          e.character_id asc,
+          e.id asc
+      ) - 1 as next_order_index
+    from public.odyssey_initiative_entries e
+    join public.odyssey_characters c on c.id = e.character_id
+    where e.encounter_id = v_encounter_id
+      and e.is_active = true
+  )
+  update public.odyssey_initiative_entries e
+  set order_index = ranked.next_order_index
+  from ranked
+  where ranked.id = e.id;
+
+  perform public.odyssey_increment_encounter_state_version(v_encounter_id);
+
+  return public.odyssey_build_combat_runtime(v_encounter_id, p_payload->>'actor_player_id', true, true, 5);
+end;
+$$;
+
+update public.odyssey_initiative_entries e
+set
+  move_max = 10,
+  move_current = case
+    when coalesce(e.move_current, 0) = coalesce(e.move_max, 0) then 10
+    else least(coalesce(e.move_current, 0), 10)
+  end
+from public.odyssey_combat_encounters encounter
+where encounter.id = e.encounter_id
+  and encounter.status = 'active'
+  and encounter.ended_at is null
+  and e.is_active = true;
+
+-- ===== END 81_base_move_10m_no_modifiers.sql =====
+
 

@@ -16,6 +16,8 @@ import { normalizeDistanceMode, normalizeObrGridType, sceneToCell, sameCell } fr
 import {
   MOVE_TOOL_COMMANDS,
   MOVE_TOOL_EVENTS,
+  TACTICAL_MOVE_MODE_ID,
+  TACTICAL_MOVE_TOOL_ID,
   sendMoveToolCommand,
   subscribeMoveToolMessages,
 } from "../../movement/moveToolBridge.js";
@@ -1419,6 +1421,76 @@ export function mountCharacterScreen({ root, runtime }) {
     }
   }
 
+  async function startMoveForLoadedCharacter() {
+    const participant = getLoadedCharacterParticipant();
+    const token = getSelectedTokenForLoadedCharacter();
+
+    if (!participant || !token) {
+      state.moveToolStatus = {
+        active: false,
+        pending: false,
+        characterId: state.characterId,
+        tokenId: String(state.selectedToken?.id ?? "").trim(),
+        error: "Select this character's token in Owlbear before moving.",
+      };
+      render();
+      return;
+    }
+
+    state.moveToolStatus = {
+      ...(state.moveToolStatus ?? {}),
+      active: false,
+      pending: true,
+      characterId: state.characterId,
+      tokenId: String(token.id ?? "").trim(),
+      error: "",
+    };
+    render();
+
+    try {
+      await bridges.obr.activateTool(TACTICAL_MOVE_TOOL_ID);
+      await bridges.obr.activateToolMode(
+        TACTICAL_MOVE_TOOL_ID,
+        TACTICAL_MOVE_MODE_ID,
+      );
+
+      const [activeTool, activeMode] = await Promise.all([
+        bridges.obr.getActiveTool(),
+        bridges.obr.getActiveToolMode(),
+      ]);
+
+      if (
+        activeTool !== TACTICAL_MOVE_TOOL_ID ||
+        activeMode !== TACTICAL_MOVE_MODE_ID
+      ) {
+        throw new Error("Owlbear did not activate the Tactical Move tool.");
+      }
+
+      state.moveToolStatus = {
+        ...(state.moveToolStatus ?? {}),
+        active: true,
+        pending: false,
+        characterId: state.characterId,
+        tokenId: String(token.id ?? "").trim(),
+        error: "",
+      };
+      render();
+    } catch (error) {
+      state.moveToolStatus = {
+        ...(state.moveToolStatus ?? {}),
+        active: false,
+        pending: false,
+        characterId: state.characterId,
+        tokenId: String(token.id ?? "").trim(),
+        error: toErrorMessage(
+          error,
+          "Unable to activate Tactical Move.",
+        ),
+      };
+      render();
+    }
+  }
+
   async function refreshAfterCombatStart() {
     setCombatStartStage("Refreshing character sheet...");
     const refreshPromise = withTimeout(
@@ -2453,53 +2525,6 @@ export function mountCharacterScreen({ root, runtime }) {
     $("retry")?.addEventListener("click", () => state.characterId && loadCharacter(state.characterId));
     $("charId")?.addEventListener("keydown", (e) => { if (e.key === "Enter") $("loadBtn").click(); });
     $("refreshCatalogsTop")?.addEventListener("click", () => refreshGmCatalogs().catch(() => {}));
-    $("startMove")?.addEventListener("click", async () => {
-      const participant = getLoadedCharacterParticipant();
-      const selectedToken = getSelectedTokenForLoadedCharacter();
-
-      if (!participant || !selectedToken) {
-        state.moveToolStatus = {
-          active: false,
-          pending: false,
-          characterId: state.characterId,
-          tokenId: String(state.selectedToken?.id ?? "").trim(),
-          error: "Select this character's token in Owlbear before moving.",
-        };
-        render();
-        return;
-      }
-
-      try {
-        await sendMoveToolCommand(
-          MOVE_TOOL_COMMANDS.ActivateSelected,
-          {
-            characterId: String(
-              participant.character_id ?? state.characterId ?? "",
-            ).trim(),
-            tokenId: String(
-              participant.token_id ?? selectedToken.id ?? "",
-            ).trim(),
-            encounterId: String(
-              state.tacticalSnapshot?.encounterId
-              ?? state.sceneCombatSnapshot?.encounterId
-              ?? "",
-            ).trim(),
-          },
-        );
-      } catch (error) {
-        state.moveToolStatus = {
-          active: false,
-          pending: false,
-          characterId: state.characterId,
-          tokenId: String(selectedToken.id ?? "").trim(),
-          error: toErrorMessage(
-            error,
-            "Unable to send Move activation request.",
-          ),
-        };
-        render();
-      }
-    });
     $("startCombat")?.addEventListener("click", () => {
       startCombatForScene().catch(() => {});
     });
@@ -2604,6 +2629,25 @@ export function mountCharacterScreen({ root, runtime }) {
 
   function onSectionClick(e) {
     const t = e.target;
+    const startMoveButton = t.closest('[data-ref="startMove"]');
+    if (startMoveButton) {
+      e.preventDefault();
+      startMoveForLoadedCharacter().catch((error) => {
+        state.moveToolStatus = {
+          ...(state.moveToolStatus ?? {}),
+          active: false,
+          pending: false,
+          characterId: state.characterId,
+          tokenId: String(state.selectedToken?.id ?? "").trim(),
+          error: toErrorMessage(
+            error,
+            "Unable to start Tactical Move.",
+          ),
+        };
+        render();
+      });
+      return;
+    }
     const startCombatButton = t.closest('[data-ref="startCombat"]');
     if (startCombatButton) {
       startCombatForScene().catch(() => {});

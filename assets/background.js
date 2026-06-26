@@ -5962,6 +5962,8 @@ function computeDistanceCells(grid, fromCell, toCell) {
 
 // movement/moveToolBridge.js
 var MOVE_TOOL_CHANNEL = "odyssey:tactical-move";
+var TACTICAL_MOVE_TOOL_ID = "odyssey-move";
+var TACTICAL_MOVE_MODE_ID = "move-character";
 var MOVE_TOOL_COMMANDS = Object.freeze({
   ActivateSelected: "ACTIVATE_SELECTED",
   Cancel: "CANCEL",
@@ -6001,8 +6003,6 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var TOOL_ID = "odyssey-move";
-var MODE_ID = "move-character";
 function createToolIcon() {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
@@ -6455,8 +6455,8 @@ function setupTacticalMoveTool({ runtime }) {
           "broadcast-activate",
           message.payload ?? {}
         )) {
-          await lib_default.tool.activateTool(TOOL_ID);
-          await lib_default.tool.activateMode(TOOL_ID, MODE_ID);
+          await lib_default.tool.activateTool(TACTICAL_MOVE_TOOL_ID);
+          await lib_default.tool.activateMode(TACTICAL_MOVE_TOOL_ID, TACTICAL_MOVE_MODE_ID);
         }
         break;
       default:
@@ -6468,21 +6468,21 @@ function setupTacticalMoveTool({ runtime }) {
     ids.lineId = resolvePreviewIds((await getPlayerInfo())?.id).lineId;
     ids.labelId = resolvePreviewIds((await getPlayerInfo())?.id).labelId;
     try {
-      await lib_default.tool.removeMode(MODE_ID);
+      await lib_default.tool.removeMode(TACTICAL_MOVE_MODE_ID);
     } catch {
     }
     try {
-      await lib_default.tool.remove(TOOL_ID);
+      await lib_default.tool.remove(TACTICAL_MOVE_TOOL_ID);
     } catch {
     }
     await lib_default.tool.create({
-      id: TOOL_ID,
+      id: TACTICAL_MOVE_TOOL_ID,
       icons: [{ icon: createToolIcon(), label: "Move" }],
-      defaultMode: MODE_ID,
+      defaultMode: TACTICAL_MOVE_MODE_ID,
       defaultMetadata: { extension: "odyssey" }
     });
     await lib_default.tool.createMode({
-      id: MODE_ID,
+      id: TACTICAL_MOVE_MODE_ID,
       icons: [{ icon: createToolIcon(), label: "Move" }],
       onToolMove: handleToolMove,
       onToolClick: handleToolClick,
@@ -6494,7 +6494,7 @@ function setupTacticalMoveTool({ runtime }) {
         }
       }
     });
-    addDiagnosticEntry("info", "Tactical move tool ready", `tool=${TOOL_ID} mode=${MODE_ID}`);
+    addDiagnosticEntry("info", "Tactical move tool ready", `tool=${TACTICAL_MOVE_TOOL_ID} mode=${TACTICAL_MOVE_MODE_ID}`);
   }
   async function start() {
     try {
@@ -6516,11 +6516,11 @@ function setupTacticalMoveTool({ runtime }) {
       unsubscribeSceneItems?.();
       await cancelMove("dispose");
       try {
-        await lib_default.tool.removeMode(MODE_ID);
+        await lib_default.tool.removeMode(TACTICAL_MOVE_MODE_ID);
       } catch {
       }
       try {
-        await lib_default.tool.remove(TOOL_ID);
+        await lib_default.tool.remove(TACTICAL_MOVE_TOOL_ID);
       } catch {
       }
     }
