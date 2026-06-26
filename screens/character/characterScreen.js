@@ -608,12 +608,22 @@ export function mountCharacterScreen({ root, runtime }) {
       scheduleSelectionSync(true);
     }));
     safePush(await subscribeMoveToolMessages((event) => {
-      if (event.type === MOVE_TOOL_EVENTS.Status || event.type === MOVE_TOOL_EVENTS.Activated || event.type === MOVE_TOOL_EVENTS.Cancelled) {
-        state.moveToolStatus = event.payload ?? null;
+      if (
+        event.type === MOVE_TOOL_EVENTS.Status ||
+        event.type === MOVE_TOOL_EVENTS.Activated ||
+        event.type === MOVE_TOOL_EVENTS.Cancelled
+      ) {
+        state.moveToolStatus = {
+          ...(state.moveToolStatus ?? {}),
+          ...(event.payload ?? {}),
+        };
         render();
       }
       if (event.type === MOVE_TOOL_EVENTS.Applied) {
-        state.moveToolStatus = event.payload ?? null;
+        state.moveToolStatus = {
+          ...(state.moveToolStatus ?? {}),
+          ...(event.payload ?? {}),
+        };
         if (state.characterId && event.payload?.characterId === state.characterId) {
           refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false }).catch(() => {});
         } else {
@@ -621,9 +631,20 @@ export function mountCharacterScreen({ root, runtime }) {
         }
       }
       if (event.type === MOVE_TOOL_EVENTS.Error) {
-        if (state.moveToolStatus) {
-          state.moveToolStatus = { ...state.moveToolStatus, error: event.payload?.message ?? "" };
-        }
+        state.moveToolStatus = {
+          ...(state.moveToolStatus ?? {}),
+          active: false,
+          pending: false,
+          characterId: String(
+            event.payload?.characterId ?? state.characterId ?? "",
+          ).trim(),
+          tokenId: String(
+            event.payload?.tokenId ?? state.selectedToken?.id ?? "",
+          ).trim(),
+          error: String(
+            event.payload?.message ?? "Unable to activate Move.",
+          ),
+        };
         render();
       }
     }));
@@ -2433,7 +2454,51 @@ export function mountCharacterScreen({ root, runtime }) {
     $("charId")?.addEventListener("keydown", (e) => { if (e.key === "Enter") $("loadBtn").click(); });
     $("refreshCatalogsTop")?.addEventListener("click", () => refreshGmCatalogs().catch(() => {}));
     $("startMove")?.addEventListener("click", async () => {
-      await sendMoveToolCommand(MOVE_TOOL_COMMANDS.ActivateSelected).catch(() => {});
+      const participant = getLoadedCharacterParticipant();
+      const selectedToken = getSelectedTokenForLoadedCharacter();
+
+      if (!participant || !selectedToken) {
+        state.moveToolStatus = {
+          active: false,
+          pending: false,
+          characterId: state.characterId,
+          tokenId: String(state.selectedToken?.id ?? "").trim(),
+          error: "Select this character's token in Owlbear before moving.",
+        };
+        render();
+        return;
+      }
+
+      try {
+        await sendMoveToolCommand(
+          MOVE_TOOL_COMMANDS.ActivateSelected,
+          {
+            characterId: String(
+              participant.character_id ?? state.characterId ?? "",
+            ).trim(),
+            tokenId: String(
+              participant.token_id ?? selectedToken.id ?? "",
+            ).trim(),
+            encounterId: String(
+              state.tacticalSnapshot?.encounterId
+              ?? state.sceneCombatSnapshot?.encounterId
+              ?? "",
+            ).trim(),
+          },
+        );
+      } catch (error) {
+        state.moveToolStatus = {
+          active: false,
+          pending: false,
+          characterId: state.characterId,
+          tokenId: String(selectedToken.id ?? "").trim(),
+          error: toErrorMessage(
+            error,
+            "Unable to send Move activation request.",
+          ),
+        };
+        render();
+      }
     });
     $("startCombat")?.addEventListener("click", () => {
       startCombatForScene().catch(() => {});

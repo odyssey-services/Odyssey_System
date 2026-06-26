@@ -6039,6 +6039,11 @@ function createInitialState() {
     previewCreated: false
   };
 }
+var DEV_HOSTS = /* @__PURE__ */ new Set(["127.0.0.1", "localhost"]);
+function isDevelopmentRuntime() {
+  const hostname = String(globalThis?.location?.hostname ?? "").trim().toLowerCase();
+  return DEV_HOSTS.has(hostname);
+}
 function buildStatus(state, extras = {}) {
   const preview = state.preview ?? null;
   return {
@@ -6164,7 +6169,7 @@ function setupTacticalMoveTool({ runtime }) {
     }
     await publishStatus();
   }
-  async function loadRuntimeForSelection(characterId, tokenId) {
+  async function loadRuntimeForSelection(tokenId = "") {
     state.settings = await loadRoomSupabaseSettings();
     if (!hasSupabaseSettings(state.settings)) {
       throw new Error("Supabase room settings are not configured.");
@@ -6187,34 +6192,67 @@ function setupTacticalMoveTool({ runtime }) {
     }
     return { roomContext, runtimeResponse };
   }
-  async function prepareFromSelectedToken(reason = "manual") {
+  async function prepareFromSelectedToken(reason = "manual", commandPayload = {}) {
     const selectedTokens = await getSelectedOwlbearTokens();
     if (selectedTokens.length !== 1) {
       await clearPreview();
       state.active = false;
-      await publishStatus({ error: "Select exactly one linked token before using Move." });
-      await notify2("Select exactly one linked token before using Move.", "WARNING");
+      state.pending = false;
+      const message = "Select exactly one token before using Move.";
+      await publishStatus({ error: message, reason });
+      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
+        message,
+        reason,
+        characterId: String(commandPayload.characterId ?? "").trim(),
+        tokenId: String(commandPayload.tokenId ?? "").trim()
+      });
+      await notify2(message, "WARNING");
       return false;
     }
     const token = selectedTokens[0];
-    const link = getTokenCharacterLink(token);
-    const characterId = String(link.characterId ?? "").trim();
-    if (!characterId) {
-      await clearPreview();
+    const selectedTokenId = String(token?.id ?? "").trim();
+    if (commandPayload.tokenId && String(commandPayload.tokenId).trim() !== selectedTokenId) {
+      const message = "Selected token changed before Move could start.";
       state.active = false;
-      await publishStatus({ error: "The selected token is not linked to a character." });
-      await notify2("The selected token is not linked to a character.", "WARNING");
+      state.pending = false;
+      await clearPreview();
+      await publishStatus({ error: message, reason });
+      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
+        message,
+        reason,
+        tokenId: selectedTokenId,
+        characterId: String(commandPayload.characterId ?? "").trim()
+      });
+      await notify2(message, "WARNING");
       return false;
     }
     try {
-      const { runtimeResponse } = await loadRuntimeForSelection(characterId, String(token.id ?? "").trim());
+      if (isDevelopmentRuntime()) {
+        console.info("[Odyssey Move] activation requested", {
+          selectedTokenId,
+          commandTokenId: String(commandPayload.tokenId ?? "").trim(),
+          commandCharacterId: String(commandPayload.characterId ?? "").trim()
+        });
+      }
+      const { runtimeResponse } = await loadRuntimeForSelection(selectedTokenId);
       const encounter = runtimeResponse?.encounter;
       if (!encounter?.id) {
-        throw new Error("This character is not part of an active encounter.");
+        throw new Error("No active combat exists for this scene.");
       }
-      const participant = extractParticipant(runtimeResponse, characterId, String(token.id ?? "").trim());
+      const participant = ensureArray2(
+        runtimeResponse?.visible_participants
+      ).find((row) => String(row?.token_id ?? "").trim() === selectedTokenId) ?? null;
       if (!participant) {
-        throw new Error("No active encounter participant matches the selected token.");
+        throw new Error("The selected token is not an active combat participant.");
+      }
+      const characterId = String(
+        participant.character_id ?? ""
+      ).trim();
+      if (!characterId) {
+        throw new Error("The selected combat participant has no character ID.");
+      }
+      if (commandPayload.characterId && String(commandPayload.characterId).trim() !== characterId) {
+        throw new Error("The selected token does not match the active character panel.");
       }
       if (!participant?.control?.allowed) {
         throw new Error("You cannot control this character right now.");
@@ -6229,6 +6267,15 @@ function setupTacticalMoveTool({ runtime }) {
       const originPosition = participant?.position ?? null;
       if (!originPosition) {
         throw new Error("This token position has not been synced by the GM yet.");
+      }
+      if (isDevelopmentRuntime()) {
+        console.info("[Odyssey Move] participant resolved", {
+          tokenId: selectedTokenId,
+          characterId,
+          encounterId: String(encounter.id ?? "").trim(),
+          isCurrentTurn: !!participant.is_current_turn,
+          controlAllowed: !!participant.control?.allowed
+        });
       }
       state.active = true;
       state.pending = false;
@@ -6259,7 +6306,12 @@ function setupTacticalMoveTool({ runtime }) {
       state.pending = false;
       await clearPreview();
       await publishStatus({ error: message, reason });
-      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, { message, reason });
+      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
+        message,
+        reason,
+        tokenId: selectedTokenId,
+        characterId: String(commandPayload.characterId ?? "").trim()
+      });
       await notify2(message, "WARNING");
       return false;
     }
@@ -6420,7 +6472,10 @@ function setupTacticalMoveTool({ runtime }) {
         await cancelMove("broadcast-cancel");
         break;
       case MOVE_TOOL_COMMANDS.ActivateSelected:
-        if (await prepareFromSelectedToken("broadcast-activate")) {
+        if (await prepareFromSelectedToken(
+          "broadcast-activate",
+          message.payload ?? {}
+        )) {
           await lib_default.tool.activateTool(TOOL_ID);
           await lib_default.tool.activateMode(TOOL_ID, MODE_ID);
         }
