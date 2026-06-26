@@ -33961,8 +33961,8 @@ function sameCell(a, b) {
 
 // movement/moveToolBridge.js
 var MOVE_TOOL_CHANNEL = "odyssey:tactical-move";
-var TACTICAL_MOVE_TOOL_ID = "odyssey-move";
-var TACTICAL_MOVE_MODE_ID = "move-character";
+var TACTICAL_MOVE_TOOL_ID = "com.odyssey-system/tactical-move";
+var TACTICAL_MOVE_MODE_ID = "com.odyssey-system/tactical-move/move-character";
 var MOVE_TOOL_COMMANDS = Object.freeze({
   ActivateSelected: "ACTIVATE_SELECTED",
   Cancel: "CANCEL",

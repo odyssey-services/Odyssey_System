@@ -584,16 +584,9 @@ export function setupTacticalMoveTool({ runtime }) {
     try { await OBR.tool.removeMode(TACTICAL_MOVE_MODE_ID); } catch {}
     try { await OBR.tool.remove(TACTICAL_MOVE_TOOL_ID); } catch {}
 
-    await OBR.tool.create({
-      id: TACTICAL_MOVE_TOOL_ID,
-      icons: [{ icon: createToolIcon(), label: "Move" }],
-      defaultMode: TACTICAL_MOVE_MODE_ID,
-      defaultMetadata: { extension: "odyssey" },
-    });
-
     await OBR.tool.createMode({
       id: TACTICAL_MOVE_MODE_ID,
-      icons: [{ icon: createToolIcon(), label: "Move" }],
+      icons: [{ icon: createToolIcon(), label: "Tactical Move" }],
       onToolMove: handleToolMove,
       onToolClick: handleToolClick,
       onActivate: handleToolActivate,
@@ -603,6 +596,13 @@ export function setupTacticalMoveTool({ runtime }) {
           await cancelMove("escape");
         }
       },
+    });
+
+    await OBR.tool.create({
+      id: TACTICAL_MOVE_TOOL_ID,
+      icons: [{ icon: createToolIcon(), label: "Tactical Move" }],
+      defaultMode: TACTICAL_MOVE_MODE_ID,
+      defaultMetadata: { extension: "odyssey" },
     });
 
     addDiagnosticEntry("info", "Tactical move tool ready", `tool=${TACTICAL_MOVE_TOOL_ID} mode=${TACTICAL_MOVE_MODE_ID}`);
@@ -617,6 +617,14 @@ export function setupTacticalMoveTool({ runtime }) {
     } catch (error) {
       const normalized = normalizeError(error, "Unable to initialize tactical move tool.");
       addDiagnosticEntry("error", "Tactical move init failed", normalized.message);
+      await publishMoveToolEvent(
+        MOVE_TOOL_EVENTS.Error,
+        {
+          source: "tool-registration",
+          message: normalized.message,
+        },
+        "LOCAL",
+      );
     }
   }
 

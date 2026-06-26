@@ -1,8 +1,11 @@
 import { OBR, waitForObrReady } from "../bridge/obrBridge.js";
 
 export const MOVE_TOOL_CHANNEL = "odyssey:tactical-move";
-export const TACTICAL_MOVE_TOOL_ID = "odyssey-move";
-export const TACTICAL_MOVE_MODE_ID = "move-character";
+export const TACTICAL_MOVE_TOOL_ID =
+  "com.odyssey-system/tactical-move";
+
+export const TACTICAL_MOVE_MODE_ID =
+  "com.odyssey-system/tactical-move/move-character";
 
 export const MOVE_TOOL_COMMANDS = Object.freeze({
   ActivateSelected: "ACTIVATE_SELECTED",

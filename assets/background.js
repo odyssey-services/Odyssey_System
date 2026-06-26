@@ -5962,8 +5962,8 @@ function computeDistanceCells(grid, fromCell, toCell) {
 
 // movement/moveToolBridge.js
 var MOVE_TOOL_CHANNEL = "odyssey:tactical-move";
-var TACTICAL_MOVE_TOOL_ID = "odyssey-move";
-var TACTICAL_MOVE_MODE_ID = "move-character";
+var TACTICAL_MOVE_TOOL_ID = "com.odyssey-system/tactical-move";
+var TACTICAL_MOVE_MODE_ID = "com.odyssey-system/tactical-move/move-character";
 var MOVE_TOOL_COMMANDS = Object.freeze({
   ActivateSelected: "ACTIVATE_SELECTED",
   Cancel: "CANCEL",
@@ -6475,15 +6475,9 @@ function setupTacticalMoveTool({ runtime }) {
       await lib_default.tool.remove(TACTICAL_MOVE_TOOL_ID);
     } catch {
     }
-    await lib_default.tool.create({
-      id: TACTICAL_MOVE_TOOL_ID,
-      icons: [{ icon: createToolIcon(), label: "Move" }],
-      defaultMode: TACTICAL_MOVE_MODE_ID,
-      defaultMetadata: { extension: "odyssey" }
-    });
     await lib_default.tool.createMode({
       id: TACTICAL_MOVE_MODE_ID,
-      icons: [{ icon: createToolIcon(), label: "Move" }],
+      icons: [{ icon: createToolIcon(), label: "Tactical Move" }],
       onToolMove: handleToolMove,
       onToolClick: handleToolClick,
       onActivate: handleToolActivate,
@@ -6493,6 +6487,12 @@ function setupTacticalMoveTool({ runtime }) {
           await cancelMove("escape");
         }
       }
+    });
+    await lib_default.tool.create({
+      id: TACTICAL_MOVE_TOOL_ID,
+      icons: [{ icon: createToolIcon(), label: "Tactical Move" }],
+      defaultMode: TACTICAL_MOVE_MODE_ID,
+      defaultMetadata: { extension: "odyssey" }
     });
     addDiagnosticEntry("info", "Tactical move tool ready", `tool=${TACTICAL_MOVE_TOOL_ID} mode=${TACTICAL_MOVE_MODE_ID}`);
   }
@@ -6505,6 +6505,14 @@ function setupTacticalMoveTool({ runtime }) {
     } catch (error) {
       const normalized = normalizeError(error, "Unable to initialize tactical move tool.");
       addDiagnosticEntry("error", "Tactical move init failed", normalized.message);
+      await publishMoveToolEvent(
+        MOVE_TOOL_EVENTS.Error,
+        {
+          source: "tool-registration",
+          message: normalized.message
+        },
+        "LOCAL"
+      );
     }
   }
   void start();
