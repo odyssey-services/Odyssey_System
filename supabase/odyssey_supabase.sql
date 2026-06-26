@@ -52003,7 +52003,7 @@ begin
   into v_encounter
   from public.odyssey_get_active_encounter(v_campaign_id, v_room_id, v_scene_id);
 
-  if not found then
+  if v_encounter.id is null then
     return jsonb_build_object(
       'ok', true,
       'encounter', null,

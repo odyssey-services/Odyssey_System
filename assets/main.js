@@ -34106,6 +34106,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     notice: "",
     realtimeSubscriptions: [],
     // Real-Time listeners for auto-refresh
+    sceneRealtimeSubscriptions: [],
     catalogSubscriptions: [],
     refreshInFlight: null,
     queuedRefresh: null,
@@ -34113,6 +34114,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     realtimeRefreshTimer: null,
     selectedToken: null,
     moveToolStatus: null,
+    sceneCombatSnapshot: null,
     tacticalSnapshot: null,
     uiSubscriptions: []
   };
@@ -34156,6 +34158,48 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       settings()
     ).catch(() => null);
   }
+  async function refreshSceneCombatSnapshot(forceRender = false) {
+    if (!bridges.obr?.getRoomSceneContext || !api.combat?.getActiveRuntime) {
+      state.sceneCombatSnapshot = null;
+      if (forceRender) render();
+      return;
+    }
+    try {
+      const [context, player] = await Promise.all([
+        withTimeout3(bridges.obr.getRoomSceneContext?.(), OBR_TIMEOUT, null),
+        withTimeout3(bridges.obr.getPlayerInfo?.(), OBR_TIMEOUT, null)
+      ]);
+      if (!context?.campaignId || !context?.roomId || !context?.sceneId || !hasUsableSettings(settings())) {
+        state.sceneCombatSnapshot = null;
+        if (forceRender) render();
+        return;
+      }
+      const runtime3 = await withTimeout3(
+        fetchActiveCombatRuntimeForScene(
+          context,
+          player,
+          String(player?.role ?? "").toUpperCase() === "GM"
+        ),
+        5e3,
+        null
+      );
+      if (!runtime3?.encounter?.id) {
+        state.sceneCombatSnapshot = null;
+      } else {
+        state.sceneCombatSnapshot = {
+          encounterId: String(runtime3.encounter.id ?? "").trim(),
+          stateVersion: Number(
+            runtime3.state_version ?? runtime3.encounter?.state_version ?? 0
+          ) || 0,
+          runtime: runtime3
+        };
+      }
+    } catch (error) {
+      console.warn("[Odyssey] Unable to refresh scene combat snapshot", error);
+      state.sceneCombatSnapshot = null;
+    }
+    if (forceRender) render();
+  }
   async function refreshTacticalSnapshot(forceRender = false) {
     if (!state.characterId || !bridges.obr?.getRoomSceneContext || !api.combat?.getActiveRuntime) {
       state.tacticalSnapshot = null;
@@ -34172,7 +34216,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         if (forceRender) render();
         return;
       }
-      const runtimeRes = await fetchActiveCombatRuntimeForScene(
+      const runtimeRes = state.sceneCombatSnapshot?.runtime ?? await fetchActiveCombatRuntimeForScene(
         context,
         player,
         String(player?.role ?? "").toUpperCase() === "GM"
@@ -34245,6 +34289,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }));
     state.uiSubscriptions = subs;
     await refreshSelectedTokenContext().catch(() => {
+    });
+    await ensureSettings().catch(() => {
+    });
+    setupSceneCombatSubscriptions();
+    await refreshSceneCombatSnapshot(true).catch(() => {
     });
     await sendMoveToolCommand(MOVE_TOOL_COMMANDS.RequestStatus).catch(() => {
     });
@@ -34419,6 +34468,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       state.perkAvailability = gmMode && availablePerksResult?.ok ? arr2(availablePerksResult.perks) : [];
       state.pinnedPartId = "";
       setupRealtimeSubscriptions(id);
+      await refreshSceneCombatSnapshot();
       await refreshTacticalSnapshot();
     } catch (e) {
       state.error = e.message;
@@ -34450,6 +34500,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       state.perkAvailability = isGM() && availablePerksResult?.ok ? arr2(availablePerksResult.perks) : [];
     }
     if (sheet) {
+      await refreshSceneCombatSnapshot();
       await refreshTacticalSnapshot();
     }
     render();
@@ -34485,6 +34536,31 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       refresh(pending).catch(() => {
       });
     }, 120);
+  }
+  function setupSceneCombatSubscriptions(sb = getRealtimeClient(settings())) {
+    if (!sb) return;
+    cleanupSceneCombatSubscriptions(sb);
+    const combatTables = [
+      "odyssey_combat_encounters",
+      "odyssey_initiative_entries",
+      "odyssey_combat_positions"
+    ];
+    const combatEpoch = Date.now();
+    for (const table of combatTables) {
+      const channel = sb.channel(`cp:scene-combat:${combatEpoch}:${table}`).on(
+        "postgres_changes",
+        { event: "*", schema: "public", table },
+        () => {
+          refreshSceneCombatSnapshot(true).catch(() => {
+          });
+          if (state.characterId) {
+            refreshTacticalSnapshot(true).catch(() => {
+            });
+          }
+        }
+      ).subscribe();
+      state.sceneRealtimeSubscriptions.push(channel);
+    }
   }
   function setupRealtimeSubscriptions(characterId) {
     const sb = getRealtimeClient(settings());
@@ -34551,6 +34627,14 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     if (state.realtimeRefreshTimer) clearTimeout(state.realtimeRefreshTimer);
     state.realtimeRefreshTimer = null;
     state.realtimeRefreshPending = null;
+  }
+  function cleanupSceneCombatSubscriptions(sb = getRealtimeClient(settings())) {
+    if (!sb) {
+      state.sceneRealtimeSubscriptions = [];
+      return;
+    }
+    for (const channel of state.sceneRealtimeSubscriptions) sb.removeChannel(channel);
+    state.sceneRealtimeSubscriptions = [];
   }
   function cleanupCatalogSubscriptions(sb = getRealtimeClient(settings())) {
     if (!sb) {
@@ -34660,7 +34744,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         <div class="button-row"><button data-ref="retry" type="button">Retry</button></div></section>`;
     }
     if (!state.sheet) {
-      return `<section class="panel">${noticeHtml()}<div class="cp-empty">Enter a character_id and press <b>Load character</b>.</div></section>`;
+      return `<section class="panel">${noticeHtml()}${renderCombatSessionCard()}<div class="cp-empty">Enter a character_id and press <b>Load character</b>.</div></section>`;
     }
     return `<section class="panel">
       ${headerBlock()}
@@ -34772,7 +34856,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     return state.tacticalSnapshot?.participant ?? null;
   }
   function getActiveEncounterSummary() {
-    const snapshot = state.tacticalSnapshot;
+    const snapshot = state.sceneCombatSnapshot;
     if (!snapshot?.encounterId) return null;
     const runtime3 = snapshot.runtime ?? {};
     const encounter = runtime3.encounter ?? {};
@@ -34783,7 +34867,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       round: Number(encounter.current_round ?? runtime3.current_round ?? 0) || 0,
       stateVersion: snapshot.stateVersion,
       participantCount: participants.length,
-      hasLoadedCharacterParticipant: !!snapshot.participant
+      hasLoadedCharacterParticipant: !!getLoadedCharacterParticipant()
     };
   }
   function getSelectedTokenForLoadedCharacter() {
@@ -35011,6 +35095,29 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         throw new Error(result?.message || result?.error || "Unable to start combat.");
       }
       setCombatStartStage("Combat created.");
+      if (result?.runtime?.encounter?.id) {
+        const nextSceneSnapshot = {
+          encounterId: String(result.runtime.encounter.id ?? "").trim(),
+          stateVersion: Number(
+            result.runtime.state_version ?? result.runtime.encounter?.state_version ?? 0
+          ) || 0,
+          runtime: result.runtime
+        };
+        state.sceneCombatSnapshot = nextSceneSnapshot;
+        if (state.characterId) {
+          const participants = arr2(result.runtime.visible_participants);
+          const participant = participants.find((row) => String(row?.character_id ?? "").trim() === state.characterId) ?? null;
+          state.tacticalSnapshot = {
+            encounterId: nextSceneSnapshot.encounterId,
+            stateVersion: nextSceneSnapshot.stateVersion,
+            grid: normalizeTacticalGridSettings(result.runtime.tactical_grid),
+            participant,
+            runtime: result.runtime
+          };
+        }
+      } else {
+        void refreshSceneCombatSnapshot(true);
+      }
       state.isStartingCombat = false;
       state.busy = false;
       setNotice("ok", result.__resolvedByPoll ? "Combat started. Runtime was confirmed by follow-up check." : "Combat started.");
@@ -35055,6 +35162,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       if (!result || result.ok === false) {
         throw new Error(result?.message || result?.error || "Unable to end combat.");
       }
+      state.sceneCombatSnapshot = null;
       state.tacticalSnapshot = null;
       state.moveToolStatus = null;
       setNotice("ok", "Combat ended.");
@@ -36557,9 +36665,18 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     input.select();
   }
   render();
+  root2.addEventListener("odyssey:tabshow", () => {
+    refreshSceneCombatSnapshot(true).catch(() => {
+    });
+    if (state.characterId) {
+      refreshTacticalSnapshot(true).catch(() => {
+      });
+    }
+  });
   return () => {
     document.removeEventListener("keydown", onEscOnce);
     cleanupRealtimeSubscriptions();
+    cleanupSceneCombatSubscriptions();
   };
 }
 
