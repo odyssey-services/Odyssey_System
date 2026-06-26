@@ -33889,7 +33889,7 @@ function normalizeDistanceMode(gridType, measurement) {
       return "";
   }
 }
-function normalizeTacticalGridSettings2(raw) {
+function normalizeTacticalGridSettings(raw) {
   if (!raw || typeof raw !== "object") return null;
   const gridType = String(raw.grid_type ?? raw.gridType ?? "").trim().toLowerCase();
   const distanceMode = String(raw.distance_mode ?? raw.distanceMode ?? "").trim().toLowerCase();
@@ -33930,7 +33930,7 @@ function axialRound(q, r) {
   return { q: cube.x, r: cube.z };
 }
 function sceneToCell(grid, position) {
-  const settings = normalizeTacticalGridSettings2(grid);
+  const settings = normalizeTacticalGridSettings(grid);
   if (!settings || !position) return null;
   const x = (Number(position.x) || 0) - settings.anchor.x;
   const y = (Number(position.y) || 0) - settings.anchor.y;
@@ -34064,6 +34064,38 @@ function withTimeout3(promise, ms, fallback) {
     Promise.resolve().then(() => promise).catch(() => fallback),
     new Promise((r) => setTimeout(() => r(fallback), ms))
   ]);
+}
+function normalizeTacticalGridSettings2(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const gridType = String(raw.grid_type ?? "").trim().toLowerCase();
+  const distanceMode = String(raw.distance_mode ?? "").trim().toLowerCase();
+  const metersPerCell = Number(raw.meters_per_cell);
+  const anchorSceneX = Number(raw.anchor_scene_x);
+  const anchorSceneY = Number(raw.anchor_scene_y);
+  const gridDpi = Number(raw.grid_dpi);
+  const supportedGridTypes = /* @__PURE__ */ new Set([
+    "square",
+    "hex_vertical",
+    "hex_horizontal"
+  ]);
+  if (!supportedGridTypes.has(gridType)) {
+    return null;
+  }
+  const hasValidDistanceMode = gridType === "square" && ["chebyshev", "manhattan"].includes(distanceMode) || gridType !== "square" && distanceMode === "hex";
+  if (!hasValidDistanceMode) {
+    return null;
+  }
+  if (!Number.isFinite(anchorSceneX) || !Number.isFinite(anchorSceneY) || !Number.isFinite(gridDpi) || gridDpi <= 0) {
+    return null;
+  }
+  return {
+    grid_type: gridType,
+    distance_mode: distanceMode,
+    meters_per_cell: Number.isFinite(metersPerCell) && metersPerCell > 0 ? Math.round(metersPerCell) : 1,
+    anchor_scene_x: anchorSceneX,
+    anchor_scene_y: anchorSceneY,
+    grid_dpi: gridDpi
+  };
 }
 function banner2(kind, html) {
   return `<div class="cp-banner ${kind}">${html}</div>`;
@@ -34229,12 +34261,13 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         state.tacticalSnapshot = {
           encounterId: String(runtimeRes.encounter.id ?? "").trim(),
           stateVersion: Number(runtimeRes.state_version ?? runtimeRes.encounter?.state_version ?? 0) || 0,
-          grid: normalizeTacticalGridSettings(runtimeRes.tactical_grid),
+          grid: normalizeTacticalGridSettings2(runtimeRes.tactical_grid),
           participant,
           runtime: runtimeRes
         };
       }
-    } catch {
+    } catch (error) {
+      console.warn("[Odyssey] Tactical snapshot refresh failed:", error);
       state.tacticalSnapshot = null;
     }
     if (forceRender) render();
@@ -35110,7 +35143,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
           state.tacticalSnapshot = {
             encounterId: nextSceneSnapshot.encounterId,
             stateVersion: nextSceneSnapshot.stateVersion,
-            grid: normalizeTacticalGridSettings(result.runtime.tactical_grid),
+            grid: normalizeTacticalGridSettings2(result.runtime.tactical_grid),
             participant,
             runtime: result.runtime
           };

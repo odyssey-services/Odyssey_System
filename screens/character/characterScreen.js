@@ -93,6 +93,62 @@ function withTimeout(promise, ms, fallback) {
     new Promise((r) => setTimeout(() => r(fallback), ms)),
   ]);
 }
+function normalizeTacticalGridSettings(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const gridType = String(raw.grid_type ?? "")
+    .trim()
+    .toLowerCase();
+
+  const distanceMode = String(raw.distance_mode ?? "")
+    .trim()
+    .toLowerCase();
+
+  const metersPerCell = Number(raw.meters_per_cell);
+  const anchorSceneX = Number(raw.anchor_scene_x);
+  const anchorSceneY = Number(raw.anchor_scene_y);
+  const gridDpi = Number(raw.grid_dpi);
+
+  const supportedGridTypes = new Set([
+    "square",
+    "hex_vertical",
+    "hex_horizontal",
+  ]);
+
+  if (!supportedGridTypes.has(gridType)) {
+    return null;
+  }
+
+  const hasValidDistanceMode =
+    (gridType === "square" &&
+      ["chebyshev", "manhattan"].includes(distanceMode)) ||
+    (gridType !== "square" && distanceMode === "hex");
+
+  if (!hasValidDistanceMode) {
+    return null;
+  }
+
+  if (
+    !Number.isFinite(anchorSceneX) ||
+    !Number.isFinite(anchorSceneY) ||
+    !Number.isFinite(gridDpi) ||
+    gridDpi <= 0
+  ) {
+    return null;
+  }
+
+  return {
+    grid_type: gridType,
+    distance_mode: distanceMode,
+    meters_per_cell:
+      Number.isFinite(metersPerCell) && metersPerCell > 0
+        ? Math.round(metersPerCell)
+        : 1,
+    anchor_scene_x: anchorSceneX,
+    anchor_scene_y: anchorSceneY,
+    grid_dpi: gridDpi,
+  };
+}
 function banner(kind, html) {
   return `<div class="cp-banner ${kind}">${html}</div>`;
 }
@@ -277,7 +333,8 @@ export function mountCharacterScreen({ root, runtime }) {
           runtime: runtimeRes,
         };
       }
-    } catch {
+    } catch (error) {
+      console.warn("[Odyssey] Tactical snapshot refresh failed:", error);
       state.tacticalSnapshot = null;
     }
     if (forceRender) render();
