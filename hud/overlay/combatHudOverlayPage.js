@@ -1,27 +1,41 @@
-// Combat HUD overlay — popover iframe entry (Phase 1A + follow-up).
+// Combat HUD overlay — popover iframe entry (Phase 1A · 2 · 2.1 · 2.2).
 //
-// Build entry loaded by combat-hud-overlay.html INSIDE the OBR popover iframe.
-// It injects styles, restores the UI snapshot from the URL (seeded by the
-// background controller), mounts the shell wired to the Phase 0 mock store,
-// and broadcasts UI-state changes back to the controller so the state survives
-// the next popover re-open.
+// The SAME page is loaded into every HUD popover. A `?module=` URL param
+// (seeded by the background controller) selects what to mount:
+//   module=player|gun|skills|target|modifiers|action|log → one module block
+//   module=editor                                          → Arrange-HUD editor
+//   module=pill                                            → collapsed pill
+//   (absent)                                               → editor (standalone preview)
 //
-// Standalone fallback: if opened directly (not inside Owlbear), it still mounts
-// and shows an "OBR unavailable — local HUD preview" banner. It never
-// simulates the OBR API.
+// Each module iframe is tight to its module rect, so the map stays clickable
+// between modules. Layout is read/written to localStorage here (browser-local),
+// and changes are broadcast (LOCAL) to the background controller which owns the
+// real popover lifecycle. Standalone (no OBR) still renders for local preview.
 
 import OBR from "@owlbear-rodeo/sdk";
 import tokenStyles from "../styles/combatHudTokens.css";
 import overlayStyles from "./combatHudOverlay.css";
 import layoutStyles from "../components/combatHudLayout.css";
-import { mountCombatHudOverlay } from "./mountCombatHudOverlay.js";
-import { BC_HUD_UI_STATE, parseHudUiState, parseRenderContext } from "./overlayConstants.js";
+import moduleStyles from "../components/combatHudModule.css";
+
+import { mountCombatHudModule } from "../components/CombatHudModule.js";
+import { mountCombatHudLayoutEditor } from "../components/CombatHudLayoutEditor.js";
+import { BC_HUD_UI_STATE, parseHudUiState } from "./overlayConstants.js";
+import {
+  HUD_MODULE_IDS,
+  BC_HUD_LAYOUT,
+  BC_HUD_EDITOR,
+  readStoredLayout,
+  writeStoredLayout,
+} from "./hudLayout.js";
+import { ICON_MARK } from "../components/hudIcons.js";
 
 function injectStyles() {
   for (const [id, css] of [
     ["ohud-tokens", tokenStyles],
     ["ohud-overlay-styles", overlayStyles],
     ["ohud-layout-styles", layoutStyles],
+    ["ohud-module-styles", moduleStyles],
   ]) {
     if (document.getElementById(id)) continue;
     const el = document.createElement("style");
@@ -29,6 +43,29 @@ function injectStyles() {
     el.textContent = css;
     document.head.appendChild(el);
   }
+}
+
+function send(channel, data) {
+  try { OBR.broadcast.sendMessage(channel, data, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
+}
+
+function getModuleParam() {
+  try { return new URLSearchParams(window.location.search).get("module") || ""; } catch { return ""; }
+}
+
+function renderPill(root, available) {
+  const host = document.createElement("div");
+  host.className = "odyssey-hud ohud-overlay is-collapsed";
+  host.innerHTML = `<button class="ohud-pill" data-ohud="reopen" title="Open Odyssey Combat HUD" aria-label="Open Odyssey Combat HUD">
+      <span class="ohud-mark" aria-hidden="true">${ICON_MARK}</span>
+      <span class="ohud-pill-label">ODYSSEY</span>
+    </button>`;
+  root.appendChild(host);
+  host.addEventListener("click", (e) => {
+    if (e.target.closest('[data-ohud="reopen"]')) {
+      if (available) send(BC_HUD_UI_STATE, { isHudCollapsed: false });
+    }
+  });
 }
 
 function start() {
@@ -39,37 +76,63 @@ function start() {
 
   const root = document.getElementById("root") || document.body;
   const available = !!(OBR && OBR.isAvailable);
+  const moduleParam = getModuleParam();
 
-  // Restore the UI snapshot the controller seeded into the URL on (re)open.
-  let restored = {};
-  let renderContext = {};
-  try { restored = parseHudUiState(window.location.search); } catch { restored = {}; }
-  try { renderContext = parseRenderContext(window.location.search); } catch { renderContext = {}; }
+  let uiState = {};
+  try { uiState = parseHudUiState(window.location.search); } catch { uiState = {}; }
 
-  mountCombatHudOverlay({
-    root,
-    uiState: restored,
-    renderContext,
-    devControls: true,
-    integration: {
-      available,
-      onUiStateChange(uiState) {
-        // Persist the latest snapshot in the background controller (same
-        // client → LOCAL). The controller resizes in place on collapse and
-        // re-seeds this snapshot via URL on the next re-anchor. No-op when
-        // not embedded in OBR.
-        if (!available) return;
-        try {
-          OBR.broadcast.sendMessage(BC_HUD_UI_STATE, uiState, { destination: "LOCAL" });
-        } catch (_e) {
-          /* ignore — UI still updated locally via the store */
-        }
+  // --- Collapsed pill ---
+  if (moduleParam === "pill") {
+    renderPill(root, available);
+    return;
+  }
+
+  // --- Arrange-HUD editor ---
+  if (moduleParam === "editor" || moduleParam === "") {
+    mountCombatHudLayoutEditor({
+      root,
+      uiState,
+      layout: readStoredLayout(window.localStorage),
+      integration: {
+        onSave(layout) {
+          writeStoredLayout(window.localStorage, layout);
+          if (available) {
+            send(BC_HUD_LAYOUT, layout);
+            send(BC_HUD_EDITOR, { open: false });
+          }
+        },
+        onCancel() {
+          if (available) send(BC_HUD_EDITOR, { open: false });
+        },
       },
-    },
-  });
+    });
+    return;
+  }
+
+  // --- Single HUD module ---
+  if (HUD_MODULE_IDS.includes(moduleParam)) {
+    mountCombatHudModule({
+      root,
+      moduleId: moduleParam,
+      uiState,
+      integration: {
+        onArrange() { if (available) send(BC_HUD_EDITOR, { open: true }); },
+        onCollapse(collapsed) { if (available) send(BC_HUD_UI_STATE, { isHudCollapsed: !!collapsed }); },
+      },
+    });
+    // The Player module is always present: seed the controller with the
+    // browser-local saved layout so it can place all module popovers (cold
+    // start opens at default first, then this corrects once).
+    if (moduleParam === "player" && available) {
+      send(BC_HUD_LAYOUT, readStoredLayout(window.localStorage));
+    }
+    return;
+  }
+
+  // Unknown module → render the editor as a safe fallback overview.
+  mountCombatHudLayoutEditor({ root, uiState, layout: readStoredLayout(window.localStorage), integration: {} });
 }
 
-// Mount after OBR is ready when embedded; mount immediately when standalone.
 if (OBR && OBR.isAvailable) {
   OBR.onReady(start);
 } else {

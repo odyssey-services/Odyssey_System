@@ -1,0 +1,132 @@
+/*
+ * Combat HUD — Phase 2.2 module + editor styles.
+ *
+ * Module mode: each block fills its own (tight) popover iframe so the map stays
+ * clickable in the gaps between modules. Editor mode: a fullscreen arrange
+ * surface with draggable preview cards, snap grid + alignment guides.
+ * Scoped under .ohud-module / .ohud-editor-root. No native scrollbar (except
+ * inside the Log list).
+ */
+
+/* ===================== Single module (normal mode) ===================== */
+.ohud-module {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--odyssey-hud-text);
+}
+/* The single block fills the whole module iframe. */
+.ohud-module > .ohud-panel,
+.ohud-module > .ohud-state-wrap {
+  width: 100%;
+  height: 100%;
+  flex: none;
+  margin: 0;
+}
+.ohud-module .ohud-panel--bare {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+.ohud-module .ohud-panel--bare .ohud-action { height: 100%; }
+.ohud-module .ohud-panel--bare .ohud-action-btn { height: 100%; }
+.ohud-module .ohud-panel--muted { display: grid; place-items: center; opacity: 0.5; }
+
+/* Global controls live only in the Player module (top-right). */
+.ohud-module-controls {
+  position: absolute; top: 4px; right: 4px; z-index: 5;
+  display: flex; gap: 4px;
+}
+
+/* Log scroll allowed only inside its own list. */
+.ohud-module[data-module="log"] .ohud-log-panel { width: 100%; height: 100%; max-height: none; }
+
+/* --- Per-module visual scale-ups (modules are larger than the 2.1 rail) --- */
+/* Player (250×250): prominent silhouette + readable stats. */
+.ohud-module[data-module="player"] .ohud-player-grid { grid-template-columns: 96px 1fr; gap: 12px; }
+.ohud-module[data-module="player"] .ohud-figure { width: 96px; }
+.ohud-module[data-module="player"] .ohud-player-name { font-size: 16px; }
+.ohud-module[data-module="player"] .ohud-res-num { font-size: 12px; }
+.ohud-module[data-module="player"] .ohud-res-label { font-size: 9px; }
+.ohud-module[data-module="player"] .ohud-res-track { height: 8px; }
+.ohud-module[data-module="player"] .ohud-pip { font-size: 9px; padding: 2px 8px; }
+.ohud-module[data-module="player"] .ohud-chip-status { font-size: 9.5px; }
+
+/* Skills (600×165): centred content, larger tiles, wrap past one row. */
+.ohud-module[data-module="skills"] .ohud-panel-body { justify-content: center; align-items: center; }
+.ohud-module[data-module="skills"] .ohud-skill-groups { align-items: center; justify-content: center; height: auto; gap: 18px; flex-wrap: wrap; }
+.ohud-module[data-module="skills"] .ohud-slot { width: 56px; height: 56px; }
+
+/* Target (165×165): silhouette ~55–60% of the block height. */
+.ohud-module[data-module="target"] .ohud-target { justify-content: center; gap: 5px; }
+.ohud-module[data-module="target"] .ohud-figure { width: 86px; height: 92px; }
+.ohud-module[data-module="target"] .ohud-target-name { font-size: 12px; }
+
+/* Modifiers (125×165): a touch more breathing room above the Action overlap. */
+.ohud-module[data-module="modifiers"] .ohud-mods { gap: 4px; padding-bottom: 6px; }
+
+/* ===================== Arrange-HUD editor ===================== */
+.ohud-editor-root {
+  position: fixed; inset: 0; z-index: 100;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.ohud-editor {
+  position: absolute; inset: 0;
+  background: rgba(8, 12, 22, 0.86);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+}
+/* Toolbar floats OVER the canvas so the canvas spans the full viewport and the
+ * preview cards sit exactly where the real module popovers will. */
+.ohud-editor-toolbar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 400;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; background: var(--odyssey-hud-panel);
+  border-bottom: 1px solid var(--odyssey-hud-border-strong);
+}
+.ohud-editor-title { font-size: 13px; font-weight: 800; letter-spacing: 0.5px; color: var(--odyssey-hud-text); }
+.ohud-editor-hint { font-size: 11px; color: var(--odyssey-hud-muted); }
+.ohud-editor-actions { margin-left: auto; display: flex; gap: 8px; }
+.ohud-editor-btn {
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  padding: 5px 12px; border-radius: 8px;
+  border: 1px solid var(--odyssey-hud-border-strong);
+  background: var(--odyssey-panel-base); color: var(--odyssey-hud-text);
+}
+.ohud-editor-btn:hover { border-color: var(--odyssey-purple); }
+.ohud-editor-btn.is-primary { background: var(--odyssey-purple-strong); border-color: var(--odyssey-purple-strong); color: #fff; }
+
+.ohud-editor-canvas {
+  position: absolute; inset: 0; overflow: hidden;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 7px, rgba(120,142,184,0.06) 7px, rgba(120,142,184,0.06) 8px),
+    repeating-linear-gradient(90deg, transparent, transparent 7px, rgba(120,142,184,0.06) 7px, rgba(120,142,184,0.06) 8px);
+}
+.ohud-guide { position: absolute; background: var(--odyssey-cyan); opacity: 0.7; pointer-events: none; z-index: 200; }
+.ohud-guide--v { top: 0; bottom: 0; width: 1px; }
+.ohud-guide--h { left: 0; right: 0; height: 1px; }
+
+.ohud-card {
+  position: absolute; overflow: hidden;
+  border: 1px solid var(--odyssey-hud-border-strong);
+  border-radius: var(--odyssey-hud-radius);
+  box-shadow: var(--odyssey-hud-shadow);
+  display: flex; flex-direction: column;
+}
+.ohud-card.is-dragging { z-index: 300 !important; box-shadow: 0 0 0 2px var(--odyssey-cyan), var(--odyssey-hud-shadow); }
+.ohud-card-bar {
+  flex: 0 0 18px; display: flex; align-items: center; gap: 5px;
+  padding: 0 6px; cursor: grab; touch-action: none;
+  background: var(--odyssey-panel-base); border-bottom: 1px solid var(--odyssey-hud-border);
+}
+.ohud-card.is-dragging .ohud-card-bar { cursor: grabbing; }
+.ohud-card-grip { display: inline-flex; color: var(--odyssey-hud-muted); }
+.ohud-card-name { font-size: 10px; font-weight: 700; color: var(--odyssey-hud-text); }
+.ohud-card-body { position: relative; flex: 1 1 auto; min-height: 0; pointer-events: none; }
+.ohud-card-body > .ohud-panel { width: 100%; height: 100%; flex: none; }
+.ohud-card-body .ohud-panel--bare { background: transparent; border: none; box-shadow: none; }
+.ohud-card-body .ohud-panel--bare .ohud-action,
+.ohud-card-body .ohud-panel--bare .ohud-action-btn { height: 100%; }

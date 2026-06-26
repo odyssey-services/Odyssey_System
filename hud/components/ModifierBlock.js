@@ -33,12 +33,36 @@ function modChip(mod) {
   </span>`;
 }
 
+/**
+ * Modifier chips list (shared by the combined 2.1 column and the standalone
+ * 2.2 Modifiers module). Shows up to `limit` chips, then a `+N` overflow chip
+ * with a tooltip listing the hidden ones — never overflowing the block.
+ */
+export function renderModifierChips(state, limit = MAX_CHIPS) {
+  const all = selectModifierChips(state);
+  const shown = all.slice(0, limit);
+  let html = shown.map(modChip).join("");
+  if (all.length > shown.length) {
+    const hidden = all.slice(limit);
+    const tip = tipAttr(`${hidden.length} more`, hidden.map((m) => m.name));
+    html += `<span class="ohud-mod ohud-mod--more"${tip}>+${hidden.length}</span>`;
+  }
+  return `<div class="ohud-mods">${html}</div>`;
+}
+
+/** Phase 2.2 standalone Modifiers module (chips only — Action is its own module). */
+export function renderModifierModule(state) {
+  return `<section class="ohud-panel ohud-panel--modifiers" data-block="modifiers">
+    <div class="ohud-panel-head"><span class="ohud-panel-label">Mod</span></div>
+    ${renderModifierChips(state)}
+  </section>`;
+}
+
+/** Combined 2.1 column (chips + Action button) — kept for the single-HUD view. */
 export function renderModifierActionColumn(state) {
-  const chips = selectModifierChips(state).slice(0, MAX_CHIPS);
-  const chipsHtml = chips.map(modChip).join("");
   return `<section class="ohud-panel ohud-panel--modact" data-block="modact">
     <div class="ohud-panel-head"><span class="ohud-panel-label">Mod</span></div>
-    <div class="ohud-mods">${chipsHtml}</div>
+    ${renderModifierChips(state)}
     ${renderActionButton(state)}
   </section>`;
 }

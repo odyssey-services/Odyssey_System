@@ -1,0 +1,339 @@
+// Combat HUD — modular layout math (Phase 2.2).
+//
+// Pure helpers for the multi-module HUD: NO DOM, NO OBR, NO CSS — only data +
+// math, shared by the background controller (computes each module popover rect),
+// the per-module page mount, and the Arrange-HUD editor. Unit-tested under Node.
+//
+// Each of the seven HUD modules is an independent OBR popover with a stable id.
+// Positions are stored NORMALISED (fractions of available travel) so they
+// survive viewport resizes and always clamp on-screen. Layout is a LOCAL,
+// per-browser preference: never synced to other players, Supabase, or metadata.
+
+/** The geometry below is authored against this exact reference viewport. */
+export const HUD_LAYOUT_REFERENCE_VIEWPORT = Object.freeze({ width: 1920, height: 1080 });
+
+export const LAYOUT_VERSION = 2;
+export const LAYOUT_STORAGE_KEY = "odyssey.hud.layout.v2";
+/** Legacy single-HUD key (Phase 2.1). Intentionally NOT read by v2. */
+export const LEGACY_PLACEMENT_KEY = "odyssey.hud.placement.v1";
+
+export const HUD_MODULE_IDS = Object.freeze([
+  "player", "gun", "skills", "target", "modifiers", "action", "log",
+]);
+
+/** Stable OBR popover ids — re-opening with the same id updates in place. */
+export const HUD_MODULE_POPOVER_IDS = Object.freeze({
+  player: "odyssey-hud-player",
+  gun: "odyssey-hud-gun",
+  skills: "odyssey-hud-skills",
+  target: "odyssey-hud-target",
+  modifiers: "odyssey-hud-modifiers",
+  action: "odyssey-hud-action",
+  log: "odyssey-hud-log",
+});
+export const HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";
+export const HUD_PILL_POPOVER_ID = "odyssey-hud-pill";
+
+/** LOCAL broadcast channels (iframe ↔ background controller). */
+export const BC_HUD_LAYOUT = "com.odyssey.combat-hud/layout";
+export const BC_HUD_EDITOR = "com.odyssey.combat-hud/editor";
+
+/** Safe inset (px) from each viewport edge for normalised placement + clamping. */
+export const LAYOUT_MARGIN = 16;
+/** Drag snap grid (px) used by the editor. */
+export const SNAP_GRID = 8;
+/** Below this viewport width we use a stacked compact fallback layout. */
+export const COMPACT_LAYOUT_BREAKPOINT = 1100;
+/** Skills: max quick slots per row before wrapping to a second row. */
+export const SKILLS_MAX_PER_ROW = 10;
+
+/**
+ * EXACT designer layout at 1920×1080. These values are authoritative and must
+ * NOT be "improved" via CSS grid. Intentional overlaps (player/gun,
+ * action/modifiers) and the gun↔skills gap are deliberate — do not auto-fix.
+ * @typedef {{left:number,bottom:number,width:number,height:number,zIndex:number}} ModuleRectDef
+ */
+export const DEFAULT_HUD_LAYOUT_V2 = Object.freeze({
+  player:    Object.freeze({ left: 16,   bottom: 16, width: 250, height: 250, zIndex: 30 }),
+  gun:       Object.freeze({ left: 126,  bottom: 16, width: 340, height: 165, zIndex: 20 }),
+  skills:    Object.freeze({ left: 663,  bottom: 16, width: 600, height: 165, zIndex: 20 }),
+  target:    Object.freeze({ left: 1263, bottom: 16, width: 165, height: 165, zIndex: 20 }),
+  modifiers: Object.freeze({ left: 1428, bottom: 16, width: 125, height: 165, zIndex: 20 }),
+  action:    Object.freeze({ left: 1428, bottom: 16, width: 165, height: 40,  zIndex: 40 }),
+  log:       Object.freeze({ left: 1656, bottom: 16, width: 250, height: 250, zIndex: 20 }),
+});
+
+/* ----------------- small math ----------------- */
+
+export function clamp01(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** Scale factor from the reference viewport, capped at 1 (never upscale). */
+export function computeLayoutScale(vw, vh) {
+  const w = Math.max(1, Number(vw) || 0);
+  const h = Math.max(1, Number(vh) || 0);
+  return Math.min(w / HUD_LAYOUT_REFERENCE_VIEWPORT.width, h / HUD_LAYOUT_REFERENCE_VIEWPORT.height, 1);
+}
+
+export function isCompactViewport(vw) {
+  return (Number(vw) || 0) < COMPACT_LAYOUT_BREAKPOINT;
+}
+
+export function snapToGrid(value, grid = SNAP_GRID) {
+  const g = grid || 1;
+  return Math.round((Number(value) || 0) / g) * g;
+}
+
+export function rectsOverlap(a, b) {
+  return a.left < b.left + b.width && a.left + a.width > b.left &&
+         a.top < b.top + b.height && a.top + a.height > b.top;
+}
+
+/* ----------------- module sizing ----------------- */
+
+/** A module's pixel size at the current viewport (scaled default, or compact). */
+export function moduleSize(moduleId, vw, vh) {
+  if (isCompactViewport(vw)) return compactModuleSize(moduleId, vw);
+  const def = DEFAULT_HUD_LAYOUT_V2[moduleId];
+  const scale = computeLayoutScale(vw, vh);
+  return { width: Math.round(def.width * scale), height: Math.round(def.height * scale) };
+}
+
+/** Default (designer) pixel rect for a module at the current viewport. */
+export function defaultModuleRect(moduleId, vw, vh) {
+  if (isCompactViewport(vw)) return compactModuleRect(moduleId, vw, vh);
+  const def = DEFAULT_HUD_LAYOUT_V2[moduleId];
+  const scale = computeLayoutScale(vw, vh);
+  const width = Math.round(def.width * scale);
+  const height = Math.round(def.height * scale);
+  return {
+    left: Math.round(def.left * scale),
+    top: Math.round((Number(vh) || 0) - def.bottom * scale - height),
+    width, height, zIndex: def.zIndex,
+  };
+}
+
+/* ----------------- normalised ↔ pixels ----------------- */
+
+export function normalizedToPixels(moduleId, placement, vw, vh) {
+  const { width, height } = moduleSize(moduleId, vw, vh);
+  const availW = Math.max(0, (Number(vw) || 0) - width - 2 * LAYOUT_MARGIN);
+  const availH = Math.max(0, (Number(vh) || 0) - height - 2 * LAYOUT_MARGIN);
+  return {
+    left: Math.round(LAYOUT_MARGIN + clamp01(placement && placement.x) * availW),
+    top: Math.round(LAYOUT_MARGIN + clamp01(placement && placement.y) * availH),
+    width, height,
+    zIndex: DEFAULT_HUD_LAYOUT_V2[moduleId].zIndex,
+  };
+}
+
+export function pixelsToNormalized(moduleId, left, top, vw, vh) {
+  const { width, height } = moduleSize(moduleId, vw, vh);
+  const availW = Math.max(0, (Number(vw) || 0) - width - 2 * LAYOUT_MARGIN);
+  const availH = Math.max(0, (Number(vh) || 0) - height - 2 * LAYOUT_MARGIN);
+  return {
+    x: availW > 0 ? clamp01((left - LAYOUT_MARGIN) / availW) : 0,
+    y: availH > 0 ? clamp01((top - LAYOUT_MARGIN) / availH) : 0,
+  };
+}
+
+/** Clamp a pixel rect fully inside the viewport (size preserved). */
+export function clampRect(rect, vw, vh) {
+  const w = Number(vw) || 0;
+  const h = Number(vh) || 0;
+  return {
+    ...rect,
+    left: Math.max(0, Math.min(rect.left, Math.max(0, w - rect.width))),
+    top: Math.max(0, Math.min(rect.top, Math.max(0, h - rect.height))),
+  };
+}
+
+/** Resolve one module's on-screen pixel rect from its placement. */
+export function resolveModuleRect(moduleId, placement, vw, vh) {
+  const rect = placement && placement.mode === "custom"
+    ? normalizedToPixels(moduleId, placement, vw, vh)
+    : defaultModuleRect(moduleId, vw, vh);
+  return clampRect(rect, vw, vh);
+}
+
+/** Resolve every module's pixel rect for a full layout state. */
+export function resolveLayoutRects(layoutState, vw, vh) {
+  const state = normalizeLayoutState(layoutState);
+  const out = {};
+  for (const id of HUD_MODULE_IDS) {
+    out[id] = resolveModuleRect(id, state.modules[id], vw, vh);
+  }
+  return out;
+}
+
+/* ----------------- compact fallback ----------------- */
+//
+// Below COMPACT_LAYOUT_BREAKPOINT we don't shrink the desktop layout into
+// illegibility. Instead modules keep a readable min size and stack bottom-up in
+// a wrapped row, so every module stays reachable + editable.
+
+const COMPACT_SIZES = {
+  player: { width: 150, height: 150 },
+  gun: { width: 190, height: 92 },
+  skills: { width: 300, height: 92 },
+  target: { width: 92, height: 92 },
+  modifiers: { width: 92, height: 92 },
+  action: { width: 120, height: 34 },
+  log: { width: 180, height: 140 },
+};
+
+export function compactModuleSize(moduleId, vw) {
+  const s = COMPACT_SIZES[moduleId];
+  const maxW = Math.max(80, (Number(vw) || 0) - 2 * LAYOUT_MARGIN);
+  return { width: Math.min(s.width, maxW), height: s.height };
+}
+
+export function compactModuleRect(moduleId, vw, vh) {
+  const w = Number(vw) || 0;
+  const h = Number(vh) || 0;
+  // Pack modules left→right, wrapping to new rows stacked upward from the bottom.
+  let x = LAYOUT_MARGIN;
+  let rowTopFromBottom = LAYOUT_MARGIN;
+  let rowHeight = 0;
+  for (const id of HUD_MODULE_IDS) {
+    const size = compactModuleSize(id, vw);
+    if (x + size.width + LAYOUT_MARGIN > w && x > LAYOUT_MARGIN) {
+      rowTopFromBottom += rowHeight + 8;
+      x = LAYOUT_MARGIN;
+      rowHeight = 0;
+    }
+    if (id === moduleId) {
+      const top = Math.max(0, h - rowTopFromBottom - size.height);
+      return clampRect({ left: x, top, width: size.width, height: size.height, zIndex: DEFAULT_HUD_LAYOUT_V2[moduleId].zIndex }, vw, vh);
+    }
+    x += size.width + 8;
+    rowHeight = Math.max(rowHeight, size.height);
+  }
+  // Fallback (should not happen)
+  return clampRect({ left: LAYOUT_MARGIN, top: LAYOUT_MARGIN, ...compactModuleSize(moduleId, vw), zIndex: 20 }, vw, vh);
+}
+
+/* ----------------- editor alignment guides ----------------- */
+
+/**
+ * Edge/centre alignment guides between a moving rect and the others.
+ * @returns {{vertical:number[], horizontal:number[]}}
+ */
+export function computeAlignmentGuides(moving, others, threshold = 6) {
+  const vertical = new Set();
+  const horizontal = new Set();
+  const mX = [moving.left, moving.left + moving.width / 2, moving.left + moving.width];
+  const mY = [moving.top, moving.top + moving.height / 2, moving.top + moving.height];
+  for (const o of others) {
+    const oX = [o.left, o.left + o.width / 2, o.left + o.width];
+    const oY = [o.top, o.top + o.height / 2, o.top + o.height];
+    for (const a of mX) for (const b of oX) if (Math.abs(a - b) <= threshold) vertical.add(Math.round(b));
+    for (const a of mY) for (const b of oY) if (Math.abs(a - b) <= threshold) horizontal.add(Math.round(b));
+  }
+  return { vertical: [...vertical], horizontal: [...horizontal] };
+}
+
+/* ----------------- skills row layout ----------------- */
+
+/** Split N skill items into rows of at most SKILLS_MAX_PER_ROW. */
+export function splitSkillRows(items, maxPerRow = SKILLS_MAX_PER_ROW) {
+  const list = Array.isArray(items) ? items : [];
+  const cap = Math.max(1, maxPerRow);
+  const rows = [];
+  for (let i = 0; i < list.length; i += cap) rows.push(list.slice(i, i + cap));
+  return rows;
+}
+
+/* ----------------- layout state (storage) ----------------- */
+
+/**
+ * @typedef {{mode:"default"|"custom", x:number, y:number}} ModulePlacement
+ * @typedef {{version:number, modules:Record<string, ModulePlacement>}} LayoutState
+ */
+
+export function defaultLayoutState() {
+  const modules = {};
+  for (const id of HUD_MODULE_IDS) modules[id] = { mode: "default", x: 0, y: 0 };
+  return { version: LAYOUT_VERSION, modules };
+}
+
+/** Reset = exact designer default. */
+export function resetLayoutState() {
+  return defaultLayoutState();
+}
+
+/** Validate an untrusted object as a v2 LayoutState, or return null. */
+export function validateLayoutState(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  if (raw.version !== LAYOUT_VERSION) return null;
+  if (!raw.modules || typeof raw.modules !== "object") return null;
+  const out = defaultLayoutState();
+  for (const id of HUD_MODULE_IDS) {
+    const m = raw.modules[id];
+    if (m && (m.mode === "default" || m.mode === "custom") &&
+        typeof m.x === "number" && typeof m.y === "number" &&
+        Number.isFinite(m.x) && Number.isFinite(m.y)) {
+      out.modules[id] = { mode: m.mode, x: clamp01(m.x), y: clamp01(m.y) };
+    }
+  }
+  return out;
+}
+
+/** Coerce anything into a complete LayoutState (invalid → default). */
+export function normalizeLayoutState(state) {
+  return validateLayoutState(state) ?? defaultLayoutState();
+}
+
+export function parseLayoutState(rawJson) {
+  if (rawJson == null) return null;
+  let obj = rawJson;
+  if (typeof rawJson === "string") {
+    try { obj = JSON.parse(rawJson); } catch { return null; }
+  }
+  return validateLayoutState(obj);
+}
+
+export function serializeLayoutState(state) {
+  return JSON.stringify(normalizeLayoutState(state));
+}
+
+/** Read + validate the layout from a Storage-like object. Default on miss/invalid. */
+export function readStoredLayout(storage) {
+  try {
+    const raw = storage && storage.getItem ? storage.getItem(LAYOUT_STORAGE_KEY) : null;
+    return parseLayoutState(raw) ?? defaultLayoutState();
+  } catch {
+    return defaultLayoutState();
+  }
+}
+
+export function writeStoredLayout(storage, state) {
+  try {
+    if (storage && storage.setItem) storage.setItem(LAYOUT_STORAGE_KEY, serializeLayoutState(state));
+  } catch { /* ignore quota/security */ }
+}
+
+/* ----------------- draft (editor) helpers ----------------- */
+
+/** A draft is just a LayoutState; commit returns it, cancel returns the base. */
+export function commitDraft(draft) {
+  return normalizeLayoutState(draft);
+}
+export function cancelDraft(base) {
+  return normalizeLayoutState(base);
+}
+/** Set one module's placement in a draft (immutably). */
+export function setModulePlacement(draft, moduleId, placement) {
+  const next = normalizeLayoutState(draft);
+  if (HUD_MODULE_IDS.includes(moduleId)) {
+    next.modules[moduleId] = {
+      mode: placement && placement.mode === "default" ? "default" : "custom",
+      x: clamp01(placement && placement.x),
+      y: clamp01(placement && placement.y),
+    };
+  }
+  return next;
+}

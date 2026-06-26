@@ -2540,10 +2540,10 @@ var ToolApi = class {
       }
     };
     this.handleToolModeClick = (event) => {
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        if (mode.onClick) {
-          const result = mode.onClick(event.context, event.elementId);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        if (mode2.onClick) {
+          const result = mode2.onClick(event.context, event.elementId);
           Promise.resolve(result).then((activate) => {
             if (activate) {
               this.messageBus.send("OBR_TOOL_MODE_ACTIVATE", {
@@ -2561,10 +2561,10 @@ var ToolApi = class {
       }
     };
     this.handleToolModeToolClick = (event) => {
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        if (mode.onToolClick) {
-          const result = mode.onToolClick(event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        if (mode2.onToolClick) {
+          const result = mode2.onToolClick(event.context, event.event);
           Promise.resolve(result).then((select) => {
             if (select && event.event.target && !event.event.target.locked) {
               this.messageBus.sendAsync("OBR_PLAYER_SELECT", {
@@ -2582,10 +2582,10 @@ var ToolApi = class {
       }
     };
     this.handleToolModeToolDoubleClick = (event) => {
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        if (mode.onToolDoubleClick) {
-          const result = mode.onToolDoubleClick(event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        if (mode2.onToolDoubleClick) {
+          const result = mode2.onToolDoubleClick(event.context, event.event);
           Promise.resolve(result).then((select) => {
             if (select && event.event.target) {
               this.messageBus.sendAsync("OBR_PLAYER_SELECT", {
@@ -2604,79 +2604,79 @@ var ToolApi = class {
     };
     this.handleToolModeToolDown = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onToolDown) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onToolDown) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeToolMove = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onToolMove) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onToolMove) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeToolUp = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onToolUp) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onToolUp) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeToolDragStart = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onToolDragStart) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onToolDragStart) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeToolDragMove = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onToolDragMove) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onToolDragMove) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeToolDragEnd = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onToolDragEnd) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onToolDragEnd) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeToolDragCancel = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onToolDragCancel) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onToolDragCancel) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeKeyDown = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onKeyDown) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onKeyDown) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeKeyUp = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onKeyUp) === null || _a === void 0 ? void 0 : _a.call(mode, event.context, event.event);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onKeyUp) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context, event.event);
       }
     };
     this.handleToolModeActivate = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onActivate) === null || _a === void 0 ? void 0 : _a.call(mode, event.context);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onActivate) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context);
       }
     };
     this.handleToolModeDeactivate = (event) => {
       var _a;
-      const mode = this.toolModes[event.id];
-      if (mode) {
-        (_a = mode.onDeactivate) === null || _a === void 0 ? void 0 : _a.call(mode, event.context);
+      const mode2 = this.toolModes[event.id];
+      if (mode2) {
+        (_a = mode2.onDeactivate) === null || _a === void 0 ? void 0 : _a.call(mode2, event.context);
       }
     };
     this.messageBus = messageBus2;
@@ -2769,17 +2769,17 @@ var ToolApi = class {
       delete this.tools[id];
     });
   }
-  createMode(mode) {
+  createMode(mode2) {
     return __awaiter11(this, void 0, void 0, function* () {
       yield this.messageBus.sendAsync("OBR_TOOL_MODE_CREATE", {
-        id: mode.id,
-        shortcut: mode.shortcut,
-        icons: normalizeIconPaths(mode.icons),
-        preventDrag: mode.preventDrag,
-        disabled: mode.disabled,
-        cursors: mode.cursors
+        id: mode2.id,
+        shortcut: mode2.shortcut,
+        icons: normalizeIconPaths(mode2.icons),
+        preventDrag: mode2.preventDrag,
+        disabled: mode2.disabled,
+        cursors: mode2.cursors
       });
-      this.toolModes[mode.id] = mode;
+      this.toolModes[mode2.id] = mode2;
     });
   }
   removeMode(id) {
@@ -4027,7 +4027,6 @@ async function clearRoomSupabaseSettings() {
 }
 
 // hud/overlay/hudPlacement.js
-var SAFE_MARGIN = 10;
 var DEFAULT_PLACEMENT = Object.freeze({ mode: "default", x: 0, y: 1 });
 function clamp01(n) {
   const v = Number(n);
@@ -4038,31 +4037,15 @@ function clamp01(n) {
 }
 function clampPlacement(raw) {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_PLACEMENT };
-  const mode = raw.mode === "custom" ? "custom" : "default";
-  if (mode === "default") return { ...DEFAULT_PLACEMENT };
+  const mode2 = raw.mode === "custom" ? "custom" : "default";
+  if (mode2 === "default") return { ...DEFAULT_PLACEMENT };
   return { mode: "custom", x: clamp01(raw.x), y: clamp01(raw.y) };
-}
-function availableTravel({ vw, vh, hudW, hudH, safeMargin = SAFE_MARGIN }) {
-  return {
-    width: Math.max(0, (Number(vw) || 0) - (Number(hudW) || 0) - 2 * safeMargin),
-    height: Math.max(0, (Number(vh) || 0) - (Number(hudH) || 0) - 2 * safeMargin)
-  };
-}
-function placementToPixels(placement, dims) {
-  const p = clampPlacement(placement);
-  const safeMargin = dims.safeMargin ?? SAFE_MARGIN;
-  const { width: availW, height: availH } = availableTravel({ ...dims, safeMargin });
-  return {
-    left: Math.round(safeMargin + p.x * availW),
-    top: Math.round(safeMargin + p.y * availH)
-  };
 }
 function serializePlacement(placement) {
   return JSON.stringify(clampPlacement(placement));
 }
 
 // hud/overlay/overlayConstants.js
-var OVERLAY_POPOVER_ID = "com.odyssey.combat-hud/overlay";
 var OVERLAY_HTML = "combat-hud-overlay.html";
 var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 var PLAYER_W = 144;
@@ -4075,51 +4058,11 @@ var MODACT_W = 126;
 var RAIL_W = GUN_W + SKILLS_W + TARGET_W + MODACT_W + RAIL_GAP * 3;
 var HUD_PAD_X = 16;
 var HUD_TOP_STRIP = 16;
-var HUD_GAP_MIN = 110;
 var HUD_GAP_MAX = 235;
 var EXPANDED_HEIGHT = HUD_TOP_STRIP + PLAYER_HEIGHT + 4;
-var COMPACT_EXPANDED_HEIGHT = 300;
 var EXPANDED_MAX_WIDTH = PLAYER_W + HUD_GAP_MAX + RAIL_W + HUD_PAD_X;
-var COLLAPSED_WIDTH = 150;
-var COLLAPSED_HEIGHT = 44;
-var WIDE_BREAKPOINT = 1280;
-var MEDIUM_BREAKPOINT = 960;
-var MINI_BREAKPOINT = 620;
-function resolveLayoutMode(vw) {
-  const w = Math.max(0, Number(vw) || 0);
-  if (w >= WIDE_BREAKPOINT) return "wide";
-  if (w >= MEDIUM_BREAKPOINT) return "medium";
-  if (w >= MINI_BREAKPOINT) return "compact";
-  return "mini";
-}
-function isTwoRowMode(mode) {
-  return mode === "compact" || mode === "mini";
-}
-function computeHudGap(vw) {
-  const v = Math.max(0, Number(vw) || 0);
-  return Math.round(Math.min(HUD_GAP_MAX, Math.max(HUD_GAP_MIN, v * 0.12)));
-}
-function computeContentWidth(vw) {
-  return PLAYER_W + computeHudGap(vw) + RAIL_W + HUD_PAD_X;
-}
-function computeExpandedWidth(vw) {
-  const avail = Math.max(0, (Number(vw) || 0) - 2 * SAFE_MARGIN);
-  if (isTwoRowMode(resolveLayoutMode(vw))) return avail;
-  return Math.max(0, Math.min(computeContentWidth(vw), avail));
-}
-function computeExpandedHeight(vw) {
-  return isTwoRowMode(resolveLayoutMode(vw)) ? COMPACT_EXPANDED_HEIGHT : EXPANDED_HEIGHT;
-}
-function computeOverlaySize(collapsed, vw) {
-  if (collapsed) return { width: COLLAPSED_WIDTH, height: COLLAPSED_HEIGHT };
-  return { width: computeExpandedWidth(vw), height: computeExpandedHeight(vw) };
-}
 var ANCHOR_ORIGIN = Object.freeze({ horizontal: "LEFT", vertical: "BOTTOM" });
 var TRANSFORM_ORIGIN = Object.freeze({ horizontal: "LEFT", vertical: "BOTTOM" });
-function computeAnchorPosition({ vw, vh, width, height, placement }) {
-  const px = placementToPixels(placement, { vw, vh, hudW: width, hudH: height });
-  return { left: px.left, top: px.top + height };
-}
 var DEFAULT_HUD_UI_STATE = Object.freeze({
   isHudCollapsed: false,
   mockScenarioId: "A",
@@ -4155,97 +4098,286 @@ function normalizeHudUiState(partial) {
     hudPlacement: clampPlacement(p.hudPlacement ?? DEFAULT_HUD_UI_STATE.hudPlacement)
   };
 }
-function buildOverlayPopoverParams({ vw, vh, collapsed, placement }) {
-  const { width, height } = computeOverlaySize(collapsed, vw);
+
+// hud/overlay/hudLayout.js
+var HUD_LAYOUT_REFERENCE_VIEWPORT = Object.freeze({ width: 1920, height: 1080 });
+var LAYOUT_VERSION = 2;
+var HUD_MODULE_IDS = Object.freeze([
+  "player",
+  "gun",
+  "skills",
+  "target",
+  "modifiers",
+  "action",
+  "log"
+]);
+var HUD_MODULE_POPOVER_IDS = Object.freeze({
+  player: "odyssey-hud-player",
+  gun: "odyssey-hud-gun",
+  skills: "odyssey-hud-skills",
+  target: "odyssey-hud-target",
+  modifiers: "odyssey-hud-modifiers",
+  action: "odyssey-hud-action",
+  log: "odyssey-hud-log"
+});
+var HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";
+var HUD_PILL_POPOVER_ID = "odyssey-hud-pill";
+var BC_HUD_LAYOUT = "com.odyssey.combat-hud/layout";
+var BC_HUD_EDITOR = "com.odyssey.combat-hud/editor";
+var LAYOUT_MARGIN = 16;
+var COMPACT_LAYOUT_BREAKPOINT = 1100;
+var DEFAULT_HUD_LAYOUT_V2 = Object.freeze({
+  player: Object.freeze({ left: 16, bottom: 16, width: 250, height: 250, zIndex: 30 }),
+  gun: Object.freeze({ left: 126, bottom: 16, width: 340, height: 165, zIndex: 20 }),
+  skills: Object.freeze({ left: 663, bottom: 16, width: 600, height: 165, zIndex: 20 }),
+  target: Object.freeze({ left: 1263, bottom: 16, width: 165, height: 165, zIndex: 20 }),
+  modifiers: Object.freeze({ left: 1428, bottom: 16, width: 125, height: 165, zIndex: 20 }),
+  action: Object.freeze({ left: 1428, bottom: 16, width: 165, height: 40, zIndex: 40 }),
+  log: Object.freeze({ left: 1656, bottom: 16, width: 250, height: 250, zIndex: 20 })
+});
+function clamp012(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return 0;
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+function computeLayoutScale(vw, vh) {
+  const w = Math.max(1, Number(vw) || 0);
+  const h = Math.max(1, Number(vh) || 0);
+  return Math.min(w / HUD_LAYOUT_REFERENCE_VIEWPORT.width, h / HUD_LAYOUT_REFERENCE_VIEWPORT.height, 1);
+}
+function isCompactViewport(vw) {
+  return (Number(vw) || 0) < COMPACT_LAYOUT_BREAKPOINT;
+}
+function moduleSize(moduleId, vw, vh) {
+  if (isCompactViewport(vw)) return compactModuleSize(moduleId, vw);
+  const def = DEFAULT_HUD_LAYOUT_V2[moduleId];
+  const scale = computeLayoutScale(vw, vh);
+  return { width: Math.round(def.width * scale), height: Math.round(def.height * scale) };
+}
+function defaultModuleRect(moduleId, vw, vh) {
+  if (isCompactViewport(vw)) return compactModuleRect(moduleId, vw, vh);
+  const def = DEFAULT_HUD_LAYOUT_V2[moduleId];
+  const scale = computeLayoutScale(vw, vh);
+  const width = Math.round(def.width * scale);
+  const height = Math.round(def.height * scale);
   return {
+    left: Math.round(def.left * scale),
+    top: Math.round((Number(vh) || 0) - def.bottom * scale - height),
     width,
     height,
-    anchorReference: "POSITION",
-    anchorPosition: computeAnchorPosition({ vw, vh, width, height, placement }),
-    anchorOrigin: { ...ANCHOR_ORIGIN },
-    transformOrigin: { ...TRANSFORM_ORIGIN },
-    hidePaper: true,
-    disableClickAway: true,
-    marginThreshold: 0
+    zIndex: def.zIndex
   };
+}
+function normalizedToPixels(moduleId, placement, vw, vh) {
+  const { width, height } = moduleSize(moduleId, vw, vh);
+  const availW = Math.max(0, (Number(vw) || 0) - width - 2 * LAYOUT_MARGIN);
+  const availH = Math.max(0, (Number(vh) || 0) - height - 2 * LAYOUT_MARGIN);
+  return {
+    left: Math.round(LAYOUT_MARGIN + clamp012(placement && placement.x) * availW),
+    top: Math.round(LAYOUT_MARGIN + clamp012(placement && placement.y) * availH),
+    width,
+    height,
+    zIndex: DEFAULT_HUD_LAYOUT_V2[moduleId].zIndex
+  };
+}
+function clampRect(rect, vw, vh) {
+  const w = Number(vw) || 0;
+  const h = Number(vh) || 0;
+  return {
+    ...rect,
+    left: Math.max(0, Math.min(rect.left, Math.max(0, w - rect.width))),
+    top: Math.max(0, Math.min(rect.top, Math.max(0, h - rect.height)))
+  };
+}
+function resolveModuleRect(moduleId, placement, vw, vh) {
+  const rect = placement && placement.mode === "custom" ? normalizedToPixels(moduleId, placement, vw, vh) : defaultModuleRect(moduleId, vw, vh);
+  return clampRect(rect, vw, vh);
+}
+var COMPACT_SIZES = {
+  player: { width: 150, height: 150 },
+  gun: { width: 190, height: 92 },
+  skills: { width: 300, height: 92 },
+  target: { width: 92, height: 92 },
+  modifiers: { width: 92, height: 92 },
+  action: { width: 120, height: 34 },
+  log: { width: 180, height: 140 }
+};
+function compactModuleSize(moduleId, vw) {
+  const s = COMPACT_SIZES[moduleId];
+  const maxW = Math.max(80, (Number(vw) || 0) - 2 * LAYOUT_MARGIN);
+  return { width: Math.min(s.width, maxW), height: s.height };
+}
+function compactModuleRect(moduleId, vw, vh) {
+  const w = Number(vw) || 0;
+  const h = Number(vh) || 0;
+  let x = LAYOUT_MARGIN;
+  let rowTopFromBottom = LAYOUT_MARGIN;
+  let rowHeight = 0;
+  for (const id of HUD_MODULE_IDS) {
+    const size = compactModuleSize(id, vw);
+    if (x + size.width + LAYOUT_MARGIN > w && x > LAYOUT_MARGIN) {
+      rowTopFromBottom += rowHeight + 8;
+      x = LAYOUT_MARGIN;
+      rowHeight = 0;
+    }
+    if (id === moduleId) {
+      const top = Math.max(0, h - rowTopFromBottom - size.height);
+      return clampRect({ left: x, top, width: size.width, height: size.height, zIndex: DEFAULT_HUD_LAYOUT_V2[moduleId].zIndex }, vw, vh);
+    }
+    x += size.width + 8;
+    rowHeight = Math.max(rowHeight, size.height);
+  }
+  return clampRect({ left: LAYOUT_MARGIN, top: LAYOUT_MARGIN, ...compactModuleSize(moduleId, vw), zIndex: 20 }, vw, vh);
+}
+function defaultLayoutState() {
+  const modules = {};
+  for (const id of HUD_MODULE_IDS) modules[id] = { mode: "default", x: 0, y: 0 };
+  return { version: LAYOUT_VERSION, modules };
+}
+function validateLayoutState(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  if (raw.version !== LAYOUT_VERSION) return null;
+  if (!raw.modules || typeof raw.modules !== "object") return null;
+  const out = defaultLayoutState();
+  for (const id of HUD_MODULE_IDS) {
+    const m = raw.modules[id];
+    if (m && (m.mode === "default" || m.mode === "custom") && typeof m.x === "number" && typeof m.y === "number" && Number.isFinite(m.x) && Number.isFinite(m.y)) {
+      out.modules[id] = { mode: m.mode, x: clamp012(m.x), y: clamp012(m.y) };
+    }
+  }
+  return out;
+}
+function normalizeLayoutState(state) {
+  return validateLayoutState(state) ?? defaultLayoutState();
 }
 
 // hud/overlay/combatHudOverlayController.js
 var VIEWPORT_POLL_MS = 600;
+var PILL_W = 150;
+var PILL_H = 44;
+var OPEN_ORDER = [...HUD_MODULE_IDS].sort(
+  (a, b) => DEFAULT_HUD_LAYOUT_V2[a].zIndex - DEFAULT_HUD_LAYOUT_V2[b].zIndex
+);
 var started = false;
-var lastUiState = { ...DEFAULT_HUD_UI_STATE };
 var lastVW = 0;
 var lastVH = 0;
+var lastUiState = { ...DEFAULT_HUD_UI_STATE };
+var lastLayout = defaultLayoutState();
+var mode = "modules";
 var pollTimer = null;
 var cleanups = [];
 function isCollapsed() {
   return Boolean(lastUiState.isHudCollapsed);
 }
-function samePlacement(a, b) {
-  if (!a || !b) return a === b;
-  if (a.mode !== b.mode) return false;
-  return Math.abs((a.x ?? 0) - (b.x ?? 0)) < 1e-3 && Math.abs((a.y ?? 0) - (b.y ?? 0)) < 1e-3;
-}
-function resolveOverlayUrl(vw, vh) {
-  const params = new URLSearchParams(serializeHudUiState(lastUiState));
-  params.set(HUD_RENDER_PARAM_KEYS.vw, String(Math.round(vw)));
-  params.set(HUD_RENDER_PARAM_KEYS.vh, String(Math.round(vh)));
-  params.set(HUD_RENDER_PARAM_KEYS.gap, String(computeHudGap(vw)));
-  const query = params.toString();
-  try {
-    const base = typeof window !== "undefined" ? window.location.href : "";
-    const url = new URL(OVERLAY_HTML, base);
-    url.search = query;
-    return url.toString();
-  } catch {
-    return `${OVERLAY_HTML}?${query}`;
-  }
-}
 async function readViewport() {
-  const [vw, vh] = await Promise.all([
-    lib_default.viewport.getWidth(),
-    lib_default.viewport.getHeight()
-  ]);
-  return { vw, vh };
-}
-async function openOrReanchor() {
-  const { vw, vh } = await readViewport();
+  const [vw, vh] = await Promise.all([lib_default.viewport.getWidth(), lib_default.viewport.getHeight()]);
   lastVW = vw;
   lastVH = vh;
-  const params = buildOverlayPopoverParams({
-    vw,
-    vh,
-    collapsed: isCollapsed(),
-    placement: lastUiState.hudPlacement
-  });
-  const url = resolveOverlayUrl(vw, vh);
-  await lib_default.popover.open({ id: OVERLAY_POPOVER_ID, url, ...params });
+  return { vw, vh };
 }
-async function applyCollapsedSize() {
+function baseHref() {
+  return typeof window !== "undefined" ? window.location.href : "";
+}
+function pageUrl(moduleId) {
+  const params = new URLSearchParams(serializeHudUiState(lastUiState));
+  params.set("module", moduleId);
+  params.set("vw", String(Math.round(lastVW)));
+  params.set("vh", String(Math.round(lastVH)));
   try {
-    const { width, height } = buildOverlayPopoverParams({
-      vw: lastVW,
-      vh: lastVH,
-      collapsed: isCollapsed(),
-      placement: lastUiState.hudPlacement
-    });
-    await lib_default.popover.setWidth(OVERLAY_POPOVER_ID, width);
-    await lib_default.popover.setHeight(OVERLAY_POPOVER_ID, height);
-  } catch (error) {
+    const url = new URL(OVERLAY_HTML, baseHref());
+    url.search = params.toString();
+    return url.toString();
+  } catch {
+    return `${OVERLAY_HTML}?${params.toString()}`;
+  }
+}
+function paramsForRect(rect) {
+  return {
+    width: Math.max(1, rect.width),
+    height: Math.max(1, rect.height),
+    anchorReference: "POSITION",
+    anchorPosition: { left: rect.left, top: rect.top },
+    anchorOrigin: { horizontal: "LEFT", vertical: "TOP" },
+    transformOrigin: { horizontal: "LEFT", vertical: "TOP" },
+    hidePaper: true,
+    disableClickAway: true,
+    marginThreshold: 0
+  };
+}
+function moduleRect(moduleId) {
+  return resolveModuleRect(moduleId, lastLayout.modules[moduleId], lastVW, lastVH);
+}
+async function openModule(moduleId) {
+  const rect = moduleRect(moduleId);
+  await lib_default.popover.open({
+    id: HUD_MODULE_POPOVER_IDS[moduleId],
+    url: pageUrl(moduleId),
+    ...paramsForRect(rect)
+  });
+}
+async function openAllModules() {
+  for (const id of OPEN_ORDER) {
     try {
-      await openOrReanchor();
+      await openModule(id);
     } catch (_e) {
     }
-    void error;
+  }
+}
+async function closeAllModules() {
+  for (const id of HUD_MODULE_IDS) {
+    try {
+      await lib_default.popover.close(HUD_MODULE_POPOVER_IDS[id]);
+    } catch (_e) {
+    }
+  }
+}
+async function openEditor() {
+  const rect = { left: 0, top: 0, width: lastVW, height: lastVH };
+  await lib_default.popover.open({ id: HUD_EDITOR_POPOVER_ID, url: pageUrl("editor"), ...paramsForRect(rect) });
+}
+async function closeEditorPopover() {
+  try {
+    await lib_default.popover.close(HUD_EDITOR_POPOVER_ID);
+  } catch (_e) {
+  }
+}
+function pillRect() {
+  const p = moduleRect("player");
+  return clampRect({ left: p.left, top: p.top + p.height - PILL_H, width: PILL_W, height: PILL_H, zIndex: 50 }, lastVW, lastVH);
+}
+async function openPill() {
+  await lib_default.popover.open({ id: HUD_PILL_POPOVER_ID, url: pageUrl("pill"), ...paramsForRect(pillRect()) });
+}
+async function closePill() {
+  try {
+    await lib_default.popover.close(HUD_PILL_POPOVER_ID);
+  } catch (_e) {
+  }
+}
+async function applyMode() {
+  if (mode === "collapsed") {
+    await closeEditorPopover();
+    await closeAllModules();
+    await openPill();
+  } else if (mode === "editor") {
+    await closePill();
+    await closeAllModules();
+    await openEditor();
+  } else {
+    await closePill();
+    await closeEditorPopover();
+    await openAllModules();
   }
 }
 function startViewportPoll() {
   if (pollTimer) return;
   pollTimer = setInterval(async () => {
     try {
-      const { vw, vh } = await readViewport();
+      const { vw, vh } = { vw: await lib_default.viewport.getWidth(), vh: await lib_default.viewport.getHeight() };
       if (vw === lastVW && vh === lastVH) return;
-      await openOrReanchor();
+      lastVW = vw;
+      lastVH = vh;
+      await applyMode();
     } catch (_e) {
     }
   }, VIEWPORT_POLL_MS);
@@ -4262,20 +4394,33 @@ function setupCombatHudOverlay() {
   started = true;
   lib_default.onReady(async () => {
     try {
-      await openOrReanchor();
+      await readViewport();
+      mode = isCollapsed() ? "collapsed" : "modules";
+      await applyMode();
       startViewportPoll();
-      const unsubUiState = lib_default.broadcast.onMessage(BC_HUD_UI_STATE, async (event) => {
+      cleanups.push(lib_default.broadcast.onMessage(BC_HUD_UI_STATE, async (event) => {
         const next = normalizeHudUiState(event?.data);
         const collapseChanged = next.isHudCollapsed !== lastUiState.isHudCollapsed;
-        const placementChanged = !samePlacement(next.hudPlacement, lastUiState.hudPlacement);
-        lastUiState = next;
-        if (placementChanged) {
-          await openOrReanchor();
-        } else if (collapseChanged) {
-          await applyCollapsedSize();
+        lastUiState = { ...lastUiState, ...next };
+        if (collapseChanged) {
+          mode = isCollapsed() ? "collapsed" : "modules";
+          await applyMode();
         }
-      });
-      cleanups.push(unsubUiState);
+      }));
+      cleanups.push(lib_default.broadcast.onMessage(BC_HUD_EDITOR, async (event) => {
+        const open = Boolean(event?.data && event.data.open);
+        if (open && mode !== "editor") {
+          mode = "editor";
+          await applyMode();
+        } else if (!open && mode === "editor") {
+          mode = "modules";
+          await applyMode();
+        }
+      }));
+      cleanups.push(lib_default.broadcast.onMessage(BC_HUD_LAYOUT, async (event) => {
+        lastLayout = normalizeLayoutState(event?.data);
+        if (mode === "modules") await openAllModules();
+      }));
     } catch (error) {
       console.error("[combatHud/overlay] setup failed", error);
       started = false;
@@ -6003,7 +6148,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.15";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.16";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }

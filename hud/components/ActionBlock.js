@@ -40,3 +40,10 @@ export function renderActionButton(state) {
       data-action="primary"${disabled ? ' aria-disabled="true"' : ""}${tip}>${esc(label)}</button>
   </div>`;
 }
+
+/** Phase 2.2 standalone Action module — the button fills the small rect. */
+export function renderActionModule(state) {
+  return `<section class="ohud-panel ohud-panel--action ohud-panel--bare" data-block="action">
+    ${renderActionButton(state)}
+  </section>`;
+}
