@@ -34144,6 +34144,10 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     queuedRefresh: null,
     realtimeRefreshPending: null,
     realtimeRefreshTimer: null,
+    selectionSyncTimer: null,
+    selectionSyncRequestId: 0,
+    lastSelectionSignature: "",
+    selectedTokenResolution: null,
     selectedToken: null,
     moveToolStatus: null,
     sceneCombatSnapshot: null,
@@ -34156,9 +34160,28 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     state.combatStartStage = stage;
     console.info("[Odyssey combat]", stage);
   }
+  function isSelectionRequestCurrent(requestId) {
+    return !requestId || requestId === state.selectionSyncRequestId;
+  }
+  function scheduleSelectionSync(force = false) {
+    if (state.selectionSyncTimer) {
+      clearTimeout(state.selectionSyncTimer);
+    }
+    state.selectionSyncTimer = setTimeout(() => {
+      state.selectionSyncTimer = null;
+      syncCharacterFromOwlbearSelection({ force }).catch((error) => {
+        console.warn("[Odyssey] Selection sync failed:", error);
+      });
+    }, 100);
+  }
   async function refreshSelectedTokenContext() {
     const tokens = await withTimeout3(bridges.obr?.getSelectedOwlbearTokens?.(), OBR_TIMEOUT, []);
-    const token = arr2(tokens)[0] ?? null;
+    if (!Array.isArray(tokens) || tokens.length !== 1) {
+      state.selectedToken = null;
+      render();
+      return;
+    }
+    const token = tokens[0] ?? null;
     if (!token) {
       state.selectedToken = null;
       render();
@@ -34232,6 +34255,201 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
     if (forceRender) render();
   }
+  async function syncCharacterFromOwlbearSelection({ force = false } = {}) {
+    const requestId = ++state.selectionSyncRequestId;
+    const tokens = await withTimeout3(
+      bridges.obr?.getSelectedOwlbearTokens?.(),
+      OBR_TIMEOUT,
+      []
+    );
+    if (!isSelectionRequestCurrent(requestId)) return;
+    const selectedTokens = arr2(tokens);
+    const signature = `${selectedTokens.length}:${selectedTokens.map((token) => String(token?.id ?? "").trim()).sort().join("|")}`;
+    if (!force && signature === state.lastSelectionSignature) {
+      return;
+    }
+    state.lastSelectionSignature = signature;
+    if (!selectedTokens.length) {
+      state.selectedToken = null;
+      state.selectedTokenResolution = {
+        status: "idle",
+        tokenId: "",
+        tokenName: "",
+        characterId: "",
+        characterName: "",
+        source: "",
+        message: "No token selected."
+      };
+      render();
+      return;
+    }
+    if (selectedTokens.length > 1) {
+      state.selectedToken = null;
+      state.selectedTokenResolution = {
+        status: "multiple",
+        tokenId: "",
+        tokenName: "",
+        characterId: "",
+        characterName: "",
+        source: "",
+        message: "Select exactly one token to open its character."
+      };
+      render();
+      return;
+    }
+    const selectedToken = selectedTokens[0] ?? null;
+    if (!selectedToken) {
+      state.selectedToken = null;
+      state.selectedTokenResolution = {
+        status: "idle",
+        tokenId: "",
+        tokenName: "",
+        characterId: "",
+        characterName: "",
+        source: "",
+        message: "No token selected."
+      };
+      render();
+      return;
+    }
+    const tokenLink = bridges.token?.getTokenCharacterLink?.(selectedToken) ?? { characterId: "" };
+    const selectedTokenId = String(selectedToken.id ?? "").trim();
+    const selectedTokenName = String(selectedToken.name ?? "").trim();
+    state.selectedToken = {
+      id: selectedTokenId,
+      name: selectedTokenName,
+      position: selectedToken.position ?? null,
+      layer: String(selectedToken.layer ?? "").trim(),
+      link: tokenLink
+    };
+    state.selectedTokenResolution = {
+      status: "loading",
+      tokenId: selectedTokenId,
+      tokenName: selectedTokenName,
+      characterId: "",
+      characterName: "",
+      source: "",
+      message: "Resolving selected token..."
+    };
+    render();
+    const [context, player] = await Promise.all([
+      withTimeout3(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null),
+      withTimeout3(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null)
+    ]);
+    if (!isSelectionRequestCurrent(requestId)) return;
+    if (!context?.campaignId || !context?.roomId || !context?.sceneId || !hasUsableSettings(settings())) {
+      state.selectedTokenResolution = {
+        status: "error",
+        tokenId: selectedTokenId,
+        tokenName: selectedTokenName,
+        characterId: "",
+        characterName: "",
+        source: "",
+        message: "Unable to resolve Owlbear scene context."
+      };
+      render();
+      return;
+    }
+    let runtime3 = state.sceneCombatSnapshot?.runtime ?? null;
+    if (!runtime3) {
+      await refreshSceneCombatSnapshot();
+      if (!isSelectionRequestCurrent(requestId)) return;
+      runtime3 = state.sceneCombatSnapshot?.runtime ?? null;
+    }
+    const isGm = isGM();
+    let candidateCharacterId = "";
+    let candidateCharacterName = "";
+    let candidateSource = "";
+    const participant = arr2(runtime3?.visible_participants).find(
+      (row) => String(row?.token_id ?? "").trim() === selectedTokenId
+    ) ?? null;
+    if (participant) {
+      candidateCharacterId = String(participant.character_id ?? "").trim();
+      candidateCharacterName = String(participant.display_name ?? participant.character_key ?? "").trim();
+      candidateSource = "combat_runtime";
+      const controlledIds = new Set(
+        arr2(runtime3?.viewer_controlled_character_ids).map((id) => String(id ?? "").trim()).filter(Boolean)
+      );
+      const allowed = isGm || controlledIds.has(candidateCharacterId);
+      if (!allowed) {
+        state.selectedTokenResolution = {
+          status: "forbidden",
+          tokenId: selectedTokenId,
+          tokenName: selectedTokenName,
+          characterId: candidateCharacterId,
+          characterName: "",
+          source: candidateSource,
+          message: "You can only open characters assigned to you."
+        };
+        render();
+        return;
+      }
+    } else {
+      const linkResult = await api.placement.getSceneTokenLinks(
+        {
+          campaign_id: context.campaignId,
+          room_id: context.roomId,
+          scene_id: context.sceneId,
+          token_id: selectedTokenId,
+          actor_player_id: player?.id ?? "",
+          actor_is_gm: isGm
+        },
+        settings()
+      ).catch(() => null);
+      if (!isSelectionRequestCurrent(requestId)) return;
+      const link = arr2(linkResult?.links)[0] ?? null;
+      const control = link?.character?.control ?? {};
+      const allowed = isGm || control?.allowed === true || link?.character?.can_control === true;
+      if (!link?.character?.id) {
+        state.selectedTokenResolution = {
+          status: "unlinked",
+          tokenId: selectedTokenId,
+          tokenName: selectedTokenName,
+          characterId: "",
+          characterName: "",
+          source: "scene_link",
+          message: "Selected token is not linked to a character."
+        };
+        render();
+        return;
+      }
+      candidateCharacterId = String(link.character.id ?? "").trim();
+      candidateCharacterName = String(link.character.display_name ?? link.character.character_key ?? "").trim();
+      candidateSource = "scene_link";
+      if (!allowed) {
+        state.selectedTokenResolution = {
+          status: "forbidden",
+          tokenId: selectedTokenId,
+          tokenName: selectedTokenName,
+          characterId: candidateCharacterId,
+          characterName: "",
+          source: candidateSource,
+          message: "You can only open characters assigned to you."
+        };
+        render();
+        return;
+      }
+    }
+    state.selectedTokenResolution = {
+      status: "resolved",
+      tokenId: selectedTokenId,
+      tokenName: selectedTokenName,
+      characterId: candidateCharacterId,
+      characterName: candidateCharacterName,
+      source: candidateSource,
+      message: ""
+    };
+    if (state.characterId === candidateCharacterId) {
+      await refreshTacticalSnapshot(true);
+      render();
+      return;
+    }
+    await loadCharacter(candidateCharacterId, { selectionRequestId: requestId });
+    if (!isSelectionRequestCurrent(requestId)) return;
+    await refreshSelectedTokenContext();
+    if (!isSelectionRequestCurrent(requestId)) return;
+    await refreshTacticalSnapshot(true);
+  }
   async function refreshTacticalSnapshot(forceRender = false) {
     if (!state.characterId || !bridges.obr?.getRoomSceneContext || !api.combat?.getActiveRuntime) {
       state.tacticalSnapshot = null;
@@ -34292,12 +34510,10 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       if (typeof unsubscribe === "function") subs.push(unsubscribe);
     };
     safePush(await bridges.obr?.subscribePlayerChanges?.(() => {
-      refreshSelectedTokenContext().catch(() => {
-      });
+      scheduleSelectionSync();
     }));
     safePush(await bridges.obr?.subscribeSceneItems?.(() => {
-      refreshSelectedTokenContext().catch(() => {
-      });
+      scheduleSelectionSync(true);
     }));
     safePush(await subscribeMoveToolMessages((event) => {
       if (event.type === MOVE_TOOL_EVENTS.Status || event.type === MOVE_TOOL_EVENTS.Activated || event.type === MOVE_TOOL_EVENTS.Cancelled) {
@@ -34328,6 +34544,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     setupSceneCombatSubscriptions();
     await refreshSceneCombatSnapshot(true).catch(() => {
     });
+    scheduleSelectionSync(true);
     await sendMoveToolCommand(MOVE_TOOL_COMMANDS.RequestStatus).catch(() => {
     });
   })();
@@ -34465,7 +34682,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       perkAvailability: !!(base.perkAvailability || extra.perkAvailability)
     };
   }
-  async function loadCharacter(id) {
+  async function loadCharacter(id, options = {}) {
+    const selectionRequestId = options.selectionRequestId ?? 0;
     state.loading = true;
     state.error = null;
     state.notice = "";
@@ -34492,6 +34710,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         fetchGmDefs().then(() => render()).catch(() => {
         });
       }
+      if (!isSelectionRequestCurrent(selectionRequestId)) return false;
       if (!bundle || bundle.ok === false || !bundle.character) throw new Error("Character not found: check character_id.");
       state.characterId = id;
       state.itemDefs = arr2(itemDefs);
@@ -34503,12 +34722,14 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       setupRealtimeSubscriptions(id);
       await refreshSceneCombatSnapshot();
       await refreshTacticalSnapshot();
+      return true;
     } catch (e) {
       state.error = e.message;
     } finally {
       state.loading = false;
       render();
     }
+    return false;
   }
   async function performRefresh(options) {
     const id = state.characterId;
@@ -34590,6 +34811,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
             refreshTacticalSnapshot(true).catch(() => {
             });
           }
+          scheduleSelectionSync(true);
         }
       ).subscribe();
       state.sceneRealtimeSubscriptions.push(channel);
@@ -34751,6 +34973,22 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function topBar() {
     const cfgWarn = hasUsableSettings(loadDevSettings()) ? "" : `<div class="cp-banner warn" style="margin-top:6px">Supabase not configured - open the <b>Resolve Attack</b> tab and save URL/key, then load a character here.</div>`;
+    const selection = state.selectedTokenResolution;
+    const selectionMeta = isGM() ? "GM control" : "Your character";
+    const selectionText = (() => {
+      if (!selection || selection.status === "idle") return "No token selected.";
+      if (selection.status === "multiple") return "Select exactly one token.";
+      if (selection.status === "unlinked") return "Selected token is not linked to a character.";
+      if (selection.status === "forbidden") return "You can only open characters assigned to you.";
+      if (selection.status === "error") return selection.message || "Unable to resolve Owlbear scene context.";
+      if (selection.status === "loading") return `Selected token: ${esc2(selection.tokenName || "Token")} \xB7 resolving...`;
+      if (selection.status === "resolved") {
+        const tokenName = esc2(selection.tokenName || "Token");
+        const charName = esc2(selection.characterName || selection.characterId || "Character");
+        return `Selected token: ${tokenName} \xB7 ${charName}`;
+      }
+      return selection.message || "No token selected.";
+    })();
     return `
       <section class="panel">
         <div class="panel-title">Character</div>
@@ -34764,9 +35002,10 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
             </select></label>
         </div>
         <div class="button-row">
-          <button data-ref="useToken" type="button" class="secondary">Use selected token</button>
           <button data-ref="loadBtn" type="button">Load character</button>
         </div>
+        <div class="cp-muted" style="margin-top:6px">${selectionText}</div>
+        ${selection?.status === "resolved" ? `<div class="cp-muted" style="margin-top:4px">${selectionMeta}</div>` : ""}
         ${cfgWarn}
       </section>`;
   }
@@ -34777,7 +35016,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         <div class="button-row"><button data-ref="retry" type="button">Retry</button></div></section>`;
     }
     if (!state.sheet) {
-      return `<section class="panel">${noticeHtml()}${renderCombatSessionCard()}<div class="cp-empty">Enter a character_id and press <b>Load character</b>.</div></section>`;
+      return `<section class="panel">${noticeHtml()}${renderCombatSessionCard()}<div class="cp-empty">Select a token in Owlbear or enter a character_id and press <b>Load character</b>.</div></section>`;
     }
     return `<section class="panel">
       ${headerBlock()}
@@ -34904,8 +35143,23 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     };
   }
   function getSelectedTokenForLoadedCharacter() {
-    if (!state.selectedToken) return null;
-    return String(state.selectedToken?.link?.characterId ?? "").trim() === state.characterId ? state.selectedToken : null;
+    const selectedToken = state.selectedToken;
+    const participant = getLoadedCharacterParticipant();
+    if (!selectedToken || !participant) {
+      return null;
+    }
+    const selectedTokenId = String(selectedToken.id ?? "").trim();
+    const participantTokenId = String(participant.token_id ?? "").trim();
+    if (selectedTokenId && participantTokenId && selectedTokenId === participantTokenId) {
+      return selectedToken;
+    }
+    const metadataCharacterId = String(
+      selectedToken?.link?.characterId ?? ""
+    ).trim();
+    if (metadataCharacterId === state.characterId) {
+      return selectedToken;
+    }
+    return null;
   }
   function getTokenPositionMismatch() {
     const participant = getLoadedCharacterParticipant();
@@ -35011,6 +35265,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       setNotice("ok", selectedOnly ? "Token position synced." : `Tactical grid synced for ${positions.length} token(s).`);
       await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
       await refreshSelectedTokenContext();
+      scheduleSelectionSync(true);
     } catch (error) {
       setNotice("err", esc2(toErrorMessage(error, "Unable to sync tactical positions.")));
       render();
@@ -35156,6 +35411,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       setNotice("ok", result.__resolvedByPoll ? "Combat started. Runtime was confirmed by follow-up check." : "Combat started.");
       render();
       void refreshAfterCombatStart();
+      scheduleSelectionSync(true);
     } catch (error) {
       const message = toErrorMessage(error, "Unable to start combat.");
       setCombatStartStage(`Failed: ${message}`);
@@ -35201,6 +35457,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       setNotice("ok", "Combat ended.");
       await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
       await refreshSelectedTokenContext();
+      scheduleSelectionSync(true);
     } catch (error) {
       setNotice("err", esc2(toErrorMessage(error, "Unable to end combat.")));
       render();
@@ -35959,8 +36216,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       if (state.characterId && isGM()) {
         await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: true });
       }
+      scheduleSelectionSync(true);
     });
-    $("useToken")?.addEventListener("click", onUseToken);
     root2.querySelectorAll("[data-section]").forEach((b) => b.addEventListener("click", () => {
       state.section = b.dataset.section;
       state.notice = "";
@@ -36594,51 +36851,6 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     if (kind === "heal") return runMutation("GM heal", () => api.gm.gmHealCharacter(state.characterId, settings()), () => refresh());
     if (kind === "repair") return runMutation("GM repair", () => api.gm.gmRepairCharacterArmor(state.characterId, settings()), () => refresh());
   }
-  async function onUseToken() {
-    const tokens = await withTimeout3(bridges.obr?.getSelectedOwlbearTokens?.(), OBR_TIMEOUT, null);
-    if (!tokens) {
-      setNotice("warn", "Owlbear not available (run inside Owlbear).");
-      render();
-      return;
-    }
-    if (!tokens.length) {
-      setNotice("warn", "No token selected.");
-      render();
-      return;
-    }
-    const token = tokens[0];
-    const tokenId = String(token?.id ?? "");
-    let characterId = bridges.token.getTokenCharacterLink(token).characterId;
-    if (!characterId && hasUsableSettings(settings())) {
-      setNotice("info", "Looking up character by token_id...");
-      render();
-      const ctx = await withTimeout3(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null);
-      if (ctx?.roomId) {
-        const catalogRes = await withTimeout3(
-          api.placement.getCharacterSpawnCatalog({
-            room_id: ctx.roomId,
-            scene_id: ctx.sceneId,
-            include_active_npcs: true,
-            limit: 200
-          }, settings()),
-          OBR_TIMEOUT * 2,
-          null
-        );
-        const match = (catalogRes?.items ?? []).find(
-          (item) => String(item?.scene_link?.token_id ?? "") === tokenId
-        );
-        characterId = String(match?.id ?? "").trim();
-      }
-    }
-    if (!characterId) {
-      setNotice("warn", "Token is not linked to a character. Bind it first in GM Tools -> Placement.");
-      render();
-      return;
-    }
-    const input = root2.querySelector('[data-ref="charId"]');
-    if (input) input.value = characterId;
-    loadCharacter(characterId);
-  }
   function openForm({ title, note, current: current2, min, max, onSave }) {
     const overlay = document.createElement("div");
     overlay.className = "cp-overlay";
@@ -36705,9 +36917,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       refreshTacticalSnapshot(true).catch(() => {
       });
     }
+    scheduleSelectionSync(true);
   });
   return () => {
     document.removeEventListener("keydown", onEscOnce);
+    if (state.selectionSyncTimer) clearTimeout(state.selectionSyncTimer);
     cleanupRealtimeSubscriptions();
     cleanupSceneCombatSubscriptions();
   };
