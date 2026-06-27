@@ -262,14 +262,14 @@ export function selectVisibleStatuses(state, limit = 5) {
  * the mock snapshot. No body-part targeting is performed.
  * @returns {{
  *   hasTarget:boolean, name:(string|null), kind:string,
- *   bodyPartId:string, bodyPartLabel:string,
+ *   bodyPartId:string, bodyPartLabel:string, distance:(number|null),
  * }}
  */
 export function selectTargetView(state) {
   const bodyPartId = selectSelectedBodyPart(state);
   const empty = {
     hasTarget: false, name: null, kind: "humanoid",
-    bodyPartId, bodyPartLabel: selectBodyPartLabel(bodyPartId),
+    bodyPartId, bodyPartLabel: selectBodyPartLabel(bodyPartId), distance: null,
   };
   const session = selectCombatSession(state);
   if (!session || session.status !== "active") return empty;
@@ -286,6 +286,9 @@ export function selectTargetView(state) {
     kind: "humanoid",
     bodyPartId,
     bodyPartLabel: selectBodyPartLabel(bodyPartId),
+    // Read-only passthrough: distance arrives from the backend later; absent in
+    // the mock, so the Target section shows a neutral placeholder until then.
+    distance: Number.isFinite(enemy.distance) ? enemy.distance : null,
   };
 }
 

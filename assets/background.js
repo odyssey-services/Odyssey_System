@@ -4106,20 +4106,21 @@ var HUD_MODULE_IDS = Object.freeze([
   "player",
   "gun",
   "skills",
-  "target",
-  "modifiers",
-  "action",
+  "combatControl",
   "log"
 ]);
 var HUD_MODULE_POPOVER_IDS = Object.freeze({
   player: "odyssey-hud-player",
   gun: "odyssey-hud-gun",
   skills: "odyssey-hud-skills",
-  target: "odyssey-hud-target",
-  modifiers: "odyssey-hud-modifiers",
-  action: "odyssey-hud-action",
+  combatControl: "odyssey-hud-combat-control",
   log: "odyssey-hud-log"
 });
+var LEGACY_HUD_POPOVER_IDS = Object.freeze([
+  "odyssey-hud-target",
+  "odyssey-hud-modifiers",
+  "odyssey-hud-action"
+]);
 var HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";
 var HUD_PILL_POPOVER_ID = "odyssey-hud-pill";
 var BC_HUD_LAYOUT = "com.odyssey.combat-hud/layout";
@@ -4130,9 +4131,9 @@ var DEFAULT_HUD_LAYOUT_V2 = Object.freeze({
   player: Object.freeze({ left: 16, bottom: 16, width: 250, height: 250, zIndex: 30 }),
   gun: Object.freeze({ left: 126, bottom: 16, width: 340, height: 165, zIndex: 20 }),
   skills: Object.freeze({ left: 663, bottom: 16, width: 600, height: 165, zIndex: 20 }),
-  target: Object.freeze({ left: 1263, bottom: 16, width: 165, height: 165, zIndex: 20 }),
-  modifiers: Object.freeze({ left: 1428, bottom: 16, width: 125, height: 165, zIndex: 20 }),
-  action: Object.freeze({ left: 1428, bottom: 16, width: 165, height: 40, zIndex: 40 }),
+  // Composite: Target (left 165) + Modifiers/Action (right 165). Replaces the
+  // former three separate target/modifiers/action rects.
+  combatControl: Object.freeze({ left: 1263, bottom: 16, width: 330, height: 165, zIndex: 20 }),
   log: Object.freeze({ left: 1656, bottom: 16, width: 250, height: 250, zIndex: 20 })
 });
 function clamp012(n) {
@@ -4234,13 +4235,24 @@ function defaultLayoutState() {
   for (const id of HUD_MODULE_IDS) modules[id] = { mode: "default", x: 0, y: 0 };
   return { version: LAYOUT_VERSION, modules };
 }
+function migrateLegacyModules(modules) {
+  if (!modules || modules.combatControl) return modules;
+  const hasLegacy = modules.target || modules.modifiers || modules.action;
+  if (!hasLegacy) return modules;
+  const base = modules.target;
+  if (base && base.mode === "custom" && Number.isFinite(base.x) && Number.isFinite(base.y)) {
+    return { ...modules, combatControl: { mode: "custom", x: clamp012(base.x), y: clamp012(base.y) } };
+  }
+  return modules;
+}
 function validateLayoutState(raw) {
   if (!raw || typeof raw !== "object") return null;
   if (raw.version !== LAYOUT_VERSION) return null;
   if (!raw.modules || typeof raw.modules !== "object") return null;
+  const src = migrateLegacyModules(raw.modules);
   const out = defaultLayoutState();
   for (const id of HUD_MODULE_IDS) {
-    const m = raw.modules[id];
+    const m = src[id];
     if (m && (m.mode === "default" || m.mode === "custom") && typeof m.x === "number" && typeof m.y === "number" && Number.isFinite(m.x) && Number.isFinite(m.y)) {
       out.modules[id] = { mode: m.mode, x: clamp012(m.x), y: clamp012(m.y) };
     }
@@ -4340,6 +4352,14 @@ async function closeAllModules() {
     }
   }
 }
+async function closeLegacyPopovers() {
+  for (const id of LEGACY_HUD_POPOVER_IDS) {
+    try {
+      await lib_default.popover.close(id);
+    } catch (_e) {
+    }
+  }
+}
 async function openChangedModules(prev, next) {
   const changed = OPEN_ORDER.filter((id) => !placementsEqual(prev.modules[id], next.modules[id]));
   for (const id of changed) {
@@ -4413,6 +4433,7 @@ function setupCombatHudOverlay() {
   lib_default.onReady(async () => {
     try {
       await readViewport();
+      await closeLegacyPopovers();
       mode = isCollapsed() ? "collapsed" : "modules";
       await applyMode();
       startViewportPoll();
@@ -6169,7 +6190,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.18";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.19";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }

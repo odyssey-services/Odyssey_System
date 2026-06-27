@@ -21,6 +21,7 @@ export function renderTargetBlock(state) {
     return panel({ key: "target", label: "Target", bodyHtml: body });
   }
 
+  const distLabel = Number.isFinite(tv.distance) ? `${tv.distance} m` : "—";
   const body = `<div class="ohud-target">
     <div class="ohud-figure">
       <div class="ohud-figure-svg">${humanoidSvg({ neutral: true, highlight: tv.bodyPartId })}</div>
@@ -28,7 +29,10 @@ export function renderTargetBlock(state) {
     </div>
     <div class="ohud-target-meta">
       <div class="ohud-target-name" title="${esc(tv.name)}">${esc(tv.name)}</div>
-      <div class="ohud-target-zone"${tipAttr("Aimed zone", ["Body-part targeting arrives in a later phase"])}>${esc(tv.bodyPartLabel)}</div>
+      <div class="ohud-target-sub">
+        <span class="ohud-target-zone"${tipAttr("Aimed zone", ["Body-part targeting arrives in a later phase"])}>${esc(tv.bodyPartLabel)}</span>
+        <span class="ohud-target-dist"${tipAttr("Distance to target", ["Range arrives from the backend later"])}>${esc(distLabel)}</span>
+      </div>
     </div>
   </div>`;
 

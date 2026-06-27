@@ -17,9 +17,7 @@ import { resolveBodyMode } from "./hudLayoutModel.js";
 import { renderPlayerBlock } from "./PlayerBlock.js";
 import { renderGunBlock } from "./GunBlock.js";
 import { renderSkillBlock } from "./SkillBlock.js";
-import { renderTargetBlock } from "./TargetBlock.js";
-import { renderModifierModule } from "./ModifierBlock.js";
-import { renderActionModule } from "./ActionBlock.js";
+import { renderCombatControlBlock } from "./CombatControlBlock.js";
 import { renderBattleLogPanel } from "./BattleLogBlock.js";
 import { renderEmptyState, renderErrorState, renderLoadingState } from "./EmptyHudState.js";
 import { createTooltip } from "./Tooltip.js";
@@ -36,9 +34,7 @@ const BLOCK_RENDERERS = {
   player: renderPlayerBlock,
   gun: renderGunBlock,
   skills: renderSkillBlock,
-  target: renderTargetBlock,
-  modifiers: renderModifierModule,
-  action: renderActionModule,
+  combatControl: renderCombatControlBlock,
   log: renderBattleLogPanel,
 };
 

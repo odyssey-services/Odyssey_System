@@ -82,13 +82,34 @@
 .ohud-module[data-module="skills"] .ohud-skill-groups { align-items: center; justify-content: center; height: auto; gap: 18px; flex-wrap: wrap; }
 .ohud-module[data-module="skills"] .ohud-slot { width: 56px; height: 56px; }
 
-/* Target (165×165): silhouette ~55–60% of the block height. */
-.ohud-module[data-module="target"] .ohud-target { justify-content: center; gap: 5px; }
-.ohud-module[data-module="target"] .ohud-figure { width: 86px; height: 92px; }
-.ohud-module[data-module="target"] .ohud-target-name { font-size: 12px; }
+/* ---------- Combat Control composite (330×165) ---------- */
+/* Outer panel carries the frame; the grid fills it edge-to-edge. */
+.ohud-panel--cc { padding: 0; gap: 0; overflow: hidden; }
+.ohud-cc { display: grid; grid-template-columns: 1fr 1fr; width: 100%; height: 100%; min-height: 0; }
+.ohud-cc-target { min-width: 0; min-height: 0; border-right: 1px solid var(--odyssey-hud-border); }
+.ohud-cc-right { display: grid; grid-template-rows: 1fr 40px; min-width: 0; min-height: 0; }
+/* Inner section panels are seamless — the outer .ohud-panel--cc owns the frame. */
+.ohud-cc .ohud-panel { background: transparent; border: none; box-shadow: none; border-radius: 0; width: 100%; height: 100%; padding: 6px 7px; }
+/* Action strip: thin divider + tight padding (rule after the line above to win). */
+.ohud-cc .ohud-cc-action { border-top: 1px solid var(--odyssey-hud-border); padding: 3px 6px; }
 
-/* Modifiers (125×165): a touch more breathing room above the Action overlap. */
-.ohud-module[data-module="modifiers"] .ohud-mods { gap: 4px; padding-bottom: 6px; }
+/* Target section — prominent silhouette (~56% height) + name / zone / distance. */
+.ohud-cc-target .ohud-target { justify-content: center; gap: 4px; }
+.ohud-cc-target .ohud-figure { width: 64px; height: 92px; }
+.ohud-cc-target .ohud-target-name { font-size: 11px; }
+.ohud-target-sub { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 2px; }
+.ohud-target-dist { font-size: 8.5px; font-weight: 700; color: var(--odyssey-hud-muted); }
+.ohud-target-dist--none { opacity: 0.7; }
+
+/* Modifier section — dense 2-column chip grid, ≤6 then +N, no horizontal overflow. */
+.ohud-cc-mod .ohud-panel-head { min-height: 10px; }
+.ohud-cc-mod .ohud-mods { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; align-content: start; overflow: hidden; }
+.ohud-cc-mod .ohud-mod { height: auto; min-height: 16px; font-size: 9px; padding: 1px 5px; }
+.ohud-cc-mod .ohud-mod--more { justify-content: center; }
+
+/* Action section — compact button fills the 165×40 strip. */
+.ohud-cc-action .ohud-action { height: 100%; gap: 5px; }
+.ohud-cc-action .ohud-action-btn { height: 100%; }
 
 /* ===================== Arrange-HUD editor ===================== */
 .ohud-editor-root {

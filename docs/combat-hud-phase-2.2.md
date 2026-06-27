@@ -220,6 +220,54 @@ unchanged. (Reproduced and fixed in the standalone page — the same page/CSS th
 Owlbear popover loads — so it is not an OBR-runtime-only check; still worth a
 quick Owlbear pass per the checklist.)
 
+## Phase 2.2.3 — Combat Control composite (Target + Modifiers + Action)
+
+Target, Modifiers and Action are no longer three separate popovers. They merge
+into **one** module — **Combat Control** (`odyssey-hud-combat-control`). Five
+independent HUD modules remain: **Player, Gun, Skills, Combat Control, Log**.
+The reusable `TargetBlock` / `ModifierBlock` / `ActionBlock` renderers are kept
+and composed as internal sections (`hud/components/CombatControlBlock.js`).
+
+**Module ids:** `HUD_MODULE_IDS = ["player","gun","skills","combatControl","log"]`.
+Retired popover ids `odyssey-hud-target|modifiers|action` are tracked in
+`LEGACY_HUD_POPOVER_IDS` and explicitly closed by the controller on setup +
+teardown so no stale popovers survive an update.
+
+**Exact rects @1920×1080:** `combatControl {left:1263, bottom:16, width:330,
+height:165, z:20}` (→ top 899). `log` unchanged. The old target/modifiers/action
+rects are removed.
+
+**Internal geometry (330×165):**
+- Left — Target section 165 wide: label, prominent silhouette (~56% height),
+  shield, name, aimed zone, distance (read-only; placeholder until backend
+  provides range), no-target variant.
+- Right — 165 wide, a CSS grid `1fr / 40px`:
+  - top — Modifiers: `Mod` label + a dense **2-column** chip grid, up to 6 chips
+    then `+N`, colour states preserved (positive/negative/passive/selected/God
+    Bless), no horizontal overflow.
+  - bottom — Action: the existing button in a **165×40** strip (not an overlay;
+    a real DOM row, so it never covers the Target). Verb (Attack/Throw/Cast/
+    Use/Activate), disabled reason + tooltip preserved.
+The outer `.ohud-panel--cc` owns the frame; inner section panels are seamless.
+
+**Layout editor:** one draggable `Combat Control` preview (Target/Modifiers/
+Action are not separately draggable); the preview shows the real internal
+structure. Reset uses the new `combatControl` rect. Save/Cancel unchanged.
+
+**localStorage migration (v2, same key/version).** `validateLayoutState`
+migrates an older payload: if `target`/`modifiers`/`action` exist but
+`combatControl` does not, Combat Control is seeded from the old `target`
+placement (custom → carried over; default/missing → default rect). Legacy keys
+are then dropped (only the five module ids are persisted). Reset/default use the
+five ids only. Robust against partial/corrupt payloads (falls back to default).
+
+**Verified (DOM-measured standalone — screenshot tool unavailable this session):**
+Combat Control module 330×165, token bg `rgba(22,32,58,0.96)`, Target 164×163
+(silhouette 64×92 ≈ 56%), Mod 164×123 (2-col grid, 6 chips), Action 164×40,
+no overflow; editor shows exactly 5 cards incl. the composite; old payload
+migrates (Combat Control takes target's position, legacy keys gone); legacy
+`?module=target` falls back to the editor. `npm run test:hud` = 59, build OK.
+
 ## Known limitations
 
 - Cross-popover stacking relies on open order (no z-index API); if the OBR host

@@ -26,6 +26,7 @@ import {
 import {
   HUD_MODULE_IDS,
   HUD_MODULE_POPOVER_IDS,
+  LEGACY_HUD_POPOVER_IDS,
   HUD_EDITOR_POPOVER_ID,
   HUD_PILL_POPOVER_ID,
   DEFAULT_HUD_LAYOUT_V2,
@@ -131,6 +132,14 @@ async function closeAllModules() {
   }
 }
 
+/** Close popovers retired in 2.2.3 (Target/Modifiers/Action) so an update never
+ *  leaves stale separate popovers behind. */
+async function closeLegacyPopovers() {
+  for (const id of LEGACY_HUD_POPOVER_IDS) {
+    try { await OBR.popover.close(id); } catch (_e) { /* ignore */ }
+  }
+}
+
 /** Re-open only the modules whose placement changed (in z-order). Re-opening a
  *  module reloads its iframe, so we must NOT touch unchanged ones — re-opening
  *  the Player module re-triggers its BC_HUD_LAYOUT broadcast, which would loop. */
@@ -198,6 +207,7 @@ export function setupCombatHudOverlay() {
   OBR.onReady(async () => {
     try {
       await readViewport();
+      await closeLegacyPopovers(); // drop any 2.2.2 Target/Modifiers/Action popovers
       mode = isCollapsed() ? "collapsed" : "modules";
       await applyMode();
       startViewportPoll();
@@ -250,4 +260,5 @@ export async function teardownCombatHudOverlay() {
   await closeEditorPopover();
   await closePill();
   await closeAllModules();
+  await closeLegacyPopovers();
 }

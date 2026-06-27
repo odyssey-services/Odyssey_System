@@ -17,8 +17,10 @@ export const LAYOUT_STORAGE_KEY = "odyssey.hud.layout.v2";
 /** Legacy single-HUD key (Phase 2.1). Intentionally NOT read by v2. */
 export const LEGACY_PLACEMENT_KEY = "odyssey.hud.placement.v1";
 
+// Phase 2.2.3: Target + Modifiers + Action are merged into ONE "Combat Control"
+// module (composite popover). Five independent HUD modules remain.
 export const HUD_MODULE_IDS = Object.freeze([
-  "player", "gun", "skills", "target", "modifiers", "action", "log",
+  "player", "gun", "skills", "combatControl", "log",
 ]);
 
 /** Stable OBR popover ids — re-opening with the same id updates in place. */
@@ -26,11 +28,14 @@ export const HUD_MODULE_POPOVER_IDS = Object.freeze({
   player: "odyssey-hud-player",
   gun: "odyssey-hud-gun",
   skills: "odyssey-hud-skills",
-  target: "odyssey-hud-target",
-  modifiers: "odyssey-hud-modifiers",
-  action: "odyssey-hud-action",
+  combatControl: "odyssey-hud-combat-control",
   log: "odyssey-hud-log",
 });
+/** Popover ids retired in 2.2.3 — the controller closes these so no stale
+ *  Target/Modifiers/Action popovers survive an update. */
+export const LEGACY_HUD_POPOVER_IDS = Object.freeze([
+  "odyssey-hud-target", "odyssey-hud-modifiers", "odyssey-hud-action",
+]);
 export const HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";
 export const HUD_PILL_POPOVER_ID = "odyssey-hud-pill";
 
@@ -54,13 +59,13 @@ export const SKILLS_MAX_PER_ROW = 10;
  * @typedef {{left:number,bottom:number,width:number,height:number,zIndex:number}} ModuleRectDef
  */
 export const DEFAULT_HUD_LAYOUT_V2 = Object.freeze({
-  player:    Object.freeze({ left: 16,   bottom: 16, width: 250, height: 250, zIndex: 30 }),
-  gun:       Object.freeze({ left: 126,  bottom: 16, width: 340, height: 165, zIndex: 20 }),
-  skills:    Object.freeze({ left: 663,  bottom: 16, width: 600, height: 165, zIndex: 20 }),
-  target:    Object.freeze({ left: 1263, bottom: 16, width: 165, height: 165, zIndex: 20 }),
-  modifiers: Object.freeze({ left: 1428, bottom: 16, width: 125, height: 165, zIndex: 20 }),
-  action:    Object.freeze({ left: 1428, bottom: 16, width: 165, height: 40,  zIndex: 40 }),
-  log:       Object.freeze({ left: 1656, bottom: 16, width: 250, height: 250, zIndex: 20 }),
+  player:       Object.freeze({ left: 16,   bottom: 16, width: 250, height: 250, zIndex: 30 }),
+  gun:          Object.freeze({ left: 126,  bottom: 16, width: 340, height: 165, zIndex: 20 }),
+  skills:       Object.freeze({ left: 663,  bottom: 16, width: 600, height: 165, zIndex: 20 }),
+  // Composite: Target (left 165) + Modifiers/Action (right 165). Replaces the
+  // former three separate target/modifiers/action rects.
+  combatControl: Object.freeze({ left: 1263, bottom: 16, width: 330, height: 165, zIndex: 20 }),
+  log:          Object.freeze({ left: 1656, bottom: 16, width: 250, height: 250, zIndex: 20 }),
 });
 
 /* ----------------- small math ----------------- */
@@ -265,14 +270,33 @@ export function resetLayoutState() {
   return defaultLayoutState();
 }
 
+/**
+ * Phase 2.2.3 migration: an older v2 payload may still hold separate `target`,
+ * `modifiers`, `action` placements. If there's no `combatControl` yet, seed it
+ * from the old `target` position (the merged module sits where Target was);
+ * if Target was default/missing, leave it absent → default Combat Control rect.
+ * Legacy keys are then dropped (only HUD_MODULE_IDS are copied below).
+ */
+function migrateLegacyModules(modules) {
+  if (!modules || modules.combatControl) return modules;
+  const hasLegacy = modules.target || modules.modifiers || modules.action;
+  if (!hasLegacy) return modules;
+  const base = modules.target;
+  if (base && base.mode === "custom" && Number.isFinite(base.x) && Number.isFinite(base.y)) {
+    return { ...modules, combatControl: { mode: "custom", x: clamp01(base.x), y: clamp01(base.y) } };
+  }
+  return modules;
+}
+
 /** Validate an untrusted object as a v2 LayoutState, or return null. */
 export function validateLayoutState(raw) {
   if (!raw || typeof raw !== "object") return null;
   if (raw.version !== LAYOUT_VERSION) return null;
   if (!raw.modules || typeof raw.modules !== "object") return null;
+  const src = migrateLegacyModules(raw.modules);
   const out = defaultLayoutState();
   for (const id of HUD_MODULE_IDS) {
-    const m = raw.modules[id];
+    const m = src[id];
     if (m && (m.mode === "default" || m.mode === "custom") &&
         typeof m.x === "number" && typeof m.y === "number" &&
         Number.isFinite(m.x) && Number.isFinite(m.y)) {

@@ -27,9 +27,7 @@ import {
 import { renderPlayerBlock } from "./PlayerBlock.js";
 import { renderGunBlock } from "./GunBlock.js";
 import { renderSkillBlock } from "./SkillBlock.js";
-import { renderTargetBlock } from "./TargetBlock.js";
-import { renderModifierModule } from "./ModifierBlock.js";
-import { renderActionModule } from "./ActionBlock.js";
+import { renderCombatControlBlock } from "./CombatControlBlock.js";
 import { renderBattleLogPanel } from "./BattleLogBlock.js";
 import { ICON_GRIP } from "./hudIcons.js";
 import { esc } from "./hudDom.js";
@@ -38,14 +36,12 @@ const BLOCK_RENDERERS = {
   player: renderPlayerBlock,
   gun: renderGunBlock,
   skills: renderSkillBlock,
-  target: renderTargetBlock,
-  modifiers: renderModifierModule,
-  action: renderActionModule,
+  combatControl: renderCombatControlBlock,
   log: renderBattleLogPanel,
 };
 const MODULE_LABEL = {
-  player: "Player", gun: "Gun", skills: "Skills", target: "Target",
-  modifiers: "Modifiers", action: "Action", log: "Log",
+  player: "Player", gun: "Gun", skills: "Skills",
+  combatControl: "Combat Control", log: "Log",
 };
 
 export function mountCombatHudLayoutEditor(options) {
