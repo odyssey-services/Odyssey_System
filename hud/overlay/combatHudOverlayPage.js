@@ -75,6 +75,12 @@ function start() {
   document.body.style.margin = "0";
 
   const root = document.getElementById("root") || document.body;
+  // Single shared design-token layer for EVERY route (module / editor / pill):
+  // combatHudTokens.css declares the --odyssey-* custom properties on
+  // `.odyssey-hud`, so the mount root must carry that class or all var()-based
+  // panel styling resolves to nothing. Each mount also self-applies it, but
+  // anchoring it here guarantees tokens regardless of what is mounted.
+  root.classList.add("odyssey-hud");
   const available = !!(OBR && OBR.isAvailable);
   const moduleParam = getModuleParam();
 

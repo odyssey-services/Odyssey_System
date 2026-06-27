@@ -63,7 +63,14 @@ export function mountCombatHudModule(options) {
   store.initialize();
 
   const el = document.createElement("div");
-  el.className = cls("ohud-hud", "ohud-module");
+  // `.odyssey-hud` is the DESIGN-TOKEN root (combatHudTokens.css declares every
+  // --odyssey-* custom property there). It MUST be present or all var()-based
+  // panel backgrounds/borders/colours resolve to nothing (the module would
+  // render as a "naked" block — text/SVG only). We deliberately do NOT use the
+  // legacy `.ohud-hud` shell class here: that drives the old single-HUD outer
+  // grid/flex layout, which a standalone module iframe must not inherit.
+  // `.ohud-module` carries the neutral fill/sizing for one block per iframe.
+  el.className = cls("odyssey-hud", "ohud-module");
   el.setAttribute("data-module", moduleId);
   root.appendChild(el);
 

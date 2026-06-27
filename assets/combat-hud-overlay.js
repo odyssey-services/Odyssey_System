@@ -5653,7 +5653,7 @@ function mountCombatHudModule(options) {
   const store = createCombatHudStore({ adapter });
   store.initialize();
   const el = document.createElement("div");
-  el.className = cls("ohud-hud", "ohud-module");
+  el.className = cls("odyssey-hud", "ohud-module");
   el.setAttribute("data-module", moduleId);
   root.appendChild(el);
   const tooltip = createTooltip(el);
@@ -6203,6 +6203,7 @@ function start() {
   document.body.style.background = "transparent";
   document.body.style.margin = "0";
   const root = document.getElementById("root") || document.body;
+  root.classList.add("odyssey-hud");
   const available = !!(lib_default && lib_default.isAvailable);
   const moduleParam = getModuleParam();
   let uiState = {};

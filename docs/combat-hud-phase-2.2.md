@@ -178,6 +178,48 @@ never affects siblings. A dev-only badge (`?debug=1`) shows
 `<module> · mount✓ · snap✓ · <bodyMode>`; production shows only the compact
 fallback (and only on error).
 
+## Phase 2.2.2 — module CSS isolation (missing token root)
+
+**Symptom:** in a real Owlbear room the seven module popovers rendered as
+"naked" elements — text, SVG and icons visible, but panel backgrounds, borders,
+border-radius, accent colours and var-based sizing all missing. The Arrange
+editor looked correct.
+
+**Root cause (CSS custom properties not resolving).** All design tokens are
+declared on the `.odyssey-hud` root class (`hud/styles/combatHudTokens.css`,
+"variables are declared on a `.odyssey-hud` root class"). The editor mounts under
+`.odyssey-hud ohud-editor-root`, so its panels resolve `var(--odyssey-*)`. But a
+module mounted under **`.ohud-hud ohud-module`** — `.ohud-hud` is the *legacy
+single-HUD shell*, **not** the token root — so no `.odyssey-hud` ancestor
+existed and every `var(--odyssey-*)` resolved to its initial (empty) value.
+Fixed pixel values (padding `6px 8px`, font sizes) and text/SVG survived;
+everything var-driven (panel `background`, `border`, `border-radius`, zone fills,
+accent colours) vanished. Confirmed by computed style in module mode:
+`background-color: rgba(0,0,0,0)`, `border-width: 0`, `--odyssey-hud-panel: (empty)`,
+no `.odyssey-hud` ancestor — vs the editor's `rgba(22,32,58,0.96)` panel.
+
+**Fix.**
+- `CombatHudModule.js` — the module root is now `.odyssey-hud .ohud-module`
+  (the design-token root + the neutral fill/sizing class). It no longer uses the
+  legacy `.ohud-hud` shell, so a standalone module iframe does **not** inherit
+  the old single-HUD outer grid/flex layout.
+- `combatHudOverlayPage.js` — `start()` also adds `.odyssey-hud` to `#root`, a
+  single shared token layer that covers every route (module / editor / pill)
+  regardless of what mounts.
+
+Component/panel styles (`.ohud-panel`, block internals) were already global (not
+scoped to `.ohud-hud`), so once the token root is present they apply identically
+in module mode and in the editor. The legacy single-HUD layout (`.ohud-hud`
+shell, `.ohud-main`/`.ohud-rail`, footprints, `[data-mode]`) stays scoped to
+`.ohud-hud` and no longer leaks into modules.
+
+**Verified (computed styles, all 7 routes):** panel
+`background-color: rgba(22,32,58,0.96)`, `border: 1px`, `border-radius: 14px`,
+internal `display:grid/flex` restored, no overflow, no console errors; editor
+unchanged. (Reproduced and fixed in the standalone page — the same page/CSS the
+Owlbear popover loads — so it is not an OBR-runtime-only check; still worth a
+quick Owlbear pass per the checklist.)
+
 ## Known limitations
 
 - Cross-popover stacking relies on open order (no z-index API); if the OBR host
