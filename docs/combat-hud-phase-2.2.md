@@ -148,6 +148,36 @@ skills ≤10/row wrapping + snap.
 12. Reset layout → exact default.
 13. No white scrollbars; no duplicate popovers.
 
+## Phase 2.2.1 — module render fix (infinite re-open loop)
+
+**Symptom:** in normal mode the seven module popovers opened but their content
+looked empty / "not loaded" / broken, while the Arrange editor worked fine.
+
+**Root cause:** the Player module broadcasts `BC_HUD_LAYOUT` (its stored layout)
+on every mount so the controller can place the popovers. The controller's
+handler did `lastLayout = …; if (mode === "modules") openAllModules()` — which
+re-opened **all** module popovers, reloading the Player iframe, which mounted
+again and re-broadcast `BC_HUD_LAYOUT` → an **infinite re-open loop**. Every
+module iframe was perpetually reloaded, so it never finished rendering. The
+editor was immune (it doesn't broadcast layout on mount, and the handler only
+re-opens when `mode === "modules"`); standalone was immune (no controller).
+
+**Fix (`combatHudOverlayController.js`):** the `BC_HUD_LAYOUT` handler now
+ignores an unchanged layout (`layoutsEqual`) and, when it does change, re-opens
+only the modules whose placement actually changed (`openChangedModules`). A
+cold start with no saved layout → Player broadcasts the default = current
+`lastLayout` → equal → no re-open → loop broken. A saved custom layout → only
+the changed modules reposition once; re-opening the Player re-broadcasts the
+now-current layout → equal → stop. No loop on resize/collapse/reopen either
+(the layout broadcast is idempotent).
+
+**Module error boundary (`CombatHudModule.js`):** each module render is wrapped
+in try/catch → a compact error card (`.ohud-moderr`) + `console.error(moduleId,
+stack)`; a render failure never blanks the iframe and (being a separate popover)
+never affects siblings. A dev-only badge (`?debug=1`) shows
+`<module> · mount✓ · snap✓ · <bodyMode>`; production shows only the compact
+fallback (and only on error).
+
 ## Known limitations
 
 - Cross-popover stacking relies on open order (no z-index API); if the OBR host

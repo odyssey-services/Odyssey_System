@@ -42,6 +42,27 @@
   display: flex; gap: 4px;
 }
 
+/* Compact per-module error fallback (production-safe). */
+.ohud-moderr {
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column; gap: 4px; justify-content: center; align-items: center;
+  text-align: center; padding: 8px;
+  border-color: var(--odyssey-hud-negative);
+}
+.ohud-moderr-title { font-size: 11px; font-weight: 800; color: var(--odyssey-hud-negative); }
+.ohud-moderr-detail {
+  font-size: 9px; line-height: 1.3; color: var(--odyssey-hud-muted);
+  max-height: 60%; overflow: auto; white-space: pre-wrap; word-break: break-word;
+}
+
+/* Dev-only diagnostic badge (?debug=1). Tiny, corner, never in production. */
+.ohud-module-debug {
+  position: absolute; left: 2px; bottom: 2px; z-index: 6; pointer-events: none;
+  font-size: 8px; font-weight: 700; letter-spacing: 0.3px;
+  color: var(--odyssey-cyan); background: rgba(8, 12, 22, 0.7);
+  border: 1px solid var(--odyssey-hud-border); border-radius: 4px; padding: 0 4px;
+}
+
 /* Log scroll allowed only inside its own list. */
 .ohud-module[data-module="log"] .ohud-log-panel { width: 100%; height: 100%; max-height: none; }
 

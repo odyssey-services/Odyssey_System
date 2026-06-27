@@ -24,7 +24,13 @@ import { renderBattleLogPanel } from "./BattleLogBlock.js";
 import { renderEmptyState, renderErrorState, renderLoadingState } from "./EmptyHudState.js";
 import { createTooltip } from "./Tooltip.js";
 import { ICON_GRID, ICON_CARET_DOWN } from "./hudIcons.js";
-import { cls } from "./hudDom.js";
+import { cls, esc } from "./hudDom.js";
+
+/** Dev-only verbose diagnostics, toggled with `?debug=1` on the popover URL.
+ *  Production always keeps the compact error fallback, but no debug badge. */
+const DEV = (() => {
+  try { return /[?&](debug|dev)=1/.test(location.search); } catch { return false; }
+})();
 
 const BLOCK_RENDERERS = {
   player: renderPlayerBlock,
@@ -73,27 +79,60 @@ export function mountCombatHudModule(options) {
     </div>`;
   }
 
+  /** Compact, production-safe error card (this module only — siblings are
+   *  separate popovers and are unaffected). Full stack only in DEV. */
+  function moduleErrorCard(err) {
+    const detail = DEV
+      ? `<div class="ohud-moderr-detail">${esc(String((err && err.stack) || (err && err.message) || err))}</div>`
+      : "";
+    return `<section class="ohud-panel ohud-moderr" data-block="${esc(moduleId)}">
+      <div class="ohud-moderr-title">⚠ ${esc(moduleId)}</div>${detail}</section>`;
+  }
+
+  // Module-level error boundary: a render exception becomes a compact card +
+  // console.error(moduleId, stack); it never throws out and never blanks the iframe.
   function bodyHtml(state) {
-    const mode = resolveBodyMode(state);
-    if (mode === "ready") {
-      const fn = BLOCK_RENDERERS[moduleId];
-      return fn ? fn(state) : "";
+    try {
+      if (!state) throw new Error("no snapshot");
+      const mode = resolveBodyMode(state);
+      if (mode === "ready") {
+        const fn = BLOCK_RENDERERS[moduleId];
+        if (!fn) throw new Error(`unknown module "${moduleId}"`);
+        return fn(state);
+      }
+      // Non-ready: Player shows the calm state; others stay muted (map reads through).
+      if (moduleId === "player") {
+        const inner = mode === "error" ? renderErrorState(state)
+          : mode === "loading" ? renderLoadingState()
+          : renderEmptyState(state);
+        return `<div class="ohud-state-wrap">${inner}</div>`;
+      }
+      return `<section class="ohud-panel ohud-panel--muted" data-block="${esc(moduleId)}"><div class="ohud-muted-fill">—</div></section>`;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[combatHud/module:${moduleId}] render failed`, err);
+      return moduleErrorCard(err);
     }
-    // Non-ready: the Player module shows the calm state; others stay muted/empty
-    // (the map still reads through the gaps between modules).
-    if (moduleId === "player") {
-      const inner = mode === "error" ? renderErrorState(state)
-        : mode === "loading" ? renderLoadingState()
-        : renderEmptyState(state);
-      return `<div class="ohud-state-wrap">${inner}</div>`;
-    }
-    return `<section class="ohud-panel ohud-panel--muted" data-block="${moduleId}"><div class="ohud-muted-fill">—</div></section>`;
+  }
+
+  function debugBadge(state) {
+    if (!DEV) return "";
+    const snap = state && state.snapshot ? "snap✓" : "snap✗";
+    let bodyMode = "?";
+    try { bodyMode = state ? resolveBodyMode(state) : "no-state"; } catch (_e) { bodyMode = "err"; }
+    return `<div class="ohud-module-debug">${esc(moduleId)} · mount✓ · ${snap} · ${esc(bodyMode)}</div>`;
   }
 
   function render() {
-    const state = store.getState();
-    el.setAttribute("data-body", resolveBodyMode(state));
-    el.innerHTML = `${bodyHtml(state)}${controlsHtml()}<div class="ohud-toast" hidden></div>`;
+    let state = null;
+    try { state = store.getState(); } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[combatHud/module:${moduleId}] getState failed`, err);
+    }
+    let bodyMode = "error";
+    try { bodyMode = state ? resolveBodyMode(state) : "error"; } catch (_e) { bodyMode = "error"; }
+    el.setAttribute("data-body", bodyMode);
+    el.innerHTML = `${bodyHtml(state)}${controlsHtml()}${debugBadge(state)}<div class="ohud-toast" hidden></div>`;
   }
 
   function showToast(text) {

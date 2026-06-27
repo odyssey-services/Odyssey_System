@@ -4269,6 +4269,15 @@ var cleanups = [];
 function isCollapsed() {
   return Boolean(lastUiState.isHudCollapsed);
 }
+function placementsEqual(a, b) {
+  if (!a || !b) return a === b;
+  if (a.mode !== b.mode) return false;
+  return Math.abs((a.x || 0) - (b.x || 0)) < 1e-4 && Math.abs((a.y || 0) - (b.y || 0)) < 1e-4;
+}
+function layoutsEqual(a, b) {
+  if (!a || !b || !a.modules || !b.modules) return false;
+  return HUD_MODULE_IDS.every((id) => placementsEqual(a.modules[id], b.modules[id]));
+}
 async function readViewport() {
   const [vw, vh] = await Promise.all([lib_default.viewport.getWidth(), lib_default.viewport.getHeight()]);
   lastVW = vw;
@@ -4327,6 +4336,15 @@ async function closeAllModules() {
   for (const id of HUD_MODULE_IDS) {
     try {
       await lib_default.popover.close(HUD_MODULE_POPOVER_IDS[id]);
+    } catch (_e) {
+    }
+  }
+}
+async function openChangedModules(prev, next) {
+  const changed = OPEN_ORDER.filter((id) => !placementsEqual(prev.modules[id], next.modules[id]));
+  for (const id of changed) {
+    try {
+      await openModule(id);
     } catch (_e) {
     }
   }
@@ -4418,8 +4436,11 @@ function setupCombatHudOverlay() {
         }
       }));
       cleanups.push(lib_default.broadcast.onMessage(BC_HUD_LAYOUT, async (event) => {
-        lastLayout = normalizeLayoutState(event?.data);
-        if (mode === "modules") await openAllModules();
+        const next = normalizeLayoutState(event?.data);
+        if (layoutsEqual(next, lastLayout)) return;
+        const prev = lastLayout;
+        lastLayout = next;
+        if (mode === "modules") await openChangedModules(prev, next);
       }));
     } catch (error) {
       console.error("[combatHud/overlay] setup failed", error);
@@ -6148,7 +6169,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.16";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.17";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }

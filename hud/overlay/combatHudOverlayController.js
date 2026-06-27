@@ -57,6 +57,16 @@ const cleanups = [];
 
 function isCollapsed() { return Boolean(lastUiState.isHudCollapsed); }
 
+function placementsEqual(a, b) {
+  if (!a || !b) return a === b;
+  if (a.mode !== b.mode) return false;
+  return Math.abs((a.x || 0) - (b.x || 0)) < 1e-4 && Math.abs((a.y || 0) - (b.y || 0)) < 1e-4;
+}
+function layoutsEqual(a, b) {
+  if (!a || !b || !a.modules || !b.modules) return false;
+  return HUD_MODULE_IDS.every((id) => placementsEqual(a.modules[id], b.modules[id]));
+}
+
 async function readViewport() {
   const [vw, vh] = await Promise.all([OBR.viewport.getWidth(), OBR.viewport.getHeight()]);
   lastVW = vw; lastVH = vh;
@@ -118,6 +128,16 @@ async function openAllModules() {
 async function closeAllModules() {
   for (const id of HUD_MODULE_IDS) {
     try { await OBR.popover.close(HUD_MODULE_POPOVER_IDS[id]); } catch (_e) { /* ignore */ }
+  }
+}
+
+/** Re-open only the modules whose placement changed (in z-order). Re-opening a
+ *  module reloads its iframe, so we must NOT touch unchanged ones — re-opening
+ *  the Player module re-triggers its BC_HUD_LAYOUT broadcast, which would loop. */
+async function openChangedModules(prev, next) {
+  const changed = OPEN_ORDER.filter((id) => !placementsEqual(prev.modules[id], next.modules[id]));
+  for (const id of changed) {
+    try { await openModule(id); } catch (_e) { /* skip one, keep the rest */ }
   }
 }
 
@@ -201,10 +221,17 @@ export function setupCombatHudOverlay() {
       }));
 
       // Layout updates: Player module seeds the stored layout on mount; the
-      // editor sends the new layout on Save.
+      // editor sends the new layout on Save. Ignore an UNCHANGED layout —
+      // otherwise the Player module's mount broadcast would re-open all modules,
+      // reload the Player iframe, re-broadcast … an infinite re-open loop that
+      // leaves every module perpetually "not loaded". Only reposition the
+      // modules that actually changed.
       cleanups.push(OBR.broadcast.onMessage(BC_HUD_LAYOUT, async (event) => {
-        lastLayout = normalizeLayoutState(event?.data);
-        if (mode === "modules") await openAllModules(); // reposition to the new layout
+        const next = normalizeLayoutState(event?.data);
+        if (layoutsEqual(next, lastLayout)) return;
+        const prev = lastLayout;
+        lastLayout = next;
+        if (mode === "modules") await openChangedModules(prev, next);
       }));
     } catch (error) {
       // eslint-disable-next-line no-console
