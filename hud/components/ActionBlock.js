@@ -26,6 +26,7 @@ export function renderActionButton(state) {
   const reason = selectDisabledReason(state);
   const disabled = !can || Boolean(reason);
   const cost = selectCurrentActionCost(state);
+  const displayLabel = reason === "Select a target." ? "Select target" : label;
 
   const tip = disabled
     ? tipAttr("Action unavailable", [esc(reason || "Not available")])
@@ -37,7 +38,7 @@ export function renderActionButton(state) {
       <span class="${cls("ohud-econ-pip", cost === "MOVE" ? "is-spend" : "")}">Mv</span>
     </span>
     <button type="button" class="${cls("ohud-action-btn", disabled ? "is-disabled" : "is-ready")}"
-      data-action="primary"${disabled ? ' aria-disabled="true"' : ""}${tip}>${esc(label)}</button>
+      data-action="primary"${disabled ? ' aria-disabled="true"' : ""}${tip}>${esc(displayLabel)}</button>
   </div>`;
 }
 

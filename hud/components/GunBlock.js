@@ -28,6 +28,22 @@ function emptyGun() {
   });
 }
 
+function weaponOption(option) {
+  return `<button type="button" class="${cls("ohud-weapon-option", option.selected ? "is-selected" : "")}"
+    data-action="select-weapon" data-weapon-id="${esc(option.id)}">
+    <span class="ohud-weapon-option-name">${esc(option.name)}</span>
+    ${option.type ? `<span class="ohud-weapon-option-type">${esc(option.type)}</span>` : ""}
+    <span class="ohud-weapon-option-ammo">${esc(option.ammoLabel || "—")}</span>
+  </button>`;
+}
+
+function reserveOption(mag) {
+  return `<button type="button" class="ohud-reserve-mag" data-action="select-reload-mag" data-magazine-id="${esc(mag.id)}">
+    <span>${esc(mag.description || mag.ammoType || "Magazine")}</span>
+    <span>${Number(mag.current ?? 0)}/${Number(mag.max ?? 0)}</span>
+  </button>`;
+}
+
 export function renderGunBlock(state) {
   const weapon = state?.snapshot?.weapon?.primary ?? null;
   const secondary = state?.snapshot?.weapon?.secondary ?? null;
@@ -43,6 +59,7 @@ export function renderGunBlock(state) {
   const canReload = Boolean(weapon.canReload) && reserve.length > 0;
   const disabled = Boolean(weapon.disabledReason) || (isEmpty && !canReload);
   const fm = fireModeLetter(weapon.currentFireMode);
+  const availableWeapons = Array.isArray(state?.snapshot?.weapon?.available) ? state.snapshot.weapon.available : [];
 
   const fireModeTip = tipAttr("Fire mode", [
     `Current: ${weapon.currentFireMode ?? "—"}`,
@@ -56,7 +73,7 @@ export function renderGunBlock(state) {
   const mainCard = `
     <div class="ohud-gun-main"${tipAttr(weapon.name, [weapon.currentFireMode ? `Mode: ${weapon.currentFireMode}` : ""])}>
       <span class="ohud-gun-name">${esc(weapon.name)}</span>
-      <span class="ohud-gun-caret is-readonly" aria-hidden="true"${swapTip}>${ICON_CARET_DOWN}</span>
+      <button type="button" class="ohud-gun-caret" data-action="toggle-weapon-list" aria-label="Choose weapon"${swapTip}>${ICON_CARET_DOWN}</button>
       <span class="ohud-gun-silhouette">${weaponSvg(weapon.svgRef)}</span>
       <span class="ohud-firemode is-readonly"${fireModeTip}><span class="ohud-firemode-knob"></span><span class="ohud-firemode-letter">${esc(fm)}</span></span>
       ${secondary ? `<span class="ohud-gun-secondary"${tipAttr("Secondary weapon", [esc(secondary.name || "")])}>2nd</span>` : ""}
@@ -73,16 +90,24 @@ export function renderGunBlock(state) {
     <div class="ohud-ammo-card">
       <span class="ohud-ammo-head">
         <span class="ohud-ammo-label">ammo</span>
-        <span class="${cls("ohud-ammo-reload", "is-readonly", canReload ? "" : "is-off")}" aria-hidden="true"${tipAttr("Reload", [canReload ? "Reserve magazine available" : "No reload available", "Reload arrives in a later phase"])}>${ICON_RELOAD}</span>
+        <button type="button" class="${cls("ohud-ammo-reload", canReload ? "" : "is-off")}" data-action="reload" data-weapon-id="${esc(weapon.id)}" data-magazine-id="${esc(reserve[0]?.id ?? "")}" ${canReload ? "" : "disabled"}${tipAttr("Reload", [canReload ? "Insert compatible magazine" : "No compatible magazine"])}>${ICON_RELOAD}</button>
       </span>
       <span class="${cls("ohud-ammo-count", isEmpty ? "ohud-ammo-count--empty" : "")}">
         <span class="ohud-ammo-cur">${ammoCur}</span><span class="ohud-ammo-max">/${ammoMax}</span>
       </span>
     </div>`;
 
+  const weaponList = availableWeapons.length > 1
+    ? `<div class="ohud-weapon-list">${availableWeapons.map(weaponOption).join("")}</div>`
+    : "";
+  const reserveList = reserve.length
+    ? `<div class="ohud-reserve-list">${reserve.map(reserveOption).join("")}</div>`
+    : "";
+
   const body = `<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
     ${mainCard}
     <div class="ohud-gun-side">${magCard}${ammoCard}</div>
+    ${weaponList}${reserveList}
   </div>`;
 
   return panel({ key: "gun", label: "Weapon", bodyHtml: body });

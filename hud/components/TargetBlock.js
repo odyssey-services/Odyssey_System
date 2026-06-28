@@ -14,9 +14,13 @@ export function renderTargetBlock(state) {
   const tv = selectTargetView(state);
 
   if (!tv.hasTarget) {
+    const picking = tv.isPicking;
     const body = `<div class="ohud-target is-empty">
       <div class="ohud-figure ohud-figure--ghost"><div class="ohud-figure-svg">${humanoidSvg({ neutral: true })}</div></div>
-      <div class="ohud-target-hint">No target</div>
+      <div class="ohud-target-hint">${picking ? "PICK A TARGET" : "No target selected"}</div>
+      <button type="button" class="ohud-target-pick" data-action="${picking ? "cancel-target" : "pick-target"}">
+        ${picking ? "Cancel" : "Pick target"}
+      </button>
     </div>`;
     return panel({ key: "target", label: "Target", bodyHtml: body });
   }

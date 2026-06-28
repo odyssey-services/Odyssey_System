@@ -104,6 +104,9 @@ function mutedCard(moduleId) {
 function buildSyntheticState(payload) {
   const snap = payload.hudSnapshot;
   const role = String(payload.viewer?.role ?? "UNKNOWN").toLowerCase();
+  const prepared = payload.ui?.preparedAction ?? null;
+  const selectedAbilityId = prepared?.kind === "skill" ? prepared.id : null;
+  const targeting = payload.ui?.targeting ?? {};
 
   return {
     status:              "ready",
@@ -127,13 +130,13 @@ function buildSyntheticState(payload) {
     ui: {
       isHudCollapsed:          false,
       selectedTechniqueId:     null,
-      selectedAbilityId:       null,
+      selectedAbilityId,
       selectedReloadMagazineId: null,
       selectedModifierIds:     [],
       targeting: {
-        mode:                "none",
-        selectedTargetIds:   [],
-        selectedBodyPartId:  "torso",
+        mode:                targeting.mode ?? "none",
+        selectedTargetIds:   Array.isArray(targeting.selectedTargetIds) ? targeting.selectedTargetIds : [],
+        selectedBodyPartId:  targeting.selectedBodyPartId ?? "torso",
         selectedPoint:       null,
         radius:              null,
       },

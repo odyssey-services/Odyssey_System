@@ -114,7 +114,7 @@ export function selectDisabledReason(state) {
     const targeting = state?.ui?.targeting ?? {};
     if (skill.usesPoint && !targeting.selectedPoint) return "Pick a target point.";
     if (!skill.usesPoint && (targeting.selectedTargetIds?.length ?? 0) === 0) {
-      return "Pick a target on the map.";
+      return "Select a target.";
     }
   }
 
@@ -267,10 +267,25 @@ export function selectVisibleStatuses(state, limit = 5) {
  */
 export function selectTargetView(state) {
   const bodyPartId = selectSelectedBodyPart(state);
+  const targeting = state?.ui?.targeting ?? {};
   const empty = {
-    hasTarget: false, name: null, kind: "humanoid",
+    hasTarget: false,
+    isPicking: targeting.mode === "picking",
+    name: null,
+    kind: "humanoid",
     bodyPartId, bodyPartLabel: selectBodyPartLabel(bodyPartId), distance: null,
   };
+  if (Array.isArray(targeting.selectedTargetIds) && targeting.selectedTargetIds.length > 0) {
+    return {
+      hasTarget: true,
+      isPicking: false,
+      name: targeting.selectedTargetName ?? "Target",
+      kind: "humanoid",
+      bodyPartId,
+      bodyPartLabel: selectBodyPartLabel(bodyPartId),
+      distance: Number.isFinite(targeting.distance) ? targeting.distance : null,
+    };
+  }
   const session = selectCombatSession(state);
   if (!session || session.status !== "active") return empty;
   const selfId = state?.selectedCharacterId ?? null;

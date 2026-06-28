@@ -189,13 +189,13 @@ function readyState(viewer, selectedItemId, characterId, bundle) {
  *  - Phase 3A.1: attach a normalized HUD snapshot (gun/skills/modifiers/log)
  *    so module iframes render real data without additional RPC calls.
  */
-export function buildBroadcastPayload(state) {
+export function buildBroadcastPayload(state, ephemeral = {}) {
   const s = state ?? createInitialSelectionState(null);
   const ready = s.status === SELECTION_STATUS.ready && s.access?.canView === true;
 
   let hudSnapshot = null;
   if (ready && s.runtimeBundle) {
-    try { hudSnapshot = mapBundleToHudSnapshot(s.runtimeBundle); } catch (_e) { /* mapper errors → null → neutral fallback */ }
+    try { hudSnapshot = mapBundleToHudSnapshot(s.runtimeBundle, ephemeral); } catch (_e) { /* mapper errors → null → neutral fallback */ }
   }
   const debug = ready && s.runtimeBundle
     ? buildRuntimeDebugSummary(s.runtimeBundle, hudSnapshot, {
@@ -214,6 +214,12 @@ export function buildBroadcastPayload(state) {
     view: ready ? (s.view ?? null) : null,
     // Normalized HUD view models — block renderers use this; full bundle is NOT included.
     hudSnapshot: ready ? hudSnapshot : null,
+    ui: {
+      selectedWeaponId: ephemeral.selectedWeaponId ?? null,
+      preparedAction: ephemeral.preparedAction ?? null,
+      targeting: ephemeral.targeting ?? null,
+      commandStatus: ephemeral.commandStatus ?? null,
+    },
     debug: ready ? debug : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null },
   };
@@ -231,6 +237,7 @@ export function normalizeSelectionPayload(raw) {
     view: raw.view ?? null,
     // Phase 3A.1: normalized HUD snapshot (block renderers use this).
     hudSnapshot: raw.hudSnapshot ?? null,
+    ui: raw.ui ?? null,
     debug: raw.debug ?? null,
     error: { code: raw.error?.code ?? null, message: raw.error?.message ?? null },
   };

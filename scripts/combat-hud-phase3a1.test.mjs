@@ -361,7 +361,8 @@ test("9. missing optional fields (no shield, no psi, no zones) → entity still 
   assert.equal(e.summary.name, "TestChar");
   assert.equal(e.shield.current, 0, "defaults to 0 when absent");
   assert.equal(e.shield.max, 0);
-  assert.equal(e.psi.current, 0);
+  assert.equal(e.psi.current, null);
+  assert.equal(e.psi.max, null);
   assert.equal(e.zones.length, 0, "empty zones when no combat.body_parts");
   assert.equal(e.flags.alive, true, "alive defaults to true");
   assert.equal(e.flags.conscious, true);
@@ -483,6 +484,68 @@ test("17. missing live sections produce controlled empty state and debug reason"
   assert.equal(snap.skills.library.length, 0);
   assert.equal(debug.reason, "armory section missing");
   assert.equal(debug.broadcast.gunState, "empty");
+});
+
+test("18. live resource_pools PSI maps to Player view model", () => {
+  const bundle = liveSectionsBundle();
+  delete bundle.sections.combat.psi_current;
+  delete bundle.sections.combat.psi_max;
+  bundle.sections.abilities.resource_pools = [
+    { code: "psi", name: "Psi", source_type: "psionic", current_value: 7, max_value: 12 },
+  ];
+  const snap = mapBundleToHudSnapshot(bundle);
+  assert.equal(snap.entity.psi.current, 7);
+  assert.equal(snap.entity.psi.max, 12);
+  const html = renderSelectionModule("player", payloadFromBundle(bundle));
+  assert.ok(html.includes("PSI"));
+  assert.ok(html.includes(">7<span") || html.includes("7<span"), "psi current rendered");
+});
+
+test("19. Pick target is visible for ready source without target", () => {
+  const payload = payloadFromBundle(liveSectionsBundle());
+  const html = renderSelectionModule("combatControl", payload);
+  assert.ok(html.includes("Pick target"));
+  assert.ok(html.includes('data-action="pick-target"'));
+});
+
+test("20. selectedWeaponId picks a non-first weapon and weapon selector lists both", () => {
+  const first = canonicalWeapon({ id: "w-first", name: "First Rifle" });
+  const second = canonicalWeapon({ id: "w-second", name: "Sidearm", cls: "Pistol" });
+  const bundle = bundleWithWeapons([first, second], [
+    { id: "mag-2", current_rounds: 8, ammo_type_name: "FMJ", magazine_def: { capacity: 12, caliber: "5.56", caliber_name: "5.56" } },
+  ]);
+  const snap = mapBundleToHudSnapshot(bundle, { selectedWeaponId: "w-second" });
+  assert.equal(snap.weapon.primary.name, "Sidearm");
+  assert.equal(snap.weapon.available.length, 2);
+  const state = deriveSelectionState({ viewer: PLAYER, selectionIds: ["tok-1"], link: { characterId: "char-1" }, bundle });
+  const payload = buildBroadcastPayload(state, { selectedWeaponId: "w-second" });
+  const html = renderSelectionModule("gun", payload);
+  assert.ok(html.includes("First Rifle"));
+  assert.ok(html.includes("Sidearm"));
+  assert.ok(html.includes('data-action="select-weapon"'));
+});
+
+test("21. reserve magazines exclude inserted and empty magazines", () => {
+  const bundle = bundleWithWeapon();
+  bundle.armory.magazines.push({ id: "mag-empty", current_rounds: 0, ammo_type_name: "FMJ", magazine_def: { capacity: 30, caliber: "5.56", caliber_name: "5.56" } });
+  const snap = mapBundleToHudSnapshot(bundle);
+  assert.equal(snap.weapon.primary.reserveMagazines.some((m) => m.id === "mag-1"), false);
+  assert.equal(snap.weapon.primary.reserveMagazines.some((m) => m.id === "mag-empty"), true, "mapper keeps raw reserve");
+  const payload = payloadFromBundle(bundle);
+  const html = renderSelectionModule("gun", payload);
+  assert.ok(html.includes("mag-2") || html.includes("Full Metal Jacket"));
+  assert.ok(!html.includes("mag-empty"), "Gun UI hides empty reserve");
+});
+
+test("22. directed skill without target shows Select target and prepared state", () => {
+  const bundle = liveSectionsBundle();
+  bundle.sections.abilities.abilities[0].targeting_mode = "token";
+  const state = deriveSelectionState({ viewer: PLAYER, selectionIds: ["tok-1"], link: { characterId: "char-1" }, bundle });
+  const payload = buildBroadcastPayload(state, { preparedAction: { kind: "skill", id: "ability-1" } });
+  const skillsHtml = renderSelectionModule("skills", payload);
+  const actionHtml = renderSelectionModule("combatControl", payload);
+  assert.ok(skillsHtml.includes("is-selected"), "prepared skill has selected state");
+  assert.ok(actionHtml.includes("Select target"));
 });
 
 // Summary

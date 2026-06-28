@@ -81,6 +81,7 @@
 .ohud-module[data-module="skills"] .ohud-panel-body { justify-content: center; align-items: center; }
 .ohud-module[data-module="skills"] .ohud-skill-groups { align-items: center; justify-content: center; height: auto; gap: 18px; flex-wrap: wrap; }
 .ohud-module[data-module="skills"] .ohud-slot { width: 56px; height: 56px; }
+.ohud-module .ohud-gun { position: relative; }
 
 /* ---------- Combat Control composite (330×165) ---------- */
 /* Outer panel carries the frame; the grid fills it edge-to-edge. */
@@ -100,6 +101,59 @@
 .ohud-target-sub { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 2px; }
 .ohud-target-dist { font-size: 8.5px; font-weight: 700; color: var(--odyssey-hud-muted); }
 .ohud-target-dist--none { opacity: 0.7; }
+.ohud-target-pick {
+  margin-top: 2px; height: 20px; padding: 0 8px;
+  border: 1px solid var(--odyssey-purple); border-radius: 6px;
+  background: rgba(112, 80, 255, 0.22); color: var(--odyssey-hud-text);
+  font: inherit; font-size: 9px; font-weight: 800; cursor: pointer;
+  pointer-events: auto;
+}
+.ohud-target-pick:hover { border-color: var(--odyssey-cyan); }
+
+.ohud-gun-caret,
+.ohud-ammo-reload,
+.ohud-weapon-option,
+.ohud-reserve-mag,
+.ohud-slot {
+  font: inherit;
+  cursor: pointer;
+}
+.ohud-gun-caret,
+.ohud-ammo-reload {
+  border: 0; background: transparent; color: inherit; padding: 0;
+}
+.ohud-ammo-reload:disabled { cursor: not-allowed; opacity: 0.45; }
+.ohud-weapon-list {
+  position: absolute; left: 6px; right: 86px; bottom: 6px;
+  display: grid; gap: 2px; z-index: 4;
+}
+.ohud-weapon-option {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 4px; align-items: center;
+  min-width: 0; height: 18px; padding: 1px 5px;
+  border: 1px solid var(--odyssey-hud-border); border-radius: 5px;
+  background: rgba(10, 16, 31, 0.74); color: var(--odyssey-hud-text);
+  font-size: 8px; text-align: left;
+}
+.ohud-weapon-option.is-selected { border-color: var(--odyssey-cyan); color: var(--odyssey-cyan); }
+.ohud-weapon-option-name,
+.ohud-weapon-option-type {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ohud-weapon-option-type,
+.ohud-weapon-option-ammo { color: var(--odyssey-hud-muted); font-size: 7.5px; }
+.ohud-reserve-list {
+  position: absolute; right: 6px; bottom: 6px; width: 76px;
+  display: grid; gap: 2px; z-index: 4;
+}
+.ohud-reserve-mag {
+  display: flex; justify-content: space-between; gap: 3px;
+  height: 18px; padding: 1px 4px;
+  border: 1px solid var(--odyssey-hud-border); border-radius: 5px;
+  background: rgba(10, 16, 31, 0.74); color: var(--odyssey-hud-text);
+  font-size: 7.5px;
+}
+.ohud-reserve-mag:hover,
+.ohud-weapon-option:hover { border-color: var(--odyssey-purple); }
 
 /* Modifier section — dense 2-column chip grid, ≤6 then +N, no horizontal overflow. */
 .ohud-cc-mod .ohud-panel-head { min-height: 10px; }

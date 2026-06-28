@@ -182,6 +182,28 @@ export function mountCombatHudModule(options) {
       case "primary":
         if (!t.classList.contains("is-disabled")) showToast("Action resolution arrives in a later phase");
         break;
+      case "pick-target":
+        integration.onCommand && integration.onCommand({ type: "pick-target" });
+        break;
+      case "cancel-target":
+        integration.onCommand && integration.onCommand({ type: "cancel-target" });
+        break;
+      case "select-weapon":
+        integration.onCommand && integration.onCommand({ type: "select-weapon", weaponId: t.getAttribute("data-weapon-id") });
+        break;
+      case "reload":
+        integration.onCommand && integration.onCommand({
+          type: "reload",
+          weaponId: t.getAttribute("data-weapon-id"),
+          magazineId: t.getAttribute("data-magazine-id"),
+        });
+        break;
+      case "select-reload-mag":
+        integration.onCommand && integration.onCommand({ type: "select-reload-mag", magazineId: t.getAttribute("data-magazine-id") });
+        break;
+      case "prepare-skill":
+        integration.onCommand && integration.onCommand({ type: "prepare-skill", skillId: t.getAttribute("data-skill-id") });
+        break;
       default: break;
     }
   }

@@ -22,13 +22,18 @@ function zonesMap(entity) {
 }
 
 function resourceBar(kind, label, res) {
-  const max = Math.max(0, Number(res?.max) || 0);
-  const cur = Math.max(0, Number(res?.current) || 0);
-  const pct = max > 0 ? Math.round((cur / max) * 100) : 0;
-  return `<div class="ohud-res ohud-res--${kind}"${tipAttr(label, [`${cur} / ${max}`])}>
+  const maxRaw = res?.max;
+  const curRaw = res?.current;
+  const hasMax = Number.isFinite(Number(maxRaw)) && Number(maxRaw) > 0;
+  const hasCur = Number.isFinite(Number(curRaw));
+  const max = hasMax ? Math.max(0, Number(maxRaw)) : null;
+  const cur = hasCur ? Math.max(0, Number(curRaw)) : null;
+  const pct = max > 0 && cur != null ? Math.round((cur / max) * 100) : 0;
+  const labelText = max != null && cur != null ? `${cur} / ${max}` : "—";
+  return `<div class="ohud-res ohud-res--${kind}"${tipAttr(label, [labelText])}>
     <span class="ohud-res-label">${esc(label)}</span>
     <span class="ohud-res-track"><span class="ohud-res-fill" style="width:${pct}%"></span></span>
-    <span class="ohud-res-num">${cur}<span class="ohud-res-max">/${max}</span></span>
+    <span class="ohud-res-num">${esc(cur != null ? cur : "—")}${max != null ? `<span class="ohud-res-max">/${max}</span>` : ""}</span>
   </div>`;
 }
 
@@ -69,7 +74,7 @@ export function renderPlayerBlock(state) {
       <div class="ohud-player-stats">
         <div class="ohud-player-name" title="${esc(entity.summary.name)}">${esc(entity.summary.name)}</div>
         ${resourceBar("shield", "SHIELD", entity.shield)}
-        ${entity.psi && entity.psi.max > 0 ? resourceBar("psi", "PSI", entity.psi) : ""}
+        ${entity.psi ? resourceBar("psi", "PSI", entity.psi) : ""}
         ${actionPips(entity.actions)}
       </div>
     </div>

@@ -41,6 +41,11 @@ export const BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
  *  selection change still renders the current state). */
 export const BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
 
+/** LOCAL broadcast: module iframe → background scene controller. Carries
+ *  ephemeral HUD commands (weapon pick, reload, prepared action, target pick).
+ *  The iframe never calls Supabase directly. */
+export const BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
+
 /* ----------------- HUD geometry (Phase 2.1) ----------------- */
 //
 // The HUD is a left-anchored bottom panel: a tall PlayerBlock, a responsive

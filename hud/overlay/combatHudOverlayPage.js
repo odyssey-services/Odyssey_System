@@ -20,7 +20,7 @@ import moduleStyles from "../components/combatHudModule.css";
 
 import { mountCombatHudModule } from "../components/CombatHudModule.js";
 import { mountCombatHudLayoutEditor } from "../components/CombatHudLayoutEditor.js";
-import { BC_HUD_UI_STATE, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, parseHudUiState } from "./overlayConstants.js";
+import { BC_HUD_COMMAND, BC_HUD_UI_STATE, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, parseHudUiState } from "./overlayConstants.js";
 import {
   HUD_MODULE_IDS,
   BC_HUD_LAYOUT,
@@ -124,6 +124,7 @@ function start() {
       integration: {
         onArrange() { if (available) send(BC_HUD_EDITOR, { open: true }); },
         onCollapse(collapsed) { if (available) send(BC_HUD_UI_STATE, { isHudCollapsed: !!collapsed }); },
+        onCommand(command) { if (available) send(BC_HUD_COMMAND, command); },
       },
     });
     // Phase 3A: subscribe to live scene-selection (real OBR room). The module

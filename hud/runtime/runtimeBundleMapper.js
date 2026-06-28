@@ -107,6 +107,10 @@ function section(bundle, key) {
   return sections[key] ?? bundle?.[key] ?? null;
 }
 
+function hasValue(v) {
+  return v !== null && v !== undefined && v !== "";
+}
+
 function normalizePartId(bp) {
   const raw = str(bp?.zone_id) ?? str(bp?.part_key) ?? str(bp?.code) ?? str(bp?.id) ?? "unknown";
   const v = raw.toLowerCase();
@@ -187,6 +191,7 @@ export function mapEntity(bundle) {
   const char    = bundle?.character ?? {};
   const state   = bundle?.state ?? {};
   const combat  = section(bundle, "combat") ?? {};
+  const abilities = section(bundle, "abilities") ?? {};
 
   // Action economy flags: prefer combat section (combat's flags are turn-specific),
   // fall back to state section.
@@ -195,8 +200,16 @@ export function mapEntity(bundle) {
   // Resources: combat section is authoritative when present.
   const shieldCur = num(combat.shield_current ?? state.shield_current, 0);
   const shieldMax = num(combat.shield_max ?? state.shield_max, 0);
-  const psiCur    = num(combat.psi_current ?? state.psi_current, 0);
-  const psiMax    = num(combat.psi_max ?? state.psi_max, 0);
+  const psiPool = arr(abilities?.resource_pools).find((pool) => {
+    const code = String(pool?.code ?? pool?.resource_pool_code ?? "").toLowerCase();
+    const name = String(pool?.name ?? "").toLowerCase();
+    const source = String(pool?.source_type ?? "").toLowerCase();
+    return code.includes("psi") || code.includes("psion") || name.includes("psi") || name.includes("пси") || source.includes("psion");
+  });
+  const psiCurrentRaw = combat.psi_current ?? state.psi_current ?? psiPool?.current_value ?? psiPool?.current;
+  const psiMaxRaw = combat.psi_max ?? state.psi_max ?? psiPool?.max_value ?? psiPool?.max;
+  const psiCur = hasValue(psiCurrentRaw) ? num(psiCurrentRaw, 0) : null;
+  const psiMax = hasValue(psiMaxRaw) ? num(psiMaxRaw, 0) : null;
 
   const zones    = mapZones(combat.body_parts ?? []);
   const effectsSection = section(bundle, "effects");
@@ -255,12 +268,14 @@ function hasEquippedFlag(w) {
  * screens/resolveAttack/resolveAttackScreen.js `weapons[0]`). A single-object
  * `armory.equipped_weapon` projection is tolerated as a fallback.
  */
-export function pickActiveWeapon(armory) {
+export function pickActiveWeapon(armory, selectedWeaponId = null) {
   if (!armory || typeof armory !== "object") return null;
+  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
+  const selected = selectedWeaponId ? weapons.find((w) => str(w?.id) === selectedWeaponId) : null;
+  if (selected) return selected;
   if (armory.equipped_weapon && typeof armory.equipped_weapon === "object") {
     return armory.equipped_weapon;
   }
-  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
   if (weapons.length === 0) return null;
   return weapons.find(hasEquippedFlag) ?? weapons[0];
 }
@@ -340,6 +355,16 @@ function readReserveMagazines(armory, w, loadedMag) {
   if (Array.isArray(w.reserve_magazines) && w.reserve_magazines.length) {
     return w.reserve_magazines.map(readMagazine).filter(Boolean);
   }
+  const profileMags = Array.isArray(w.compatible_magazines) && w.compatible_magazines.length
+    ? w.compatible_magazines
+    : (Array.isArray(w.active_profile?.compatible_magazines) ? w.active_profile.compatible_magazines : []);
+  if (profileMags.length) {
+    const loadedId = loadedMag?.id ?? null;
+    return profileMags
+      .filter((m) => m && (str(m.id) ?? null) !== loadedId)
+      .map(readMagazine)
+      .filter(Boolean);
+  }
   const mags = Array.isArray(armory?.magazines) ? armory.magazines : [];
   if (!mags.length) return [];
   const weaponCaliber = str(w.model?.caliber) ?? str(w.caliber);
@@ -357,8 +382,8 @@ function readReserveMagazines(armory, w, loadedMag) {
  * never disappears just because one field (magazine / fire mode / caliber) is
  * missing. PURE.
  */
-export function mapWeapon(armory) {
-  const w = pickActiveWeapon(armory);
+export function mapWeapon(armory, selectedWeaponId = null) {
+  const w = pickActiveWeapon(armory, selectedWeaponId);
   if (!w) return null;
 
   const isMelee = !str(w.model?.caliber) && !str(w.caliber);
@@ -380,6 +405,7 @@ export function mapWeapon(armory) {
   return {
     id:             str(w.id) ?? "wpn-unknown",
     name:           str(w.name) ?? str(w.weapon_name) ?? "Unknown Weapon",
+    activeProfileId: str(w.active_profile?.id) ?? str(w.active_profile_id),
     svgRef:         weaponSvgRef(w),
     fireModes,
     currentFireMode,
@@ -419,6 +445,24 @@ function mapSkillSource(v) {
   }
   if (source.includes("item")) return SKILL_SOURCES.item;
   return SKILL_SOURCES.perk;
+}
+
+function mapWeaponOption(armory, weapon, selectedWeaponId) {
+  const vm = mapWeapon({ ...armory, weapons: [weapon] }, str(weapon?.id));
+  const cls = str(weapon?.model?.weapon_class_name) ?? str(weapon?.model?.weapon_class);
+  const mag = vm?.loadedMagazine ?? null;
+  return {
+    id: str(weapon?.id) ?? "wpn-unknown",
+    name: str(weapon?.name) ?? str(weapon?.weapon_name) ?? "Unknown Weapon",
+    type: cls,
+    selected: vm?.id === selectedWeaponId,
+    ammoLabel: mag ? `${mag.current}/${mag.max}` : (vm?.requiresAmmo ? "no magazine" : "—"),
+  };
+}
+
+function mapWeaponInventory(armory, selectedWeaponId) {
+  const weapons = arr(armory?.weapons);
+  return weapons.map((weapon) => mapWeaponOption(armory, weapon, selectedWeaponId));
 }
 
 function mapSkillColor(v) {
@@ -595,7 +639,7 @@ function logWeaponDiagnostics(bundle, weaponVM) {
  * @param {object} bundle  Raw Supabase RPC response object.
  * @returns {import("../models/combatHudContracts.js").CombatHudSnapshot}
  */
-export function mapBundleToHudSnapshot(bundle) {
+export function mapBundleToHudSnapshot(bundle, options = {}) {
   const empty = {
     entity:       null,
     weapon:       { primary: null, secondary: null },
@@ -612,7 +656,8 @@ export function mapBundleToHudSnapshot(bundle) {
 
   let weaponPrimary = null;
   const armory = section(bundle, "armory");
-  try { weaponPrimary = armory ? mapWeapon(armory) : null; } catch (_e) { weaponPrimary = null; }
+  const selectedWeaponId = str(options.selectedWeaponId) ?? null;
+  try { weaponPrimary = armory ? mapWeapon(armory, selectedWeaponId) : null; } catch (_e) { weaponPrimary = null; }
 
   let skills = { library: [], quickSlots: [] };
   try { skills = mapSkills(section(bundle, "abilities")); } catch (_e) { skills = { library: [], quickSlots: [] }; }
@@ -624,7 +669,11 @@ export function mapBundleToHudSnapshot(bundle) {
 
   return {
     entity,
-    weapon:       { primary: weaponPrimary, secondary: null },
+    weapon:       {
+      primary: weaponPrimary,
+      secondary: null,
+      available: armory ? mapWeaponInventory(armory, weaponPrimary?.id ?? selectedWeaponId) : [],
+    },
     skills,
     combatSession: mapCombatSession(),
     modifiers,
@@ -655,6 +704,9 @@ export function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {
   if (!abilities) missing.push("abilities section missing");
   else if (quickActionCount === 0) missing.push("no quick actions");
   if (!combat) missing.push("combat section missing");
+  if (hudSnapshot?.entity?.psi?.current == null || hudSnapshot?.entity?.psi?.max == null) {
+    missing.push("psi resource path missing");
+  }
   return {
     selectionStatus: context.selectionStatus ?? null,
     selectedTokenId: context.selectedTokenId ?? null,

@@ -4081,6 +4081,7 @@ var OVERLAY_HTML = "combat-hud-overlay.html";
 var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 var BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
 var BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
+var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
 var PLAYER_W = 144;
 var PLAYER_HEIGHT = 146;
 var RAIL_GAP = 10;
@@ -4619,6 +4620,74 @@ function purgeActiveNpcs(payload, settings) {
   );
 }
 
+// api/weaponApi.js
+var weaponApi_exports = {};
+__export(weaponApi_exports, {
+  activateWeaponFeature: () => activateWeaponFeature,
+  deactivateWeaponFeature: () => deactivateWeaponFeature,
+  getCharacterArmory: () => getCharacterArmory,
+  getCharacterWeaponFeatures: () => getCharacterWeaponFeatures,
+  loadWeaponProfileMagazine: () => loadWeaponProfileMagazine,
+  switchWeaponFireMode: () => switchWeaponFireMode,
+  switchWeaponProfile: () => switchWeaponProfile
+});
+function getCharacterArmory(characterId, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.getCharacterArmory,
+    { p_character_id: characterId },
+    settings
+  );
+}
+function switchWeaponProfile(characterWeaponId, profileId, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.switchWeaponProfile,
+    {
+      p_character_weapon_id: characterWeaponId,
+      p_profile_id: profileId
+    },
+    settings
+  );
+}
+function switchWeaponFireMode(characterId, weaponId, fireModeId, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.switchWeaponFireMode,
+    {
+      p_character_id: characterId,
+      p_weapon_id: weaponId,
+      p_fire_mode_id: fireModeId
+    },
+    settings
+  );
+}
+function loadWeaponProfileMagazine(payload, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.loadWeaponProfileMagazine,
+    { p_payload: payload },
+    settings
+  );
+}
+function activateWeaponFeature(payload, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.activateWeaponFeature,
+    { p_payload: payload },
+    settings
+  );
+}
+function deactivateWeaponFeature(featureStateId, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.deactivateWeaponFeature,
+    { p_state_id: featureStateId },
+    settings
+  );
+}
+function getCharacterWeaponFeatures(characterWeaponId, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.getCharacterWeaponFeatures,
+    { p_character_weapon_id: characterWeaponId },
+    settings
+  );
+}
+
 // hud/models/combatHudContracts.js
 var HUD_STATUS = Object.freeze({
   idle: "idle",
@@ -4753,6 +4822,9 @@ function section(bundle, key) {
   const sections = sectionsOf(bundle);
   return sections[key] ?? bundle?.[key] ?? null;
 }
+function hasValue(v) {
+  return v !== null && v !== void 0 && v !== "";
+}
 function normalizePartId(bp) {
   const raw = str(bp?.zone_id) ?? str(bp?.part_key) ?? str(bp?.code) ?? str(bp?.id) ?? "unknown";
   const v = raw.toLowerCase();
@@ -4822,11 +4894,20 @@ function mapEntity(bundle) {
   const char = bundle?.character ?? {};
   const state = bundle?.state ?? {};
   const combat = section(bundle, "combat") ?? {};
+  const abilities = section(bundle, "abilities") ?? {};
   const flags = combat?.combat_flags ?? state?.combat_flags ?? {};
   const shieldCur = num(combat.shield_current ?? state.shield_current, 0);
   const shieldMax = num(combat.shield_max ?? state.shield_max, 0);
-  const psiCur = num(combat.psi_current ?? state.psi_current, 0);
-  const psiMax = num(combat.psi_max ?? state.psi_max, 0);
+  const psiPool = arr(abilities?.resource_pools).find((pool) => {
+    const code = String(pool?.code ?? pool?.resource_pool_code ?? "").toLowerCase();
+    const name = String(pool?.name ?? "").toLowerCase();
+    const source = String(pool?.source_type ?? "").toLowerCase();
+    return code.includes("psi") || code.includes("psion") || name.includes("psi") || name.includes("\u043F\u0441\u0438") || source.includes("psion");
+  });
+  const psiCurrentRaw = combat.psi_current ?? state.psi_current ?? psiPool?.current_value ?? psiPool?.current;
+  const psiMaxRaw = combat.psi_max ?? state.psi_max ?? psiPool?.max_value ?? psiPool?.max;
+  const psiCur = hasValue(psiCurrentRaw) ? num(psiCurrentRaw, 0) : null;
+  const psiMax = hasValue(psiMaxRaw) ? num(psiMaxRaw, 0) : null;
   const zones = mapZones(combat.body_parts ?? []);
   const effectsSection = section(bundle, "effects");
   const effects = Array.isArray(effectsSection) ? effectsSection.map(mapEffect) : [];
@@ -4862,12 +4943,14 @@ var EQUIPPED_FLAGS = ["is_equipped", "is_active", "is_primary", "equipped", "act
 function hasEquippedFlag(w) {
   return !!w && EQUIPPED_FLAGS.some((k) => w[k] === true);
 }
-function pickActiveWeapon(armory) {
+function pickActiveWeapon(armory, selectedWeaponId = null) {
   if (!armory || typeof armory !== "object") return null;
+  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
+  const selected = selectedWeaponId ? weapons.find((w) => str(w?.id) === selectedWeaponId) : null;
+  if (selected) return selected;
   if (armory.equipped_weapon && typeof armory.equipped_weapon === "object") {
     return armory.equipped_weapon;
   }
-  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
   if (weapons.length === 0) return null;
   return weapons.find(hasEquippedFlag) ?? weapons[0];
 }
@@ -4913,14 +4996,19 @@ function readReserveMagazines(armory, w, loadedMag) {
   if (Array.isArray(w.reserve_magazines) && w.reserve_magazines.length) {
     return w.reserve_magazines.map(readMagazine).filter(Boolean);
   }
+  const profileMags = Array.isArray(w.compatible_magazines) && w.compatible_magazines.length ? w.compatible_magazines : Array.isArray(w.active_profile?.compatible_magazines) ? w.active_profile.compatible_magazines : [];
+  if (profileMags.length) {
+    const loadedId2 = loadedMag?.id ?? null;
+    return profileMags.filter((m) => m && (str(m.id) ?? null) !== loadedId2).map(readMagazine).filter(Boolean);
+  }
   const mags = Array.isArray(armory?.magazines) ? armory.magazines : [];
   if (!mags.length) return [];
   const weaponCaliber = str(w.model?.caliber) ?? str(w.caliber);
   const loadedId = loadedMag?.id ?? null;
   return mags.filter((m) => m && (str(m.id) ?? null) !== loadedId).filter((m) => !weaponCaliber || !rawMagCaliberCode(m) || rawMagCaliberCode(m) === weaponCaliber).map(readMagazine).filter(Boolean);
 }
-function mapWeapon(armory) {
-  const w = pickActiveWeapon(armory);
+function mapWeapon(armory, selectedWeaponId = null) {
+  const w = pickActiveWeapon(armory, selectedWeaponId);
   if (!w) return null;
   const isMelee = !str(w.model?.caliber) && !str(w.caliber);
   const rawMag = w.loaded_magazine ?? w.active_profile?.loaded_magazine ?? null;
@@ -4935,6 +5023,7 @@ function mapWeapon(armory) {
   return {
     id: str(w.id) ?? "wpn-unknown",
     name: str(w.name) ?? str(w.weapon_name) ?? "Unknown Weapon",
+    activeProfileId: str(w.active_profile?.id) ?? str(w.active_profile_id),
     svgRef: weaponSvgRef(w),
     fireModes,
     currentFireMode,
@@ -4969,6 +5058,22 @@ function mapSkillSource(v) {
   }
   if (source.includes("item")) return SKILL_SOURCES.item;
   return SKILL_SOURCES.perk;
+}
+function mapWeaponOption(armory, weapon, selectedWeaponId) {
+  const vm = mapWeapon({ ...armory, weapons: [weapon] }, str(weapon?.id));
+  const cls = str(weapon?.model?.weapon_class_name) ?? str(weapon?.model?.weapon_class);
+  const mag = vm?.loadedMagazine ?? null;
+  return {
+    id: str(weapon?.id) ?? "wpn-unknown",
+    name: str(weapon?.name) ?? str(weapon?.weapon_name) ?? "Unknown Weapon",
+    type: cls,
+    selected: vm?.id === selectedWeaponId,
+    ammoLabel: mag ? `${mag.current}/${mag.max}` : vm?.requiresAmmo ? "no magazine" : "\u2014"
+  };
+}
+function mapWeaponInventory(armory, selectedWeaponId) {
+  const weapons = arr(armory?.weapons);
+  return weapons.map((weapon) => mapWeaponOption(armory, weapon, selectedWeaponId));
 }
 function mapSkillColor(v) {
   const source = String(v ?? "").toLowerCase();
@@ -5089,7 +5194,7 @@ function logWeaponDiagnostics(bundle, weaponVM) {
   } catch (_e) {
   }
 }
-function mapBundleToHudSnapshot(bundle) {
+function mapBundleToHudSnapshot(bundle, options = {}) {
   const empty = {
     entity: null,
     weapon: { primary: null, secondary: null },
@@ -5107,8 +5212,9 @@ function mapBundleToHudSnapshot(bundle) {
   }
   let weaponPrimary = null;
   const armory = section(bundle, "armory");
+  const selectedWeaponId = str(options.selectedWeaponId) ?? null;
   try {
-    weaponPrimary = armory ? mapWeapon(armory) : null;
+    weaponPrimary = armory ? mapWeapon(armory, selectedWeaponId) : null;
   } catch (_e) {
     weaponPrimary = null;
   }
@@ -5127,7 +5233,11 @@ function mapBundleToHudSnapshot(bundle) {
   logWeaponDiagnostics({ ...bundle, armory }, weaponPrimary);
   return {
     entity,
-    weapon: { primary: weaponPrimary, secondary: null },
+    weapon: {
+      primary: weaponPrimary,
+      secondary: null,
+      available: armory ? mapWeaponInventory(armory, weaponPrimary?.id ?? selectedWeaponId) : []
+    },
     skills,
     combatSession: mapCombatSession(),
     modifiers,
@@ -5153,6 +5263,9 @@ function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {}) {
   if (!abilities) missing.push("abilities section missing");
   else if (quickActionCount === 0) missing.push("no quick actions");
   if (!combat) missing.push("combat section missing");
+  if (hudSnapshot?.entity?.psi?.current == null || hudSnapshot?.entity?.psi?.max == null) {
+    missing.push("psi resource path missing");
+  }
   return {
     selectionStatus: context.selectionStatus ?? null,
     selectedTokenId: context.selectedTokenId ?? null,
@@ -5314,13 +5427,13 @@ function readyState(viewer, selectedItemId, characterId, bundle) {
     error: { code: null, message: null }
   };
 }
-function buildBroadcastPayload(state) {
+function buildBroadcastPayload(state, ephemeral = {}) {
   const s = state ?? createInitialSelectionState(null);
   const ready = s.status === SELECTION_STATUS.ready && s.access?.canView === true;
   let hudSnapshot = null;
   if (ready && s.runtimeBundle) {
     try {
-      hudSnapshot = mapBundleToHudSnapshot(s.runtimeBundle);
+      hudSnapshot = mapBundleToHudSnapshot(s.runtimeBundle, ephemeral);
     } catch (_e) {
     }
   }
@@ -5338,6 +5451,12 @@ function buildBroadcastPayload(state) {
     view: ready ? s.view ?? null : null,
     // Normalized HUD view models — block renderers use this; full bundle is NOT included.
     hudSnapshot: ready ? hudSnapshot : null,
+    ui: {
+      selectedWeaponId: ephemeral.selectedWeaponId ?? null,
+      preparedAction: ephemeral.preparedAction ?? null,
+      targeting: ephemeral.targeting ?? null,
+      commandStatus: ephemeral.commandStatus ?? null
+    },
     debug: ready ? debug : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null }
   };
@@ -5449,7 +5568,17 @@ function setupSceneSelection(hooks = {}) {
   const onSelectionState = typeof hooks.onSelectionState === "function" ? hooks.onSelectionState : null;
   let disposed = false;
   let lastPayload = null;
+  let lastState = null;
   let sceneTimer = null;
+  let currentSelectionIds = [];
+  const ephemeral = {
+    characterId: null,
+    selectedWeaponId: null,
+    selectedReloadMagazineId: null,
+    preparedAction: null,
+    targeting: { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" },
+    commandStatus: null
+  };
   const cleanups2 = [];
   function broadcast(payload) {
     try {
@@ -5484,14 +5613,95 @@ function setupSceneSelection(hooks = {}) {
         return bundle && typeof bundle === "object" ? { ...bundle, __hudDebug: { requestedSections: HUD_RUNTIME_SECTIONS } } : bundle;
       }
     });
+    function resetEphemeralForCharacter(characterId) {
+      if (ephemeral.characterId === characterId) return;
+      ephemeral.characterId = characterId ?? null;
+      ephemeral.selectedWeaponId = null;
+      ephemeral.selectedReloadMagazineId = null;
+      ephemeral.preparedAction = null;
+      ephemeral.targeting = { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" };
+      ephemeral.commandStatus = null;
+    }
+    function buildEphemeralForPayload() {
+      return {
+        selectedWeaponId: ephemeral.selectedWeaponId,
+        preparedAction: ephemeral.preparedAction,
+        targeting: ephemeral.targeting,
+        commandStatus: ephemeral.commandStatus
+      };
+    }
+    function publishState(state) {
+      lastPayload = buildBroadcastPayload(state, buildEphemeralForPayload());
+      broadcast(lastPayload);
+      return lastPayload;
+    }
+    async function refetchCurrent() {
+      if (currentSelectionIds.length === 1) await resolveAndPublish(currentSelectionIds);
+      else if (lastState) publishState(lastState);
+    }
+    async function handleCommand(command) {
+      if (!command || typeof command !== "object") return;
+      if (!lastPayload || lastPayload.status !== "ready") return;
+      const type = String(command.type ?? "");
+      ephemeral.commandStatus = null;
+      if (type === "select-weapon") {
+        ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
+        ephemeral.selectedReloadMagazineId = null;
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "select-reload-mag") {
+        ephemeral.selectedReloadMagazineId = String(command.magazineId ?? "").trim() || null;
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "prepare-skill") {
+        const skillId = String(command.skillId ?? "").trim();
+        ephemeral.preparedAction = ephemeral.preparedAction?.id === skillId ? null : { kind: "skill", id: skillId };
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "pick-target") {
+        ephemeral.targeting = { ...ephemeral.targeting, mode: "picking" };
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "cancel-target") {
+        ephemeral.targeting = { ...ephemeral.targeting, mode: "none" };
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "reload") {
+        const weapon = lastPayload.hudSnapshot?.weapon?.primary ?? null;
+        const weaponId = String(command.weaponId ?? weapon?.id ?? "").trim();
+        const magazineId = String(command.magazineId ?? ephemeral.selectedReloadMagazineId ?? weapon?.reserveMagazines?.[0]?.id ?? "").trim();
+        const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
+        if (!weaponId || !magazineId || !profileId) {
+          ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
+          if (lastState) publishState(lastState);
+          return;
+        }
+        try {
+          await loadWeaponProfileMagazine({ character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magazineId }, settings);
+          ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
+          await refetchCurrent();
+        } catch (error) {
+          ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed.") };
+          if (lastState) publishState(lastState);
+        }
+      }
+    }
     async function resolveAndPublish(selectionIds) {
+      currentSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
       const { stale, state } = await adapter.resolveLatest(selectionIds);
       if (disposed || stale) return;
-      lastPayload = buildBroadcastPayload(state);
-      broadcast(lastPayload);
+      if (state.status !== "ready") resetEphemeralForCharacter(null);
+      else resetEphemeralForCharacter(state.characterId ?? null);
+      lastState = state;
+      const payload = publishState(state);
       if (onSelectionState) {
         try {
-          await onSelectionState(lastPayload);
+          await onSelectionState(payload);
         } catch (_e) {
         }
       }
@@ -5499,6 +5709,23 @@ function setupSceneSelection(hooks = {}) {
     await resolveAndPublish(player.selection);
     cleanups2.push(await subscribePlayerChanges((p) => {
       viewer = normalizeViewer({ playerId: p.id, role: p.role });
+      if (ephemeral.targeting.mode === "picking") {
+        const targetId = Array.isArray(p.selection) ? p.selection.find((id) => id && id !== lastPayload?.selectedItemId) : null;
+        if (targetId) {
+          ephemeral.targeting = {
+            ...ephemeral.targeting,
+            mode: "none",
+            selectedTargetIds: [String(targetId)],
+            selectedTargetName: "Target"
+          };
+          try {
+            lib_default.player.select([lastPayload.selectedItemId], true);
+          } catch (_e) {
+          }
+          if (lastState) publishState(lastState);
+          return;
+        }
+      }
       void resolveAndPublish(p.selection);
     }));
     cleanups2.push(await subscribeSceneItems(() => {
@@ -5512,6 +5739,10 @@ function setupSceneSelection(hooks = {}) {
     }));
     cleanups2.push(lib_default.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
       if (lastPayload) broadcast(lastPayload);
+    }));
+    cleanups2.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
+      void handleCommand(event?.data).catch(() => {
+      });
     }));
   }
   lib_default.onReady(() => {
@@ -6143,74 +6374,6 @@ function reloadFeatureResource(payload, settings) {
   return callSupabaseRpc(
     FEATURE_RPC_NAMES.reloadFeatureResource,
     { p_payload: payload },
-    settings
-  );
-}
-
-// api/weaponApi.js
-var weaponApi_exports = {};
-__export(weaponApi_exports, {
-  activateWeaponFeature: () => activateWeaponFeature,
-  deactivateWeaponFeature: () => deactivateWeaponFeature,
-  getCharacterArmory: () => getCharacterArmory,
-  getCharacterWeaponFeatures: () => getCharacterWeaponFeatures,
-  loadWeaponProfileMagazine: () => loadWeaponProfileMagazine,
-  switchWeaponFireMode: () => switchWeaponFireMode,
-  switchWeaponProfile: () => switchWeaponProfile
-});
-function getCharacterArmory(characterId, settings) {
-  return callSupabaseRpc(
-    WEAPON_RPC_NAMES.getCharacterArmory,
-    { p_character_id: characterId },
-    settings
-  );
-}
-function switchWeaponProfile(characterWeaponId, profileId, settings) {
-  return callSupabaseRpc(
-    WEAPON_RPC_NAMES.switchWeaponProfile,
-    {
-      p_character_weapon_id: characterWeaponId,
-      p_profile_id: profileId
-    },
-    settings
-  );
-}
-function switchWeaponFireMode(characterId, weaponId, fireModeId, settings) {
-  return callSupabaseRpc(
-    WEAPON_RPC_NAMES.switchWeaponFireMode,
-    {
-      p_character_id: characterId,
-      p_weapon_id: weaponId,
-      p_fire_mode_id: fireModeId
-    },
-    settings
-  );
-}
-function loadWeaponProfileMagazine(payload, settings) {
-  return callSupabaseRpc(
-    WEAPON_RPC_NAMES.loadWeaponProfileMagazine,
-    { p_payload: payload },
-    settings
-  );
-}
-function activateWeaponFeature(payload, settings) {
-  return callSupabaseRpc(
-    WEAPON_RPC_NAMES.activateWeaponFeature,
-    { p_payload: payload },
-    settings
-  );
-}
-function deactivateWeaponFeature(featureStateId, settings) {
-  return callSupabaseRpc(
-    WEAPON_RPC_NAMES.deactivateWeaponFeature,
-    { p_state_id: featureStateId },
-    settings
-  );
-}
-function getCharacterWeaponFeatures(characterWeaponId, settings) {
-  return callSupabaseRpc(
-    WEAPON_RPC_NAMES.getCharacterWeaponFeatures,
-    { p_character_weapon_id: characterWeaponId },
     settings
   );
 }
@@ -7194,7 +7357,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.23";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.24";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }

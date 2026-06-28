@@ -43,13 +43,13 @@ function skillTile(skill, selectedId) {
     skill.disabledReason ? `Disabled: ${skill.disabledReason}` : (skill.tooltip || ""),
   ]);
 
-  return `<div class="${cls("ohud-slot", `ohud-accent--${accent}`, disabled ? "is-disabled" : "", selected ? "is-selected" : "", skill.isToggled ? "is-toggled" : "")}" data-skill="${esc(skill.id)}"${tip}>
+  return `<button type="button" class="${cls("ohud-slot", `ohud-accent--${accent}`, disabled ? "is-disabled" : "", selected ? "is-selected" : "", skill.isToggled ? "is-toggled" : "")}" data-action="prepare-skill" data-skill-id="${esc(skill.id)}" ${disabled ? "disabled" : ""}${tip}>
     <span class="ohud-slot-icon">${skillIconSvg(skill.icon)}</span>
     ${cost ? `<span class="ohud-slot-cost">${esc(cost)}</span>` : ""}
     ${res ? `<span class="ohud-slot-res">${esc(res)}</span>` : ""}
     ${cd > 0 ? `<span class="ohud-slot-cd">${cd}</span>` : ""}
     ${skill.isToggled ? `<span class="ohud-slot-toggle" aria-hidden="true"></span>` : ""}
-  </div>`;
+  </button>`;
 }
 
 export function renderSkillBlock(state) {

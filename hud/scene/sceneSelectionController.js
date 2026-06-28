@@ -22,7 +22,8 @@ import {
 } from "../../bridge/obrBridge.js";
 import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/settingsBridge.js";
 import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/characterPlacementApi.js";
-import { BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST } from "../overlay/overlayConstants.js";
+import { loadWeaponProfileMagazine } from "../../api/weaponApi.js";
+import { BC_HUD_COMMAND, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST } from "../overlay/overlayConstants.js";
 import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
 import { buildBroadcastPayload, normalizeViewer } from "./selectionState.js";
 
@@ -39,7 +40,17 @@ export function setupSceneSelection(hooks = {}) {
   const onSelectionState = typeof hooks.onSelectionState === "function" ? hooks.onSelectionState : null;
   let disposed = false;
   let lastPayload = null;
+  let lastState = null;
   let sceneTimer = null;
+  let currentSelectionIds = [];
+  const ephemeral = {
+    characterId: null,
+    selectedWeaponId: null,
+    selectedReloadMagazineId: null,
+    preparedAction: null,
+    targeting: { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" },
+    commandStatus: null,
+  };
   /** @type {Array<() => void>} */
   const cleanups = [];
 
@@ -79,13 +90,99 @@ export function setupSceneSelection(hooks = {}) {
       },
     });
 
+    function resetEphemeralForCharacter(characterId) {
+      if (ephemeral.characterId === characterId) return;
+      ephemeral.characterId = characterId ?? null;
+      ephemeral.selectedWeaponId = null;
+      ephemeral.selectedReloadMagazineId = null;
+      ephemeral.preparedAction = null;
+      ephemeral.targeting = { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" };
+      ephemeral.commandStatus = null;
+    }
+
+    function buildEphemeralForPayload() {
+      return {
+        selectedWeaponId: ephemeral.selectedWeaponId,
+        preparedAction: ephemeral.preparedAction,
+        targeting: ephemeral.targeting,
+        commandStatus: ephemeral.commandStatus,
+      };
+    }
+
+    function publishState(state) {
+      lastPayload = buildBroadcastPayload(state, buildEphemeralForPayload());
+      broadcast(lastPayload);
+      return lastPayload;
+    }
+
+    async function refetchCurrent() {
+      if (currentSelectionIds.length === 1) await resolveAndPublish(currentSelectionIds);
+      else if (lastState) publishState(lastState);
+    }
+
+    async function handleCommand(command) {
+      if (!command || typeof command !== "object") return;
+      if (!lastPayload || lastPayload.status !== "ready") return;
+      const type = String(command.type ?? "");
+      ephemeral.commandStatus = null;
+      if (type === "select-weapon") {
+        ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
+        ephemeral.selectedReloadMagazineId = null;
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "select-reload-mag") {
+        ephemeral.selectedReloadMagazineId = String(command.magazineId ?? "").trim() || null;
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "prepare-skill") {
+        const skillId = String(command.skillId ?? "").trim();
+        ephemeral.preparedAction = ephemeral.preparedAction?.id === skillId ? null : { kind: "skill", id: skillId };
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "pick-target") {
+        ephemeral.targeting = { ...ephemeral.targeting, mode: "picking" };
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "cancel-target") {
+        ephemeral.targeting = { ...ephemeral.targeting, mode: "none" };
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "reload") {
+        const weapon = lastPayload.hudSnapshot?.weapon?.primary ?? null;
+        const weaponId = String(command.weaponId ?? weapon?.id ?? "").trim();
+        const magazineId = String(command.magazineId ?? ephemeral.selectedReloadMagazineId ?? weapon?.reserveMagazines?.[0]?.id ?? "").trim();
+        const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
+        if (!weaponId || !magazineId || !profileId) {
+          ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
+          if (lastState) publishState(lastState);
+          return;
+        }
+        try {
+          await loadWeaponProfileMagazine({ character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magazineId }, settings);
+          ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
+          await refetchCurrent();
+        } catch (error) {
+          ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed.") };
+          if (lastState) publishState(lastState);
+        }
+      }
+    }
+
     async function resolveAndPublish(selectionIds) {
+      currentSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
       const { stale, state } = await adapter.resolveLatest(selectionIds);
       if (disposed || stale) return; // only the freshest selection updates the HUD
-      lastPayload = buildBroadcastPayload(state);
-      broadcast(lastPayload);
+      if (state.status !== "ready") resetEphemeralForCharacter(null);
+      else resetEphemeralForCharacter(state.characterId ?? null);
+      lastState = state;
+      const payload = publishState(state);
       if (onSelectionState) {
-        try { await onSelectionState(lastPayload); } catch (_e) { /* controller handles its own errors */ }
+        try { await onSelectionState(payload); } catch (_e) { /* controller handles its own errors */ }
       }
     }
 
@@ -95,6 +192,22 @@ export function setupSceneSelection(hooks = {}) {
     // Selection / role changes (OBR.player.onChange carries selection + role).
     cleanups.push(await subscribePlayerChanges((p) => {
       viewer = normalizeViewer({ playerId: p.id, role: p.role });
+      if (ephemeral.targeting.mode === "picking") {
+        const targetId = Array.isArray(p.selection)
+          ? p.selection.find((id) => id && id !== lastPayload?.selectedItemId)
+          : null;
+        if (targetId) {
+          ephemeral.targeting = {
+            ...ephemeral.targeting,
+            mode: "none",
+            selectedTargetIds: [String(targetId)],
+            selectedTargetName: "Target",
+          };
+          try { OBR.player.select([lastPayload.selectedItemId], true); } catch (_e) { /* best effort */ }
+          if (lastState) publishState(lastState);
+          return;
+        }
+      }
       void resolveAndPublish(p.selection);
     }));
 
@@ -112,6 +225,10 @@ export function setupSceneSelection(hooks = {}) {
     // Replay the latest state to a module iframe that just mounted.
     cleanups.push(OBR.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
       if (lastPayload) broadcast(lastPayload);
+    }));
+
+    cleanups.push(OBR.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
+      void handleCommand(event?.data).catch(() => {});
     }));
   }
 
