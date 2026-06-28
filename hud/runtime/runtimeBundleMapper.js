@@ -24,16 +24,28 @@
 //                       psi_current?,   psi_max?,
 //                       is_alive, is_conscious, state_version, status_summary }
 //
-//  bundle.armory      { equipped_weapon: {
-//                         id, weapon_name, weapon_type_key,
-//                         fire_modes: string[],
-//                         current_fire_mode,
-//                         uses_magazine, uses_consumable, requires_ammo,
-//                         loaded_magazine: { id, ammo_type_key, ammo_type_name,
-//                                           current_rounds, max_rounds, caliber },
-//                         reserve_magazines: [...same shape],
-//                         can_reload, disabled_reason
-//                       } | null }
+//  bundle.armory      CANONICAL shape (same payload as get_character_armory, the
+//                     RPC the existing Combat / Resolve-Attack menu renders from —
+//                     see screens/resolveAttack/resolveAttackScreen.js):
+//                     { weapons: [{
+//                         id, name,
+//                         model: { weapon_class_name, weapon_class, caliber },
+//                         active_profile_id,
+//                         active_profile: { id, name, code, loaded_magazine,
+//                                           selected_fire_mode, available_fire_modes },
+//                         loaded_magazine: { id, current_rounds, capacity,
+//                                            ammo_type_name, ammo_type:{name},
+//                                            magazine_def:{ capacity, caliber, caliber_name } },
+//                         selected_fire_mode: { id, name, code },
+//                         available_fire_modes: [{ id, name, code }],
+//                         features: [...]
+//                       }],
+//                       magazines: [{ ...magazine shape... }] }
+//                     The active weapon is weapons[0] (the menu uses weapons[0];
+//                     weapons carry NO is_equipped flag — that flag belongs to
+//                     equipment/armor). We still honour an explicit equipped/active
+//                     flag if the backend ever adds one, and tolerate a single
+//                     armory.equipped_weapon object as a fallback projection.
 //
 //  bundle.abilities   { quick_actions: [{
 //                         id, ability_name, ability_type, source_type,
@@ -182,48 +194,169 @@ export function mapEntity(bundle) {
 }
 
 // ─── Weapon ─────────────────────────────────────────────────────────────────
+// The canonical source of truth is the get_character_armory payload (the exact
+// data the existing Combat / Resolve-Attack menu renders from). The bundle's
+// "armory" section is that same shape. Field readers below mirror that menu's
+// access paths so the HUD shows the *same* active weapon, name, ammo, capacity
+// and fire mode — never guessed field names, never mock data.
 
-function mapMagazine(mag) {
-  if (!mag) return null;
+/** Flags that, if present, mark an explicit active/equipped weapon. Weapons in
+ *  the current backend have NONE of these (the menu falls back to array order);
+ *  honoured here only so an explicit flag wins if the backend ever adds one. */
+const EQUIPPED_FLAGS = ["is_equipped", "is_active", "is_primary", "equipped", "active"];
+
+function hasEquippedFlag(w) {
+  return !!w && EQUIPPED_FLAGS.some((k) => w[k] === true);
+}
+
+/**
+ * Pick the active weapon from an armory section. Returns the RAW weapon object
+ * (canonical getCharacterArmory shape) or null. PURE.
+ *
+ * Priority: explicit equipped/active flag → first weapon in weapons[] (mirrors
+ * screens/resolveAttack/resolveAttackScreen.js `weapons[0]`). A single-object
+ * `armory.equipped_weapon` projection is tolerated as a fallback.
+ */
+export function pickActiveWeapon(armory) {
+  if (!armory || typeof armory !== "object") return null;
+  if (armory.equipped_weapon && typeof armory.equipped_weapon === "object") {
+    return armory.equipped_weapon;
+  }
+  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
+  if (weapons.length === 0) return null;
+  return weapons.find(hasEquippedFlag) ?? weapons[0];
+}
+
+/** Caliber CODE used for compatibility matching (mirrors the menu's
+ *  magCaliberCode: magazine_def.caliber || caliber). */
+function rawMagCaliberCode(m) {
+  return str(m?.magazine_def?.caliber) ?? str(m?.caliber);
+}
+
+/** Normalize a raw magazine (canonical or legacy) to the HUD magazine shape. */
+function readMagazine(mag) {
+  if (!mag || typeof mag !== "object") return null;
+  // Capacity: canonical magazine_def.capacity / capacity; legacy max_rounds/max.
+  const max = num(mag.capacity ?? mag.magazine_def?.capacity ?? mag.max_rounds ?? mag.max, 0);
+  const current = num(mag.current_rounds ?? mag.current, 0);
+  const ammoType =
+    str(mag.ammo_type_name) ??
+    str(mag.ammo_type?.name) ??
+    str(mag.ammo_type_key) ??
+    str(typeof mag.ammo_type === "string" ? mag.ammo_type : null) ??
+    "—";
+  // Display caliber prefers the human name; matching uses the same field for
+  // both loaded + reserve so the selector's caliber filter stays consistent.
+  const caliber =
+    str(mag.magazine_def?.caliber_name) ??
+    str(mag.caliber_name) ??
+    str(mag.magazine_def?.caliber) ??
+    str(mag.caliber) ??
+    "";
   return {
     id:          str(mag.id) ?? `mag-${Math.random().toString(36).slice(2)}`,
-    ammoType:    str(mag.ammo_type_key) ?? str(mag.ammo_type_name) ?? "—",
-    description: str(mag.ammo_type_name) ?? "",
-    current:     num(mag.current_rounds, 0),
-    max:         num(mag.max_rounds, 0),
-    caliber:     str(mag.caliber) ?? "",
+    ammoType,
+    description: str(mag.ammo_type_name) ?? str(mag.name) ?? "",
+    current,
+    max,
+    caliber,
   };
 }
 
-export function mapWeapon(armory) {
-  const ew = armory?.equipped_weapon ?? null;
-  if (!ew) return null;
+/** Available fire-mode names (canonical objects on weapon/active_profile, or a
+ *  legacy string array). */
+function readFireModes(w) {
+  const objs =
+    (Array.isArray(w.available_fire_modes) && w.available_fire_modes.length
+      ? w.available_fire_modes
+      : Array.isArray(w.active_profile?.available_fire_modes)
+        ? w.active_profile.available_fire_modes
+        : []);
+  if (objs.length) {
+    return objs.map((m) => str(m?.name) ?? str(m?.code) ?? str(m)).filter(Boolean);
+  }
+  if (Array.isArray(w.fire_modes)) return w.fire_modes.map((m) => str(m)).filter(Boolean);
+  return [];
+}
 
-  const rawModes  = Array.isArray(ew.fire_modes) ? ew.fire_modes : [];
-  const fireModes = rawModes.map((m) => str(m)).filter(Boolean);
-  const loadedMag = mapMagazine(ew.loaded_magazine);
-  const reserve   = Array.isArray(ew.reserve_magazines)
-    ? ew.reserve_magazines.map(mapMagazine).filter(Boolean)
-    : [];
+/** Currently selected fire mode (weapon or active_profile; legacy string). */
+function readCurrentFireMode(w) {
+  const fm = w.selected_fire_mode ?? w.active_profile?.selected_fire_mode ?? null;
+  if (fm && typeof fm === "object") return str(fm.name) ?? str(fm.code);
+  return str(w.current_fire_mode);
+}
+
+/** Map weapon class → one of weaponSvg()'s known silhouettes (pistol|rifle). */
+function weaponSvgRef(w) {
+  const cls = String(
+    w.model?.weapon_class_name ?? w.model?.weapon_class ?? w.weapon_type_key ?? w.weapon_type ?? "",
+  ).toLowerCase();
+  if (/pistol|handgun|sidearm|revolver/.test(cls)) return "pistol";
+  return "rifle";
+}
+
+/** Reserve magazines: weapon-carried (legacy) or the character's compatible
+ *  magazines from armory.magazines (caliber match, excluding the loaded one) —
+ *  mirrors the menu's compatibleMagazinesForWeapon(). */
+function readReserveMagazines(armory, w, loadedMag) {
+  if (Array.isArray(w.reserve_magazines) && w.reserve_magazines.length) {
+    return w.reserve_magazines.map(readMagazine).filter(Boolean);
+  }
+  const mags = Array.isArray(armory?.magazines) ? armory.magazines : [];
+  if (!mags.length) return [];
+  const weaponCaliber = str(w.model?.caliber) ?? str(w.caliber);
+  const loadedId = loadedMag?.id ?? null;
+  return mags
+    .filter((m) => m && (str(m.id) ?? null) !== loadedId)
+    .filter((m) => !weaponCaliber || !rawMagCaliberCode(m) || rawMagCaliberCode(m) === weaponCaliber)
+    .map(readMagazine)
+    .filter(Boolean);
+}
+
+/**
+ * Map an armory section to the HUD weapon view model, or null when no weapon is
+ * equipped. Every field degrades to a neutral local value if absent — the weapon
+ * never disappears just because one field (magazine / fire mode / caliber) is
+ * missing. PURE.
+ */
+export function mapWeapon(armory) {
+  const w = pickActiveWeapon(armory);
+  if (!w) return null;
+
+  const isMelee = !str(w.model?.caliber) && !str(w.caliber);
+  const rawMag = w.loaded_magazine ?? w.active_profile?.loaded_magazine ?? null;
+  const loadedMag = readMagazine(rawMag);
+
+  const fireModes = readFireModes(w);
+  const currentFireMode = readCurrentFireMode(w) ?? fireModes[0] ?? null;
+  const reserve = readReserveMagazines(armory, w, loadedMag);
+
+  // A weapon "uses a magazine" / "requires ammo" when it is not melee. Explicit
+  // backend flags win if present.
+  const usesMagazine   = w.uses_magazine   != null ? bool(w.uses_magazine)   : !isMelee;
+  const requiresAmmo   = w.requires_ammo   != null ? bool(w.requires_ammo)   : !isMelee;
+  const usesConsumable = bool(w.uses_consumable, false);
+  const canReload =
+    w.can_reload != null ? bool(w.can_reload) : (!isMelee && reserve.length > 0);
 
   return {
-    id:             str(ew.id) ?? "wpn-unknown",
-    name:           str(ew.weapon_name) ?? str(ew.name) ?? "Unknown Weapon",
-    svgRef:         str(ew.weapon_type_key) ?? str(ew.weapon_type) ?? "rifle",
+    id:             str(w.id) ?? "wpn-unknown",
+    name:           str(w.name) ?? str(w.weapon_name) ?? "Unknown Weapon",
+    svgRef:         weaponSvgRef(w),
     fireModes,
-    currentFireMode: str(ew.current_fire_mode) ?? fireModes[0] ?? null,
-    usesMagazine:   bool(ew.uses_magazine, true),
-    usesConsumable: bool(ew.uses_consumable, false),
-    requiresAmmo:   bool(ew.requires_ammo, true),
+    currentFireMode,
+    usesMagazine,
+    usesConsumable,
+    requiresAmmo,
     loadedMagazine: loadedMag,
     reserveMagazines: reserve,
     ammo: {
-      current: loadedMag ? loadedMag.current : num(ew.ammo_current, 0),
-      max:     loadedMag ? loadedMag.max     : num(ew.ammo_max,     0),
+      current: loadedMag ? loadedMag.current : num(w.ammo_current, 0),
+      max:     loadedMag ? loadedMag.max     : num(w.ammo_max,     0),
     },
     reloadCandidateId: reserve[0]?.id ?? null,
-    canReload:      bool(ew.can_reload, false),
-    disabledReason: str(ew.disabled_reason),
+    canReload,
+    disabledReason: str(w.disabled_reason),
   };
 }
 
@@ -306,6 +439,52 @@ function mapCombatSession() {
   return createInactiveCombatSession();
 }
 
+// ─── Dev-only diagnostics ─────────────────────────────────────────────────────
+// Compact, SAFE summary of the weapon data path. Off by default; never logs the
+// full bundle and never throws. Enable with localStorage["odyssey.debug"]="1"
+// or a ?odysseyDebug=1 / ?debugHud=1 query param. Silent under Node (no DOM).
+
+function isMapperDebugEnabled() {
+  try {
+    if (globalThis.localStorage?.getItem("odyssey.debug") === "1") return true;
+  } catch (_e) { /* no storage access */ }
+  try {
+    return /[?&](odysseyDebug|debugHud)=1(?:&|$)/i.test(String(globalThis.location?.search ?? ""));
+  } catch (_e) { return false; }
+}
+
+function logWeaponDiagnostics(bundle, weaponVM) {
+  if (!isMapperDebugEnabled()) return;
+  try {
+    const armory = bundle?.armory ?? null;
+    const raw = pickActiveWeapon(armory);
+    const detectedActiveWeaponPath = !armory
+      ? "no armory section"
+      : armory.equipped_weapon
+        ? "armory.equipped_weapon"
+        : Array.isArray(armory.weapons) && armory.weapons.length
+          ? (armory.weapons.some(hasEquippedFlag) ? "armory.weapons[explicit-flag]" : "armory.weapons[0]")
+          : "armory.weapons empty";
+    // eslint-disable-next-line no-console
+    console.info("[combatHud/mapper] weapon diagnostics", {
+      runtimeArmoryKeys: armory && typeof armory === "object" ? Object.keys(armory) : null,
+      weaponsCount: Array.isArray(armory?.weapons) ? armory.weapons.length : null,
+      detectedActiveWeaponPath,
+      rawWeaponKeys: raw && typeof raw === "object" ? Object.keys(raw) : null,
+      mappedWeapon: weaponVM
+        ? {
+            name: weaponVM.name,
+            svgRef: weaponVM.svgRef,
+            currentFireMode: weaponVM.currentFireMode,
+            ammo: weaponVM.ammo,
+            hasMagazine: !!weaponVM.loadedMagazine,
+            reserve: weaponVM.reserveMagazines.length,
+          }
+        : null,
+    });
+  } catch (_e) { /* diagnostics must never throw */ }
+}
+
 // ─── Public ─────────────────────────────────────────────────────────────────
 
 /**
@@ -338,6 +517,8 @@ export function mapBundleToHudSnapshot(bundle) {
 
   let modifiers = { passive: [], active: [], narrative: [] };
   try { modifiers = mapModifiers(bundle); } catch (_e) { modifiers = { passive: [], active: [], narrative: [] }; }
+
+  logWeaponDiagnostics(bundle, weaponPrimary);
 
   return {
     entity,

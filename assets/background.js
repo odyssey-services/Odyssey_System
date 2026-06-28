@@ -4824,42 +4824,98 @@ function mapEntity(bundle) {
     pilot: null
   };
 }
-function mapMagazine(mag) {
-  if (!mag) return null;
+var EQUIPPED_FLAGS = ["is_equipped", "is_active", "is_primary", "equipped", "active"];
+function hasEquippedFlag(w) {
+  return !!w && EQUIPPED_FLAGS.some((k) => w[k] === true);
+}
+function pickActiveWeapon(armory) {
+  if (!armory || typeof armory !== "object") return null;
+  if (armory.equipped_weapon && typeof armory.equipped_weapon === "object") {
+    return armory.equipped_weapon;
+  }
+  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
+  if (weapons.length === 0) return null;
+  return weapons.find(hasEquippedFlag) ?? weapons[0];
+}
+function rawMagCaliberCode(m) {
+  return str(m?.magazine_def?.caliber) ?? str(m?.caliber);
+}
+function readMagazine(mag) {
+  if (!mag || typeof mag !== "object") return null;
+  const max = num(mag.capacity ?? mag.magazine_def?.capacity ?? mag.max_rounds ?? mag.max, 0);
+  const current2 = num(mag.current_rounds ?? mag.current, 0);
+  const ammoType = str(mag.ammo_type_name) ?? str(mag.ammo_type?.name) ?? str(mag.ammo_type_key) ?? str(typeof mag.ammo_type === "string" ? mag.ammo_type : null) ?? "\u2014";
+  const caliber = str(mag.magazine_def?.caliber_name) ?? str(mag.caliber_name) ?? str(mag.magazine_def?.caliber) ?? str(mag.caliber) ?? "";
   return {
     id: str(mag.id) ?? `mag-${Math.random().toString(36).slice(2)}`,
-    ammoType: str(mag.ammo_type_key) ?? str(mag.ammo_type_name) ?? "\u2014",
-    description: str(mag.ammo_type_name) ?? "",
-    current: num(mag.current_rounds, 0),
-    max: num(mag.max_rounds, 0),
-    caliber: str(mag.caliber) ?? ""
+    ammoType,
+    description: str(mag.ammo_type_name) ?? str(mag.name) ?? "",
+    current: current2,
+    max,
+    caliber
   };
 }
+function readFireModes(w) {
+  const objs = Array.isArray(w.available_fire_modes) && w.available_fire_modes.length ? w.available_fire_modes : Array.isArray(w.active_profile?.available_fire_modes) ? w.active_profile.available_fire_modes : [];
+  if (objs.length) {
+    return objs.map((m) => str(m?.name) ?? str(m?.code) ?? str(m)).filter(Boolean);
+  }
+  if (Array.isArray(w.fire_modes)) return w.fire_modes.map((m) => str(m)).filter(Boolean);
+  return [];
+}
+function readCurrentFireMode(w) {
+  const fm = w.selected_fire_mode ?? w.active_profile?.selected_fire_mode ?? null;
+  if (fm && typeof fm === "object") return str(fm.name) ?? str(fm.code);
+  return str(w.current_fire_mode);
+}
+function weaponSvgRef(w) {
+  const cls = String(
+    w.model?.weapon_class_name ?? w.model?.weapon_class ?? w.weapon_type_key ?? w.weapon_type ?? ""
+  ).toLowerCase();
+  if (/pistol|handgun|sidearm|revolver/.test(cls)) return "pistol";
+  return "rifle";
+}
+function readReserveMagazines(armory, w, loadedMag) {
+  if (Array.isArray(w.reserve_magazines) && w.reserve_magazines.length) {
+    return w.reserve_magazines.map(readMagazine).filter(Boolean);
+  }
+  const mags = Array.isArray(armory?.magazines) ? armory.magazines : [];
+  if (!mags.length) return [];
+  const weaponCaliber = str(w.model?.caliber) ?? str(w.caliber);
+  const loadedId = loadedMag?.id ?? null;
+  return mags.filter((m) => m && (str(m.id) ?? null) !== loadedId).filter((m) => !weaponCaliber || !rawMagCaliberCode(m) || rawMagCaliberCode(m) === weaponCaliber).map(readMagazine).filter(Boolean);
+}
 function mapWeapon(armory) {
-  const ew = armory?.equipped_weapon ?? null;
-  if (!ew) return null;
-  const rawModes = Array.isArray(ew.fire_modes) ? ew.fire_modes : [];
-  const fireModes = rawModes.map((m) => str(m)).filter(Boolean);
-  const loadedMag = mapMagazine(ew.loaded_magazine);
-  const reserve = Array.isArray(ew.reserve_magazines) ? ew.reserve_magazines.map(mapMagazine).filter(Boolean) : [];
+  const w = pickActiveWeapon(armory);
+  if (!w) return null;
+  const isMelee = !str(w.model?.caliber) && !str(w.caliber);
+  const rawMag = w.loaded_magazine ?? w.active_profile?.loaded_magazine ?? null;
+  const loadedMag = readMagazine(rawMag);
+  const fireModes = readFireModes(w);
+  const currentFireMode = readCurrentFireMode(w) ?? fireModes[0] ?? null;
+  const reserve = readReserveMagazines(armory, w, loadedMag);
+  const usesMagazine = w.uses_magazine != null ? bool(w.uses_magazine) : !isMelee;
+  const requiresAmmo = w.requires_ammo != null ? bool(w.requires_ammo) : !isMelee;
+  const usesConsumable = bool(w.uses_consumable, false);
+  const canReload = w.can_reload != null ? bool(w.can_reload) : !isMelee && reserve.length > 0;
   return {
-    id: str(ew.id) ?? "wpn-unknown",
-    name: str(ew.weapon_name) ?? str(ew.name) ?? "Unknown Weapon",
-    svgRef: str(ew.weapon_type_key) ?? str(ew.weapon_type) ?? "rifle",
+    id: str(w.id) ?? "wpn-unknown",
+    name: str(w.name) ?? str(w.weapon_name) ?? "Unknown Weapon",
+    svgRef: weaponSvgRef(w),
     fireModes,
-    currentFireMode: str(ew.current_fire_mode) ?? fireModes[0] ?? null,
-    usesMagazine: bool(ew.uses_magazine, true),
-    usesConsumable: bool(ew.uses_consumable, false),
-    requiresAmmo: bool(ew.requires_ammo, true),
+    currentFireMode,
+    usesMagazine,
+    usesConsumable,
+    requiresAmmo,
     loadedMagazine: loadedMag,
     reserveMagazines: reserve,
     ammo: {
-      current: loadedMag ? loadedMag.current : num(ew.ammo_current, 0),
-      max: loadedMag ? loadedMag.max : num(ew.ammo_max, 0)
+      current: loadedMag ? loadedMag.current : num(w.ammo_current, 0),
+      max: loadedMag ? loadedMag.max : num(w.ammo_max, 0)
     },
     reloadCandidateId: reserve[0]?.id ?? null,
-    canReload: bool(ew.can_reload, false),
-    disabledReason: str(ew.disabled_reason)
+    canReload,
+    disabledReason: str(w.disabled_reason)
   };
 }
 function normalizeEnum(v, validSet, fallback) {
@@ -4916,6 +4972,40 @@ function mapModifiers(_bundle) {
 function mapCombatSession() {
   return createInactiveCombatSession();
 }
+function isMapperDebugEnabled() {
+  try {
+    if (globalThis.localStorage?.getItem("odyssey.debug") === "1") return true;
+  } catch (_e) {
+  }
+  try {
+    return /[?&](odysseyDebug|debugHud)=1(?:&|$)/i.test(String(globalThis.location?.search ?? ""));
+  } catch (_e) {
+    return false;
+  }
+}
+function logWeaponDiagnostics(bundle, weaponVM) {
+  if (!isMapperDebugEnabled()) return;
+  try {
+    const armory = bundle?.armory ?? null;
+    const raw = pickActiveWeapon(armory);
+    const detectedActiveWeaponPath = !armory ? "no armory section" : armory.equipped_weapon ? "armory.equipped_weapon" : Array.isArray(armory.weapons) && armory.weapons.length ? armory.weapons.some(hasEquippedFlag) ? "armory.weapons[explicit-flag]" : "armory.weapons[0]" : "armory.weapons empty";
+    console.info("[combatHud/mapper] weapon diagnostics", {
+      runtimeArmoryKeys: armory && typeof armory === "object" ? Object.keys(armory) : null,
+      weaponsCount: Array.isArray(armory?.weapons) ? armory.weapons.length : null,
+      detectedActiveWeaponPath,
+      rawWeaponKeys: raw && typeof raw === "object" ? Object.keys(raw) : null,
+      mappedWeapon: weaponVM ? {
+        name: weaponVM.name,
+        svgRef: weaponVM.svgRef,
+        currentFireMode: weaponVM.currentFireMode,
+        ammo: weaponVM.ammo,
+        hasMagazine: !!weaponVM.loadedMagazine,
+        reserve: weaponVM.reserveMagazines.length
+      } : null
+    });
+  } catch (_e) {
+  }
+}
 function mapBundleToHudSnapshot(bundle) {
   const empty = {
     entity: null,
@@ -4950,6 +5040,7 @@ function mapBundleToHudSnapshot(bundle) {
   } catch (_e) {
     modifiers = { passive: [], active: [], narrative: [] };
   }
+  logWeaponDiagnostics(bundle, weaponPrimary);
   return {
     entity,
     weapon: { primary: weaponPrimary, secondary: null },
@@ -6957,7 +7048,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.20";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.21";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }

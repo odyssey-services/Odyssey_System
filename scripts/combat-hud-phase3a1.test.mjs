@@ -63,36 +63,57 @@ function minimalBundle(opts = {}) {
   };
 }
 
-/** Bundle with full armory section (equipped weapon). */
+// CANONICAL armory shape — identical to get_character_armory, the RPC the
+// existing Combat / Resolve-Attack menu renders from (weapons[], model.*,
+// active_profile.loaded_magazine, available_fire_modes[]). NO equipped_weapon
+// key; the active weapon is weapons[0] (or one bearing an explicit flag).
+function canonicalWeapon(opts = {}) {
+  const caliber = opts.caliber ?? "5.56";
+  return {
+    id: opts.id ?? "wpn-1",
+    name: opts.name ?? "Striker Carbine",
+    model: { weapon_class_name: opts.cls ?? "Assault Rifle", caliber: opts.melee ? null : caliber },
+    active_profile_id: "prof-1",
+    active_profile: {
+      id: "prof-1",
+      name: "Standard",
+      code: "std",
+      loaded_magazine: opts.noMag ? null : {
+        id: opts.loadedMagId ?? "mag-1",
+        current_rounds: opts.current ?? 20,
+        ammo_type_name: "Full Metal Jacket",
+        ammo_type: { name: "Full Metal Jacket" },
+        magazine_def: { capacity: 30, caliber, caliber_name: caliber },
+      },
+      selected_fire_mode: opts.melee ? null : { id: "fm-1", name: "Semi", code: "semi" },
+      available_fire_modes: opts.melee ? [] : [
+        { id: "fm-1", name: "Semi", code: "semi" },
+        { id: "fm-2", name: "Burst", code: "burst" },
+      ],
+    },
+    ...(opts.extra ?? {}),
+  };
+}
+
+/** Canonical single-weapon bundle (weapons[0] is the active weapon). */
 function bundleWithWeapon(opts = {}) {
   return {
     ...minimalBundle(opts),
     armory: {
-      equipped_weapon: {
-        id: "wpn-1",
-        weapon_name: "Striker Carbine",
-        weapon_type_key: "rifle",
-        fire_modes: ["Semi", "Burst"],
-        current_fire_mode: "Semi",
-        uses_magazine: true,
-        uses_consumable: false,
-        requires_ammo: true,
-        loaded_magazine: {
-          id: "mag-1",
-          ammo_type_key: "FMJ",
-          ammo_type_name: "Full Metal Jacket",
-          current_rounds: 20,
-          max_rounds: 30,
-          caliber: "5.56",
-        },
-        reserve_magazines: [
-          { id: "mag-2", ammo_type_key: "FMJ", ammo_type_name: "Full Metal Jacket", current_rounds: 30, max_rounds: 30, caliber: "5.56" },
-        ],
-        can_reload: true,
-        disabled_reason: null,
-      },
+      weapons: [canonicalWeapon(opts.weapon)],
+      // Character magazines: the loaded one + one compatible spare. The mapper
+      // derives reserve magazines from here (caliber match, loaded excluded).
+      magazines: [
+        { id: "mag-1", current_rounds: 20, ammo_type_name: "Full Metal Jacket", ammo_type: { name: "Full Metal Jacket" }, magazine_def: { capacity: 30, caliber: "5.56", caliber_name: "5.56" } },
+        { id: "mag-2", current_rounds: 30, ammo_type_name: "Full Metal Jacket", ammo_type: { name: "Full Metal Jacket" }, magazine_def: { capacity: 30, caliber: "5.56", caliber_name: "5.56" } },
+      ],
     },
   };
+}
+
+/** Canonical multi-weapon bundle for active-weapon-selection tests. */
+function bundleWithWeapons(weapons, magazines = []) {
+  return { ...minimalBundle(), armory: { weapons, magazines } };
 }
 
 /** Bundle with N quick actions in the abilities section. */
@@ -168,20 +189,40 @@ function payloadFromBundle(b, viewerOpts = {}) {
 
 console.log("\nCombat HUD — Phase 3A.1 verification\n");
 
-// ── Test 1: weapon in bundle → gun view model ────────────────────────────────
-test("1. real weapon in bundle.armory → gun view model with name / fire mode / magazine", () => {
+// ── Test 1: exact Combat-Menu armory shape → correct Gun view model ──────────
+test("1. exact runtime bundle shape (get_character_armory) → correct gun view model", () => {
   const snap = mapBundleToHudSnapshot(bundleWithWeapon());
   const w = snap.weapon.primary;
   assert.ok(w !== null, "weapon should be present");
   assert.equal(w.name, "Striker Carbine");
+  // Fire modes read from active_profile.available_fire_modes (objects → names).
   assert.deepEqual(w.fireModes, ["Semi", "Burst"]);
   assert.equal(w.currentFireMode, "Semi");
+  // Magazine from active_profile.loaded_magazine; capacity from magazine_def.
   assert.ok(w.loadedMagazine !== null, "loaded magazine present");
   assert.equal(w.loadedMagazine.current, 20);
-  assert.equal(w.loadedMagazine.max, 30);
-  assert.equal(w.loadedMagazine.ammoType, "FMJ");
+  assert.equal(w.loadedMagazine.max, 30, "capacity from magazine_def.capacity");
+  assert.equal(w.loadedMagazine.ammoType, "Full Metal Jacket", "ammo type = human name, as the menu shows");
   assert.equal(w.canReload, true);
+  // Reserve derived from armory.magazines (loaded mag-1 excluded → only mag-2).
   assert.equal(w.reserveMagazines.length, 1);
+  assert.equal(w.reserveMagazines[0].id, "mag-2");
+});
+
+// ── Test 1b: explicit equipped/active flag wins over array order ─────────────
+test("1b. explicit equipped/active weapon wins over the first item in inventory", () => {
+  const first  = canonicalWeapon({ id: "w-first",  name: "First Carbine" });
+  const second = canonicalWeapon({ id: "w-second", name: "Equipped Pistol", extra: { is_equipped: true } });
+  const snap = mapBundleToHudSnapshot(bundleWithWeapons([first, second]));
+  assert.equal(snap.weapon.primary.name, "Equipped Pistol", "flagged weapon wins, not weapons[0]");
+});
+
+// ── Test 1c: no explicit flag → weapons[0] is the active weapon (menu parity) ─
+test("1c. no explicit flag → weapons[0] is active (mirrors the existing Combat Menu)", () => {
+  const first  = canonicalWeapon({ id: "w-first",  name: "First Carbine" });
+  const second = canonicalWeapon({ id: "w-second", name: "Second Pistol" });
+  const snap = mapBundleToHudSnapshot(bundleWithWeapons([first, second]));
+  assert.equal(snap.weapon.primary.name, "First Carbine", "first weapon is active by array order");
 });
 
 // ── Test 2: no equipped weapon → weapon.primary null ────────────────────────
@@ -196,6 +237,22 @@ test("2. no equipped weapon (armory absent) → weapon.primary null → Gun show
   assert.ok(html.includes("No weapon"), "Gun shows neutral empty state");
   assert.ok(!html.includes("AR-7"),    "No mock weapon name");
   assert.ok(!html.includes("Striker"), "No real-but-different weapon leaking from old payload");
+});
+
+// ── Test 2b: weapon present but no magazine → still renders, neutral ammo ─────
+test("2b. weapon exists but no magazine/ammo → weapon still renders with neutral ammo state", () => {
+  const snap = mapBundleToHudSnapshot(bundleWithWeapon({ weapon: { name: "Dry Carbine", noMag: true } }));
+  const w = snap.weapon.primary;
+  assert.ok(w !== null, "weapon present even without a magazine");
+  assert.equal(w.name, "Dry Carbine");
+  assert.equal(w.loadedMagazine, null, "no loaded magazine");
+  assert.equal(w.ammo.current, 0, "neutral ammo current");
+  assert.equal(w.ammo.max, 0, "neutral ammo max");
+
+  const payload = payloadFromBundle(bundleWithWeapon({ weapon: { name: "Dry Carbine", noMag: true } }));
+  const gunHtml = renderSelectionModule("gun", payload);
+  assert.ok(gunHtml.includes("Dry Carbine"), "weapon name still shown");
+  assert.ok(!gunHtml.includes("No weapon"),  "weapon does NOT disappear due to missing magazine");
 });
 
 // ── Test 3: ≤10 quick actions → single row via splitSkillRows ───────────────
@@ -305,8 +362,12 @@ test("9b. bundle.combat section → zones, shield, psi, action economy correctly
 
 // ── Test 10: live data is never mixed with mock values ───────────────────────
 test("10. live-ready payload never mixes mock scenario values with real character data", () => {
-  // A bundle with a character named "RealHero" (not a mock scenario name).
-  const b = { ...minimalBundle({ name: "RealHero", owner: "p1" }), armory: { equipped_weapon: { id: "w1", weapon_name: "Plasma Rifle", weapon_type_key: "rifle", fire_modes: ["Semi"], current_fire_mode: "Semi", uses_magazine: false, uses_consumable: true, requires_ammo: true, ammo_current: 5, ammo_max: 10, reserve_magazines: [], can_reload: false, disabled_reason: null } } };
+  // A bundle with a character named "RealHero" (not a mock scenario name) and a
+  // canonical armory weapon "Plasma Rifle".
+  const b = {
+    ...minimalBundle({ name: "RealHero", owner: "p1" }),
+    armory: { weapons: [canonicalWeapon({ id: "w1", name: "Plasma Rifle", cls: "Energy Rifle" })], magazines: [] },
+  };
   const payload = payloadFromBundle(b);
 
   const playerHtml = renderSelectionModule("player", payload);
