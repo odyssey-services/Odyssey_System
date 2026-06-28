@@ -94,6 +94,43 @@ function bool(v, fallback = false) {
   return v === null || v === undefined ? fallback : Boolean(v);
 }
 
+function arr(v) {
+  return Array.isArray(v) ? v : [];
+}
+
+function sectionsOf(bundle) {
+  return bundle?.sections && typeof bundle.sections === "object" ? bundle.sections : {};
+}
+
+function section(bundle, key) {
+  const sections = sectionsOf(bundle);
+  return sections[key] ?? bundle?.[key] ?? null;
+}
+
+function normalizePartId(bp) {
+  const raw = str(bp?.zone_id) ?? str(bp?.part_key) ?? str(bp?.code) ?? str(bp?.id) ?? "unknown";
+  const v = raw.toLowerCase();
+  const aliases = {
+    head: "head",
+    torso: "torso",
+    body: "torso",
+    chest: "torso",
+    left_arm: "l_arm",
+    l_arm: "l_arm",
+    arm_left: "l_arm",
+    right_arm: "r_arm",
+    r_arm: "r_arm",
+    arm_right: "r_arm",
+    left_leg: "l_leg",
+    l_leg: "l_leg",
+    leg_left: "l_leg",
+    right_leg: "r_leg",
+    r_leg: "r_leg",
+    leg_right: "r_leg",
+  };
+  return aliases[v] ?? v;
+}
+
 // ─── Zone state ─────────────────────────────────────────────────────────────
 // body_part columns: minor, serious, critical, disabled, destroyed.
 // Map to the internal ZONE_STATES enum (worsening severity).
@@ -115,12 +152,12 @@ const ZONE_LABELS = Object.freeze({
 function mapZones(bodyParts) {
   if (!Array.isArray(bodyParts) || bodyParts.length === 0) return [];
   return bodyParts.map((bp) => {
-    const id = str(bp?.zone_id) ?? "unknown";
+    const id = normalizePartId(bp);
     return {
       id,
-      label: ZONE_LABELS[id] ?? id,
+      label: str(bp?.name) ?? ZONE_LABELS[id] ?? id,
       state: zoneStateFromBodyPart(bp),
-      canBeTargeted: !bool(bp?.disabled) && !bool(bp?.destroyed),
+      canBeTargeted: bp?.can_be_targeted === false ? false : (!bool(bp?.disabled) && !bool(bp?.destroyed)),
     };
   });
 }
@@ -149,7 +186,7 @@ function mapEffect(ef) {
 export function mapEntity(bundle) {
   const char    = bundle?.character ?? {};
   const state   = bundle?.state ?? {};
-  const combat  = bundle?.combat ?? {};
+  const combat  = section(bundle, "combat") ?? {};
 
   // Action economy flags: prefer combat section (combat's flags are turn-specific),
   // fall back to state section.
@@ -162,7 +199,8 @@ export function mapEntity(bundle) {
   const psiMax    = num(combat.psi_max ?? state.psi_max, 0);
 
   const zones    = mapZones(combat.body_parts ?? []);
-  const effects  = Array.isArray(bundle?.effects) ? bundle.effects.map(mapEffect) : [];
+  const effectsSection = section(bundle, "effects");
+  const effects = Array.isArray(effectsSection) ? effectsSection.map(mapEffect) : [];
 
   return {
     summary: {
@@ -373,26 +411,58 @@ const VALID_COLORS        = new Set(Object.values(COLOR_SEMANTICS));
 const VALID_TARGETING     = new Set(Object.values(TARGETING_MODES));
 const VALID_COSTS         = new Set(Object.values(ACTION_COSTS));
 
+function mapSkillSource(v) {
+  const source = String(v ?? "").toLowerCase();
+  if (source.includes("psion")) return SKILL_SOURCES.psionic;
+  if (source.includes("implant") || source.includes("prosthetic") || source.includes("equipment") || source.includes("device")) {
+    return SKILL_SOURCES.implant;
+  }
+  if (source.includes("item")) return SKILL_SOURCES.item;
+  return SKILL_SOURCES.perk;
+}
+
+function mapSkillColor(v) {
+  const source = String(v ?? "").toLowerCase();
+  if (source.includes("psion")) return COLOR_SEMANTICS.psionic;
+  if (source.includes("implant") || source.includes("prosthetic") || source.includes("equipment") || source.includes("device")) {
+    return COLOR_SEMANTICS.implant;
+  }
+  if (source.includes("weapon") || source.includes("attack")) return COLOR_SEMANTICS.attack;
+  if (source.includes("positive") || source.includes("aid")) return COLOR_SEMANTICS.positive;
+  return COLOR_SEMANTICS.neutral;
+}
+
+function normalizeActionCost(v) {
+  const raw = String(v ?? "MAIN").toUpperCase();
+  if (raw === "0" || raw === "FREE") return ACTION_COSTS.free;
+  if (raw === "MOVE" || raw === "MV") return ACTION_COSTS.move;
+  if (raw === "TURN") return ACTION_COSTS.turn;
+  return normalizeEnum(raw, VALID_COSTS, ACTION_COSTS.main);
+}
+
 function mapSkillAction(qa) {
-  const rawCost = String(qa?.action_cost ?? "MAIN").toUpperCase();
+  const resourceCost = qa?.resource?.cost ?? qa?.resource_cost ?? null;
+  const source = qa?.source_type ?? qa?.source;
   return {
     id:          str(qa?.id) ?? `sk-${Math.random().toString(36).slice(2)}`,
     name:        str(qa?.ability_name) ?? str(qa?.name) ?? "Unknown",
     type:        normalizeEnum(qa?.ability_type ?? qa?.type, VALID_SKILL_TYPES, SKILL_TYPES.instantAbility),
-    source:      normalizeEnum(qa?.source_type ?? qa?.source, VALID_SKILL_SOURCES, SKILL_SOURCES.perk),
+    source:      normalizeEnum(source, VALID_SKILL_SOURCES, mapSkillSource(source)),
     icon:        str(qa?.icon_key) ?? str(qa?.icon) ?? "bolt",
-    color:       normalizeEnum(qa?.color_key ?? qa?.color, VALID_COLORS, COLOR_SEMANTICS.neutral),
-    actionCost:  normalizeEnum(rawCost, VALID_COSTS, ACTION_COSTS.main),
-    resourceCost: null,
-    cooldownTurns: num(qa?.cooldown_remaining_turns ?? qa?.cooldown_remaining, 0),
+    color:       normalizeEnum(qa?.color_key ?? qa?.color, VALID_COLORS, mapSkillColor(source)),
+    actionCost:  normalizeActionCost(qa?.action_cost),
+    resourceCost: resourceCost != null && Number(resourceCost) > 0
+      ? { type: str(qa?.resource?.pool_code) ?? "resource", amount: num(resourceCost, 0) }
+      : null,
+    cooldownTurns: num(qa?.cooldown_remaining_turns ?? qa?.cooldown_remaining ?? qa?.current_cooldown_rounds, 0),
     weaponRequirements: Array.isArray(qa?.weapon_requirements) ? qa.weapon_requirements.map(String) : [],
     targeting:   normalizeEnum(qa?.targeting_mode ?? qa?.targeting, VALID_TARGETING, TARGETING_MODES.none),
     allowsMultipleTargets: bool(qa?.allows_multiple_targets, false),
     usesPoint:   bool(qa?.uses_point, false),
     radius:      qa?.radius != null ? num(qa.radius) : null,
     isToggled:   bool(qa?.is_toggled, false),
-    disabledReason: str(qa?.disabled_reason),
-    tooltip:     str(qa?.tooltip) ?? "",
+    disabledReason: str(qa?.disabled_reason) ?? (qa?.is_enabled === false ? "Disabled" : null),
+    tooltip:     str(qa?.tooltip) ?? str(qa?.description) ?? str(qa?.level_data?.effect_data?.summary) ?? "",
   };
 }
 
@@ -401,7 +471,16 @@ export function mapSkills(abilitiesSection) {
     return { library: [], quickSlots: [] };
   }
 
-  const rawActions = Array.isArray(abilitiesSection.quick_actions) ? abilitiesSection.quick_actions : [];
+  const rawActions = Array.isArray(abilitiesSection.quick_actions)
+    ? abilitiesSection.quick_actions
+    : arr(abilitiesSection.abilities).filter((ability) => {
+        const kind = String(ability?.ability_kind ?? "").toLowerCase();
+        const activation = String(ability?.activation_type ?? "").toLowerCase();
+        return ability?.is_hidden !== true
+          && ability?.is_enabled !== false
+          && kind !== "passive"
+          && activation !== "passive";
+      });
   const rawSlots   = Array.isArray(abilitiesSection.quickbar_slots ?? abilitiesSection.quickbar)
     ? (abilitiesSection.quickbar_slots ?? abilitiesSection.quickbar)
     : [];
@@ -409,9 +488,13 @@ export function mapSkills(abilitiesSection) {
   const library = rawActions.map(mapSkillAction);
   const idSet   = new Set(library.map((sk) => sk.id));
 
-  const quickSlots = rawSlots
+  const slotsSource = rawSlots.length
+    ? rawSlots
+    : library.map((sk, index) => ({ slot_index: index, ability_id: sk.id }));
+
+  const quickSlots = slotsSource
     .map((s) => {
-      const sid = str(s?.ability_id ?? s?.skill_id);
+      const sid = str(s?.ability_id ?? s?.skill_id ?? s?.action_id);
       return {
         index:   num(s?.slot_index ?? s?.index, 0),
         skillId: (sid && idSet.has(sid)) ? sid : null,
@@ -437,6 +520,24 @@ export function mapModifiers(_bundle) {
 // always enabled (no "not your turn" block) when outside an active encounter.
 function mapCombatSession() {
   return createInactiveCombatSession();
+}
+
+function mapBattleLog(bundle) {
+  const log = section(bundle, "battle_log") ?? section(bundle, "log") ?? section(bundle, "combat_log");
+  const entries = Array.isArray(log?.entries) ? log.entries : (Array.isArray(log) ? log : []);
+  return {
+    entries: entries.map((entry, index) => ({
+      id: str(entry?.id) ?? `log-${index}`,
+      sequence: num(entry?.sequence ?? index, index),
+      kind: str(entry?.kind) ?? "system",
+      actor: str(entry?.actor) ?? str(entry?.actor_name) ?? "",
+      action: str(entry?.action) ?? str(entry?.message) ?? str(entry?.summary) ?? "",
+      target: str(entry?.target) ?? str(entry?.target_name) ?? "",
+      delta: str(entry?.delta) ?? "",
+      summary: str(entry?.summary) ?? str(entry?.message) ?? "",
+      detail: str(entry?.detail) ?? "",
+    })),
+  };
 }
 
 // ─── Dev-only diagnostics ─────────────────────────────────────────────────────
@@ -510,15 +611,16 @@ export function mapBundleToHudSnapshot(bundle) {
   try { entity = mapEntity(bundle); } catch (_e) { entity = null; }
 
   let weaponPrimary = null;
-  try { weaponPrimary = bundle.armory ? mapWeapon(bundle.armory) : null; } catch (_e) { weaponPrimary = null; }
+  const armory = section(bundle, "armory");
+  try { weaponPrimary = armory ? mapWeapon(armory) : null; } catch (_e) { weaponPrimary = null; }
 
   let skills = { library: [], quickSlots: [] };
-  try { skills = mapSkills(bundle.abilities); } catch (_e) { skills = { library: [], quickSlots: [] }; }
+  try { skills = mapSkills(section(bundle, "abilities")); } catch (_e) { skills = { library: [], quickSlots: [] }; }
 
   let modifiers = { passive: [], active: [], narrative: [] };
   try { modifiers = mapModifiers(bundle); } catch (_e) { modifiers = { passive: [], active: [], narrative: [] }; }
 
-  logWeaponDiagnostics(bundle, weaponPrimary);
+  logWeaponDiagnostics({ ...bundle, armory }, weaponPrimary);
 
   return {
     entity,
@@ -526,6 +628,58 @@ export function mapBundleToHudSnapshot(bundle) {
     skills,
     combatSession: mapCombatSession(),
     modifiers,
-    battleLog:    { entries: [] },
+    battleLog:    mapBattleLog(bundle),
+  };
+}
+
+export function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {}) {
+  const sections = sectionsOf(bundle);
+  const armory = section(bundle, "armory");
+  const abilities = section(bundle, "abilities");
+  const effects = section(bundle, "effects");
+  const combat = section(bundle, "combat");
+  const weaponCount = arr(armory?.weapons).length + (armory?.equipped_weapon ? 1 : 0);
+  const quickActionCount = Array.isArray(abilities?.quick_actions)
+    ? abilities.quick_actions.length
+    : arr(abilities?.abilities).filter((ability) => {
+        const kind = String(ability?.ability_kind ?? "").toLowerCase();
+        const activation = String(ability?.activation_type ?? "").toLowerCase();
+        return ability?.is_hidden !== true && ability?.is_enabled !== false && kind !== "passive" && activation !== "passive";
+      }).length;
+  const topLevelKeys = bundle && typeof bundle === "object"
+    ? Object.keys(bundle).filter((key) => !key.startsWith("__")).sort()
+    : [];
+  const missing = [];
+  if (!armory) missing.push("armory section missing");
+  else if (weaponCount === 0) missing.push("armory has no weapons");
+  if (!abilities) missing.push("abilities section missing");
+  else if (quickActionCount === 0) missing.push("no quick actions");
+  if (!combat) missing.push("combat section missing");
+  return {
+    selectionStatus: context.selectionStatus ?? null,
+    selectedTokenId: context.selectedTokenId ?? null,
+    characterId: context.characterId ?? bundle?.character?.id ?? null,
+    requestedSections: arr(bundle?.__hudDebug?.requestedSections ?? context.requestedSections),
+    returnedTopLevelKeys: topLevelKeys,
+    returnedSections: {
+      summary: !!bundle?.character || !!sections.summary,
+      combat: !!combat,
+      armory: !!armory,
+      abilities: !!abilities,
+      effects: Array.isArray(effects),
+    },
+    mapper: {
+      player: hudSnapshot?.entity ? "populated" : "empty",
+      weaponCount,
+      activeWeaponFound: !!hudSnapshot?.weapon?.primary,
+      quickActionCount,
+      effectCount: Array.isArray(effects) ? effects.length : 0,
+    },
+    broadcast: {
+      hudSnapshotPresent: !!hudSnapshot,
+      gunState: hudSnapshot?.weapon?.primary ? "ready" : "empty",
+      skillsState: hudSnapshot?.skills?.library?.length ? "ready" : "empty",
+    },
+    reason: missing[0] ?? null,
   };
 }

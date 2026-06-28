@@ -88,6 +88,11 @@ function readyFallbackCard(moduleId) {
   </section>`;
 }
 
+function debugReason(payload, opts) {
+  if (!opts?.dev || !payload?.debug?.reason) return "";
+  return `<div class="ohud-bind-dev">HUD DEBUG: ${esc(payload.debug.reason)}</div>`;
+}
+
 function mutedCard(moduleId) {
   return `<section class="ohud-panel ohud-panel--muted" data-block="${esc(moduleId)}"><div class="ohud-muted-fill">—</div></section>`;
 }
@@ -163,10 +168,10 @@ export function renderSelectionModule(moduleId, payload, opts = {}) {
       if (payload.hudSnapshot) {
         // Phase 3A.1: full player block with real resource bars / zones / statuses.
         const syntheticState = buildSyntheticState(payload);
-        return renderPlayerBlock(syntheticState);
+        return `${renderPlayerBlock(syntheticState)}${debugReason(payload, opts)}`;
       }
       // Fallback: minimal identity card (no hudSnapshot → old wire or bundle error).
-      if (payload.view) return readyPlayerCard(payload.view);
+      if (payload.view) return `${readyPlayerCard(payload.view)}${debugReason(payload, opts)}`;
     }
     if (status === SELECTION_STATUS.loading || !status) return loadingCard();
     const p = PLAYER_PROMPTS[status] || PLAYER_PROMPTS[SELECTION_STATUS.noSelection];

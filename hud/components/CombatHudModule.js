@@ -135,6 +135,14 @@ export function mountCombatHudModule(options) {
     return `<div class="ohud-module-debug">${esc(moduleId)} · mount✓ · ${snap} · ${esc(bodyMode)}</div>`;
   }
 
+  function logLiveDebug(payload) {
+    if (!DEV || !payload?.debug) return;
+    try {
+      // eslint-disable-next-line no-console
+      console.info(`[combatHud/debug:${moduleId}]`, payload.debug);
+    } catch (_e) { /* diagnostics must never throw */ }
+  }
+
   function render() {
     let state = null;
     try { state = store.getState(); } catch (err) {
@@ -152,6 +160,7 @@ export function mountCombatHudModule(options) {
    *  reopen, no layout change. */
   function applySelection(payload) {
     liveSelection = payload ? normalizeSelectionPayload(payload) : null;
+    logLiveDebug(liveSelection);
     render();
   }
 

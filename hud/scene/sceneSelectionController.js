@@ -27,6 +27,7 @@ import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
 import { buildBroadcastPayload, normalizeViewer } from "./selectionState.js";
 
 const SCENE_RERESOLVE_DEBOUNCE_MS = 600;
+const HUD_RUNTIME_SECTIONS = Object.freeze(["summary", "combat", "armory", "abilities", "effects"]);
 
 /**
  * @param {{ onSelectionState?: (payload:object) => (void|Promise<void>) }} [hooks]
@@ -64,13 +65,18 @@ export function setupSceneSelection(hooks = {}) {
         { room_id: context.roomId, scene_id: context.sceneId, campaign_id: context.campaignId, token_id: tokenId },
         settings,
       ),
-      fetchCharacterBundle: (characterId) => getCharacterRuntimeBundle(
-        {
-          character_id: characterId,
-          sections: ["summary", "combat", "armory", "abilities", "effects"],
-        },
-        settings,
-      ),
+      fetchCharacterBundle: async (characterId) => {
+        const bundle = await getCharacterRuntimeBundle(
+          {
+            character_id: characterId,
+            sections: HUD_RUNTIME_SECTIONS,
+          },
+          settings,
+        );
+        return bundle && typeof bundle === "object"
+          ? { ...bundle, __hudDebug: { requestedSections: HUD_RUNTIME_SECTIONS } }
+          : bundle;
+      },
     });
 
     async function resolveAndPublish(selectionIds) {

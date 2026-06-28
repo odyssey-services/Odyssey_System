@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 
 import {
+  buildRuntimeDebugSummary,
   mapBundleToHudSnapshot,
   mapEntity,
   mapWeapon,
@@ -170,6 +171,34 @@ function bundleWithCombat(opts = {}) {
       is_alive: true,
       is_conscious: true,
     },
+  };
+}
+
+function liveSectionsBundle(opts = {}) {
+  const weaponBundle = bundleWithWeapon(opts);
+  const ability = {
+    id: "ability-1",
+    name: "Quick Hack",
+    ability_kind: "active",
+    source_type: "implant",
+    activation_type: "active",
+    description: "Disrupt nearby electronics.",
+    current_cooldown_rounds: 0,
+    resource: { pool_code: "psi", cost: 2 },
+    is_enabled: true,
+    is_hidden: false,
+  };
+  return {
+    ok: true,
+    character: weaponBundle.character,
+    state: weaponBundle.state,
+    sections: {
+      combat: bundleWithCombat().combat,
+      armory: weaponBundle.armory,
+      abilities: { ok: true, abilities: opts.noAbilities ? [] : [ability], resource_pools: [] },
+      effects: [{ id: "ef-live", effect_name: "Focused", polarity: "positive", remaining_turns: 1 }],
+    },
+    __hudDebug: { requestedSections: ["summary", "combat", "armory", "abilities", "effects"] },
   };
 }
 
@@ -408,6 +437,52 @@ test("12. all secondary modules open when ready; no 'Runtime data wiring' placeh
     assert.ok(!html.includes("ohud-panel--muted"),   `${id} not muted`);
     assert.ok(!html.includes("Runtime data wiring"), `${id} no placeholder`);
   }
+});
+
+test("13. live RPC sections.armory shape maps to Gun HUD", () => {
+  const snap = mapBundleToHudSnapshot(liveSectionsBundle());
+  assert.equal(snap.weapon.primary?.name, "Striker Carbine");
+  assert.equal(snap.weapon.primary?.loadedMagazine?.current, 20);
+  assert.equal(snap.weapon.primary?.loadedMagazine?.max, 30);
+  assert.equal(snap.weapon.primary?.currentFireMode, "Semi");
+});
+
+test("14. live RPC sections.abilities shape maps to quick actions", () => {
+  const snap = mapBundleToHudSnapshot(liveSectionsBundle());
+  assert.equal(snap.skills.library.length, 1);
+  assert.equal(snap.skills.library[0].name, "Quick Hack");
+  assert.equal(snap.skills.library[0].source, "implant");
+  assert.equal(snap.skills.library[0].resourceCost.amount, 2);
+  assert.equal(snap.skills.quickSlots.length, 1);
+});
+
+test("15. hudSnapshot from sections bundle survives selection broadcast", () => {
+  const payload = payloadFromBundle(liveSectionsBundle());
+  assert.ok(payload.hudSnapshot, "hudSnapshot present");
+  assert.equal(payload.hudSnapshot.weapon.primary?.name, "Striker Carbine");
+  assert.equal(payload.debug?.returnedSections.armory, true);
+  assert.equal(payload.debug?.requestedSections.includes("armory"), true);
+});
+
+test("16. module iframe uses live sections snapshot instead of mock or empty state", () => {
+  const payload = payloadFromBundle(liveSectionsBundle());
+  const gunHtml = renderSelectionModule("gun", payload);
+  const skillsHtml = renderSelectionModule("skills", payload);
+  assert.ok(gunHtml.includes("Striker Carbine"), "live weapon rendered");
+  assert.ok(!gunHtml.includes("No weapon"), "weapon does not collapse to empty");
+  assert.ok(!gunHtml.includes("AR-7"), "mock weapon not used");
+  assert.ok(skillsHtml.includes("Quick Hack"), "live ability rendered");
+  assert.ok(!skillsHtml.includes("No actions"), "actions do not collapse to empty");
+});
+
+test("17. missing live sections produce controlled empty state and debug reason", () => {
+  const bundle = minimalBundle();
+  const snap = mapBundleToHudSnapshot(bundle);
+  const debug = buildRuntimeDebugSummary(bundle, snap, { selectionStatus: "ready", selectedTokenId: "tok-1", characterId: "char-1" });
+  assert.equal(snap.weapon.primary, null);
+  assert.equal(snap.skills.library.length, 0);
+  assert.equal(debug.reason, "armory section missing");
+  assert.equal(debug.broadcast.gunState, "empty");
 });
 
 // Summary

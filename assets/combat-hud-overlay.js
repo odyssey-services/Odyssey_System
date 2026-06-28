@@ -5624,6 +5624,7 @@ function normalizeSelectionPayload(raw) {
     view: raw.view ?? null,
     // Phase 3A.1: normalized HUD snapshot (block renderers use this).
     hudSnapshot: raw.hudSnapshot ?? null,
+    debug: raw.debug ?? null,
     error: { code: raw.error?.code ?? null, message: raw.error?.message ?? null }
   };
 }
@@ -5679,6 +5680,10 @@ function readyFallbackCard(moduleId) {
     </div>
   </section>`;
 }
+function debugReason(payload, opts) {
+  if (!opts?.dev || !payload?.debug?.reason) return "";
+  return `<div class="ohud-bind-dev">HUD DEBUG: ${esc(payload.debug.reason)}</div>`;
+}
 function mutedCard(moduleId) {
   return `<section class="ohud-panel ohud-panel--muted" data-block="${esc(moduleId)}"><div class="ohud-muted-fill">\u2014</div></section>`;
 }
@@ -5729,9 +5734,9 @@ function renderSelectionModule(moduleId, payload, opts = {}) {
     if (isReady) {
       if (payload.hudSnapshot) {
         const syntheticState = buildSyntheticState(payload);
-        return renderPlayerBlock(syntheticState);
+        return `${renderPlayerBlock(syntheticState)}${debugReason(payload, opts)}`;
       }
-      if (payload.view) return readyPlayerCard(payload.view);
+      if (payload.view) return `${readyPlayerCard(payload.view)}${debugReason(payload, opts)}`;
     }
     if (status2 === SELECTION_STATUS.loading || !status2) return loadingCard();
     const p = PLAYER_PROMPTS[status2] || PLAYER_PROMPTS[SELECTION_STATUS.noSelection];
@@ -5893,6 +5898,13 @@ function mountCombatHudModule(options) {
     }
     return `<div class="ohud-module-debug">${esc(moduleId)} \xB7 mount\u2713 \xB7 ${snap} \xB7 ${esc(bodyMode)}</div>`;
   }
+  function logLiveDebug(payload) {
+    if (!DEV || !payload?.debug) return;
+    try {
+      console.info(`[combatHud/debug:${moduleId}]`, payload.debug);
+    } catch (_e) {
+    }
+  }
   function render() {
     let state = null;
     try {
@@ -5911,6 +5923,7 @@ function mountCombatHudModule(options) {
   }
   function applySelection(payload) {
     liveSelection = payload ? normalizeSelectionPayload(payload) : null;
+    logLiveDebug(liveSelection);
     render();
   }
   function showToast(text) {

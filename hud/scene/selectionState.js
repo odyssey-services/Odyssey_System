@@ -7,7 +7,7 @@
 //
 // This file is the unit-tested heart of Phase 3A/3A.1 and loads under plain Node.
 
-import { mapBundleToHudSnapshot } from "../runtime/runtimeBundleMapper.js";
+import { buildRuntimeDebugSummary, mapBundleToHudSnapshot } from "../runtime/runtimeBundleMapper.js";
 
 /** Canonical selection statuses (string values are part of the wire contract). */
 export const SELECTION_STATUS = Object.freeze({
@@ -197,6 +197,13 @@ export function buildBroadcastPayload(state) {
   if (ready && s.runtimeBundle) {
     try { hudSnapshot = mapBundleToHudSnapshot(s.runtimeBundle); } catch (_e) { /* mapper errors → null → neutral fallback */ }
   }
+  const debug = ready && s.runtimeBundle
+    ? buildRuntimeDebugSummary(s.runtimeBundle, hudSnapshot, {
+        selectionStatus: s.status,
+        selectedTokenId: s.selectedItemId ?? null,
+        characterId: s.characterId ?? null,
+      })
+    : null;
 
   return {
     status: s.status,
@@ -207,6 +214,7 @@ export function buildBroadcastPayload(state) {
     view: ready ? (s.view ?? null) : null,
     // Normalized HUD view models — block renderers use this; full bundle is NOT included.
     hudSnapshot: ready ? hudSnapshot : null,
+    debug: ready ? debug : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null },
   };
 }
@@ -223,6 +231,7 @@ export function normalizeSelectionPayload(raw) {
     view: raw.view ?? null,
     // Phase 3A.1: normalized HUD snapshot (block renderers use this).
     hudSnapshot: raw.hudSnapshot ?? null,
+    debug: raw.debug ?? null,
     error: { code: raw.error?.code ?? null, message: raw.error?.message ?? null },
   };
 }

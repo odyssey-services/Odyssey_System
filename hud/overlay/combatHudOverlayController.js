@@ -106,6 +106,10 @@ function pageUrl(moduleId) {
   params.set("vw", String(Math.round(lastVW)));
   params.set("vh", String(Math.round(lastVH)));
   try {
+    const baseParams = new URL(baseHref()).searchParams;
+    if (baseParams.get("debug") === "1") params.set("debug", "1");
+  } catch (_e) { /* ignore */ }
+  try {
     const url = new URL(OVERLAY_HTML, baseHref());
     url.search = params.toString();
     return url.toString();
