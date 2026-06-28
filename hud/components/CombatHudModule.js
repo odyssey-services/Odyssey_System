@@ -132,7 +132,21 @@ export function mountCombatHudModule(options) {
     const snap = state && state.snapshot ? "snap✓" : "snap✗";
     let bodyMode = "?";
     try { bodyMode = state ? resolveBodyMode(state) : "no-state"; } catch (_e) { bodyMode = "err"; }
-    return `<div class="ohud-module-debug">${esc(moduleId)} · mount✓ · ${snap} · ${esc(bodyMode)}</div>`;
+    let liveLines = "";
+    if (liveSelection) {
+      const ui = liveSelection.ui ?? {};
+      const tgt = ui.targeting ?? {};
+      const intent = ui.activeIntent ?? {};
+      liveLines = [
+        `char: ${esc(liveSelection.characterId ?? "—")}`,
+        `weapon: ${esc(ui.selectedWeaponId ?? "—")}`,
+        `intent: ${esc(intent.kind ?? "—")}${intent.kind === "skill" ? ` ${esc(intent.id ?? "")}` : ""}`,
+        `tgt.mode: ${esc(tgt.mode ?? "none")}`,
+        `tgt.zone: ${esc(tgt.selectedBodyPartId ?? "—")}`,
+        `tgt.ids: ${esc(JSON.stringify(tgt.selectedTargetIds ?? []))}`,
+      ].map((l) => `<div>${l}</div>`).join("");
+    }
+    return `<div class="ohud-module-debug">${esc(moduleId)} · mount✓ · ${snap} · ${esc(bodyMode)}${liveLines ? `<hr style="opacity:.3;margin:2px 0">${liveLines}` : ""}</div>`;
   }
 
   function logLiveDebug(payload) {
@@ -188,6 +202,12 @@ export function mountCombatHudModule(options) {
         break;
       case "cancel-target":
         integration.onCommand && integration.onCommand({ type: "cancel-target" });
+        break;
+      case "clear-target":
+        integration.onCommand && integration.onCommand({ type: "clear-target" });
+        break;
+      case "select-target-zone":
+        integration.onCommand && integration.onCommand({ type: "select-target-zone", zoneId: t.getAttribute("data-zone-id") });
         break;
       case "select-weapon":
         integration.onCommand && integration.onCommand({ type: "select-weapon", weaponId: t.getAttribute("data-weapon-id") });

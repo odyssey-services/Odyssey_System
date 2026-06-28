@@ -192,6 +192,10 @@ function readyState(viewer, selectedItemId, characterId, bundle) {
 export function buildBroadcastPayload(state, ephemeral = {}) {
   const s = state ?? createInitialSelectionState(null);
   const ready = s.status === SELECTION_STATUS.ready && s.access?.canView === true;
+  const activeIntent = ephemeral.activeIntent
+    ?? ((ephemeral.preparedAction?.kind === "skill" && ephemeral.preparedAction?.id)
+      ? { kind: "skill", id: ephemeral.preparedAction.id }
+      : { kind: "weapon-attack", weaponId: ephemeral.selectedWeaponId ?? null });
 
   let hudSnapshot = null;
   if (ready && s.runtimeBundle) {
@@ -243,6 +247,7 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
       preparedAction: ephemeral.preparedAction ?? null,
       targeting: ephemeral.targeting ?? null,
       commandStatus: ephemeral.commandStatus ?? null,
+      activeIntent,
     },
     debug: ready ? debug : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null },

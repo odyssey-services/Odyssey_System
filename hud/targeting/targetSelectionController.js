@@ -112,6 +112,16 @@ export function setupTargetSelection(options = {}) {
     commit(selectZone(state, zoneId));
   }
 
+  function handleTargetingCommand(cmd) {
+    switch (cmd?.type) {
+      case "pick": onPick(); break;
+      case "cancel": void onCancel(); break;
+      case "clear": onClear(); break;
+      case "selectZone": onSelectZone(cmd.zoneId); break;
+      default: break;
+    }
+  }
+
   async function resolveCandidate(tokenId) {
     if (!adapter) return;
     const { stale, result } = await adapter.resolveLatest(tokenId);
@@ -175,18 +185,6 @@ export function setupTargetSelection(options = {}) {
       void resolveCandidate(tokenId);
     }));
 
-    // Commands from the Combat Control iframe (pick / cancel / clear / zone).
-    cleanups.push(OBR.broadcast.onMessage(BC_HUD_TARGETING_COMMAND, (event) => {
-      const cmd = event?.data ?? {};
-      switch (cmd.type) {
-        case "pick": onPick(); break;
-        case "cancel": void onCancel(); break;
-        case "clear": onClear(); break;
-        case "selectZone": onSelectZone(cmd.zoneId); break;
-        default: break;
-      }
-    }));
-
     // Replay the latest targeting state to a freshly-mounted Combat Control iframe.
     cleanups.push(OBR.broadcast.onMessage(BC_HUD_TARGETING_REQUEST, () => broadcast()));
 
@@ -195,6 +193,11 @@ export function setupTargetSelection(options = {}) {
 
   OBR.onReady(() => {
     if (disposed) return;
+    // Register targeting commands before async init so Pick Target cannot be
+    // missed during the setup window.
+    cleanups.push(OBR.broadcast.onMessage(BC_HUD_TARGETING_COMMAND, (event) => {
+      handleTargetingCommand(event?.data ?? {});
+    }));
     void init().catch((error) => {
       // eslint-disable-next-line no-console
       console.error("[combatHud/targeting] setup failed", error);

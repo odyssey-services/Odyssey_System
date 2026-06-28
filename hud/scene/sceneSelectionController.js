@@ -107,12 +107,17 @@ export function setupSceneSelection(hooks = {}) {
     }
 
     function buildEphemeralForPayload() {
+      const prepared = ephemeral.preparedAction;
+      const activeIntent = (prepared?.kind === "skill" && prepared.id)
+        ? { kind: "skill", id: prepared.id }
+        : { kind: "weapon-attack", weaponId: ephemeral.selectedWeaponId };
       return {
         selectedWeaponId: ephemeral.selectedWeaponId,
         weaponSelectorOpen: ephemeral.weaponSelectorOpen,
         preparedAction: ephemeral.preparedAction,
         targeting: ephemeral.targeting,
         commandStatus: ephemeral.commandStatus,
+        activeIntent,
       };
     }
 
@@ -149,7 +154,9 @@ export function setupSceneSelection(hooks = {}) {
         ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.weaponSelectorOpen = false;
-        if (lastState) publishState(lastState);
+        // refetchCurrent triggers resolveAndPublish → onSelectionState, which lets
+        // the overlay controller resize the gun popover AFTER lastPayload is updated.
+        await refetchCurrent();
         return;
       }
       if (type === "toggle-weapon-selector") {

@@ -324,7 +324,9 @@ export function setupCombatHudOverlay() {
       cleanups.push(OBR.broadcast.onMessage(BC_HUD_COMMAND, async (event) => {
         const type = String(event?.data?.type ?? "");
         if (type === "toggle-weapon-selector") await setGunSelectorOpen(!gunSelectorOpen);
-        else if (type === "close-weapon-selector" || type === "select-weapon" || type === "reload") await setGunSelectorOpen(false);
+        else if (type === "close-weapon-selector") await setGunSelectorOpen(false);
+        // select-weapon: onSelectionState from refetchCurrent closes the gun selector
+        // after lastPayload is updated — prevents a race where the new iframe gets stale data.
 
         if (type === "pick-target") sendTargetingCommand({ type: "pick" });
         else if (type === "cancel-target") sendTargetingCommand({ type: "cancel" });

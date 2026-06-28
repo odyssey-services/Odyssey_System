@@ -134,6 +134,7 @@ function buildSyntheticState(payload) {
       selectedReloadMagazineId: payload.ui?.selectedReloadMagazineId ?? null,
       selectedModifierIds:     [],
       weaponSelectorOpen:      !!payload.ui?.weaponSelectorOpen,
+      activeIntent:            payload.ui?.activeIntent ?? { kind: "weapon-attack", weaponId: null },
       targeting: {
         mode:                targeting.mode ?? "none",
         selectedTargetIds:   Array.isArray(targeting.selectedTargetIds) ? targeting.selectedTargetIds : [],

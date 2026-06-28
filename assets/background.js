@@ -5432,6 +5432,7 @@ function readyState(viewer, selectedItemId, characterId, bundle) {
 function buildBroadcastPayload(state, ephemeral = {}) {
   const s = state ?? createInitialSelectionState(null);
   const ready = s.status === SELECTION_STATUS.ready && s.access?.canView === true;
+  const activeIntent = ephemeral.activeIntent ?? (ephemeral.preparedAction?.kind === "skill" && ephemeral.preparedAction?.id ? { kind: "skill", id: ephemeral.preparedAction.id } : { kind: "weapon-attack", weaponId: ephemeral.selectedWeaponId ?? null });
   let hudSnapshot = null;
   if (ready && s.runtimeBundle) {
     try {
@@ -5479,7 +5480,8 @@ function buildBroadcastPayload(state, ephemeral = {}) {
       weaponSelectorOpen: !!ephemeral.weaponSelectorOpen,
       preparedAction: ephemeral.preparedAction ?? null,
       targeting: ephemeral.targeting ?? null,
-      commandStatus: ephemeral.commandStatus ?? null
+      commandStatus: ephemeral.commandStatus ?? null,
+      activeIntent
     },
     debug: ready ? debug : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null }
@@ -5650,12 +5652,15 @@ function setupSceneSelection(hooks = {}) {
       ephemeral.commandStatus = null;
     }
     function buildEphemeralForPayload() {
+      const prepared = ephemeral.preparedAction;
+      const activeIntent = prepared?.kind === "skill" && prepared.id ? { kind: "skill", id: prepared.id } : { kind: "weapon-attack", weaponId: ephemeral.selectedWeaponId };
       return {
         selectedWeaponId: ephemeral.selectedWeaponId,
         weaponSelectorOpen: ephemeral.weaponSelectorOpen,
         preparedAction: ephemeral.preparedAction,
         targeting: ephemeral.targeting,
-        commandStatus: ephemeral.commandStatus
+        commandStatus: ephemeral.commandStatus,
+        activeIntent
       };
     }
     function publishState(state) {
@@ -5688,7 +5693,7 @@ function setupSceneSelection(hooks = {}) {
         ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.weaponSelectorOpen = false;
-        if (lastState) publishState(lastState);
+        await refetchCurrent();
         return;
       }
       if (type === "toggle-weapon-selector") {
@@ -6262,6 +6267,24 @@ function setupTargetSelection(options = {}) {
   function onSelectZone(zoneId) {
     commit(selectZone(state, zoneId));
   }
+  function handleTargetingCommand(cmd) {
+    switch (cmd?.type) {
+      case "pick":
+        onPick();
+        break;
+      case "cancel":
+        void onCancel();
+        break;
+      case "clear":
+        onClear();
+        break;
+      case "selectZone":
+        onSelectZone(cmd.zoneId);
+        break;
+      default:
+        break;
+    }
+  }
   async function resolveCandidate(tokenId) {
     if (!adapter) return;
     const { stale, result } = await adapter.resolveLatest(tokenId);
@@ -6314,30 +6337,14 @@ function setupTargetSelection(options = {}) {
       if (tokenId === state.source?.tokenId) return;
       void resolveCandidate(tokenId);
     }));
-    cleanups2.push(lib_default.broadcast.onMessage(BC_HUD_TARGETING_COMMAND, (event) => {
-      const cmd = event?.data ?? {};
-      switch (cmd.type) {
-        case "pick":
-          onPick();
-          break;
-        case "cancel":
-          void onCancel();
-          break;
-        case "clear":
-          onClear();
-          break;
-        case "selectZone":
-          onSelectZone(cmd.zoneId);
-          break;
-        default:
-          break;
-      }
-    }));
     cleanups2.push(lib_default.broadcast.onMessage(BC_HUD_TARGETING_REQUEST, () => broadcast()));
     broadcast();
   }
   lib_default.onReady(() => {
     if (disposed) return;
+    cleanups2.push(lib_default.broadcast.onMessage(BC_HUD_TARGETING_COMMAND, (event) => {
+      handleTargetingCommand(event?.data ?? {});
+    }));
     void init().catch((error) => {
       console.error("[combatHud/targeting] setup failed", error);
     });
@@ -6785,7 +6792,7 @@ function setupCombatHudOverlay() {
       cleanups.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, async (event) => {
         const type = String(event?.data?.type ?? "");
         if (type === "toggle-weapon-selector") await setGunSelectorOpen(!gunSelectorOpen);
-        else if (type === "close-weapon-selector" || type === "select-weapon" || type === "reload") await setGunSelectorOpen(false);
+        else if (type === "close-weapon-selector") await setGunSelectorOpen(false);
         if (type === "pick-target") sendTargetingCommand({ type: "pick" });
         else if (type === "cancel-target") sendTargetingCommand({ type: "cancel" });
         else if (type === "clear-target") sendTargetingCommand({ type: "clear" });
@@ -7915,7 +7922,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.22";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.25";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }
