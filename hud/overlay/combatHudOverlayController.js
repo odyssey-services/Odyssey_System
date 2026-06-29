@@ -29,10 +29,13 @@ import { setupSceneSelection } from "../scene/sceneSelectionController.js";
 import { setupTargetSelection } from "../targeting/targetSelectionController.js";
 import {
   SELECTION_STATUS,
-  PRIMARY_MODULE_ID,
   SECONDARY_MODULE_IDS,
-  isReadyStatus,
 } from "../scene/selectionState.js";
+import {
+  moduleShouldBeOpen as computeModuleShouldBeOpen,
+  secondaryReconcileAction,
+  characterChangeClosesCompanions,
+} from "./hudPopoverLifecycle.js";
 import {
   HUD_MODULE_IDS,
   HUD_MODULE_POPOVER_IDS,
@@ -73,6 +76,7 @@ let sceneCleanup = null;
 let targetSelection = null;
 let gunWeaponSelectorOpen = false;
 let gunMagazineSelectorOpen = false;
+let lastActiveCharacterId = null;
 /** @type {Array<() => void>} */
 const cleanups = [];
 
@@ -80,10 +84,7 @@ const SECONDARY_SET = new Set(SECONDARY_MODULE_IDS);
 
 /** Whether a module popover should currently be open (modules mode only). */
 function moduleShouldBeOpen(id) {
-  if (mode !== "modules") return false;
-  if (id === PRIMARY_MODULE_ID) return true; // Player is always present
-  if (SECONDARY_SET.has(id)) return isReadyStatus(lastSelectionStatus);
-  return true;
+  return computeModuleShouldBeOpen(mode, lastSelectionStatus, id);
 }
 
 function isCollapsed() { return Boolean(lastUiState.isHudCollapsed); }
@@ -208,6 +209,11 @@ async function setGunMagazineSelectorOpen(open) {
   }
 }
 
+async function closeBothCompanions() {
+  try { await setGunWeaponSelectorOpen(false); } catch (_e) { /* best effort */ }
+  try { await setGunMagazineSelectorOpen(false); } catch (_e) { /* best effort */ }
+}
+
 function sendTargetingCommand(command) {
   try { OBR.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, command, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
 }
@@ -227,13 +233,12 @@ async function openVisibleModules() {
  *  broadcast. This is the only popover lifecycle tied to selection. */
 async function reconcileSecondaryModules(prevStatus, nextStatus) {
   if (mode !== "modules") return;
-  const wasReady = isReadyStatus(prevStatus);
-  const nowReady = isReadyStatus(nextStatus);
-  if (nowReady === wasReady) return;
+  const action = secondaryReconcileAction(prevStatus, nextStatus);
+  if (action === "none") return;
   for (const id of OPEN_ORDER) {
     if (!SECONDARY_SET.has(id)) continue;
     try {
-      if (nowReady) await openModule(id);
+      if (action === "open") await openModule(id);
       else await OBR.popover.close(HUD_MODULE_POPOVER_IDS[id]);
     } catch (_e) { /* skip one, keep the rest */ }
   }
@@ -349,7 +354,13 @@ export function setupCombatHudOverlay() {
         shouldDeferSelection: () => targetSelection?.isPicking?.() === true,
         onSelectionState: async (payload) => {
           try { targetSelection?.handleActiveSelection?.(payload); } catch (_e) { /* targeting owns its errors */ }
-          if (gunSelectorOpen && payload?.ui?.weaponSelectorOpen !== true) await setGunSelectorOpen(false);
+          try {
+            const nextCharId = payload?.characterId ?? null;
+            if (characterChangeClosesCompanions(lastActiveCharacterId, nextCharId)) {
+              lastActiveCharacterId = nextCharId;
+              await closeBothCompanions();
+            }
+          } catch (_e) { /* companion lifecycle is best effort */ }
           const prev = lastSelectionStatus;
           lastSelectionStatus = payload?.status ?? SELECTION_STATUS.loading;
           await reconcileSecondaryModules(prev, lastSelectionStatus);
@@ -427,6 +438,7 @@ export async function teardownCombatHudOverlay() {
   lastSelectionStatus = SELECTION_STATUS.loading;
   gunWeaponSelectorOpen = false;
   gunMagazineSelectorOpen = false;
+  lastActiveCharacterId = null;
   mode = "modules";
   await closeEditorPopover();
   await closePill();

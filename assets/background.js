@@ -6651,6 +6651,24 @@ function normalizeLayoutState(state) {
   return validateLayoutState(state) ?? defaultLayoutState();
 }
 
+// hud/overlay/hudPopoverLifecycle.js
+var SECONDARY_SET = new Set(SECONDARY_MODULE_IDS);
+function moduleShouldBeOpen(mode2, status, id) {
+  if (mode2 !== "modules") return false;
+  if (id === PRIMARY_MODULE_ID) return true;
+  if (SECONDARY_SET.has(id)) return isReadyStatus(status);
+  return true;
+}
+function secondaryReconcileAction(prevStatus, nextStatus) {
+  const wasReady = isReadyStatus(prevStatus);
+  const nowReady = isReadyStatus(nextStatus);
+  if (wasReady === nowReady) return "none";
+  return nowReady ? "open" : "close";
+}
+function characterChangeClosesCompanions(prevCharId, nextCharId) {
+  return (prevCharId ?? null) !== (nextCharId ?? null);
+}
+
 // hud/overlay/combatHudOverlayController.js
 var VIEWPORT_POLL_MS = 600;
 var PILL_W = 150;
@@ -6671,13 +6689,11 @@ var sceneCleanup = null;
 var targetSelection = null;
 var gunWeaponSelectorOpen = false;
 var gunMagazineSelectorOpen = false;
+var lastActiveCharacterId = null;
 var cleanups = [];
-var SECONDARY_SET = new Set(SECONDARY_MODULE_IDS);
-function moduleShouldBeOpen(id) {
-  if (mode !== "modules") return false;
-  if (id === PRIMARY_MODULE_ID) return true;
-  if (SECONDARY_SET.has(id)) return isReadyStatus(lastSelectionStatus);
-  return true;
+var SECONDARY_SET2 = new Set(SECONDARY_MODULE_IDS);
+function moduleShouldBeOpen2(id) {
+  return moduleShouldBeOpen(mode, lastSelectionStatus, id);
 }
 function isCollapsed() {
   return Boolean(lastUiState.isHudCollapsed);
@@ -6801,6 +6817,16 @@ async function setGunMagazineSelectorOpen(open) {
     }
   }
 }
+async function closeBothCompanions() {
+  try {
+    await setGunWeaponSelectorOpen(false);
+  } catch (_e) {
+  }
+  try {
+    await setGunMagazineSelectorOpen(false);
+  } catch (_e) {
+  }
+}
 function sendTargetingCommand(command) {
   try {
     lib_default.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, command, { destination: "LOCAL" });
@@ -6809,7 +6835,7 @@ function sendTargetingCommand(command) {
 }
 async function openVisibleModules() {
   for (const id of OPEN_ORDER) {
-    if (!moduleShouldBeOpen(id)) continue;
+    if (!moduleShouldBeOpen2(id)) continue;
     try {
       await openModule(id);
     } catch (_e) {
@@ -6818,13 +6844,12 @@ async function openVisibleModules() {
 }
 async function reconcileSecondaryModules(prevStatus, nextStatus) {
   if (mode !== "modules") return;
-  const wasReady = isReadyStatus(prevStatus);
-  const nowReady = isReadyStatus(nextStatus);
-  if (nowReady === wasReady) return;
+  const action = secondaryReconcileAction(prevStatus, nextStatus);
+  if (action === "none") return;
   for (const id of OPEN_ORDER) {
-    if (!SECONDARY_SET.has(id)) continue;
+    if (!SECONDARY_SET2.has(id)) continue;
     try {
-      if (nowReady) await openModule(id);
+      if (action === "open") await openModule(id);
       else await lib_default.popover.close(HUD_MODULE_POPOVER_IDS[id]);
     } catch (_e) {
     }
@@ -6848,7 +6873,7 @@ async function closeLegacyPopovers() {
 }
 async function openChangedModules(prev, next) {
   const changed = OPEN_ORDER.filter(
-    (id) => moduleShouldBeOpen(id) && !placementsEqual(prev.modules[id], next.modules[id])
+    (id) => moduleShouldBeOpen2(id) && !placementsEqual(prev.modules[id], next.modules[id])
   );
   for (const id of changed) {
     try {
@@ -6952,7 +6977,14 @@ function setupCombatHudOverlay() {
             targetSelection?.handleActiveSelection?.(payload);
           } catch (_e) {
           }
-          if (gunSelectorOpen && payload?.ui?.weaponSelectorOpen !== true) await setGunSelectorOpen(false);
+          try {
+            const nextCharId = payload?.characterId ?? null;
+            if (characterChangeClosesCompanions(lastActiveCharacterId, nextCharId)) {
+              lastActiveCharacterId = nextCharId;
+              await closeBothCompanions();
+            }
+          } catch (_e) {
+          }
           const prev = lastSelectionStatus;
           lastSelectionStatus = payload?.status ?? SELECTION_STATUS.loading;
           await reconcileSecondaryModules(prev, lastSelectionStatus);
