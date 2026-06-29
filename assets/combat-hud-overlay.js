@@ -5153,16 +5153,33 @@ function zoneAttr(zoneId, zonesMap2, neutral) {
   const stateName = neutral ? "healthy" : zonesMap2?.[zoneId] ?? "healthy";
   return zoneStateClass(stateName);
 }
+var SVG_PART_TO_ZONE_ID = Object.freeze({
+  head: "HEAD",
+  torso: "TORSO",
+  l_arm: "LEFT_ARM",
+  r_arm: "RIGHT_ARM",
+  l_leg: "LEFT_LEG",
+  r_leg: "RIGHT_LEG"
+});
+var SVG_PART_LABEL = Object.freeze({
+  head: "Head",
+  torso: "Torso",
+  l_arm: "Left arm",
+  r_arm: "Right arm",
+  l_leg: "Left leg",
+  r_leg: "Right leg"
+});
 function humanoidSvg(opts = {}) {
-  const { zones = {}, highlight = null, neutral = false } = opts;
-  const z = (id) => `ohud-zone ohud-zone--${zoneAttr(id, zones, neutral)}${highlight === id ? " is-target" : ""}`;
-  return `<svg viewBox="0 0 120 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" class="ohud-silhouette">
-    <circle cx="60" cy="24" r="16" class="${z("head")}" data-zone="head"/>
-    <rect x="42" y="44" width="36" height="46" rx="11" class="${z("torso")}" data-zone="torso"/>
-    <rect x="24" y="48" width="14" height="40" rx="7" class="${z("l_arm")}" data-zone="l_arm"/>
-    <rect x="82" y="48" width="14" height="40" rx="7" class="${z("r_arm")}" data-zone="r_arm"/>
-    <rect x="45" y="94" width="14" height="44" rx="7" class="${z("l_leg")}" data-zone="l_leg"/>
-    <rect x="61" y="94" width="14" height="44" rx="7" class="${z("r_leg")}" data-zone="r_leg"/>
+  const { zones = {}, highlight = null, neutral = false, targetable = false } = opts;
+  const z = (id) => `ohud-zone ohud-zone--${zoneAttr(id, zones, neutral)}${highlight === id ? " is-target" : ""}${targetable ? " ohud-zone--clickable" : ""}`;
+  const a = (id) => targetable ? ` data-zone="${id}" data-action="select-target-zone" data-zone-id="${SVG_PART_TO_ZONE_ID[id]}" role="button" tabindex="0" aria-label="${SVG_PART_LABEL[id]}"` : ` data-zone="${id}"`;
+  return `<svg viewBox="0 0 120 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="${targetable ? "false" : "true"}" class="ohud-silhouette">
+    <circle cx="60" cy="24" r="16" class="${z("head")}"${a("head")}/>
+    <rect x="42" y="44" width="36" height="46" rx="11" class="${z("torso")}"${a("torso")}/>
+    <rect x="24" y="48" width="14" height="40" rx="7" class="${z("l_arm")}"${a("l_arm")}/>
+    <rect x="82" y="48" width="14" height="40" rx="7" class="${z("r_arm")}"${a("r_arm")}/>
+    <rect x="45" y="94" width="14" height="44" rx="7" class="${z("l_leg")}"${a("l_leg")}/>
+    <rect x="61" y="94" width="14" height="44" rx="7" class="${z("r_leg")}"${a("r_leg")}/>
   </svg>`;
 }
 function mechSvg(opts = {}) {
@@ -5407,10 +5424,10 @@ function renderGunBlock(state) {
   const visibleReserve = reserve.slice(0, 2);
   const reserveMore = reserve.length > visibleReserve.length ? `<div class="ohud-reserve-more">+${reserve.length - visibleReserve.length}</div>` : "";
   const reserveList = reserve.length ? `<div class="ohud-reserve-list">${visibleReserve.map((mag2) => reserveOption(mag2, mag2.id === reloadMag?.id)).join("")}${reserveMore}</div>` : "";
-  const body = `<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
+  const body = `${weaponList}<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
     ${mainCard}
     <div class="ohud-gun-side">${magCard}${ammoCard}</div>
-    ${weaponList}${reserveList}
+    ${reserveList}
   </div>`;
   return panel({ key: "gun", label: "Weapon", bodyHtml: body });
 }
@@ -5492,15 +5509,11 @@ var ZONE_TO_SVG_PART = Object.freeze({
 function zoneIdToSvgPart(zoneId) {
   return ZONE_TO_SVG_PART[String(zoneId ?? "")] ?? null;
 }
+var SVG_PART_TO_ZONE = Object.freeze(
+  Object.fromEntries(Object.entries(ZONE_TO_SVG_PART).map(([zoneId, svgPart]) => [svgPart, zoneId]))
+);
 
 // hud/components/TargetBlock.js
-function zoneChip(zone2, selectedZoneId) {
-  const isSelected = zone2.id === selectedZoneId;
-  return `<button type="button" class="${cls("ohud-zone-chip", isSelected ? "is-selected" : "")}"
-    data-action="select-target-zone" data-zone-id="${esc(zone2.id)}"
-    aria-pressed="${isSelected ? "true" : "false"}"
-    ${tipAttr(zone2.label, [])}>${esc(zone2.label)}</button>`;
-}
 function renderTargetBlock(state) {
   const tv = selectTargetView(state);
   if (!tv.hasTarget) {
@@ -5516,17 +5529,17 @@ function renderTargetBlock(state) {
   }
   const distLabel = Number.isFinite(tv.distance) ? `${tv.distance} m` : "\u2014";
   const svgPart = zoneIdToSvgPart(tv.bodyPartId);
-  const zones = HUMANOID_PROFILE.zones;
-  const chips = zones.map((z) => zoneChip(z, tv.bodyPartId)).join("");
   const body = `<div class="ohud-target">
-    <div class="ohud-figure">
-      <div class="ohud-figure-svg">${humanoidSvg({ neutral: true, highlight: svgPart })}</div>
-      <div class="ohud-figure-shield" aria-hidden="true"${tipAttr("Target shield", ["Defence detail unavailable for non-owned entities"])}>${ICON_SHIELD}</div>
+    <div class="ohud-figure ohud-figure--targetable">
+      <div class="ohud-figure-svg">${humanoidSvg({ neutral: true, highlight: svgPart, targetable: true })}</div>
+      <div class="ohud-figure-shield" aria-hidden="true"${tipAttr("Target shield", ["Defence detail hidden for non-owned entities"])}>${ICON_SHIELD}</div>
     </div>
     <div class="ohud-target-meta">
       <div class="ohud-target-name" title="${esc(tv.name)}">${esc(tv.name)}</div>
-      <div class="ohud-target-dist"${tipAttr("Distance to target", [])}>${esc(distLabel)}</div>
-      <div class="ohud-zone-chips" role="group" aria-label="Target zone">${chips}</div>
+      <div class="ohud-target-sub">
+        <span class="ohud-target-zone"${tipAttr("Aimed zone", ["Click a body zone on the silhouette"])}>${esc(tv.bodyPartLabel)}</span>
+        <span class="ohud-target-dist"${tipAttr("Distance to target", [])}>${esc(distLabel)}</span>
+      </div>
       <button type="button" class="ohud-target-clear" data-action="clear-target"${tipAttr("Clear target", [])}>Clear</button>
     </div>
   </div>`;

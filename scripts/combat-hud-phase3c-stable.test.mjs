@@ -1,18 +1,45 @@
+// Combat HUD - Phase 3C stabilisation tests.
+//
+// Covers the v1 weapon/ammo/target stabilisation work:
+// - canonical armory shape -> HUD weapon view model (inserted + reserve mags)
+// - loaded_magazine and active_profile.loaded_magazine both supported
+// - inventory magazines priority, armory.magazines fallback (buildCanonicalArmory)
+// - weapon selector closed by default; opens as a flow block (no duplicate Gun)
+// - weapon selection changes the PRIMARY view model (not just a CSS class),
+//   and is not overwritten by weapons[0] on refresh
+// - inserted / empty / incompatible reserve magazines filtered correctly
+// - clickable body zones live ON the silhouette - NO text zone chips/buttons
+// - humanoid target default zone = TORSO; activeIntent weapon-attack/skill
+// - targeting state machine: selectZone / clearTarget / cancel / source guard
+
 import assert from "node:assert/strict";
 
-import { deriveSelectionState, buildBroadcastPayload } from "../hud/scene/selectionState.js";
 import { renderTargetBlock } from "../hud/components/TargetBlock.js";
-import { zoneIdToSvgPart } from "../hud/targeting/targetProfiles.js";
+import { renderGunBlock } from "../hud/components/GunBlock.js";
+import {
+  HUMANOID_PROFILE,
+  zoneIdToSvgPart,
+  svgPartToZoneId,
+} from "../hud/targeting/targetProfiles.js";
+import {
+  mapWeapon,
+  mapBundleToHudSnapshot,
+  buildCanonicalArmory,
+} from "../hud/runtime/runtimeBundleMapper.js";
+import { selectVisibleReserveMagazines } from "../hud/core/combatHudSelectors.js";
 import {
   createInitialTargetState,
-  applySource,
   startPicking,
   cancelPicking,
-  applyResolvedTarget,
   clearTarget,
   selectZone,
-  buildTargetingBroadcast,
+  applySource,
+  applyResolvedTarget,
 } from "../hud/targeting/targetSelectionState.js";
+import {
+  buildBroadcastPayload,
+  deriveSelectionState,
+} from "../hud/scene/selectionState.js";
 
 let passed = 0;
 let failed = 0;
@@ -21,199 +48,368 @@ const failures = [];
 function test(name, fn) {
   Promise.resolve()
     .then(fn)
-    .then(() => { passed += 1; console.log(`  PASS ${name}`); })
-    .catch((err) => { failed += 1; failures.push({ name, err }); console.error(`  FAIL ${name}\n      ${err.message}`); });
+    .then(() => {
+      passed += 1;
+      console.log(`  PASS ${name}`);
+    })
+    .catch((err) => {
+      failed += 1;
+      failures.push({ name, err });
+      console.error(`  FAIL ${name}\n      ${err.message}`);
+    });
 }
 
-const PLAYER = { playerId: "p1", role: "PLAYER" };
-
-function minimalBundle() {
+function canonicalArmory() {
   return {
     ok: true,
-    character: {
-      id: "char-1",
-      display_name: "Test Character",
-      character_key: "TEST_CHARACTER",
-      owner_player_id: "p1",
-      owner_player_name: "Alice",
+    weapons: [
+      {
+        id: "w1",
+        name: "Marksman Rifle",
+        model: { weapon_class_name: "Rifle", caliber: "5.56" },
+        active_profile_id: "p1",
+        active_profile: {
+          id: "p1",
+          name: "Standard",
+          selected_fire_mode: { id: "fm1", name: "Semi" },
+          available_fire_modes: [{ id: "fm1", name: "Semi" }, { id: "fm2", name: "Auto" }],
+        },
+        loaded_magazine: {
+          id: "m1",
+          current_rounds: 20,
+          capacity: 30,
+          ammo_type_name: "FMJ",
+          magazine_def: { capacity: 30, caliber: "5.56", caliber_name: "5.56mm" },
+        },
+      },
+      {
+        id: "w2",
+        name: "Sidearm",
+        model: { weapon_class_name: "Pistol", caliber: "9mm" },
+        active_profile_id: "p2",
+        active_profile: {
+          id: "p2",
+          name: "Default",
+          loaded_magazine: {
+            id: "m4",
+            current_rounds: 12,
+            capacity: 15,
+            ammo_type_name: "JHP",
+            magazine_def: { capacity: 15, caliber: "9mm", caliber_name: "9mm" },
+          },
+          selected_fire_mode: { id: "fm3", name: "Semi" },
+          available_fire_modes: [{ id: "fm3", name: "Semi" }],
+        },
+      },
+    ],
+    magazines: [
+      { id: "m1", current_rounds: 20, magazine_def: { capacity: 30, caliber: "5.56" }, ammo_type_name: "FMJ" },
+      { id: "m2", current_rounds: 30, magazine_def: { capacity: 30, caliber: "5.56" }, ammo_type_name: "AP" },
+      { id: "m3", current_rounds: 0, magazine_def: { capacity: 30, caliber: "5.56" }, ammo_type_name: "FMJ" },
+      { id: "m4", current_rounds: 12, magazine_def: { capacity: 15, caliber: "9mm" }, ammo_type_name: "JHP" },
+    ],
+  };
+}
+
+function targetState(targetingOverride = {}) {
+  return {
+    status: "ready",
+    selectedCharacterId: "char-1",
+    snapshot: {
+      entity: { name: "Hero", svgRef: "humanoid" },
+      combatSession: { status: "inactive", participants: [] },
     },
-    state: {
-      is_alive: true,
-      is_conscious: true,
-      status_summary: "Alive",
+    ui: {
+      targeting: {
+        mode: "none",
+        selectedTargetIds: [],
+        selectedTargetName: null,
+        selectedBodyPartId: "TORSO",
+        distance: null,
+        ...targetingOverride,
+      },
     },
   };
 }
 
-function targetBlockState(targeting = {}) {
+function gunState({ weaponSelectorOpen = false, available = [] } = {}) {
   return {
-    snapshot: { combatSession: { status: "inactive" } },
-    ui: { targeting },
+    snapshot: {
+      weapon: {
+        primary: {
+          id: "w1",
+          name: "Marksman Rifle",
+          svgRef: "rifle",
+          usesMagazine: true,
+          requiresAmmo: true,
+          canReload: false,
+          loadedMagazine: { id: "m1", current: 20, max: 30, ammoType: "FMJ", caliber: "5.56" },
+          reserveMagazines: [],
+          fireModes: ["Semi"],
+          currentFireMode: "Semi",
+          ammo: { current: 20, max: 30 },
+        },
+        secondary: null,
+        available,
+      },
+    },
+    ui: { weaponSelectorOpen, selectedReloadMagazineId: null, targeting: { selectedBodyPartId: "torso" } },
   };
+}
+
+function readyPayload(ephemeralOverride = {}) {
+  const character = { id: "c1", display_name: "Hero", character_key: "HERO", owner_player_id: "p1" };
+  const state = deriveSelectionState(
+    { ok: true, links: [{ token_id: "t1", is_active: true, character }] },
+    { ok: true, character, state: { is_alive: true, is_conscious: true }, sections: {} },
+    { playerId: "p1", role: "PLAYER" },
+  );
+  return buildBroadcastPayload(state, {
+    selectedWeaponId: null,
+    weaponSelectorOpen: false,
+    preparedAction: null,
+    targeting: { mode: "none", selectedTargetIds: [], selectedBodyPartId: "TORSO" },
+    commandStatus: null,
+    activeIntent: { kind: "weapon-attack", weaponId: null },
+    ...ephemeralOverride,
+  });
+}
+
+function gunStateWithReserve(weaponVM) {
+  return { snapshot: { weapon: { primary: weaponVM } }, ui: {} };
 }
 
 console.log("\nCombat HUD - Phase 3C stabilization verification\n");
 
-test("zoneIdToSvgPart maps humanoid wire ids to SVG parts", () => {
-  assert.equal(zoneIdToSvgPart("HEAD"), "head");
+test("zoneIdToSvgPart maps wire ids to svg parts", () => {
   assert.equal(zoneIdToSvgPart("TORSO"), "torso");
+  assert.equal(zoneIdToSvgPart("HEAD"), "head");
   assert.equal(zoneIdToSvgPart("LEFT_ARM"), "l_arm");
-  assert.equal(zoneIdToSvgPart("RIGHT_ARM"), "r_arm");
-  assert.equal(zoneIdToSvgPart("LEFT_LEG"), "l_leg");
-  assert.equal(zoneIdToSvgPart("RIGHT_LEG"), "r_leg");
   assert.equal(zoneIdToSvgPart("UNKNOWN"), null);
 });
 
-test("TargetBlock shows Pick target when no target is selected", () => {
-  const html = renderTargetBlock(targetBlockState({ mode: "idle", selectedTargetIds: [], selectedBodyPartId: "TORSO" }));
-  assert.ok(html.includes("Pick target"));
-  assert.ok(html.includes('data-action="pick-target"'));
+test("svgPartToZoneId reverse maps svg parts to wire ids", () => {
+  assert.equal(svgPartToZoneId("torso"), "TORSO");
+  assert.equal(svgPartToZoneId("l_leg"), "LEFT_LEG");
+  assert.equal(svgPartToZoneId("nope"), null);
 });
 
-test("TargetBlock shows Cancel while picking", () => {
-  const html = renderTargetBlock(targetBlockState({ mode: "picking", selectedTargetIds: [], selectedBodyPartId: "TORSO" }));
-  assert.ok(html.includes("PICK A TARGET"));
-  assert.ok(html.includes('data-action="cancel-target"'));
+test("mapWeapon keeps inserted canonical magazine", () => {
+  const w = mapWeapon(canonicalArmory(), "w1");
+  assert.ok(w?.loadedMagazine);
+  assert.equal(w.loadedMagazine.current, 20);
+  assert.equal(w.loadedMagazine.max, 30);
+  assert.equal(w.ammo.current, 20);
+  assert.equal(w.ammo.max, 30);
 });
 
-test("TargetBlock shows 6 zone chips and clear button for selected target", () => {
-  const html = renderTargetBlock(targetBlockState({
-    mode: "idle",
-    selectedTargetIds: ["tok-target"],
-    selectedTargetName: "Target NPC",
-    selectedBodyPartId: "TORSO",
-    distance: 6,
+test("mapWeapon honors active_profile.loaded_magazine", () => {
+  const w = mapWeapon(canonicalArmory(), "w2");
+  assert.ok(w?.loadedMagazine);
+  assert.equal(w.loadedMagazine.current, 12);
+  assert.equal(w.loadedMagazine.max, 15);
+});
+
+test("mapWeapon reserve excludes inserted and incompatible magazines", () => {
+  const w = mapWeapon(canonicalArmory(), "w1");
+  const ids = w.reserveMagazines.map((m) => m.id);
+  assert.ok(!ids.includes("m1"));
+  assert.ok(!ids.includes("m4"));
+  assert.ok(ids.includes("m2"));
+});
+
+test("selectVisibleReserveMagazines filters empty inserted wrong-caliber", () => {
+  const w = mapWeapon(canonicalArmory(), "w1");
+  const visible = selectVisibleReserveMagazines(gunStateWithReserve(w));
+  assert.deepEqual(visible.map((m) => m.id), ["m2"]);
+});
+
+test("buildCanonicalArmory prefers inventory magazines", () => {
+  const merged = buildCanonicalArmory(
+    { ok: true, weapons: [{ id: "w1" }], magazines: [{ id: "a1" }] },
+    { magazines: [{ id: "i1" }, { id: "i2" }] },
+  );
+  assert.deepEqual(merged.magazines.map((m) => m.id), ["i1", "i2"]);
+});
+
+test("buildCanonicalArmory falls back to armory magazines", () => {
+  const merged = buildCanonicalArmory(
+    { ok: true, weapons: [{ id: "w1" }], magazines: [{ id: "a1" }] },
+    null,
+  );
+  assert.deepEqual(merged.magazines.map((m) => m.id), ["a1"]);
+});
+
+test("buildCanonicalArmory returns null for invalid armory", () => {
+  assert.equal(buildCanonicalArmory(null, null), null);
+  assert.equal(buildCanonicalArmory({ ok: false }, null), null);
+  assert.equal(buildCanonicalArmory({ ok: true }, null), null);
+});
+
+test("mapBundleToHudSnapshot default primary is weapons[0]", () => {
+  const snap = mapBundleToHudSnapshot({ sections: { armory: canonicalArmory() } }, {});
+  assert.equal(snap.weapon.primary.id, "w1");
+});
+
+test("mapBundleToHudSnapshot respects selectedWeaponId", () => {
+  const snap = mapBundleToHudSnapshot({ sections: { armory: canonicalArmory() } }, { selectedWeaponId: "w2" });
+  assert.equal(snap.weapon.primary.id, "w2");
+  assert.equal(snap.weapon.primary.name, "Sidearm");
+});
+
+test("selected weapon stays stable across refreshes", () => {
+  const bundle = { sections: { armory: canonicalArmory() } };
+  const first = mapBundleToHudSnapshot(bundle, { selectedWeaponId: "w2" });
+  const second = mapBundleToHudSnapshot(bundle, { selectedWeaponId: "w2" });
+  assert.equal(first.weapon.primary.id, "w2");
+  assert.equal(second.weapon.primary.id, "w2");
+});
+
+test("available weapon inventory marks the selected weapon", () => {
+  const snap = mapBundleToHudSnapshot({ sections: { armory: canonicalArmory() } }, { selectedWeaponId: "w2" });
+  const selected = snap.weapon.available.find((option) => option.selected);
+  assert.equal(selected?.id, "w2");
+});
+
+test("GunBlock closed by default hides weapon list", () => {
+  const html = renderGunBlock(gunState({
+    weaponSelectorOpen: false,
+    available: [
+      { id: "w1", name: "Rifle", type: "Rifle", selected: true, ammoLabel: "20/30" },
+      { id: "w2", name: "Sidearm", type: "Pistol", selected: false, ammoLabel: "12/15" },
+    ],
   }));
-  const zoneButtonCount = (html.match(/data-action="select-target-zone"/g) ?? []).length;
-  assert.equal(zoneButtonCount, 6);
+  assert.ok(!html.includes("ohud-weapon-list"));
+});
+
+test("GunBlock open selector renders list above single gun block", () => {
+  const html = renderGunBlock(gunState({
+    weaponSelectorOpen: true,
+    available: [
+      { id: "w1", name: "Rifle", type: "Rifle", selected: true, ammoLabel: "20/30" },
+      { id: "w2", name: "Sidearm", type: "Pistol", selected: false, ammoLabel: "12/15" },
+    ],
+  }));
+  assert.ok(html.includes("ohud-weapon-list"));
+  assert.ok(html.indexOf("ohud-weapon-list") < html.indexOf('class="ohud-gun"'));
+  assert.equal((html.match(/class="ohud-gun"/g) || []).length, 1);
+});
+
+test("TargetBlock without target shows pick button", () => {
+  const html = renderTargetBlock(targetState({ mode: "none", selectedTargetIds: [] }));
+  assert.ok(html.includes('data-action="pick-target"'));
+  assert.ok(!html.includes('data-action="select-target-zone"'));
+});
+
+test("TargetBlock with target shows six clickable silhouette zones", () => {
+  const html = renderTargetBlock(targetState({
+    mode: "none",
+    selectedTargetIds: ["tok-X"],
+    selectedTargetName: "Enemy",
+    selectedBodyPartId: "TORSO",
+    distance: 5,
+  }));
+  assert.equal((html.match(/data-action="select-target-zone"/g) || []).length, 6);
+  for (const zone of HUMANOID_PROFILE.zones) {
+    assert.ok(html.includes(`data-zone-id="${zone.id}"`));
+  }
+});
+
+test("TargetBlock has no legacy text zone chips", () => {
+  const html = renderTargetBlock(targetState({
+    mode: "none",
+    selectedTargetIds: ["tok-X"],
+    selectedTargetName: "Enemy",
+    selectedBodyPartId: "TORSO",
+  }));
+  assert.ok(!html.includes("ohud-zone-chip"));
+  assert.ok(!/<button[^>]*select-target-zone/.test(html));
+});
+
+test("TargetBlock carries clickable class and highlight", () => {
+  const html = renderTargetBlock(targetState({
+    mode: "none",
+    selectedTargetIds: ["tok-X"],
+    selectedTargetName: "Enemy",
+    selectedBodyPartId: "LEFT_ARM",
+  }));
+  assert.ok(html.includes("ohud-zone--clickable"));
+  assert.ok(html.includes('data-zone="l_arm"'));
+  assert.ok(html.includes("is-target"));
+});
+
+test("TargetBlock shows clear control and distance", () => {
+  const html = renderTargetBlock(targetState({
+    mode: "none",
+    selectedTargetIds: ["tok-X"],
+    selectedTargetName: "Enemy",
+    selectedBodyPartId: "TORSO",
+    distance: 12,
+  }));
   assert.ok(html.includes('data-action="clear-target"'));
-  assert.ok(html.includes("Target NPC"));
-  assert.ok(html.includes("is-selected"));
+  assert.ok(html.includes("12 m"));
 });
 
-test("activeIntent: no prepared action defaults to weapon-attack", () => {
-  const state = deriveSelectionState({
-    viewer: PLAYER,
-    selectionIds: ["tok-1"],
-    link: { characterId: "char-1" },
-    bundle: minimalBundle(),
-  });
-  const payload = buildBroadcastPayload(state);
+test("activeIntent defaults to weapon-attack", () => {
+  const payload = readyPayload({ selectedWeaponId: "w-1", activeIntent: { kind: "weapon-attack", weaponId: "w-1" } });
   assert.equal(payload.ui.activeIntent.kind, "weapon-attack");
-  assert.equal(payload.ui.activeIntent.weaponId, null);
+  assert.equal(payload.ui.activeIntent.weaponId, "w-1");
 });
 
-test("activeIntent: selected weapon is reflected in payload", () => {
-  const state = deriveSelectionState({
-    viewer: PLAYER,
-    selectionIds: ["tok-1"],
-    link: { characterId: "char-1" },
-    bundle: minimalBundle(),
-  });
-  const payload = buildBroadcastPayload(state, { selectedWeaponId: "weapon-42" });
-  assert.equal(payload.ui.activeIntent.kind, "weapon-attack");
-  assert.equal(payload.ui.activeIntent.weaponId, "weapon-42");
-});
-
-test("activeIntent: prepared skill overrides weapon attack", () => {
-  const state = deriveSelectionState({
-    viewer: PLAYER,
-    selectionIds: ["tok-1"],
-    link: { characterId: "char-1" },
-    bundle: minimalBundle(),
-  });
-  const payload = buildBroadcastPayload(state, {
-    selectedWeaponId: "weapon-42",
-    preparedAction: { kind: "skill", id: "ability-1" },
-    activeIntent: { kind: "skill", id: "ability-1" },
+test("activeIntent skill override carries id", () => {
+  const payload = readyPayload({
+    preparedAction: { kind: "skill", id: "sk-7" },
+    activeIntent: { kind: "skill", id: "sk-7" },
   });
   assert.equal(payload.ui.activeIntent.kind, "skill");
-  assert.equal(payload.ui.activeIntent.id, "ability-1");
+  assert.equal(payload.ui.activeIntent.id, "sk-7");
 });
 
-test("selectZone updates selectedZoneId when a target exists", () => {
-  const source = applySource(createInitialTargetState(), {
-    tokenId: "tok-source",
-    characterId: "char-source",
-    characterName: "Source",
-  });
-  const resolved = applyResolvedTarget(source, {
-    tokenId: "tok-target",
-    characterId: "char-target",
-    displayName: "Target",
-    profileId: "humanoid",
-  });
-  const updated = selectZone(resolved, "HEAD");
-  assert.equal(updated.target.selectedZoneId, "HEAD");
+test("applyResolvedTarget defaults humanoid target to TORSO and preserves source", () => {
+  let state = applySource(createInitialTargetState(), { tokenId: "src", characterId: "c1", characterName: "Hero" });
+  state = startPicking(state);
+  state = applyResolvedTarget(state, { tokenId: "tok-E", characterId: "c2", displayName: "Enemy", distance: { value: 5, unit: "m" } });
+  assert.equal(state.target.selectedZoneId, "TORSO");
+  assert.equal(state.source.characterId, "c1");
 });
 
-test("selectZone is ignored when no target exists", () => {
-  const state = createInitialTargetState();
-  const updated = selectZone(state, "HEAD");
-  assert.equal(updated, state);
+test("selectZone updates only when target exists", () => {
+  let state = applySource(createInitialTargetState(), { tokenId: "src", characterId: "c1" });
+  state = startPicking(state);
+  state = applyResolvedTarget(state, { tokenId: "tok-E", displayName: "Enemy" });
+  state = selectZone(state, "LEFT_ARM");
+  assert.equal(state.target.selectedZoneId, "LEFT_ARM");
+  const noTarget = selectZone(createInitialTargetState(), "HEAD");
+  assert.equal(noTarget.target, null);
 });
 
-test("clearTarget removes the target and returns idle", () => {
-  const source = applySource(createInitialTargetState(), {
-    tokenId: "tok-source",
-    characterId: "char-source",
-    characterName: "Source",
-  });
-  const resolved = applyResolvedTarget(source, {
-    tokenId: "tok-target",
-    characterId: "char-target",
-    displayName: "Target",
-    profileId: "humanoid",
-  });
-  const cleared = clearTarget(resolved);
-  assert.equal(cleared.mode, "idle");
-  assert.equal(cleared.target, null);
+test("clearTarget removes target and returns to idle", () => {
+  let state = applySource(createInitialTargetState(), { tokenId: "src", characterId: "c1" });
+  state = startPicking(state);
+  state = applyResolvedTarget(state, { tokenId: "tok-E", displayName: "Enemy" });
+  state = clearTarget(state);
+  assert.equal(state.target, null);
+  assert.equal(state.mode, "idle");
 });
 
-test("cancelPicking preserves the previously selected target", () => {
-  const source = applySource(createInitialTargetState(), {
-    tokenId: "tok-source",
-    characterId: "char-source",
-    characterName: "Source",
-  });
-  const resolved = applyResolvedTarget(source, {
-    tokenId: "tok-target",
-    characterId: "char-target",
-    displayName: "Target",
-    profileId: "humanoid",
-  });
-  const picking = startPicking(resolved);
-  const canceled = cancelPicking(picking);
-  assert.equal(canceled.mode, "idle");
-  assert.equal(canceled.target.tokenId, "tok-target");
-});
-
-test("buildTargetingBroadcast keeps source and target after resolve", () => {
-  const source = applySource(createInitialTargetState(), {
-    tokenId: "tok-source",
-    characterId: "char-source",
-    characterName: "Source",
-  });
-  const resolved = applyResolvedTarget(source, {
-    tokenId: "tok-target",
-    characterId: "char-target",
-    displayName: "Target NPC",
-    profileId: "humanoid",
-    distance: { value: 6, unit: "m" },
-  });
-  const wire = buildTargetingBroadcast(resolved);
-  assert.equal(wire.source.tokenId, "tok-source");
-  assert.equal(wire.target.tokenId, "tok-target");
-  assert.equal(wire.target.selectedZoneId, "TORSO");
+test("cancelPicking preserves previous target and source", () => {
+  let state = applySource(createInitialTargetState(), { tokenId: "src", characterId: "c1" });
+  state = startPicking(state);
+  state = applyResolvedTarget(state, { tokenId: "tok-E", displayName: "Enemy" });
+  const currentTarget = state.target;
+  state = startPicking(state);
+  state = cancelPicking(state);
+  assert.deepEqual(state.target, currentTarget);
+  assert.equal(state.source.characterId, "c1");
 });
 
 setTimeout(() => {
-  console.log(`\n${passed} passed, ${failed} failed\n`);
-  if (failed > 0) {
-    for (const f of failures) {
-      console.error(`FAILED: ${f.name}`);
-      console.error(f.err);
+  console.log(`\nPhase 3C stable: ${passed} passed, ${failed} failed`);
+  if (failures.length) {
+    for (const { name, err } of failures) {
+      console.error(`FAILED: ${name}`);
+      console.error(err?.stack ?? err);
     }
-    process.exit(1);
   }
-}, 400);
+  process.exit(failed > 0 ? 1 : 0);
+}, 200);

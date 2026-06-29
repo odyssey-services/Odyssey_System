@@ -22,9 +22,11 @@ import {
 } from "../../bridge/obrBridge.js";
 import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/settingsBridge.js";
 import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/characterPlacementApi.js";
-import { loadWeaponProfileMagazine } from "../../api/weaponApi.js";
+import { loadWeaponProfileMagazine, getCharacterArmory } from "../../api/weaponApi.js";
+import { getCharacterInventory } from "../../api/inventoryApi.js";
 import { BC_HUD_COMMAND, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST } from "../overlay/overlayConstants.js";
 import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
+import { buildCanonicalArmory } from "../runtime/runtimeBundleMapper.js";
 import { buildBroadcastPayload, normalizeViewer } from "./selectionState.js";
 
 const SCENE_RERESOLVE_DEBOUNCE_MS = 600;
@@ -82,16 +84,27 @@ export function setupSceneSelection(hooks = {}) {
         settings,
       ),
       fetchCharacterBundle: async (characterId) => {
-        const bundle = await getCharacterRuntimeBundle(
-          {
-            character_id: characterId,
-            sections: HUD_RUNTIME_SECTIONS,
-          },
-          settings,
-        );
-        return bundle && typeof bundle === "object"
-          ? { ...bundle, __hudDebug: { requestedSections: HUD_RUNTIME_SECTIONS } }
-          : bundle;
+        const [bundle, armory, inventory] = await Promise.all([
+          getCharacterRuntimeBundle(
+            {
+              character_id: characterId,
+              sections: HUD_RUNTIME_SECTIONS,
+            },
+            settings,
+          ),
+          getCharacterArmory(characterId, settings).catch(() => null),
+          getCharacterInventory(characterId, settings).catch(() => null),
+        ]);
+        if (!bundle || typeof bundle !== "object") return bundle;
+        const merged = { ...bundle, __hudDebug: { requestedSections: HUD_RUNTIME_SECTIONS } };
+        const canonicalArmory = buildCanonicalArmory(armory, inventory);
+        if (canonicalArmory) {
+          merged.armory = canonicalArmory;
+          if (merged.sections && typeof merged.sections === "object") {
+            merged.sections = { ...merged.sections, armory: canonicalArmory };
+          }
+        }
+        return merged;
       },
     });
 

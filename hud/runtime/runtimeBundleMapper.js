@@ -298,13 +298,16 @@ function readMagazine(mag) {
     str(mag.ammo_type_key) ??
     str(typeof mag.ammo_type === "string" ? mag.ammo_type : null) ??
     "—";
-  // Display caliber prefers the human name; matching uses the same field for
-  // both loaded + reserve so the selector's caliber filter stays consistent.
   const caliber =
-    str(mag.magazine_def?.caliber_name) ??
-    str(mag.caliber_name) ??
     str(mag.magazine_def?.caliber) ??
     str(mag.caliber) ??
+    str(mag.magazine_def?.caliber_name) ??
+    str(mag.caliber_name) ??
+    "";
+  const caliberLabel =
+    str(mag.magazine_def?.caliber_name) ??
+    str(mag.caliber_name) ??
+    caliber ??
     "";
   return {
     id:          str(mag.id) ?? `mag-${Math.random().toString(36).slice(2)}`,
@@ -313,6 +316,7 @@ function readMagazine(mag) {
     current,
     max,
     caliber,
+    caliberLabel,
   };
 }
 
@@ -465,6 +469,19 @@ function mapWeaponOption(armory, weapon, selectedWeaponId) {
 function mapWeaponInventory(armory, selectedWeaponId) {
   const weapons = arr(armory?.weapons);
   return weapons.map((weapon) => mapWeaponOption(armory, weapon, selectedWeaponId));
+}
+
+export function buildCanonicalArmory(armory, inventory) {
+  if (!armory || typeof armory !== "object" || armory.ok === false) return null;
+  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
+  if (!weapons.length) return null;
+  const inventoryMagazines = Array.isArray(inventory?.magazines) ? inventory.magazines.filter(Boolean) : [];
+  const armoryMagazines = Array.isArray(armory.magazines) ? armory.magazines.filter(Boolean) : [];
+  return {
+    ...armory,
+    weapons,
+    magazines: inventoryMagazines.length ? inventoryMagazines : armoryMagazines,
+  };
 }
 
 function mapSkillColor(v) {

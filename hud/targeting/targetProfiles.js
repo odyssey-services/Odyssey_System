@@ -66,3 +66,11 @@ const ZONE_TO_SVG_PART = Object.freeze({
 export function zoneIdToSvgPart(zoneId) {
   return ZONE_TO_SVG_PART[String(zoneId ?? "")] ?? null;
 }
+
+const SVG_PART_TO_ZONE = Object.freeze(
+  Object.fromEntries(Object.entries(ZONE_TO_SVG_PART).map(([zoneId, svgPart]) => [svgPart, zoneId])),
+);
+
+export function svgPartToZoneId(svgPart) {
+  return SVG_PART_TO_ZONE[String(svgPart ?? "")] ?? null;
+}

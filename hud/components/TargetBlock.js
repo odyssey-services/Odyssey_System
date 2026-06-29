@@ -1,23 +1,14 @@
-// Combat HUD — Target block (Phase 3B, live targeting).
+// Combat HUD - Target block (Phase 3B/3C, live targeting).
 //
 // Shows the current targeting state from the Phase 3B target-selection
-// controller. When a target is selected, renders the humanoid silhouette with
-// the active zone highlighted and six clickable zone chips for zone selection.
-// Zone state is owned by the targeting controller — not DOM-local.
+// controller. When a target is selected, the humanoid silhouette renders with
+// the active zone highlighted and every body zone directly clickable.
 
 import { selectTargetView } from "../core/combatHudSelectors.js";
 import { humanoidSvg, ICON_SHIELD } from "./hudIcons.js";
 import { panel } from "./HudPanel.js";
-import { esc, tipAttr, cls } from "./hudDom.js";
-import { HUMANOID_PROFILE, zoneIdToSvgPart } from "../targeting/targetProfiles.js";
-
-function zoneChip(zone, selectedZoneId) {
-  const isSelected = zone.id === selectedZoneId;
-  return `<button type="button" class="${cls("ohud-zone-chip", isSelected ? "is-selected" : "")}"
-    data-action="select-target-zone" data-zone-id="${esc(zone.id)}"
-    aria-pressed="${isSelected ? "true" : "false"}"
-    ${tipAttr(zone.label, [])}>${esc(zone.label)}</button>`;
-}
+import { esc, tipAttr } from "./hudDom.js";
+import { zoneIdToSvgPart } from "../targeting/targetProfiles.js";
 
 export function renderTargetBlock(state) {
   const tv = selectTargetView(state);
@@ -36,18 +27,18 @@ export function renderTargetBlock(state) {
 
   const distLabel = Number.isFinite(tv.distance) ? `${tv.distance} m` : "—";
   const svgPart = zoneIdToSvgPart(tv.bodyPartId);
-  const zones = HUMANOID_PROFILE.zones;
-  const chips = zones.map((z) => zoneChip(z, tv.bodyPartId)).join("");
 
   const body = `<div class="ohud-target">
-    <div class="ohud-figure">
-      <div class="ohud-figure-svg">${humanoidSvg({ neutral: true, highlight: svgPart })}</div>
-      <div class="ohud-figure-shield" aria-hidden="true"${tipAttr("Target shield", ["Defence detail unavailable for non-owned entities"])}>${ICON_SHIELD}</div>
+    <div class="ohud-figure ohud-figure--targetable">
+      <div class="ohud-figure-svg">${humanoidSvg({ neutral: true, highlight: svgPart, targetable: true })}</div>
+      <div class="ohud-figure-shield" aria-hidden="true"${tipAttr("Target shield", ["Defence detail hidden for non-owned entities"])}>${ICON_SHIELD}</div>
     </div>
     <div class="ohud-target-meta">
       <div class="ohud-target-name" title="${esc(tv.name)}">${esc(tv.name)}</div>
-      <div class="ohud-target-dist"${tipAttr("Distance to target", [])}>${esc(distLabel)}</div>
-      <div class="ohud-zone-chips" role="group" aria-label="Target zone">${chips}</div>
+      <div class="ohud-target-sub">
+        <span class="ohud-target-zone"${tipAttr("Aimed zone", ["Click a body zone on the silhouette"])}>${esc(tv.bodyPartLabel)}</span>
+        <span class="ohud-target-dist"${tipAttr("Distance to target", [])}>${esc(distLabel)}</span>
+      </div>
       <button type="button" class="ohud-target-clear" data-action="clear-target"${tipAttr("Clear target", [])}>Clear</button>
     </div>
   </div>`;

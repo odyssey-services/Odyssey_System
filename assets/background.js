@@ -4691,6 +4691,93 @@ function getCharacterWeaponFeatures(characterWeaponId, settings) {
   );
 }
 
+// api/inventoryApi.js
+var inventoryApi_exports = {};
+__export(inventoryApi_exports, {
+  addCharacterAmmoStock: () => addCharacterAmmoStock,
+  addCharacterItem: () => addCharacterItem,
+  getCharacterInventory: () => getCharacterInventory,
+  getCharacterItemQuantity: () => getCharacterItemQuantity,
+  loadRoundsToMagazine: () => loadRoundsToMagazine,
+  removeCharacterAmmoStock: () => removeCharacterAmmoStock,
+  removeCharacterItemQuantity: () => removeCharacterItemQuantity,
+  unloadRoundsFromMagazine: () => unloadRoundsFromMagazine,
+  useCharacterItem: () => useCharacterItem
+});
+function getCharacterInventory(characterId, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.getCharacterInventory,
+    { p_character_id: characterId },
+    settings
+  );
+}
+function addCharacterItem(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.addCharacterItem,
+    { p_payload: payload },
+    settings
+  );
+}
+function removeCharacterItemQuantity(characterId, itemCode, quantity, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.removeCharacterItemQuantity,
+    {
+      p_character_id: characterId,
+      p_item_code: itemCode,
+      p_quantity: quantity
+    },
+    settings
+  );
+}
+function getCharacterItemQuantity(characterId, itemCode, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.getCharacterItemQuantity,
+    {
+      p_character_id: characterId,
+      p_item_code: itemCode
+    },
+    settings
+  );
+}
+function addCharacterAmmoStock(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.addCharacterAmmoStock,
+    { p_payload: payload },
+    settings
+  );
+}
+function removeCharacterAmmoStock(ammoStockId, quantity, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.removeCharacterAmmoStock,
+    {
+      p_ammo_stock_id: ammoStockId,
+      p_quantity: quantity
+    },
+    settings
+  );
+}
+function loadRoundsToMagazine(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.loadRoundsToMagazine,
+    { p_payload: payload },
+    settings
+  );
+}
+function unloadRoundsFromMagazine(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.unloadRoundsFromMagazine,
+    { p_payload: payload },
+    settings
+  );
+}
+function useCharacterItem(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.useCharacterItem,
+    { p_payload: payload },
+    settings
+  );
+}
+
 // hud/models/combatHudContracts.js
 var HUD_STATUS = Object.freeze({
   idle: "idle",
@@ -4965,14 +5052,16 @@ function readMagazine(mag) {
   const max = num(mag.capacity ?? mag.magazine_def?.capacity ?? mag.max_rounds ?? mag.max, 0);
   const current2 = num(mag.current_rounds ?? mag.current, 0);
   const ammoType = str(mag.ammo_type_name) ?? str(mag.ammo_type?.name) ?? str(mag.ammo_type_key) ?? str(typeof mag.ammo_type === "string" ? mag.ammo_type : null) ?? "\u2014";
-  const caliber = str(mag.magazine_def?.caliber_name) ?? str(mag.caliber_name) ?? str(mag.magazine_def?.caliber) ?? str(mag.caliber) ?? "";
+  const caliber = str(mag.magazine_def?.caliber) ?? str(mag.caliber) ?? str(mag.magazine_def?.caliber_name) ?? str(mag.caliber_name) ?? "";
+  const caliberLabel = str(mag.magazine_def?.caliber_name) ?? str(mag.caliber_name) ?? caliber ?? "";
   return {
     id: str(mag.id) ?? `mag-${Math.random().toString(36).slice(2)}`,
     ammoType,
     description: str(mag.ammo_type_name) ?? str(mag.name) ?? "",
     current: current2,
     max,
-    caliber
+    caliber,
+    caliberLabel
   };
 }
 function readFireModes(w) {
@@ -5076,6 +5165,18 @@ function mapWeaponOption(armory, weapon, selectedWeaponId) {
 function mapWeaponInventory(armory, selectedWeaponId) {
   const weapons = arr(armory?.weapons);
   return weapons.map((weapon) => mapWeaponOption(armory, weapon, selectedWeaponId));
+}
+function buildCanonicalArmory(armory, inventory) {
+  if (!armory || typeof armory !== "object" || armory.ok === false) return null;
+  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
+  if (!weapons.length) return null;
+  const inventoryMagazines = Array.isArray(inventory?.magazines) ? inventory.magazines.filter(Boolean) : [];
+  const armoryMagazines = Array.isArray(armory.magazines) ? armory.magazines.filter(Boolean) : [];
+  return {
+    ...armory,
+    weapons,
+    magazines: inventoryMagazines.length ? inventoryMagazines : armoryMagazines
+  };
 }
 function mapSkillColor(v) {
   const source = String(v ?? "").toLowerCase();
@@ -5631,14 +5732,27 @@ function setupSceneSelection(hooks = {}) {
         settings
       ),
       fetchCharacterBundle: async (characterId) => {
-        const bundle = await getCharacterRuntimeBundle(
-          {
-            character_id: characterId,
-            sections: HUD_RUNTIME_SECTIONS
-          },
-          settings
-        );
-        return bundle && typeof bundle === "object" ? { ...bundle, __hudDebug: { requestedSections: HUD_RUNTIME_SECTIONS } } : bundle;
+        const [bundle, armory, inventory] = await Promise.all([
+          getCharacterRuntimeBundle(
+            {
+              character_id: characterId,
+              sections: HUD_RUNTIME_SECTIONS
+            },
+            settings
+          ),
+          getCharacterArmory(characterId, settings).catch(() => null),
+          getCharacterInventory(characterId, settings).catch(() => null)
+        ]);
+        if (!bundle || typeof bundle !== "object") return bundle;
+        const merged = { ...bundle, __hudDebug: { requestedSections: HUD_RUNTIME_SECTIONS } };
+        const canonicalArmory = buildCanonicalArmory(armory, inventory);
+        if (canonicalArmory) {
+          merged.armory = canonicalArmory;
+          if (merged.sections && typeof merged.sections === "object") {
+            merged.sections = { ...merged.sections, armory: canonicalArmory };
+          }
+        }
+        return merged;
       }
     });
     function resetEphemeralForCharacter(characterId) {
@@ -5839,6 +5953,9 @@ var ZONE_TO_SVG_PART = Object.freeze({
   LEFT_LEG: "l_leg",
   RIGHT_LEG: "r_leg"
 });
+var SVG_PART_TO_ZONE = Object.freeze(
+  Object.fromEntries(Object.entries(ZONE_TO_SVG_PART).map(([zoneId, svgPart]) => [svgPart, zoneId]))
+);
 
 // hud/targeting/targetSelectionState.js
 var TARGETING_MODE = Object.freeze({
@@ -7344,93 +7461,6 @@ function unequipCharacterEquipmentItem(equipmentItemId, settings) {
 function updateCharacterEquipmentItem(payload, settings) {
   return callSupabaseRpc(
     EQUIPMENT_RPC_NAMES.updateCharacterEquipmentItem,
-    { p_payload: payload },
-    settings
-  );
-}
-
-// api/inventoryApi.js
-var inventoryApi_exports = {};
-__export(inventoryApi_exports, {
-  addCharacterAmmoStock: () => addCharacterAmmoStock,
-  addCharacterItem: () => addCharacterItem,
-  getCharacterInventory: () => getCharacterInventory,
-  getCharacterItemQuantity: () => getCharacterItemQuantity,
-  loadRoundsToMagazine: () => loadRoundsToMagazine,
-  removeCharacterAmmoStock: () => removeCharacterAmmoStock,
-  removeCharacterItemQuantity: () => removeCharacterItemQuantity,
-  unloadRoundsFromMagazine: () => unloadRoundsFromMagazine,
-  useCharacterItem: () => useCharacterItem
-});
-function getCharacterInventory(characterId, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.getCharacterInventory,
-    { p_character_id: characterId },
-    settings
-  );
-}
-function addCharacterItem(payload, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.addCharacterItem,
-    { p_payload: payload },
-    settings
-  );
-}
-function removeCharacterItemQuantity(characterId, itemCode, quantity, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.removeCharacterItemQuantity,
-    {
-      p_character_id: characterId,
-      p_item_code: itemCode,
-      p_quantity: quantity
-    },
-    settings
-  );
-}
-function getCharacterItemQuantity(characterId, itemCode, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.getCharacterItemQuantity,
-    {
-      p_character_id: characterId,
-      p_item_code: itemCode
-    },
-    settings
-  );
-}
-function addCharacterAmmoStock(payload, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.addCharacterAmmoStock,
-    { p_payload: payload },
-    settings
-  );
-}
-function removeCharacterAmmoStock(ammoStockId, quantity, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.removeCharacterAmmoStock,
-    {
-      p_ammo_stock_id: ammoStockId,
-      p_quantity: quantity
-    },
-    settings
-  );
-}
-function loadRoundsToMagazine(payload, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.loadRoundsToMagazine,
-    { p_payload: payload },
-    settings
-  );
-}
-function unloadRoundsFromMagazine(payload, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.unloadRoundsFromMagazine,
-    { p_payload: payload },
-    settings
-  );
-}
-function useCharacterItem(payload, settings) {
-  return callSupabaseRpc(
-    INVENTORY_RPC_NAMES.useCharacterItem,
     { p_payload: payload },
     settings
   );

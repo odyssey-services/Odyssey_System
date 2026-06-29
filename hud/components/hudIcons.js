@@ -103,21 +103,43 @@ function zoneAttr(zoneId, zonesMap, neutral) {
   return zoneStateClass(stateName);
 }
 
+const SVG_PART_TO_ZONE_ID = Object.freeze({
+  head: "HEAD",
+  torso: "TORSO",
+  l_arm: "LEFT_ARM",
+  r_arm: "RIGHT_ARM",
+  l_leg: "LEFT_LEG",
+  r_leg: "RIGHT_LEG",
+});
+
+const SVG_PART_LABEL = Object.freeze({
+  head: "Head",
+  torso: "Torso",
+  l_arm: "Left arm",
+  r_arm: "Right arm",
+  l_leg: "Left leg",
+  r_leg: "Right leg",
+});
+
 /**
  * Humanoid silhouette with six targetable zones. Each zone is filled by its
  * condition class. `highlight` outlines the selected target zone.
- * @param {{ zones?:Record<string,string>, highlight?:(string|null), neutral?:boolean }} [opts]
+ * When `targetable` is true, each silhouette part becomes the zone picker.
+ * @param {{ zones?:Record<string,string>, highlight?:(string|null), neutral?:boolean, targetable?:boolean }} [opts]
  */
 export function humanoidSvg(opts = {}) {
-  const { zones = {}, highlight = null, neutral = false } = opts;
-  const z = (id) => `ohud-zone ohud-zone--${zoneAttr(id, zones, neutral)}${highlight === id ? " is-target" : ""}`;
-  return `<svg viewBox="0 0 120 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true" class="ohud-silhouette">
-    <circle cx="60" cy="24" r="16" class="${z("head")}" data-zone="head"/>
-    <rect x="42" y="44" width="36" height="46" rx="11" class="${z("torso")}" data-zone="torso"/>
-    <rect x="24" y="48" width="14" height="40" rx="7" class="${z("l_arm")}" data-zone="l_arm"/>
-    <rect x="82" y="48" width="14" height="40" rx="7" class="${z("r_arm")}" data-zone="r_arm"/>
-    <rect x="45" y="94" width="14" height="44" rx="7" class="${z("l_leg")}" data-zone="l_leg"/>
-    <rect x="61" y="94" width="14" height="44" rx="7" class="${z("r_leg")}" data-zone="r_leg"/>
+  const { zones = {}, highlight = null, neutral = false, targetable = false } = opts;
+  const z = (id) => `ohud-zone ohud-zone--${zoneAttr(id, zones, neutral)}${highlight === id ? " is-target" : ""}${targetable ? " ohud-zone--clickable" : ""}`;
+  const a = (id) => targetable
+    ? ` data-zone="${id}" data-action="select-target-zone" data-zone-id="${SVG_PART_TO_ZONE_ID[id]}" role="button" tabindex="0" aria-label="${SVG_PART_LABEL[id]}"`
+    : ` data-zone="${id}"`;
+  return `<svg viewBox="0 0 120 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="${targetable ? "false" : "true"}" class="ohud-silhouette">
+    <circle cx="60" cy="24" r="16" class="${z("head")}"${a("head")}/>
+    <rect x="42" y="44" width="36" height="46" rx="11" class="${z("torso")}"${a("torso")}/>
+    <rect x="24" y="48" width="14" height="40" rx="7" class="${z("l_arm")}"${a("l_arm")}/>
+    <rect x="82" y="48" width="14" height="40" rx="7" class="${z("r_arm")}"${a("r_arm")}/>
+    <rect x="45" y="94" width="14" height="44" rx="7" class="${z("l_leg")}"${a("l_leg")}/>
+    <rect x="61" y="94" width="14" height="44" rx="7" class="${z("r_leg")}"${a("r_leg")}/>
   </svg>`;
 }
 

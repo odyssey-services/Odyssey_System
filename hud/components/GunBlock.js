@@ -111,10 +111,10 @@ export function renderGunBlock(state) {
     ? `<div class="ohud-reserve-list">${visibleReserve.map((mag) => reserveOption(mag, mag.id === reloadMag?.id)).join("")}${reserveMore}</div>`
     : "";
 
-  const body = `<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
+  const body = `${weaponList}<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
     ${mainCard}
     <div class="ohud-gun-side">${magCard}${ammoCard}</div>
-    ${weaponList}${reserveList}
+    ${reserveList}
   </div>`;
 
   return panel({ key: "gun", label: "Weapon", bodyHtml: body });
