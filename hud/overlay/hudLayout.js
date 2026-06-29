@@ -36,6 +36,8 @@ export const HUD_MODULE_POPOVER_IDS = Object.freeze({
 export const LEGACY_HUD_POPOVER_IDS = Object.freeze([
   "odyssey-hud-target", "odyssey-hud-modifiers", "odyssey-hud-action",
 ]);
+export const GUN_WEAPON_SELECTOR_POPOVER_ID = "odyssey-hud-gun-weapon-selector";
+export const GUN_MAGAZINE_SELECTOR_POPOVER_ID = "odyssey-hud-gun-magazine-selector";
 export const HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";
 export const HUD_PILL_POPOVER_ID = "odyssey-hud-pill";
 

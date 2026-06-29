@@ -5807,7 +5807,7 @@ function setupSceneSelection(hooks = {}) {
         ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.weaponSelectorOpen = false;
-        await refetchCurrent();
+        if (lastState) publishState(lastState);
         return;
       }
       if (type === "toggle-weapon-selector") {
@@ -5817,6 +5817,10 @@ function setupSceneSelection(hooks = {}) {
       }
       if (type === "close-weapon-selector") {
         ephemeral.weaponSelectorOpen = false;
+        if (lastState) publishState(lastState);
+        return;
+      }
+      if (type === "toggle-magazine-selector") {
         if (lastState) publishState(lastState);
         return;
       }
@@ -6503,6 +6507,8 @@ var LEGACY_HUD_POPOVER_IDS = Object.freeze([
   "odyssey-hud-modifiers",
   "odyssey-hud-action"
 ]);
+var GUN_WEAPON_SELECTOR_POPOVER_ID = "odyssey-hud-gun-weapon-selector";
+var GUN_MAGAZINE_SELECTOR_POPOVER_ID = "odyssey-hud-gun-magazine-selector";
 var HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";
 var HUD_PILL_POPOVER_ID = "odyssey-hud-pill";
 var BC_HUD_LAYOUT = "com.odyssey.combat-hud/layout";
@@ -6649,7 +6655,7 @@ function normalizeLayoutState(state) {
 var VIEWPORT_POLL_MS = 600;
 var PILL_W = 150;
 var PILL_H = 44;
-var GUN_SELECTOR_EXTRA_H = 112;
+var COMPANION_POPOVER_W = 280;
 var OPEN_ORDER = [...HUD_MODULE_IDS].sort(
   (a, b) => DEFAULT_HUD_LAYOUT_V2[a].zIndex - DEFAULT_HUD_LAYOUT_V2[b].zIndex
 );
@@ -6663,7 +6669,8 @@ var pollTimer = null;
 var lastSelectionStatus = SELECTION_STATUS.loading;
 var sceneCleanup = null;
 var targetSelection = null;
-var gunSelectorOpen = false;
+var gunWeaponSelectorOpen = false;
+var gunMagazineSelectorOpen = false;
 var cleanups = [];
 var SECONDARY_SET = new Set(SECONDARY_MODULE_IDS);
 function moduleShouldBeOpen(id) {
@@ -6725,10 +6732,7 @@ function paramsForRect(rect) {
   };
 }
 function moduleRect(moduleId) {
-  const rect = resolveModuleRect(moduleId, lastLayout.modules[moduleId], lastVW, lastVH);
-  if (moduleId !== "gun" || !gunSelectorOpen) return rect;
-  const extra = Math.min(GUN_SELECTOR_EXTRA_H, Math.max(0, rect.top));
-  return { ...rect, top: rect.top - extra, height: rect.height + extra };
+  return resolveModuleRect(moduleId, lastLayout.modules[moduleId], lastVW, lastVH);
 }
 async function openModule(moduleId) {
   const rect = moduleRect(moduleId);
@@ -6738,13 +6742,61 @@ async function openModule(moduleId) {
     ...paramsForRect(rect)
   });
 }
-async function setGunSelectorOpen(open) {
+function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W) {
+  if (!lastLayout.modules?.gun) return null;
+  const gunRect = moduleRect("gun");
+  const gap = 4;
+  return {
+    left: Math.max(0, gunRect.left + (gunRect.width - width) / 2),
+    top: Math.max(0, gunRect.top - 200 - gap),
+    width,
+    height: 200
+  };
+}
+async function setGunWeaponSelectorOpen(open) {
   const next = Boolean(open);
-  if (next === gunSelectorOpen) return;
-  gunSelectorOpen = next;
-  if (mode === "modules" && moduleShouldBeOpen("gun")) {
+  if (next === gunWeaponSelectorOpen) return;
+  gunWeaponSelectorOpen = next;
+  if (mode !== "modules") return;
+  if (next) {
+    const rect = companionPopoverRectAboveGun();
+    if (rect) {
+      try {
+        await lib_default.popover.open({
+          id: GUN_WEAPON_SELECTOR_POPOVER_ID,
+          url: pageUrl("gun-weapon-selector"),
+          ...paramsForRect(rect)
+        });
+      } catch (_e) {
+      }
+    }
+  } else {
     try {
-      await openModule("gun");
+      await lib_default.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID);
+    } catch (_e) {
+    }
+  }
+}
+async function setGunMagazineSelectorOpen(open) {
+  const next = Boolean(open);
+  if (next === gunMagazineSelectorOpen) return;
+  gunMagazineSelectorOpen = next;
+  if (mode !== "modules") return;
+  if (next) {
+    const rect = companionPopoverRectAboveGun();
+    if (rect) {
+      try {
+        await lib_default.popover.open({
+          id: GUN_MAGAZINE_SELECTOR_POPOVER_ID,
+          url: pageUrl("gun-magazine-selector"),
+          ...paramsForRect(rect)
+        });
+      } catch (_e) {
+      }
+    }
+  } else {
+    try {
+      await lib_default.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID);
     } catch (_e) {
     }
   }
@@ -6830,12 +6882,22 @@ async function closePill() {
 }
 async function applyMode() {
   if (mode === "collapsed") {
-    gunSelectorOpen = false;
+    gunWeaponSelectorOpen = false;
+    gunMagazineSelectorOpen = false;
+    await lib_default.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {
+    });
+    await lib_default.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {
+    });
     await closeEditorPopover();
     await closeAllModules();
     await openPill();
   } else if (mode === "editor") {
-    gunSelectorOpen = false;
+    gunWeaponSelectorOpen = false;
+    gunMagazineSelectorOpen = false;
+    await lib_default.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {
+    });
+    await lib_default.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {
+    });
     await closePill();
     await closeAllModules();
     await openEditor();
@@ -6902,14 +6964,23 @@ function setupCombatHudOverlay() {
         lastUiState = { ...lastUiState, ...next };
         if (collapseChanged) {
           mode = isCollapsed() ? "collapsed" : "modules";
-          if (isCollapsed()) gunSelectorOpen = false;
+          if (isCollapsed()) {
+            gunWeaponSelectorOpen = false;
+            gunMagazineSelectorOpen = false;
+          }
           await applyMode();
         }
       }));
       cleanups.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, async (event) => {
         const type = String(event?.data?.type ?? "");
-        if (type === "toggle-weapon-selector") await setGunSelectorOpen(!gunSelectorOpen);
-        else if (type === "close-weapon-selector") await setGunSelectorOpen(false);
+        if (type === "toggle-weapon-selector") await setGunWeaponSelectorOpen(!gunWeaponSelectorOpen);
+        else if (type === "close-weapon-selector" || type === "select-weapon") await setGunWeaponSelectorOpen(false);
+        else if (type === "toggle-magazine-selector") await setGunMagazineSelectorOpen(!gunMagazineSelectorOpen);
+        else if (type === "select-reload-mag") await setGunMagazineSelectorOpen(false);
+        else if (type === "reload") {
+          await setGunWeaponSelectorOpen(false);
+          await setGunMagazineSelectorOpen(false);
+        }
         if (type === "pick-target") sendTargetingCommand({ type: "pick" });
         else if (type === "cancel-target") sendTargetingCommand({ type: "cancel" });
         else if (type === "clear-target") sendTargetingCommand({ type: "clear" });
@@ -7952,7 +8023,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.25";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.26";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }

@@ -19,6 +19,8 @@ import { renderGunBlock } from "./GunBlock.js";
 import { renderSkillBlock } from "./SkillBlock.js";
 import { renderCombatControlBlock } from "./CombatControlBlock.js";
 import { renderBattleLogPanel } from "./BattleLogBlock.js";
+import { renderWeaponSelectorPanel } from "./WeaponSelectorPanel.js";
+import { renderMagazineSelectorPanel } from "./MagazineSelectorPanel.js";
 import { renderEmptyState, renderErrorState, renderLoadingState } from "./EmptyHudState.js";
 import { renderSelectionModule } from "../scene/selectionView.js";
 import { normalizeSelectionPayload } from "../scene/selectionState.js";
@@ -38,6 +40,8 @@ const BLOCK_RENDERERS = {
   skills: renderSkillBlock,
   combatControl: renderCombatControlBlock,
   log: renderBattleLogPanel,
+  "gun-weapon-selector": renderWeaponSelectorPanel,
+  "gun-magazine-selector": renderMagazineSelectorPanel,
 };
 
 /**
@@ -212,8 +216,11 @@ export function mountCombatHudModule(options) {
       case "select-weapon":
         integration.onCommand && integration.onCommand({ type: "select-weapon", weaponId: t.getAttribute("data-weapon-id") });
         break;
-      case "toggle-weapon-list":
+      case "toggle-weapon-selector":
         integration.onCommand && integration.onCommand({ type: "toggle-weapon-selector" });
+        break;
+      case "toggle-magazine-selector":
+        integration.onCommand && integration.onCommand({ type: "toggle-magazine-selector" });
         break;
       case "reload":
         integration.onCommand && integration.onCommand({

@@ -282,7 +282,7 @@ test("GunBlock closed by default hides weapon list", () => {
   assert.ok(!html.includes("ohud-weapon-list"));
 });
 
-test("GunBlock open selector renders list above single gun block", () => {
+test("GunBlock weapon selector is companion popover not in Gun block HTML", () => {
   const html = renderGunBlock(gunState({
     weaponSelectorOpen: true,
     available: [
@@ -290,9 +290,9 @@ test("GunBlock open selector renders list above single gun block", () => {
       { id: "w2", name: "Sidearm", type: "Pistol", selected: false, ammoLabel: "12/15" },
     ],
   }));
-  assert.ok(html.includes("ohud-weapon-list"));
-  assert.ok(html.indexOf("ohud-weapon-list") < html.indexOf('class="ohud-gun"'));
+  assert.ok(!html.includes("ohud-weapon-list"));
   assert.equal((html.match(/class="ohud-gun"/g) || []).length, 1);
+  assert.ok(html.includes('data-action="toggle-weapon-selector"'));
 });
 
 test("TargetBlock without target shows pick button", () => {

@@ -37,6 +37,8 @@ import {
   HUD_MODULE_IDS,
   HUD_MODULE_POPOVER_IDS,
   LEGACY_HUD_POPOVER_IDS,
+  GUN_WEAPON_SELECTOR_POPOVER_ID,
+  GUN_MAGAZINE_SELECTOR_POPOVER_ID,
   HUD_EDITOR_POPOVER_ID,
   HUD_PILL_POPOVER_ID,
   DEFAULT_HUD_LAYOUT_V2,
@@ -51,7 +53,7 @@ import {
 const VIEWPORT_POLL_MS = 600;
 const PILL_W = 150;
 const PILL_H = 44;
-const GUN_SELECTOR_EXTRA_H = 112;
+const COMPANION_POPOVER_W = 280;
 /** Module open order: ascending z-index → higher-z opens last → renders on top. */
 const OPEN_ORDER = [...HUD_MODULE_IDS].sort(
   (a, b) => DEFAULT_HUD_LAYOUT_V2[a].zIndex - DEFAULT_HUD_LAYOUT_V2[b].zIndex,
@@ -69,7 +71,8 @@ let pollTimer = null;
 let lastSelectionStatus = SELECTION_STATUS.loading;
 let sceneCleanup = null;
 let targetSelection = null;
-let gunSelectorOpen = false;
+let gunWeaponSelectorOpen = false;
+let gunMagazineSelectorOpen = false;
 /** @type {Array<() => void>} */
 const cleanups = [];
 
@@ -139,10 +142,7 @@ function paramsForRect(rect) {
 }
 
 function moduleRect(moduleId) {
-  const rect = resolveModuleRect(moduleId, lastLayout.modules[moduleId], lastVW, lastVH);
-  if (moduleId !== "gun" || !gunSelectorOpen) return rect;
-  const extra = Math.min(GUN_SELECTOR_EXTRA_H, Math.max(0, rect.top));
-  return { ...rect, top: rect.top - extra, height: rect.height + extra };
+  return resolveModuleRect(moduleId, lastLayout.modules[moduleId], lastVW, lastVH);
 }
 
 async function openModule(moduleId) {
@@ -154,12 +154,57 @@ async function openModule(moduleId) {
   });
 }
 
-async function setGunSelectorOpen(open) {
+function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W) {
+  if (!lastLayout.modules?.gun) return null;
+  const gunRect = moduleRect("gun");
+  const gap = 4;
+  return {
+    left: Math.max(0, gunRect.left + (gunRect.width - width) / 2),
+    top: Math.max(0, gunRect.top - 200 - gap),
+    width,
+    height: 200,
+  };
+}
+
+async function setGunWeaponSelectorOpen(open) {
   const next = Boolean(open);
-  if (next === gunSelectorOpen) return;
-  gunSelectorOpen = next;
-  if (mode === "modules" && moduleShouldBeOpen("gun")) {
-    try { await openModule("gun"); } catch (_e) { /* best effort */ }
+  if (next === gunWeaponSelectorOpen) return;
+  gunWeaponSelectorOpen = next;
+  if (mode !== "modules") return;
+  if (next) {
+    const rect = companionPopoverRectAboveGun();
+    if (rect) {
+      try {
+        await OBR.popover.open({
+          id: GUN_WEAPON_SELECTOR_POPOVER_ID,
+          url: pageUrl("gun-weapon-selector"),
+          ...paramsForRect(rect),
+        });
+      } catch (_e) { /* best effort */ }
+    }
+  } else {
+    try { await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID); } catch (_e) { /* ignore */ }
+  }
+}
+
+async function setGunMagazineSelectorOpen(open) {
+  const next = Boolean(open);
+  if (next === gunMagazineSelectorOpen) return;
+  gunMagazineSelectorOpen = next;
+  if (mode !== "modules") return;
+  if (next) {
+    const rect = companionPopoverRectAboveGun();
+    if (rect) {
+      try {
+        await OBR.popover.open({
+          id: GUN_MAGAZINE_SELECTOR_POPOVER_ID,
+          url: pageUrl("gun-magazine-selector"),
+          ...paramsForRect(rect),
+        });
+      } catch (_e) { /* best effort */ }
+    }
+  } else {
+    try { await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID); } catch (_e) { /* ignore */ }
   }
 }
 
@@ -242,12 +287,18 @@ async function closePill() {
 /** Reflect the current `mode` by (re)opening exactly the right popovers. */
 async function applyMode() {
   if (mode === "collapsed") {
-    gunSelectorOpen = false;
+    gunWeaponSelectorOpen = false;
+    gunMagazineSelectorOpen = false;
+    await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
+    await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
     await closeEditorPopover();
     await closeAllModules();
     await openPill();
   } else if (mode === "editor") {
-    gunSelectorOpen = false;
+    gunWeaponSelectorOpen = false;
+    gunMagazineSelectorOpen = false;
+    await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
+    await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
     await closePill();
     await closeAllModules();
     await openEditor();
@@ -312,21 +363,25 @@ export function setupCombatHudOverlay() {
         lastUiState = { ...lastUiState, ...next };
         if (collapseChanged) {
           mode = isCollapsed() ? "collapsed" : "modules";
-          if (isCollapsed()) gunSelectorOpen = false;
+          if (isCollapsed()) {
+            gunWeaponSelectorOpen = false;
+            gunMagazineSelectorOpen = false;
+          }
           await applyMode();
         }
       }));
 
-      // Transient module commands that affect popover lifecycle/geometry. The
-      // actual gameplay state stays in scene/target controllers; this controller
-      // only resizes the Gun iframe while the selector is open and bridges the
-      // existing HUD command channel to the Phase 3B targeting command channel.
+      // Transient module commands that affect companion-popover lifecycle.
       cleanups.push(OBR.broadcast.onMessage(BC_HUD_COMMAND, async (event) => {
         const type = String(event?.data?.type ?? "");
-        if (type === "toggle-weapon-selector") await setGunSelectorOpen(!gunSelectorOpen);
-        else if (type === "close-weapon-selector") await setGunSelectorOpen(false);
-        // select-weapon: onSelectionState from refetchCurrent closes the gun selector
-        // after lastPayload is updated — prevents a race where the new iframe gets stale data.
+        if (type === "toggle-weapon-selector") await setGunWeaponSelectorOpen(!gunWeaponSelectorOpen);
+        else if (type === "close-weapon-selector" || type === "select-weapon") await setGunWeaponSelectorOpen(false);
+        else if (type === "toggle-magazine-selector") await setGunMagazineSelectorOpen(!gunMagazineSelectorOpen);
+        else if (type === "select-reload-mag") await setGunMagazineSelectorOpen(false);
+        else if (type === "reload") {
+          await setGunWeaponSelectorOpen(false);
+          await setGunMagazineSelectorOpen(false);
+        }
 
         if (type === "pick-target") sendTargetingCommand({ type: "pick" });
         else if (type === "cancel-target") sendTargetingCommand({ type: "cancel" });
@@ -370,10 +425,13 @@ export async function teardownCombatHudOverlay() {
   lastUiState = { ...DEFAULT_HUD_UI_STATE };
   lastLayout = defaultLayoutState();
   lastSelectionStatus = SELECTION_STATUS.loading;
-  gunSelectorOpen = false;
+  gunWeaponSelectorOpen = false;
+  gunMagazineSelectorOpen = false;
   mode = "modules";
   await closeEditorPopover();
   await closePill();
   await closeAllModules();
+  await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
+  await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
   await closeLegacyPopovers();
 }

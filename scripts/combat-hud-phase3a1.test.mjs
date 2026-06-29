@@ -527,13 +527,13 @@ test("20. selectedWeaponId picks a non-first weapon and weapon selector is close
   const state = deriveSelectionState({ viewer: PLAYER, selectionIds: ["tok-1"], link: { characterId: "char-1" }, bundle });
   const payload = buildBroadcastPayload(state, { selectedWeaponId: "w-second" });
   const html = renderSelectionModule("gun", payload);
-  assert.ok(!html.includes("First Rifle"), "closed selector hides non-current weapon rows");
+  assert.ok(!html.includes("First Rifle"), "closed Gun block hides non-current weapon (companion popover only)");
   assert.ok(html.includes("Sidearm"), "selected weapon becomes current Gun weapon");
-  assert.ok(!html.includes("ohud-weapon-list"), "weapon list closed by default");
-  assert.ok(html.includes('data-action="toggle-weapon-list"'), "caret toggles selector");
+  assert.ok(!html.includes("ohud-weapon-list"), "weapon list not in Gun block (companion popover)");
+  assert.ok(html.includes('data-action="toggle-weapon-selector"'), "caret toggles companion selector");
 });
 
-test("20b. weapon selector opens only from transient ui state", () => {
+test("20b. weapon selector companion popover does not appear in Gun block HTML", () => {
   const first = canonicalWeapon({ id: "w-first", name: "First Rifle" });
   const second = canonicalWeapon({ id: "w-second", name: "Sidearm", cls: "Pistol" });
   const bundle = bundleWithWeapons([first, second], [
@@ -542,10 +542,10 @@ test("20b. weapon selector opens only from transient ui state", () => {
   const state = deriveSelectionState({ viewer: PLAYER, selectionIds: ["tok-1"], link: { characterId: "char-1" }, bundle });
   const payload = buildBroadcastPayload(state, { selectedWeaponId: "w-second", weaponSelectorOpen: true });
   const html = renderSelectionModule("gun", payload);
-  assert.ok(html.includes("First Rifle"), "open selector lists available weapons");
-  assert.ok(html.includes("Sidearm"), "open selector keeps selected weapon visible");
-  assert.ok(html.includes("ohud-weapon-list"), "weapon list rendered only while open");
-  assert.ok(html.includes('data-action="select-weapon"'));
+  assert.ok(!html.includes("First Rifle"), "other weapons not in Gun block (companion only)");
+  assert.ok(html.includes("Sidearm"), "Gun block shows selected weapon");
+  assert.ok(!html.includes("ohud-weapon-list"), "weapon list not in Gun block (companion)");
+  assert.ok(html.includes('data-action="toggle-weapon-selector"'), "toggle button for companion");
 });
 
 test("21. reserve magazines exclude inserted and empty magazines", () => {
