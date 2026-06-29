@@ -298,6 +298,12 @@ function readMagazine(mag) {
     str(mag.ammo_type_key) ??
     str(typeof mag.ammo_type === "string" ? mag.ammo_type : null) ??
     "—";
+  // Caliber used for COMPATIBILITY matching. Mirrors Resolve-Attack's
+  // magCaliberCode (magazine_def.caliber || caliber): the CODE is preferred so
+  // the value is identical for the loaded magazine and every reserve magazine of
+  // the same caliber — otherwise the selector's caliber filter would drop valid
+  // spares when only one of them carries the human caliber_name. A human label is
+  // exposed separately for display.
   const caliber =
     str(mag.magazine_def?.caliber) ??
     str(mag.caliber) ??
@@ -430,6 +436,35 @@ export function mapWeapon(armory, selectedWeaponId = null) {
   };
 }
 
+/**
+ * Merge a canonical get_character_armory payload with a get_character_inventory
+ * payload into a single armory section, mirroring Resolve Attack's storeInventory():
+ *   magazines = inventory.magazines (when present) else armory.magazines
+ *
+ * The HUD fetches armory + inventory in the selection pipeline (same RPCs the
+ * Resolve-Attack screen uses) because the runtime bundle's armory section does
+ * not always carry the working magazine details. This helper keeps that fetch
+ * pure/testable; the mapper above then reads weapons / loaded_magazine /
+ * magazines from the result exactly as before. Returns null when armory is
+ * absent or failed (caller keeps the bundle's own armory in that case).
+ *
+ * @param {object|null} armory     get_character_armory result
+ * @param {object|null} inventory  get_character_inventory result (or fallback)
+ * @returns {object|null}
+ */
+export function buildCanonicalArmory(armory, inventory) {
+  const base = armory && typeof armory === "object" && armory.ok !== false ? armory : null;
+  if (!base || !Array.isArray(base.weapons)) return null;
+  const invMags = Array.isArray(inventory?.magazines) ? inventory.magazines : [];
+  const armoryMags = Array.isArray(base.magazines) ? base.magazines : [];
+  return {
+    ...base,
+    // Inventory magazines win (physical character magazines); armory.magazines is
+    // the tolerant fallback when inventory is unavailable / errored.
+    magazines: invMags.length ? invMags : armoryMags,
+  };
+}
+
 // ─── Skills ─────────────────────────────────────────────────────────────────
 
 function normalizeEnum(v, validSet, fallback) {
@@ -469,19 +504,6 @@ function mapWeaponOption(armory, weapon, selectedWeaponId) {
 function mapWeaponInventory(armory, selectedWeaponId) {
   const weapons = arr(armory?.weapons);
   return weapons.map((weapon) => mapWeaponOption(armory, weapon, selectedWeaponId));
-}
-
-export function buildCanonicalArmory(armory, inventory) {
-  if (!armory || typeof armory !== "object" || armory.ok === false) return null;
-  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
-  if (!weapons.length) return null;
-  const inventoryMagazines = Array.isArray(inventory?.magazines) ? inventory.magazines.filter(Boolean) : [];
-  const armoryMagazines = Array.isArray(armory.magazines) ? armory.magazines.filter(Boolean) : [];
-  return {
-    ...armory,
-    weapons,
-    magazines: inventoryMagazines.length ? inventoryMagazines : armoryMagazines,
-  };
 }
 
 function mapSkillColor(v) {

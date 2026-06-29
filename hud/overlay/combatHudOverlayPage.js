@@ -31,6 +31,11 @@ import {
 import { ICON_MARK } from "../components/hudIcons.js";
 import { renderWeaponSelectorPanel } from "../components/WeaponSelectorPanel.js";
 import { renderMagazineSelectorPanel } from "../components/MagazineSelectorPanel.js";
+import { buildCompanionSelectorState } from "../scene/selectionView.js";
+
+const COMPANION_DEBUG = (() => {
+  try { return new URLSearchParams(window.location.search).get("debug") === "1"; } catch { return false; }
+})();
 
 function injectStyles() {
   for (const [id, css] of [
@@ -154,7 +159,13 @@ function start() {
   // These are ephemeral companion popovers opened by the overlay controller.
   // They subscribe to live scene-selection and render the weapon/magazine selector.
   if (moduleParam === "gun-weapon-selector" || moduleParam === "gun-magazine-selector") {
-    let liveState = null;
+    // The companion shares the controller-owned live snapshot — it does NOT make
+    // its own armory request. The raw BC_HUD_SELECTION payload is normalized
+    // through the SAME synthetic-state path the Gun module uses, so the selector
+    // renders an identical weapon view model (`snapshot.weapon.available`). While
+    // the first replay is in flight `selState` is null → "Loading…" (never a
+    // false empty list — the bug this fixes).
+    let rawPayload = null;
 
     function renderCompanion() {
       root.innerHTML = "";
@@ -162,20 +173,44 @@ function start() {
       host.className = "odyssey-hud ohud-module";
       host.setAttribute("data-module", moduleParam);
 
-      let html = "";
-      if (moduleParam === "gun-weapon-selector") {
-        html = renderWeaponSelectorPanel(liveState || {});
-      } else if (moduleParam === "gun-magazine-selector") {
-        html = renderMagazineSelectorPanel(liveState || {});
-      }
+      const selState = buildCompanionSelectorState(rawPayload);
+      const html = moduleParam === "gun-weapon-selector"
+        ? renderWeaponSelectorPanel(selState)
+        : renderMagazineSelectorPanel(selState);
       host.innerHTML = html;
       root.appendChild(host);
+
+      if (COMPANION_DEBUG) {
+        const avail = selState?.snapshot?.weapon?.available;
+        // eslint-disable-next-line no-console
+        console.info("[combatHud/companion:debug]", {
+          module: moduleParam,
+          commandRoute: moduleParam === "gun-weapon-selector" ? "gun-selector" : "magazine-selector",
+          selectorIframeReady: !!selState,
+          selectorRenderWeaponAvailableCount: Array.isArray(avail) ? avail.length : null,
+          selectedWeaponId: rawPayload?.ui?.selectedWeaponId ?? null,
+        });
+      }
     }
+
+    // Forward weapon/magazine selection clicks as HUD commands. The scene
+    // controller owns the resulting state (selectedWeaponId / reload mag) and
+    // re-publishes the snapshot; the overlay controller closes this companion.
+    root.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-action]");
+      if (!target || !available) return;
+      const action = target.getAttribute("data-action");
+      if (action === "select-weapon") {
+        send(BC_HUD_COMMAND, { type: "select-weapon", weaponId: target.getAttribute("data-weapon-id") });
+      } else if (action === "select-reload-mag") {
+        send(BC_HUD_COMMAND, { type: "select-reload-mag", magazineId: target.getAttribute("data-magazine-id") });
+      }
+    });
 
     if (available) {
       try {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
-          liveState = event?.data ?? null;
+          rawPayload = event?.data ?? null;
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});

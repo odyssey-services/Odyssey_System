@@ -11,7 +11,7 @@
 
 import { ICON_MARK } from "../components/hudIcons.js";
 import { esc } from "../components/hudDom.js";
-import { SELECTION_STATUS, PRIMARY_MODULE_ID } from "./selectionState.js";
+import { SELECTION_STATUS, PRIMARY_MODULE_ID, normalizeSelectionPayload } from "./selectionState.js";
 import { createInactiveCombatSession } from "../models/combatHudContracts.js";
 
 // Phase 3A.1: block renderers for live-ready mode.
@@ -203,4 +203,28 @@ export function renderSelectionModule(moduleId, payload, opts = {}) {
     return readyFallbackCard(moduleId);
   }
   return mutedCard(moduleId);
+}
+
+/**
+ * Build the synthetic block-renderer state a companion selector popover (weapon
+ * / magazine) needs, from a RAW broadcast selection payload.
+ *
+ * Returns `null` when the live snapshot has not arrived yet (no payload, not a
+ * viewable ready character, or `hudSnapshot` still absent) so the caller can
+ * render a controlled "Loading…" state instead of a FALSE "empty" list. This is
+ * the exact same normalize → synthetic-state path the Gun module uses, so the
+ * companion sees an IDENTICAL `snapshot.weapon` view model (`available`,
+ * `primary`, `reserveMagazines`, …) — no duplicated armory mapping, no extra
+ * Supabase call. A non-null return guarantees `state.snapshot.weapon` exists,
+ * so an empty `available` then legitimately means "no weapons available".
+ *
+ * @param {object|null} rawPayload  The BC_HUD_SELECTION event data.
+ * @returns {object|null} synthetic CombatHudState, or null while loading.
+ */
+export function buildCompanionSelectorState(rawPayload) {
+  const payload = normalizeSelectionPayload(rawPayload);
+  if (!payload) return null;
+  const isReady = payload.status === SELECTION_STATUS.ready && payload.access?.canView;
+  if (!isReady || !payload.hudSnapshot) return null; // snapshot not ready → loading
+  return buildSyntheticState(payload);
 }

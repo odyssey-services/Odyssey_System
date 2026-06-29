@@ -1,3 +1,10 @@
+// Combat HUD — Magazine Selector companion popover (Phase 3).
+//
+// Ephemeral popover that opens above the magazine card in the Gun module when
+// the player clicks the magazine-selector caret. Shows the list of available
+// (compatible, non-empty, non-inserted) spare magazines; each is clickable to
+// select it for reload without triggering the reload immediately.
+
 import { selectVisibleReserveMagazines } from "../core/combatHudSelectors.js";
 import { esc, cls } from "./hudDom.js";
 import { panel } from "./HudPanel.js";
@@ -13,6 +20,15 @@ function reserveOption(mag, selected) {
 }
 
 export function renderMagazineSelectorPanel(state) {
+  // No live snapshot yet → controlled loading state, not a false "no spares".
+  if (!state || !state.snapshot || !state.snapshot.weapon) {
+    return panel({
+      key: "gun-magazine-selector",
+      label: "Spare Magazines",
+      bodyHtml: `<div class="ohud-reserve-list is-loading">Loading magazines…</div>`,
+    });
+  }
+
   const reserve = selectVisibleReserveMagazines(state);
 
   if (!reserve.length) {
@@ -23,9 +39,6 @@ export function renderMagazineSelectorPanel(state) {
     });
   }
 
-  return panel({
-    key: "gun-magazine-selector",
-    label: "Spare Magazines",
-    bodyHtml: `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, false)).join("")}</div>`,
-  });
+  const body = `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, false)).join("")}</div>`;
+  return panel({ key: "gun-magazine-selector", label: "Spare Magazines", bodyHtml: body });
 }

@@ -5132,6 +5132,18 @@ function mapWeapon(armory, selectedWeaponId = null) {
     disabledReason: str(w.disabled_reason)
   };
 }
+function buildCanonicalArmory(armory, inventory) {
+  const base = armory && typeof armory === "object" && armory.ok !== false ? armory : null;
+  if (!base || !Array.isArray(base.weapons)) return null;
+  const invMags = Array.isArray(inventory?.magazines) ? inventory.magazines : [];
+  const armoryMags = Array.isArray(base.magazines) ? base.magazines : [];
+  return {
+    ...base,
+    // Inventory magazines win (physical character magazines); armory.magazines is
+    // the tolerant fallback when inventory is unavailable / errored.
+    magazines: invMags.length ? invMags : armoryMags
+  };
+}
 function normalizeEnum(v, validSet, fallback) {
   const s = String(v ?? "");
   return validSet.has(s) ? s : fallback;
@@ -5165,18 +5177,6 @@ function mapWeaponOption(armory, weapon, selectedWeaponId) {
 function mapWeaponInventory(armory, selectedWeaponId) {
   const weapons = arr(armory?.weapons);
   return weapons.map((weapon) => mapWeaponOption(armory, weapon, selectedWeaponId));
-}
-function buildCanonicalArmory(armory, inventory) {
-  if (!armory || typeof armory !== "object" || armory.ok === false) return null;
-  const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
-  if (!weapons.length) return null;
-  const inventoryMagazines = Array.isArray(inventory?.magazines) ? inventory.magazines.filter(Boolean) : [];
-  const armoryMagazines = Array.isArray(armory.magazines) ? armory.magazines.filter(Boolean) : [];
-  return {
-    ...armory,
-    weapons,
-    magazines: inventoryMagazines.length ? inventoryMagazines : armoryMagazines
-  };
 }
 function mapSkillColor(v) {
   const source = String(v ?? "").toLowerCase();
@@ -8048,7 +8048,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.27";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.28";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }

@@ -5649,7 +5649,14 @@ function weaponOption(option) {
   </button>`;
 }
 function renderWeaponSelectorPanel(state) {
-  const availableWeapons = Array.isArray(state?.snapshot?.weapon?.available) ? state.snapshot.weapon.available : [];
+  if (!state || !state.snapshot || !state.snapshot.weapon) {
+    return panel({
+      key: "gun-weapon-selector",
+      label: "Weapons",
+      bodyHtml: `<div class="ohud-weapon-list is-loading">Loading weapons\u2026</div>`
+    });
+  }
+  const availableWeapons = Array.isArray(state.snapshot.weapon.available) ? state.snapshot.weapon.available : [];
   if (!availableWeapons.length) {
     return panel({
       key: "gun-weapon-selector",
@@ -5657,11 +5664,8 @@ function renderWeaponSelectorPanel(state) {
       bodyHtml: `<div class="ohud-weapon-list is-empty">No weapons available</div>`
     });
   }
-  return panel({
-    key: "gun-weapon-selector",
-    label: "Weapons",
-    bodyHtml: `<div class="ohud-weapon-list">${availableWeapons.map(weaponOption).join("")}</div>`
-  });
+  const body = `<div class="ohud-weapon-list">${availableWeapons.map(weaponOption).join("")}</div>`;
+  return panel({ key: "gun-weapon-selector", label: "Weapons", bodyHtml: body });
 }
 
 // hud/components/MagazineSelectorPanel.js
@@ -5675,6 +5679,13 @@ function reserveOption(mag, selected) {
   </button>`;
 }
 function renderMagazineSelectorPanel(state) {
+  if (!state || !state.snapshot || !state.snapshot.weapon) {
+    return panel({
+      key: "gun-magazine-selector",
+      label: "Spare Magazines",
+      bodyHtml: `<div class="ohud-reserve-list is-loading">Loading magazines\u2026</div>`
+    });
+  }
   const reserve = selectVisibleReserveMagazines(state);
   if (!reserve.length) {
     return panel({
@@ -5683,11 +5694,8 @@ function renderMagazineSelectorPanel(state) {
       bodyHtml: `<div class="ohud-reserve-list is-empty">No compatible spare magazines</div>`
     });
   }
-  return panel({
-    key: "gun-magazine-selector",
-    label: "Spare Magazines",
-    bodyHtml: `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, false)).join("")}</div>`
-  });
+  const body = `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, false)).join("")}</div>`;
+  return panel({ key: "gun-magazine-selector", label: "Spare Magazines", bodyHtml: body });
 }
 
 // hud/components/EmptyHudState.js
@@ -5899,6 +5907,13 @@ function renderSelectionModule(moduleId, payload, opts = {}) {
     return readyFallbackCard(moduleId);
   }
   return mutedCard(moduleId);
+}
+function buildCompanionSelectorState(rawPayload) {
+  const payload = normalizeSelectionPayload(rawPayload);
+  if (!payload) return null;
+  const isReady = payload.status === SELECTION_STATUS.ready && payload.access?.canView;
+  if (!isReady || !payload.hudSnapshot) return null;
+  return buildSyntheticState(payload);
 }
 
 // hud/components/Tooltip.js
@@ -6578,6 +6593,13 @@ function mountCombatHudLayoutEditor(options) {
 }
 
 // hud/overlay/combatHudOverlayPage.js
+var COMPANION_DEBUG = (() => {
+  try {
+    return new URLSearchParams(window.location.search).get("debug") === "1";
+  } catch {
+    return false;
+  }
+})();
 function injectStyles() {
   for (const [id, css] of [
     ["ohud-tokens", combatHudTokens_default],
@@ -6698,20 +6720,36 @@ function start() {
       const host = document.createElement("div");
       host.className = "odyssey-hud ohud-module";
       host.setAttribute("data-module", moduleParam);
-      let html = "";
-      if (moduleParam === "gun-weapon-selector") {
-        html = renderWeaponSelectorPanel(liveState || {});
-      } else if (moduleParam === "gun-magazine-selector") {
-        html = renderMagazineSelectorPanel(liveState || {});
-      }
+      const selState = buildCompanionSelectorState(rawPayload);
+      const html = moduleParam === "gun-weapon-selector" ? renderWeaponSelectorPanel(selState) : renderMagazineSelectorPanel(selState);
       host.innerHTML = html;
       root.appendChild(host);
+      if (COMPANION_DEBUG) {
+        const avail = selState?.snapshot?.weapon?.available;
+        console.info("[combatHud/companion:debug]", {
+          module: moduleParam,
+          commandRoute: moduleParam === "gun-weapon-selector" ? "gun-selector" : "magazine-selector",
+          selectorIframeReady: !!selState,
+          selectorRenderWeaponAvailableCount: Array.isArray(avail) ? avail.length : null,
+          selectedWeaponId: rawPayload?.ui?.selectedWeaponId ?? null
+        });
+      }
     };
-    let liveState = null;
+    let rawPayload = null;
+    root.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-action]");
+      if (!target || !available) return;
+      const action = target.getAttribute("data-action");
+      if (action === "select-weapon") {
+        send(BC_HUD_COMMAND, { type: "select-weapon", weaponId: target.getAttribute("data-weapon-id") });
+      } else if (action === "select-reload-mag") {
+        send(BC_HUD_COMMAND, { type: "select-reload-mag", magazineId: target.getAttribute("data-magazine-id") });
+      }
+    });
     if (available) {
       try {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
-          liveState = event?.data ?? null;
+          rawPayload = event?.data ?? null;
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});
