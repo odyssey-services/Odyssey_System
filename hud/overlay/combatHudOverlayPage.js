@@ -29,6 +29,8 @@ import {
   writeStoredLayout,
 } from "./hudLayout.js";
 import { ICON_MARK } from "../components/hudIcons.js";
+import { renderWeaponSelectorPanel } from "../components/WeaponSelectorPanel.js";
+import { renderMagazineSelectorPanel } from "../components/MagazineSelectorPanel.js";
 
 function injectStyles() {
   for (const [id, css] of [
@@ -145,6 +147,41 @@ function start() {
     if (moduleParam === "player" && available) {
       send(BC_HUD_LAYOUT, readStoredLayout(window.localStorage));
     }
+    return;
+  }
+
+  // --- Companion popover modules (gun-weapon-selector / gun-magazine-selector) ---
+  // These are ephemeral companion popovers opened by the overlay controller.
+  // They subscribe to live scene-selection and render the weapon/magazine selector.
+  if (moduleParam === "gun-weapon-selector" || moduleParam === "gun-magazine-selector") {
+    let liveState = null;
+
+    function renderCompanion() {
+      root.innerHTML = "";
+      const host = document.createElement("div");
+      host.className = "odyssey-hud ohud-module";
+      host.setAttribute("data-module", moduleParam);
+
+      let html = "";
+      if (moduleParam === "gun-weapon-selector") {
+        html = renderWeaponSelectorPanel(liveState || {});
+      } else if (moduleParam === "gun-magazine-selector") {
+        html = renderMagazineSelectorPanel(liveState || {});
+      }
+      host.innerHTML = html;
+      root.appendChild(host);
+    }
+
+    if (available) {
+      try {
+        OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
+          liveState = event?.data ?? null;
+          renderCompanion();
+        });
+        send(BC_HUD_SELECTION_REQUEST, {});
+      } catch (_e) { /* standalone */ }
+    }
+    renderCompanion();
     return;
   }
 

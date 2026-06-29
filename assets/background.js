@@ -5734,10 +5734,7 @@ function setupSceneSelection(hooks = {}) {
       fetchCharacterBundle: async (characterId) => {
         const [bundle, armory, inventory] = await Promise.all([
           getCharacterRuntimeBundle(
-            {
-              character_id: characterId,
-              sections: HUD_RUNTIME_SECTIONS
-            },
+            { character_id: characterId, sections: HUD_RUNTIME_SECTIONS },
             settings
           ),
           getCharacterArmory(characterId, settings).catch(() => null),
@@ -5817,10 +5814,6 @@ function setupSceneSelection(hooks = {}) {
       }
       if (type === "close-weapon-selector") {
         ephemeral.weaponSelectorOpen = false;
-        if (lastState) publishState(lastState);
-        return;
-      }
-      if (type === "toggle-magazine-selector") {
         if (lastState) publishState(lastState);
         return;
       }
@@ -8055,7 +8048,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.26";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.27";
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }

@@ -6692,6 +6692,35 @@ function start() {
     }
     return;
   }
+  if (moduleParam === "gun-weapon-selector" || moduleParam === "gun-magazine-selector") {
+    let renderCompanion = function() {
+      root.innerHTML = "";
+      const host = document.createElement("div");
+      host.className = "odyssey-hud ohud-module";
+      host.setAttribute("data-module", moduleParam);
+      let html = "";
+      if (moduleParam === "gun-weapon-selector") {
+        html = renderWeaponSelectorPanel(liveState || {});
+      } else if (moduleParam === "gun-magazine-selector") {
+        html = renderMagazineSelectorPanel(liveState || {});
+      }
+      host.innerHTML = html;
+      root.appendChild(host);
+    };
+    let liveState = null;
+    if (available) {
+      try {
+        lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
+          liveState = event?.data ?? null;
+          renderCompanion();
+        });
+        send(BC_HUD_SELECTION_REQUEST, {});
+      } catch (_e) {
+      }
+    }
+    renderCompanion();
+    return;
+  }
   mountCombatHudLayoutEditor({ root, uiState, layout: readStoredLayout(window.localStorage), integration: {} });
 }
 if (lib_default && lib_default.isAvailable) {

@@ -84,18 +84,22 @@ export function setupSceneSelection(hooks = {}) {
         settings,
       ),
       fetchCharacterBundle: async (characterId) => {
+        // Fetch the runtime bundle PLUS the canonical armory/inventory (the same
+        // RPCs the Resolve-Attack screen uses). The armory/inventory path carries
+        // the working magazine details (loaded_magazine, magazines, calibers) that
+        // the bundle's own armory section can omit. Inventory is optional: when it
+        // errors (known backend 25006) buildCanonicalArmory falls back to
+        // armory.magazines, exactly like Resolve-Attack's storeInventory().
         const [bundle, armory, inventory] = await Promise.all([
           getCharacterRuntimeBundle(
-            {
-              character_id: characterId,
-              sections: HUD_RUNTIME_SECTIONS,
-            },
+            { character_id: characterId, sections: HUD_RUNTIME_SECTIONS },
             settings,
           ),
           getCharacterArmory(characterId, settings).catch(() => null),
           getCharacterInventory(characterId, settings).catch(() => null),
         ]);
         if (!bundle || typeof bundle !== "object") return bundle;
+
         const merged = { ...bundle, __hudDebug: { requestedSections: HUD_RUNTIME_SECTIONS } };
         const canonicalArmory = buildCanonicalArmory(armory, inventory);
         if (canonicalArmory) {
@@ -164,6 +168,10 @@ export function setupSceneSelection(hooks = {}) {
       const type = String(command.type ?? "");
       ephemeral.commandStatus = null;
       if (type === "select-weapon") {
+        // Weapon selection is PURE LOCAL ephemeral state — no server mutation. The
+        // mapper re-derives weapon.primary from selectedWeaponId on every publish,
+        // so a local publishState immediately swaps the active weapon. (The overlay
+        // controller closes/relays the gun popover off the same BC_HUD_COMMAND.)
         ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.weaponSelectorOpen = false;
@@ -177,10 +185,6 @@ export function setupSceneSelection(hooks = {}) {
       }
       if (type === "close-weapon-selector") {
         ephemeral.weaponSelectorOpen = false;
-        if (lastState) publishState(lastState);
-        return;
-      }
-      if (type === "toggle-magazine-selector") {
         if (lastState) publishState(lastState);
         return;
       }
