@@ -142,7 +142,8 @@ create table if not exists public.odyssey_character_perks (
   perk_def_id uuid not null references public.odyssey_perk_defs(id) on delete cascade,
   acquired_at timestamptz not null default timezone('utc', now()),
   notes text,
-  unique (character_id, perk_def_id)
+  constraint odyssey_character_perks_character_perk_key
+    unique (character_id, perk_def_id)
 );
 
 create index if not exists odyssey_character_perks_character_idx

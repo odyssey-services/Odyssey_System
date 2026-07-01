@@ -33125,7 +33125,13 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     );
     if (!result) return;
     await refreshAttackerArmoryInventory();
-    banner(refs.invStatus, "ok", `Loaded ${dash(result.loaded_quantity)} round(s).`);
+    const loaded = Number(result.loaded_quantity ?? result.loaded_rounds ?? 0);
+    const requested = Number(result.requested_quantity ?? loaded);
+    banner(
+      refs.invStatus,
+      "ok",
+      result.partial ? `Loaded ${dash(loaded)} of ${dash(requested)} available slot(s). Ammo stock is empty.` : `Loaded ${dash(loaded)} round(s).`
+    );
   }
   async function onUnloadRounds() {
     if (!state.inv.opsMagId) {
