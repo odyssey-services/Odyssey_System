@@ -24,6 +24,7 @@ import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/sett
 import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/characterPlacementApi.js";
 import { loadWeaponProfileMagazine, getCharacterArmory } from "../../api/weaponApi.js";
 import { getCharacterInventory } from "../../api/inventoryApi.js";
+import { resolveReloadMagazineId, normalizeReloadRpcResult } from "./reloadPolicy.js";
 import { BC_HUD_COMMAND, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST } from "../overlay/overlayConstants.js";
 import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
 import { buildCanonicalArmory } from "../runtime/runtimeBundleMapper.js";
@@ -57,7 +58,13 @@ export function setupSceneSelection(hooks = {}) {
     preparedAction: null,
     targeting: { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" },
     commandStatus: null,
+    // Raw { ok, error, message } from the last loadWeaponProfileMagazine RPC
+    // call, so ?debug=1 can show the server's actual verdict — see
+    // buildReloadDebugInfo() in selectionState.js.
+    reloadRpcResult: null,
   };
+  let debugEnabled = false;
+  try { debugEnabled = new URLSearchParams(window.location.search).get("debug") === "1"; } catch (_e) { debugEnabled = false; }
   /** @type {Array<() => void>} */
   const cleanups = [];
 
@@ -121,6 +128,7 @@ export function setupSceneSelection(hooks = {}) {
       ephemeral.preparedAction = null;
       ephemeral.targeting = { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" };
       ephemeral.commandStatus = null;
+      ephemeral.reloadRpcResult = null;
     }
 
     function buildEphemeralForPayload() {
@@ -130,11 +138,14 @@ export function setupSceneSelection(hooks = {}) {
         : { kind: "weapon-attack", weaponId: ephemeral.selectedWeaponId };
       return {
         selectedWeaponId: ephemeral.selectedWeaponId,
+        selectedReloadMagazineId: ephemeral.selectedReloadMagazineId,
         weaponSelectorOpen: ephemeral.weaponSelectorOpen,
         preparedAction: ephemeral.preparedAction,
         targeting: ephemeral.targeting,
         commandStatus: ephemeral.commandStatus,
         activeIntent,
+        debugEnabled,
+        reloadRpcResult: ephemeral.reloadRpcResult,
       };
     }
 
@@ -174,6 +185,7 @@ export function setupSceneSelection(hooks = {}) {
         // controller closes/relays the gun popover off the same BC_HUD_COMMAND.)
         ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
         ephemeral.selectedReloadMagazineId = null;
+        ephemeral.reloadRpcResult = null;
         ephemeral.weaponSelectorOpen = false;
         if (lastState) publishState(lastState);
         return;
@@ -205,18 +217,38 @@ export function setupSceneSelection(hooks = {}) {
       if (type === "reload") {
         const weapon = lastPayload.hudSnapshot?.weapon?.primary ?? null;
         const weaponId = String(command.weaponId ?? weapon?.id ?? "").trim();
-        const magazineId = String(command.magazineId ?? ephemeral.selectedReloadMagazineId ?? weapon?.reserveMagazines?.[0]?.id ?? "").trim();
+        // The player's EXPLICIT selection wins outright — the HUD must never
+        // silently substitute a different magazine (e.g. reserve[0]). See
+        // reloadPolicy.js for the shared, unit-tested fallback chain.
+        const magazineId = resolveReloadMagazineId(command, ephemeral, weapon) ?? "";
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
         if (!weaponId || !magazineId || !profileId) {
           ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
+          ephemeral.reloadRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/magazineId missing before RPC call." };
           if (lastState) publishState(lastState);
           return;
         }
         try {
-          await loadWeaponProfileMagazine({ character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magazineId }, settings);
-          ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
-          await refetchCurrent();
+          const result = await loadWeaponProfileMagazine(
+            { character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magazineId },
+            settings,
+          );
+          // The RPC returns { ok:false, error, message } as a normal (HTTP 200)
+          // jsonb body on validation failures — it does NOT throw. Treating any
+          // non-throwing call as success silently swallowed real backend
+          // rejections (the UI reported "Reloaded." while nothing changed).
+          const normalized = normalizeReloadRpcResult(result);
+          ephemeral.reloadRpcResult = normalized;
+          if (normalized.ok) {
+            ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
+            ephemeral.selectedReloadMagazineId = null;
+            await refetchCurrent();
+          } else {
+            ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
+            if (lastState) publishState(lastState);
+          }
         } catch (error) {
+          ephemeral.reloadRpcResult = { ok: false, error: "RPC_EXCEPTION", message: String(error?.message ?? error ?? "Reload failed.") };
           ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed.") };
           if (lastState) publishState(lastState);
         }

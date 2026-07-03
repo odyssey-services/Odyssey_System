@@ -58,20 +58,23 @@ export function renderGunBlock(state) {
 
   const body = `<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
     ${mainCard}
-    <div class="ohud-gun-side">${renderMagazineCard(weapon, mag, reserve)}${renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag)}</div>
+    <div class="ohud-gun-side">${renderMagazineCard(weapon, reserve, reloadMag)}${renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag)}</div>
   </div>`;
 
   return panel({ key: "gun", label: "Weapon", bodyHtml: body });
 }
 
-function renderMagazineCard(weapon, mag, reserve) {
+// The small magazine card shows ONLY the selected spare (reload candidate) —
+// never the inserted magazine's ammo type. The ammo card below is the only
+// place the inserted magazine's rounds are shown; the two must never mix.
+function renderMagazineCard(weapon, reserve, reloadMag) {
   const usesMag = Boolean(weapon.usesMagazine);
-  const ammoLabel = mag?.ammoType ?? (weapon.usesConsumable ? "item" : "—");
+  const spareLabel = reloadMag ? (reloadMag.ammoType ?? reloadMag.caliberLabel ?? "—") : "—";
 
   return `<div class="ohud-mag-card${usesMag ? "" : " is-consumable"}">
     <span class="ohud-mag-icon" aria-hidden="true">${usesMag ? ICON_MAGAZINE : ""}</span>
     ${usesMag && reserve.length > 0 ? `<button type="button" class="ohud-mag-selector-btn" data-action="toggle-magazine-selector" aria-label="Choose magazine" title="Select spare magazine">${ICON_CARET_DOWN}</button>` : ""}
-    <span class="ohud-mag-type">${esc(ammoLabel)}</span>
+    <span class="ohud-mag-type"${tipAttr("Selected spare magazine", [esc(spareLabel)])}>${esc(spareLabel)}</span>
   </div>`;
 }
 

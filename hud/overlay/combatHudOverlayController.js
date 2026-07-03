@@ -31,10 +31,13 @@ import {
   SELECTION_STATUS,
   SECONDARY_MODULE_IDS,
 } from "../scene/selectionState.js";
+import { selectVisibleReserveMagazines } from "../core/combatHudSelectors.js";
 import {
   moduleShouldBeOpen as computeModuleShouldBeOpen,
   secondaryReconcileAction,
   characterChangeClosesCompanions,
+  computeCompanionSelectorHeight,
+  COMPANION_SELECTOR_WIDTH,
 } from "./hudPopoverLifecycle.js";
 import {
   HUD_MODULE_IDS,
@@ -77,6 +80,10 @@ let targetSelection = null;
 let gunWeaponSelectorOpen = false;
 let gunMagazineSelectorOpen = false;
 let lastActiveCharacterId = null;
+/** Latest full trimmed selection payload (the same one module iframes get),
+ *  kept ONLY to size the magazine-selector companion popover to its content
+ *  (row count) at open time — never read for anything else here. */
+let lastSelectionPayload = null;
 /** @type {Array<() => void>} */
 const cleanups = [];
 
@@ -155,16 +162,33 @@ async function openModule(moduleId) {
   });
 }
 
-function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W) {
+function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W, height = 200) {
   if (!lastLayout.modules?.gun) return null;
   const gunRect = moduleRect("gun");
   const gap = 4;
   return {
     left: Math.max(0, gunRect.left + (gunRect.width - width) / 2),
-    top: Math.max(0, gunRect.top - 200 - gap),
+    top: Math.max(0, gunRect.top - height - gap),
     width,
-    height: 200,
+    height,
   };
+}
+
+/** Row count backing the currently-open magazine selector, from the latest
+ *  trimmed selection payload — reuses the SAME eligibility selector the Gun
+ *  module and the companion panel use (single source of truth). */
+function visibleReserveMagazineCount() {
+  const hudSnapshot = lastSelectionPayload?.hudSnapshot ?? null;
+  if (!hudSnapshot) return 0;
+  return selectVisibleReserveMagazines({ snapshot: hudSnapshot }).length;
+}
+
+/** The magazine-selector companion popover is sized to its content (row
+ *  count), not a fixed oversized rect — a fixed rect left a large empty area
+ *  and squeezed the rows into a tiny absolutely-positioned corner. */
+function magazineSelectorRect() {
+  const height = computeCompanionSelectorHeight(visibleReserveMagazineCount());
+  return companionPopoverRectAboveGun(COMPANION_SELECTOR_WIDTH, height);
 }
 
 async function setGunWeaponSelectorOpen(open) {
@@ -194,7 +218,7 @@ async function setGunMagazineSelectorOpen(open) {
   gunMagazineSelectorOpen = next;
   if (mode !== "modules") return;
   if (next) {
-    const rect = companionPopoverRectAboveGun();
+    const rect = magazineSelectorRect();
     if (rect) {
       try {
         await OBR.popover.open({
@@ -353,6 +377,7 @@ export function setupCombatHudOverlay() {
       sceneCleanup = setupSceneSelection({
         shouldDeferSelection: () => targetSelection?.isPicking?.() === true,
         onSelectionState: async (payload) => {
+          lastSelectionPayload = payload ?? null;
           try { targetSelection?.handleActiveSelection?.(payload); } catch (_e) { /* targeting owns its errors */ }
           try {
             const nextCharId = payload?.characterId ?? null;
@@ -439,6 +464,7 @@ export async function teardownCombatHudOverlay() {
   gunWeaponSelectorOpen = false;
   gunMagazineSelectorOpen = false;
   lastActiveCharacterId = null;
+  lastSelectionPayload = null;
   mode = "modules";
   await closeEditorPopover();
   await closePill();

@@ -8,6 +8,7 @@
 // This file is the unit-tested heart of Phase 3A/3A.1 and loads under plain Node.
 
 import { buildRuntimeDebugSummary, mapBundleToHudSnapshot } from "../runtime/runtimeBundleMapper.js";
+import { resolveReloadMagazineId } from "./reloadPolicy.js";
 
 /** Canonical selection statuses (string values are part of the wire contract). */
 export const SELECTION_STATUS = Object.freeze({
@@ -189,6 +190,52 @@ function readyState(viewer, selectedItemId, characterId, bundle) {
  *  - Phase 3A.1: attach a normalized HUD snapshot (gun/skills/modifiers/log)
  *    so module iframes render real data without additional RPC calls.
  */
+/**
+ * Compact, privacy-safe reload diagnostics for `?debug=1` only. Never includes
+ * the armory/inventory bundle — only the handful of ids/values needed to
+ * compare the HUD's reload path against Character → Inventory's. PURE.
+ */
+function buildReloadDebugInfo(hudSnapshot, ephemeral) {
+  const weapon = hudSnapshot?.weapon?.primary ?? null;
+  const reserve = Array.isArray(weapon?.reserveMagazines) ? weapon.reserveMagazines : [];
+  const insertedId = weapon?.loadedMagazine?.id ?? null;
+  const selectedId = ephemeral.selectedReloadMagazineId ?? null;
+  const selectedMag = selectedId ? (reserve.find((m) => m.id === selectedId) ?? null) : null;
+  const profileId = weapon?.activeProfileId ?? null;
+  // The candidate actually used if Reload were clicked right now — the SAME
+  // shared policy sceneSelectionController's "reload" command handler uses.
+  const candidateMagId = resolveReloadMagazineId(null, ephemeral, weapon);
+
+  let reloadUiAllowed = true;
+  let reloadUiBlockReason = null;
+  if (!weapon) { reloadUiAllowed = false; reloadUiBlockReason = "NO_WEAPON"; }
+  else if (!weapon.usesMagazine) { reloadUiAllowed = false; reloadUiBlockReason = "WEAPON_DOES_NOT_USE_MAGAZINE"; }
+  else if (!weapon.id) { reloadUiAllowed = false; reloadUiBlockReason = "MISSING_WEAPON_ID"; }
+  else if (!profileId) { reloadUiAllowed = false; reloadUiBlockReason = "MISSING_PROFILE_ID"; }
+  else if (!candidateMagId) { reloadUiAllowed = false; reloadUiBlockReason = "NO_ELIGIBLE_MAGAZINE"; }
+
+  return {
+    selectedWeaponId: weapon?.id ?? null,
+    selectedWeaponProfileId: profileId,
+    selectedReloadMagazineId: candidateMagId,
+    selectedReloadMagazine: selectedMag
+      ? {
+          rounds: selectedMag.current,
+          capacity: selectedMag.max,
+          caliber: selectedMag.caliber,
+          isInserted: selectedMag.id === insertedId,
+          isCompatible: true, // present in the eligibility-filtered reserve list
+        }
+      : null,
+    reloadUiAllowed,
+    reloadUiBlockReason,
+    reloadPayload: (weapon?.id && profileId && candidateMagId)
+      ? { character_weapon_id: weapon.id, profile_id: profileId, character_magazine_id: candidateMagId }
+      : null,
+    reloadRpcResult: ephemeral.reloadRpcResult ?? null,
+  };
+}
+
 export function buildBroadcastPayload(state, ephemeral = {}) {
   const s = state ?? createInitialSelectionState(null);
   const ready = s.status === SELECTION_STATUS.ready && s.access?.canView === true;
@@ -229,6 +276,9 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
         ? (ephemeral.targeting.selectedTargetIds[0] ?? null)
         : null,
     };
+    if (ephemeral.debugEnabled) {
+      debug.reload = buildReloadDebugInfo(hudSnapshot, ephemeral);
+    }
   }
 
   return {

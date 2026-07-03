@@ -4778,6 +4778,24 @@ function useCharacterItem(payload, settings) {
   );
 }
 
+// hud/scene/reloadPolicy.js
+function resolveReloadMagazineId(command, ephemeral, weapon) {
+  const raw = command?.magazineId ?? ephemeral?.selectedReloadMagazineId ?? weapon?.reserveMagazines?.[0]?.id ?? "";
+  const trimmed = String(raw).trim();
+  return trimmed || null;
+}
+function isReloadRpcOk(result) {
+  return result?.ok !== false;
+}
+function normalizeReloadRpcResult(result) {
+  const ok = isReloadRpcOk(result);
+  return {
+    ok,
+    error: ok ? null : result?.error ?? null,
+    message: result?.message ?? null
+  };
+}
+
 // hud/models/combatHudContracts.js
 var HUD_STATUS = Object.freeze({
   idle: "idle",
@@ -5530,6 +5548,50 @@ function readyState(viewer, selectedItemId, characterId, bundle) {
     error: { code: null, message: null }
   };
 }
+function buildReloadDebugInfo(hudSnapshot, ephemeral) {
+  const weapon = hudSnapshot?.weapon?.primary ?? null;
+  const reserve = Array.isArray(weapon?.reserveMagazines) ? weapon.reserveMagazines : [];
+  const insertedId = weapon?.loadedMagazine?.id ?? null;
+  const selectedId = ephemeral.selectedReloadMagazineId ?? null;
+  const selectedMag = selectedId ? reserve.find((m) => m.id === selectedId) ?? null : null;
+  const profileId = weapon?.activeProfileId ?? null;
+  const candidateMagId = resolveReloadMagazineId(null, ephemeral, weapon);
+  let reloadUiAllowed = true;
+  let reloadUiBlockReason = null;
+  if (!weapon) {
+    reloadUiAllowed = false;
+    reloadUiBlockReason = "NO_WEAPON";
+  } else if (!weapon.usesMagazine) {
+    reloadUiAllowed = false;
+    reloadUiBlockReason = "WEAPON_DOES_NOT_USE_MAGAZINE";
+  } else if (!weapon.id) {
+    reloadUiAllowed = false;
+    reloadUiBlockReason = "MISSING_WEAPON_ID";
+  } else if (!profileId) {
+    reloadUiAllowed = false;
+    reloadUiBlockReason = "MISSING_PROFILE_ID";
+  } else if (!candidateMagId) {
+    reloadUiAllowed = false;
+    reloadUiBlockReason = "NO_ELIGIBLE_MAGAZINE";
+  }
+  return {
+    selectedWeaponId: weapon?.id ?? null,
+    selectedWeaponProfileId: profileId,
+    selectedReloadMagazineId: candidateMagId,
+    selectedReloadMagazine: selectedMag ? {
+      rounds: selectedMag.current,
+      capacity: selectedMag.max,
+      caliber: selectedMag.caliber,
+      isInserted: selectedMag.id === insertedId,
+      isCompatible: true
+      // present in the eligibility-filtered reserve list
+    } : null,
+    reloadUiAllowed,
+    reloadUiBlockReason,
+    reloadPayload: weapon?.id && profileId && candidateMagId ? { character_weapon_id: weapon.id, profile_id: profileId, character_magazine_id: candidateMagId } : null,
+    reloadRpcResult: ephemeral.reloadRpcResult ?? null
+  };
+}
 function buildBroadcastPayload(state, ephemeral = {}) {
   const s = state ?? createInitialSelectionState(null);
   const ready = s.status === SELECTION_STATUS.ready && s.access?.canView === true;
@@ -5565,6 +5627,9 @@ function buildBroadcastPayload(state, ephemeral = {}) {
       selectedObrTokenId: s.selectedItemId ?? null,
       resolvedTargetTokenId: Array.isArray(ephemeral.targeting?.selectedTargetIds) ? ephemeral.targeting.selectedTargetIds[0] ?? null : null
     };
+    if (ephemeral.debugEnabled) {
+      debug.reload = buildReloadDebugInfo(hudSnapshot, ephemeral);
+    }
   }
   return {
     status: s.status,
@@ -5706,8 +5771,18 @@ function setupSceneSelection(hooks = {}) {
     weaponSelectorOpen: false,
     preparedAction: null,
     targeting: { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" },
-    commandStatus: null
+    commandStatus: null,
+    // Raw { ok, error, message } from the last loadWeaponProfileMagazine RPC
+    // call, so ?debug=1 can show the server's actual verdict — see
+    // buildReloadDebugInfo() in selectionState.js.
+    reloadRpcResult: null
   };
+  let debugEnabled = false;
+  try {
+    debugEnabled = new URLSearchParams(window.location.search).get("debug") === "1";
+  } catch (_e) {
+    debugEnabled = false;
+  }
   const cleanups2 = [];
   function broadcast(payload) {
     try {
@@ -5761,17 +5836,21 @@ function setupSceneSelection(hooks = {}) {
       ephemeral.preparedAction = null;
       ephemeral.targeting = { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" };
       ephemeral.commandStatus = null;
+      ephemeral.reloadRpcResult = null;
     }
     function buildEphemeralForPayload() {
       const prepared = ephemeral.preparedAction;
       const activeIntent = prepared?.kind === "skill" && prepared.id ? { kind: "skill", id: prepared.id } : { kind: "weapon-attack", weaponId: ephemeral.selectedWeaponId };
       return {
         selectedWeaponId: ephemeral.selectedWeaponId,
+        selectedReloadMagazineId: ephemeral.selectedReloadMagazineId,
         weaponSelectorOpen: ephemeral.weaponSelectorOpen,
         preparedAction: ephemeral.preparedAction,
         targeting: ephemeral.targeting,
         commandStatus: ephemeral.commandStatus,
-        activeIntent
+        activeIntent,
+        debugEnabled,
+        reloadRpcResult: ephemeral.reloadRpcResult
       };
     }
     function publishState(state) {
@@ -5803,6 +5882,7 @@ function setupSceneSelection(hooks = {}) {
       if (type === "select-weapon") {
         ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
         ephemeral.selectedReloadMagazineId = null;
+        ephemeral.reloadRpcResult = null;
         ephemeral.weaponSelectorOpen = false;
         if (lastState) publishState(lastState);
         return;
@@ -5834,18 +5914,31 @@ function setupSceneSelection(hooks = {}) {
       if (type === "reload") {
         const weapon = lastPayload.hudSnapshot?.weapon?.primary ?? null;
         const weaponId = String(command.weaponId ?? weapon?.id ?? "").trim();
-        const magazineId = String(command.magazineId ?? ephemeral.selectedReloadMagazineId ?? weapon?.reserveMagazines?.[0]?.id ?? "").trim();
+        const magazineId = resolveReloadMagazineId(command, ephemeral, weapon) ?? "";
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
         if (!weaponId || !magazineId || !profileId) {
           ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
+          ephemeral.reloadRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/magazineId missing before RPC call." };
           if (lastState) publishState(lastState);
           return;
         }
         try {
-          await loadWeaponProfileMagazine({ character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magazineId }, settings);
-          ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
-          await refetchCurrent();
+          const result = await loadWeaponProfileMagazine(
+            { character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magazineId },
+            settings
+          );
+          const normalized = normalizeReloadRpcResult(result);
+          ephemeral.reloadRpcResult = normalized;
+          if (normalized.ok) {
+            ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
+            ephemeral.selectedReloadMagazineId = null;
+            await refetchCurrent();
+          } else {
+            ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
+            if (lastState) publishState(lastState);
+          }
         } catch (error) {
+          ephemeral.reloadRpcResult = { ok: false, error: "RPC_EXCEPTION", message: String(error?.message ?? error ?? "Reload failed.") };
           ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed.") };
           if (lastState) publishState(lastState);
         }
@@ -6478,6 +6571,31 @@ function setupTargetSelection(options = {}) {
   };
 }
 
+// hud/core/combatHudSelectors.js
+function selectVisibleReserveMagazines(state) {
+  const weapon = state?.snapshot?.weapon?.primary ?? null;
+  if (!weapon || !weapon.usesMagazine) return [];
+  const loaded = weapon.loadedMagazine ?? null;
+  const loadedId = loaded?.id ?? null;
+  const loadedCaliber = loaded?.caliber ?? null;
+  const reserve = Array.isArray(weapon.reserveMagazines) ? weapon.reserveMagazines : [];
+  return reserve.filter((mag) => {
+    if (!mag) return false;
+    if (mag.id === loadedId) return false;
+    if ((mag.current ?? 0) <= 0) return false;
+    if (loadedCaliber && mag.caliber !== loadedCaliber) return false;
+    return true;
+  });
+}
+var BODY_PART_LABELS = Object.freeze({
+  head: "HEAD",
+  torso: "TORSO",
+  l_arm: "L.ARM",
+  r_arm: "R.ARM",
+  l_leg: "L.LEG",
+  r_leg: "R.LEG"
+});
+
 // hud/overlay/hudLayout.js
 var HUD_LAYOUT_REFERENCE_VIEWPORT = Object.freeze({ width: 1920, height: 1080 });
 var LAYOUT_VERSION = 2;
@@ -6661,6 +6779,18 @@ function secondaryReconcileAction(prevStatus, nextStatus) {
 function characterChangeClosesCompanions(prevCharId, nextCharId) {
   return (prevCharId ?? null) !== (nextCharId ?? null);
 }
+var COMPANION_SELECTOR_WIDTH = 210;
+var ROW_HEIGHT = 22;
+var ROW_GAP = 4;
+var PANEL_CHROME_HEIGHT = 27;
+var MIN_HEIGHT = 56;
+var MAX_HEIGHT = 220;
+function computeCompanionSelectorHeight(rowCount) {
+  const rows = Math.max(1, Number(rowCount) || 0);
+  const rowsHeight = rows * ROW_HEIGHT + (rows - 1) * ROW_GAP;
+  const total = PANEL_CHROME_HEIGHT + rowsHeight;
+  return Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, total));
+}
 
 // hud/overlay/combatHudOverlayController.js
 var VIEWPORT_POLL_MS = 600;
@@ -6683,6 +6813,7 @@ var targetSelection = null;
 var gunWeaponSelectorOpen = false;
 var gunMagazineSelectorOpen = false;
 var lastActiveCharacterId = null;
+var lastSelectionPayload = null;
 var cleanups = [];
 var SECONDARY_SET2 = new Set(SECONDARY_MODULE_IDS);
 function moduleShouldBeOpen2(id) {
@@ -6751,16 +6882,25 @@ async function openModule(moduleId) {
     ...paramsForRect(rect)
   });
 }
-function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W) {
+function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W, height = 200) {
   if (!lastLayout.modules?.gun) return null;
   const gunRect = moduleRect("gun");
   const gap = 4;
   return {
     left: Math.max(0, gunRect.left + (gunRect.width - width) / 2),
-    top: Math.max(0, gunRect.top - 200 - gap),
+    top: Math.max(0, gunRect.top - height - gap),
     width,
-    height: 200
+    height
   };
+}
+function visibleReserveMagazineCount() {
+  const hudSnapshot = lastSelectionPayload?.hudSnapshot ?? null;
+  if (!hudSnapshot) return 0;
+  return selectVisibleReserveMagazines({ snapshot: hudSnapshot }).length;
+}
+function magazineSelectorRect() {
+  const height = computeCompanionSelectorHeight(visibleReserveMagazineCount());
+  return companionPopoverRectAboveGun(COMPANION_SELECTOR_WIDTH, height);
 }
 async function setGunWeaponSelectorOpen(open) {
   const next = Boolean(open);
@@ -6792,7 +6932,7 @@ async function setGunMagazineSelectorOpen(open) {
   gunMagazineSelectorOpen = next;
   if (mode !== "modules") return;
   if (next) {
-    const rect = companionPopoverRectAboveGun();
+    const rect = magazineSelectorRect();
     if (rect) {
       try {
         await lib_default.popover.open({
@@ -6966,6 +7106,7 @@ function setupCombatHudOverlay() {
       sceneCleanup = setupSceneSelection({
         shouldDeferSelection: () => targetSelection?.isPicking?.() === true,
         onSelectionState: async (payload) => {
+          lastSelectionPayload = payload ?? null;
           try {
             targetSelection?.handleActiveSelection?.(payload);
           } catch (_e) {

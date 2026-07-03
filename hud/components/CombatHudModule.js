@@ -174,6 +174,24 @@ export function mountCombatHudModule(options) {
     el.innerHTML = `${bodyHtml(state)}${controlsHtml()}${debugBadge(state)}<div class="ohud-toast" hidden></div>`;
   }
 
+  /** De-dupe key for the last commandStatus a toast was shown for — the same
+   *  {type,message} can arrive on unrelated re-broadcasts (e.g. a sibling
+   *  selection refresh) until the next user command resets it; without this,
+   *  every such re-render would re-pop the toast. */
+  let lastCommandStatusKey = null;
+
+  /** Surface ephemeral.commandStatus (reload success/failure, etc.) as a
+   *  toast. Without this, a reload REJECTED by the backend (e.g. an
+   *  incompatible/not-found magazine) produced ZERO visible feedback — the UI
+   *  looked like "Reload did nothing" instead of showing the real reason. */
+  function maybeShowCommandStatusToast() {
+    const status = liveSelection?.ui?.commandStatus ?? null;
+    const key = status ? `${status.type}:${status.message}` : null;
+    if (key === lastCommandStatusKey) return;
+    lastCommandStatusKey = key;
+    if (status?.message) showToast(status.message);
+  }
+
   /** Apply a LIVE scene-selection payload (Phase 3A). `null`/invalid → fall back
    *  to the mock render. Re-renders only this module's own content — no popover
    *  reopen, no layout change. */
@@ -181,6 +199,7 @@ export function mountCombatHudModule(options) {
     liveSelection = payload ? normalizeSelectionPayload(payload) : null;
     logLiveDebug(liveSelection);
     render();
+    maybeShowCommandStatusToast();
   }
 
   function showToast(text) {

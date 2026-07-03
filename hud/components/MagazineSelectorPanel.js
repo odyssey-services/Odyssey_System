@@ -2,19 +2,25 @@
 //
 // Ephemeral popover that opens above the magazine card in the Gun module when
 // the player clicks the magazine-selector caret. Shows the list of available
-// (compatible, non-empty, non-inserted) spare magazines; each is clickable to
-// select it for reload without triggering the reload immediately.
+// (compatible, non-empty, non-inserted) spare magazines — full-round OR
+// partially-loaded, fullness is NEVER a selection requirement — each is
+// clickable to select it for reload without triggering the reload immediately.
 
 import { selectVisibleReserveMagazines } from "../core/combatHudSelectors.js";
 import { esc, cls } from "./hudDom.js";
 import { panel } from "./HudPanel.js";
 
+/** Short ammo/caliber label for the left side of a row (e.g. ".45exp", "9x19 hj"). */
+function reserveLabel(mag) {
+  return mag.ammoType || mag.caliberLabel || mag.description || "Magazine";
+}
+
 function reserveOption(mag, selected) {
-  const desc = mag.description || mag.ammoType || "Magazine";
+  const label = reserveLabel(mag);
   const rounds = `${Number(mag.current ?? 0)}/${Number(mag.max ?? 0)}`;
   return `<button type="button" class="${cls("ohud-reserve-mag", selected ? "is-selected" : "")}"
-    data-action="select-reload-mag" data-magazine-id="${esc(mag.id)}" title="${esc(desc)}">
-    <span class="ohud-reserve-mag-desc">${esc(desc)}</span>
+    data-action="select-reload-mag" data-magazine-id="${esc(mag.id)}" title="${esc(label)} — ${esc(rounds)}">
+    <span class="ohud-reserve-mag-label">${esc(label)}</span>
     <span class="ohud-reserve-mag-rounds">${esc(rounds)}</span>
   </button>`;
 }
@@ -39,6 +45,7 @@ export function renderMagazineSelectorPanel(state) {
     });
   }
 
-  const body = `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, false)).join("")}</div>`;
+  const selectedId = state?.ui?.selectedReloadMagazineId ?? null;
+  const body = `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, mag.id === selectedId)).join("")}</div>`;
   return panel({ key: "gun-magazine-selector", label: "Spare Magazines", bodyHtml: body });
 }
