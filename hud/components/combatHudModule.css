@@ -232,6 +232,30 @@
 }
 .ohud-mag-selector-btn:hover { border-color: var(--odyssey-cyan); }
 
+/* Debug Log companion popover (Phase 3D.1, ?debug=1 only). */
+.ohud-debuglog-clear {
+  font-size: 8px; font-weight: 700; padding: 1px 6px;
+  border: 1px solid var(--odyssey-hud-border); border-radius: 6px;
+  background: transparent; color: var(--odyssey-hud-muted); cursor: pointer;
+}
+.ohud-debuglog-clear:hover { border-color: var(--odyssey-red, #e74c3c); color: var(--odyssey-hud-text); }
+.ohud-debuglog-list {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
+  overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 0;
+}
+.ohud-debuglog-row {
+  display: flex; gap: 5px; align-items: baseline; font-size: 8.5px; line-height: 1.3;
+  padding: 1px 3px; border-radius: 4px; background: rgba(10, 16, 31, 0.5);
+}
+.ohud-debuglog-row.is-fail { background: rgba(231, 76, 60, 0.12); }
+.ohud-debuglog-time { color: var(--odyssey-hud-dim); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.ohud-debuglog-cat { color: var(--odyssey-cyan); font-weight: 700; flex: 0 0 auto; }
+.ohud-debuglog-action { color: var(--odyssey-hud-text); flex: 0 0 auto; }
+.ohud-debuglog-details {
+  color: var(--odyssey-hud-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.ohud-debuglog-empty { font-size: 10px; color: var(--odyssey-hud-dim); display: grid; place-items: center; flex: 1; padding: 8px; }
+
 /* Modifier section — dense 2-column chip grid, ≤6 then +N, no horizontal overflow. */
 .ohud-cc-mod .ohud-panel-head { min-height: 10px; }
 .ohud-cc-mod .ohud-mods { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; align-content: start; overflow: hidden; }

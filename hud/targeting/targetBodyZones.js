@@ -12,16 +12,23 @@
 //
 // Privacy: the "combat" section also carries shield/psi/combat_flags/
 // status_summary for the target — none of that is read or kept here. Only
-// zoneId + bodyPartId + canBeTargeted survive past this function; the caller
+// zoneId + bodyPartId + canBeTargeted + the body-CONDITION (state/colorToken/
+// label — via the shared bodyConditionPolicy, the same one the source's own
+// silhouette uses) survive past this function; the caller
 // (targetSelectionController.js) must never store or forward the raw bundle.
+// Condition is COLOR ONLY here — never the raw wound counts a hover tooltip
+// would need (Player Block hover numbers are source-only, never for a target;
+// see PlayerBlock.js / bodyConditionPolicy.bodyConditionDetailLines()).
 
 import { normalizePartId } from "../runtime/runtimeBundleMapper.js";
-import { svgPartToZoneId } from "./targetProfiles.js";
+import { svgPartToZoneId, zoneIdToSvgPart } from "./targetProfiles.js";
+import { evaluateBodyCondition } from "./bodyConditionPolicy.js";
 
 /**
  * @param {object|null} bundle  Raw get_character_runtime_bundle result for the
  *   TARGET character, requested with `sections:["combat"]` only.
- * @returns {Array<{ zoneId:string, bodyPartId:string, canBeTargeted:boolean }>}
+ * @returns {Array<{ zoneId:string, bodyPartId:string, canBeTargeted:boolean,
+ *   state:string, colorToken:string, label:string }>}
  */
 export function mapTargetBodyZones(bundle) {
   const combat = bundle?.sections?.combat ?? bundle?.combat ?? null;
@@ -33,9 +40,30 @@ export function mapTargetBodyZones(bundle) {
     const zoneId = svgPartToZoneId(normalizePartId(bp));
     if (!zoneId) continue;
     const canBeTargeted = bp?.can_be_targeted === false ? false : !(bp?.disabled || bp?.destroyed);
-    out.push({ zoneId, bodyPartId, canBeTargeted });
+    const condition = evaluateBodyCondition(bp);
+    out.push({
+      zoneId, bodyPartId, canBeTargeted,
+      state: condition.state, colorToken: condition.colorToken, label: condition.label,
+      // The ZONE_STATES-enum-compatible value humanoidSvg()/zoneStateClass()
+      // actually render from (bodyConditionPolicy's "minor" maps to "wounded"
+      // here) — see buildTargetZonesMap() below.
+      zoneState: condition.zoneState,
+    });
   }
   return out;
+}
+
+/** Build the `{svgPartId: ZONE_STATES value}` map humanoidSvg({zones}) needs,
+ *  from a resolved target's bodyZones list. Any zone missing from the list
+ *  simply isn't in the map — hudIcons.zoneAttr() already renders a missing
+ *  entry as "unknown", never a false "healthy". */
+export function buildTargetZonesMap(bodyZones) {
+  const map = {};
+  for (const z of Array.isArray(bodyZones) ? bodyZones : []) {
+    const svgPart = zoneIdToSvgPart(z.zoneId);
+    if (svgPart) map[svgPart] = z.zoneState;
+  }
+  return map;
 }
 
 /** Resolve the real body-part UUID for `zoneId` from a pre-fetched zones list. */

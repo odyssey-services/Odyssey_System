@@ -18,6 +18,17 @@ function deltaClass(delta) {
 }
 
 function entryRow(e) {
+  // Phase 3D.1: a real, server-result-only combat log entry (attack/reload/
+  // fire-mode) — see hud/log/combatResultLogPolicy.js. Distinct shape from the
+  // Phase 0 mock entries below (kind/actor/action/target/delta); rendered as a
+  // title line + short safe detail lines, never a fabricated dice/damage value.
+  if (Array.isArray(e.details)) {
+    const accent = e.outcome === "failure" ? "miss" : "hit";
+    return `<li class="ohud-log-row ohud-log-row--result">
+      <div class="ohud-log-result-title ohud-log-delta--${accent}">${esc(e.title)}</div>
+      ${e.details.map((d) => `<div class="ohud-log-result-detail">${esc(d)}</div>`).join("")}
+    </li>`;
+  }
   if (e.kind === "system") {
     return `<li class="ohud-log-row ohud-log-row--system">▸ ${esc(e.action || e.summary)}</li>`;
   }
@@ -32,14 +43,30 @@ function entryRow(e) {
   </li>`;
 }
 
+/** Real combat-result entries (see combatResultLogPolicy.js) are already
+ *  stored NEWEST FIRST — take the first 5 directly, never reorder them.
+ *  Legacy/mock entries (oldest-first) keep using the existing, tested
+ *  selectCompactBattleLog() contract (documented "newest last"). */
+function selectRecentLogEntries(state) {
+  const raw = state?.snapshot?.battleLog?.entries ?? [];
+  if (raw.length && Array.isArray(raw[0]?.details)) return raw.slice(0, 5);
+  return selectCompactBattleLog(state);
+}
+
 export function renderBattleLogPanel(state) {
-  const entries = selectCompactBattleLog(state);
+  const entries = selectRecentLogEntries(state);
   const list = entries.length
     ? `<ul class="ohud-log-list">${entries.map(entryRow).join("")}</ul>`
     : `<div class="ohud-log-empty">No combat log yet.</div>`;
+  // Phase 3D.1: the DEBUG button (and the companion popover it opens) exist
+  // ONLY under ?debug=1 — in normal play this button is not rendered at all.
+  const debugButton = state?.ui?.debugEnabled
+    ? `<button type="button" class="ohud-log-debug-btn" data-action="toggle-debug-log" aria-label="Open debug log" title="Debug log (?debug=1)">DEBUG</button>`
+    : "";
   return `<section class="ohud-panel ohud-log-panel" data-block="log">
     <div class="ohud-panel-head">
       <span class="ohud-panel-label">Battle Log</span>
+      ${debugButton}
       <button type="button" class="ohud-icon-btn" data-action="toggle-log" aria-label="Close log">${ICON_CARET_DOWN}</button>
     </div>
     ${list}

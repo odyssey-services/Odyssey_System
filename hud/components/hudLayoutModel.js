@@ -74,15 +74,18 @@ export function resolveBodyMode(state) {
   }
 }
 
-/** Map a semantic zone state → the CSS modifier suffix used in the stylesheet. */
+/** Map a semantic zone state → the CSS modifier suffix used in the stylesheet.
+ *  An unrecognized/missing state maps to "unknown" — it must NEVER silently
+ *  render as "healthy" (that was the Phase 3D.1 bug: a target whose combat
+ *  data hadn't arrived yet, or was denied by RLS, looked perfectly healthy). */
 export function zoneStateClass(stateName) {
   switch (stateName) {
+    case ZONE_STATES.healthy: return "healthy";
     case ZONE_STATES.wounded: return "wounded";
     case ZONE_STATES.serious: return "serious";
     case ZONE_STATES.critical: return "critical";
     case ZONE_STATES.disabled: return "disabled";
-    case ZONE_STATES.healthy:
-    default: return "healthy";
+    default: return "unknown";
   }
 }
 

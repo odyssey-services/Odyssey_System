@@ -74,6 +74,9 @@
   --odyssey-hud-zone-serious: var(--odyssey-orange);
   --odyssey-hud-zone-critical: var(--odyssey-red);
   --odyssey-hud-zone-disabled: #39414f;
+  /* Combat data missing/denied (e.g. a target refresh blocked by RLS) — a
+   * distinct dim hatch-like grey, never the same as healthy. */
+  --odyssey-hud-zone-unknown: #2a3040;
 
   /* ---- Resources ---- */
   --odyssey-hud-shield: #5b9be0;

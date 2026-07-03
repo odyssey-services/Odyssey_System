@@ -263,6 +263,7 @@ export function selectVisibleStatuses(state, limit = 5) {
  * @returns {{
  *   hasTarget:boolean, name:(string|null), kind:string,
  *   bodyPartId:string, bodyPartLabel:string, distance:(number|null),
+ *   zonesMap: Record<string,string>,
  * }}
  */
 export function selectTargetView(state) {
@@ -274,6 +275,7 @@ export function selectTargetView(state) {
     name: null,
     kind: "humanoid",
     bodyPartId, bodyPartLabel: selectBodyPartLabel(bodyPartId), distance: null,
+    zonesMap: {},
   };
   if (Array.isArray(targeting.selectedTargetIds) && targeting.selectedTargetIds.length > 0) {
     return {
@@ -284,6 +286,9 @@ export function selectTargetView(state) {
       bodyPartId,
       bodyPartLabel: selectBodyPartLabel(bodyPartId),
       distance: Number.isFinite(targeting.distance) ? targeting.distance : null,
+      // Phase 3D.1: color-only body-zone condition (svgPartId -> ZONE_STATES
+      // value), never raw wound counts — see TargetBlock.js / bodyConditionPolicy.js.
+      zonesMap: targeting.zonesMap && typeof targeting.zonesMap === "object" ? targeting.zonesMap : {},
     };
   }
   const session = selectCombatSession(state);

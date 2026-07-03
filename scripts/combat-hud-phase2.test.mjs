@@ -114,7 +114,10 @@ test("5. buildEmptyStateModel returns calm guidance per reason", () => {
 test("6. zoneStateClass / accentClass map semantic names to css suffixes", () => {
   assert.equal(zoneStateClass("critical"), "critical");
   assert.equal(zoneStateClass("healthy"), "healthy");
-  assert.equal(zoneStateClass("unknown"), "healthy");
+  // Phase 3D.1: an unrecognized/missing zone state must render as "unknown",
+  // never silently fall back to "healthy" (that hid missing/denied combat data).
+  assert.equal(zoneStateClass("unknown"), "unknown");
+  assert.equal(zoneStateClass("bogus-state"), "unknown");
   assert.equal(accentClass("attack"), "attack");
   assert.equal(accentClass("psionic"), "psionic");
   assert.equal(accentClass("bogus"), "neutral");

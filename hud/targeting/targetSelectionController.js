@@ -35,6 +35,7 @@ import {
   BC_HUD_TARGETING_COMMAND,
 } from "../overlay/overlayConstants.js";
 import { createTargetSelectionAdapter } from "./targetSelectionAdapter.js";
+import { logDebugEvent } from "../debug/debugLogStore.js";
 import {
   TARGETING_MODE,
   createInitialTargetState,
@@ -44,6 +45,7 @@ import {
   clearTarget,
   selectZone,
   applySource,
+  refreshTargetBodyZones,
   buildTargetingBroadcast,
 } from "./targetSelectionState.js";
 
@@ -63,6 +65,9 @@ export function setupTargetSelection(options = {}) {
   /** True while we programmatically restore the source selection — so our own
    *  onChange echo isn't mistaken for a target pick. */
   let restoreInProgress = false;
+  /** Shared by the adapter (on target pick) and onRefreshBodyZones (post-attack) —
+   *  one fetch implementation, set once in init(). */
+  let fetchTargetBodyZonesFn = null;
   /** @type {Array<() => void>} */
   const cleanups = [];
 
@@ -113,12 +118,35 @@ export function setupTargetSelection(options = {}) {
     commit(selectZone(state, zoneId));
   }
 
+  /** Phase 3D.1: best-effort re-fetch of the CURRENTLY selected target's own
+   *  body-zone condition (e.g. right after a successful attack), so its
+   *  silhouette colors reflect the damage that attack just did. NEVER clears
+   *  or reselects the target — a no-op if there's no target anymore (a stale
+   *  request racing a cleared/changed target). On failure (RLS/network) the
+   *  target simply keeps its last-known condition — the request that
+   *  triggered this (the attack) is NOT considered failed because of it. */
+  async function onRefreshBodyZones() {
+    const characterId = state.target?.characterId;
+    if (!characterId || !fetchTargetBodyZonesFn) return;
+    try {
+      const bodyZones = await fetchTargetBodyZonesFn(characterId);
+      if (disposed) return;
+      commit(refreshTargetBodyZones(state, bodyZones));
+      logDebugEvent("refresh", "target-body-zone-refresh-result", { characterId, zoneCount: bodyZones.length }, true);
+    } catch (_e) {
+      // Best-effort: keep showing the last-known condition (or "unknown" if
+      // there never was one) rather than surface this as an attack failure.
+      logDebugEvent("refresh", "target-body-zone-refresh-result", { characterId, reason: "fetch-failed" }, false);
+    }
+  }
+
   function handleTargetingCommand(cmd) {
     switch (cmd?.type) {
       case "pick": onPick(); break;
       case "cancel": void onCancel(); break;
       case "clear": onClear(); break;
       case "selectZone": onSelectZone(cmd.zoneId); break;
+      case "refreshBodyZones": void onRefreshBodyZones(); break;
       default: break;
     }
   }
@@ -132,10 +160,12 @@ export function setupTargetSelection(options = {}) {
       // Unlinked / self / fetch error → keep any existing target, leave picking,
       // restore the source. Surface a machine-readable error code only.
       commit(cancelPicking({ ...state, error: { code: result.code, message: result.message ?? null } }));
+      logDebugEvent("targeting", "target-selection-failed", { tokenId, reason: result.code }, false);
       await restoreSourceSelection();
       return;
     }
     commit(applyResolvedTarget(state, result.candidate));
+    logDebugEvent("targeting", "target-selected", { tokenId, characterId: result.candidate?.characterId ?? null });
     await restoreSourceSelection();
   }
 
@@ -160,6 +190,17 @@ export function setupTargetSelection(options = {}) {
     ]);
     if (disposed) return;
 
+    // Basic Weapon Attack v1 / Phase 3D.1: resolve the target's OWN body-part
+    // zone→uuid + condition map via the existing get_character_runtime_bundle
+    // RPC, "combat" section only (see targetBodyZones.js for exactly why and
+    // what is discarded). Best-effort — a failure just leaves bodyZones
+    // empty/unchanged. Shared by the adapter (initial pick) and
+    // onRefreshBodyZones (post-attack re-fetch of the SAME target).
+    fetchTargetBodyZonesFn = async (characterId) => {
+      const bundle = await getCharacterRuntimeBundle({ character_id: characterId, sections: ["combat"] }, settings);
+      return mapTargetBodyZones(bundle);
+    };
+
     adapter = createTargetSelectionAdapter({
       fetchSceneTokenLink: (tokenId) => getSceneTokenLinks(
         { room_id: context.roomId, scene_id: context.sceneId, campaign_id: context.campaignId, token_id: tokenId },
@@ -172,14 +213,7 @@ export function setupTargetSelection(options = {}) {
         return { displayName: String(item.name ?? ""), position: item.position ?? null };
       },
       getGrid: () => getSceneGrid(),
-      // Basic Weapon Attack v1: resolve the target's OWN body-part zone→uuid
-      // map via the existing get_character_runtime_bundle RPC, "combat"
-      // section only (see targetBodyZones.js for exactly why and what is
-      // discarded). Best-effort — a failure just leaves bodyZones empty.
-      fetchTargetBodyZones: async (characterId) => {
-        const bundle = await getCharacterRuntimeBundle({ character_id: characterId, sections: ["combat"] }, settings);
-        return mapTargetBodyZones(bundle);
-      },
+      fetchTargetBodyZones: fetchTargetBodyZonesFn,
       getSourceContext: () => state.source ?? {},
     });
 

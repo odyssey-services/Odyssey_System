@@ -251,13 +251,17 @@ test("mapTargetBodyZones resolves zoneId/bodyPartId pairs and discards shield/ps
   };
   const zones = mapTargetBodyZones(bundle);
   assert.deepEqual(zones, [
-    { zoneId: "TORSO", bodyPartId: "bp-torso", canBeTargeted: true },
-    { zoneId: "HEAD", bodyPartId: "bp-head", canBeTargeted: true },
-    { zoneId: "LEFT_ARM", bodyPartId: "bp-larm", canBeTargeted: false },
+    { zoneId: "TORSO", bodyPartId: "bp-torso", canBeTargeted: true, state: "healthy", colorToken: "--odyssey-hud-zone-healthy", label: "Healthy", zoneState: "healthy" },
+    { zoneId: "HEAD", bodyPartId: "bp-head", canBeTargeted: true, state: "healthy", colorToken: "--odyssey-hud-zone-healthy", label: "Healthy", zoneState: "healthy" },
+    { zoneId: "LEFT_ARM", bodyPartId: "bp-larm", canBeTargeted: false, state: "disabled", colorToken: "--odyssey-hud-zone-disabled", label: "Disabled", zoneState: "disabled" },
   ]);
-  // Only zoneId/bodyPartId/canBeTargeted keys ever appear — nothing shield/psi-shaped.
+  // Only zoneId/bodyPartId/canBeTargeted/state/colorToken/label/zoneState keys
+  // ever appear — nothing shield/psi/combat_flags/status_summary-shaped.
   for (const z of zones) {
-    assert.deepEqual(Object.keys(z).sort(), ["bodyPartId", "canBeTargeted", "zoneId"]);
+    assert.deepEqual(
+      Object.keys(z).sort(),
+      ["bodyPartId", "canBeTargeted", "colorToken", "label", "state", "zoneId", "zoneState"],
+    );
   }
 });
 

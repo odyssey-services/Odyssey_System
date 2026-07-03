@@ -29,6 +29,15 @@ import { resolveReloadMagazineId, normalizeReloadRpcResult } from "./reloadPolic
 import { normalizeFireModeRpcResult } from "./fireModePolicy.js";
 import { evaluateBasicAttack, buildAttackRequestSignature, isAttackResultStale } from "../combat/basicAttackPolicy.js";
 import { buildBasicAttackCtx, resolveAttack } from "../combat/basicAttackPayload.js";
+import { createSelectedWeaponMemory, resolveStoredWeaponId } from "./selectedWeaponMemory.js";
+import {
+  appendCombatLogEntry,
+  buildAttackLogEntry,
+  buildReloadLogEntry,
+  buildFireModeLogEntry,
+} from "../log/combatResultLogPolicy.js";
+import { getZoneLabel, DEFAULT_PROFILE_ID } from "../targeting/targetProfiles.js";
+import { initDebugLog, logDebugEvent } from "../debug/debugLogStore.js";
 import { BC_HUD_COMMAND, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_TARGETING_COMMAND } from "../overlay/overlayConstants.js";
 import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
 import { buildCanonicalArmory } from "../runtime/runtimeBundleMapper.js";
@@ -54,6 +63,15 @@ export function setupSceneSelection(hooks = {}) {
   let lastState = null;
   let sceneTimer = null;
   let currentSelectionIds = [];
+  // Phase 3D.1: controller-local, session-scoped "last weapon per character"
+  // memory — see selectedWeaponMemory.js for why this exists (Token A → B → A
+  // must restore A's own weapon, not fall back to armory's first weapon).
+  const selectedWeaponMemory = createSelectedWeaponMemory();
+  // Phase 3D.1: the real (server-result-only) local Combat Log — newest first,
+  // capped, never persisted. Deliberately OUTSIDE `ephemeral` (not reset per
+  // character) — it's a running session history, not per-character state.
+  let combatLog = [];
+  function pushLog(entry) { combatLog = appendCombatLogEntry(combatLog, entry); }
   const ephemeral = {
     characterId: null,
     selectedWeaponId: null,
@@ -85,6 +103,7 @@ export function setupSceneSelection(hooks = {}) {
   };
   let debugEnabled = false;
   try { debugEnabled = new URLSearchParams(window.location.search).get("debug") === "1"; } catch (_e) { debugEnabled = false; }
+  initDebugLog(debugEnabled);
   /** @type {Array<() => void>} */
   const cleanups = [];
 
@@ -139,9 +158,13 @@ export function setupSceneSelection(hooks = {}) {
       },
     });
 
+    /** @returns {boolean} true when the character actually changed (and the reset ran) */
     function resetEphemeralForCharacter(characterId) {
-      if (ephemeral.characterId === characterId) return;
+      if (ephemeral.characterId === characterId) return false;
       ephemeral.characterId = characterId ?? null;
+      // selectedWeaponId is NOT force-reset to null here — restoreSelectedWeapon()
+      // (called right after this, once the fresh armory is known) sets it from
+      // selectedWeaponMemory for the NEW character, or null if none/invalid.
       ephemeral.selectedWeaponId = null;
       ephemeral.selectedReloadMagazineId = null;
       ephemeral.weaponSelectorOpen = false;
@@ -156,6 +179,22 @@ export function setupSceneSelection(hooks = {}) {
       // target signature captured at request time) is what actually protects
       // against a stale result applying to a new character; see "execute".
       ephemeral.basicAttackResult = null;
+      return true;
+    }
+
+    /** Restore this character's own remembered weapon (Token A → B → A), or
+     *  fall back safely (and forget the stale entry) if it's no longer a
+     *  valid weapon on their CURRENT armory. Never touches server state. */
+    function restoreSelectedWeapon(characterId, bundle) {
+      if (!characterId) return;
+      const armory = bundle?.armory ?? bundle?.sections?.armory ?? null;
+      const stored = selectedWeaponMemory.get(characterId);
+      const valid = resolveStoredWeaponId(stored, armory?.weapons);
+      if (valid) {
+        ephemeral.selectedWeaponId = valid;
+      } else if (stored) {
+        selectedWeaponMemory.forget(characterId); // removed/unavailable — safe fallback below
+      }
     }
 
     function buildEphemeralForPayload() {
@@ -177,6 +216,7 @@ export function setupSceneSelection(hooks = {}) {
         fireModeRpcResult: ephemeral.fireModeRpcResult,
         basicAttackInFlight: ephemeral.basicAttackInFlight,
         basicAttackResult: ephemeral.basicAttackResult,
+        combatLog,
       };
     }
 
@@ -204,6 +244,9 @@ export function setupSceneSelection(hooks = {}) {
         selectedBodyPartId: target?.selectedZoneId ?? "torso",
         selectedTargetCharacterId: target?.characterId ?? null,
         resolvedBodyPartId: target?.resolvedBodyPartId ?? null,
+        // COLOR-ONLY body-zone condition map (svgPartId -> ZONE_STATES value)
+        // for the Target Block silhouette — see targetBodyZones.buildTargetZonesMap.
+        zonesMap: target?.zonesMap && typeof target.zonesMap === "object" ? target.zonesMap : {},
         distance: Number.isFinite(Number(target?.distance?.value)) ? Number(target.distance.value) : null,
         error: payload?.error ?? null,
       };
@@ -222,11 +265,13 @@ export function setupSceneSelection(hooks = {}) {
         const fmType = String(command.type ?? "");
         if (fmType === "toggle-selector") {
           ephemeral.fireModeSelectorOpen = !ephemeral.fireModeSelectorOpen;
+          logDebugEvent("fire-mode", "selector-toggled", { open: ephemeral.fireModeSelectorOpen });
           if (lastState) publishState(lastState);
           return;
         }
         if (fmType === "close-selector") {
           ephemeral.fireModeSelectorOpen = false;
+          logDebugEvent("fire-mode", "selector-closed", {});
           if (lastState) publishState(lastState);
           return;
         }
@@ -237,9 +282,11 @@ export function setupSceneSelection(hooks = {}) {
           const fireModeId = String(command.fireModeId ?? "").trim() || null;
           ephemeral.fireModeSelectorOpen = false;
           ephemeral.commandStatus = null;
+          logDebugEvent("fire-mode", "selected", { weaponId, fireModeId });
           if (!weaponId || !profileId || !fireModeId) {
             ephemeral.commandStatus = { type: "error", message: "Fire mode switch unavailable: missing weapon, profile, or mode." };
             ephemeral.fireModeRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/fireModeId missing before RPC call." };
+            logDebugEvent("fire-mode", "result", { error: "MISSING_FIELDS" }, false);
             if (lastState) publishState(lastState);
             return;
           }
@@ -253,6 +300,8 @@ export function setupSceneSelection(hooks = {}) {
             // straight from armory for whichever weapon is active.
             ephemeral.fireModeRpcResult = normalizeFireModeRpcResult(null);
             ephemeral.commandStatus = { type: "ok", message: "Fire mode changed." };
+            pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Fire mode changed." }));
+            logDebugEvent("fire-mode", "result", { weaponId, fireModeId }, true);
             await refetchCurrent();
           } catch (error) {
             // switch_weapon_fire_mode RAISEs an exception (not {ok:false}) on
@@ -262,6 +311,8 @@ export function setupSceneSelection(hooks = {}) {
             const normalized = normalizeFireModeRpcResult(error);
             ephemeral.fireModeRpcResult = normalized;
             ephemeral.commandStatus = { type: "error", message: normalized.message || "Fire mode switch failed." };
+            pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: normalized.message }));
+            logDebugEvent("fire-mode", "result", { weaponId, fireModeId, error: normalized.error, message: normalized.message }, false);
             if (lastState) publishState(lastState);
           }
           return;
@@ -275,6 +326,7 @@ export function setupSceneSelection(hooks = {}) {
       if (command?.scope === "combat-hud" && command?.feature === "basic-attack") {
         const baType = String(command.type ?? "");
         if (baType !== "execute") return; // unknown → ignore
+        logDebugEvent("attack", "requested", {});
 
         // Double-submit guard: a second "execute" while one is in flight is a
         // no-op, not a queued second attack.
@@ -296,6 +348,7 @@ export function setupSceneSelection(hooks = {}) {
         if (!evalResult.uiAllowed) {
           ephemeral.commandStatus = { type: "error", message: evalResult.uiBlockReason };
           ephemeral.basicAttackResult = { ok: false, error: "PRECONDITION_FAILED", message: evalResult.uiBlockReason };
+          logDebugEvent("attack", "blocked", { reason: evalResult.uiBlockReason }, false);
           if (lastState) publishState(lastState);
           return;
         }
@@ -305,6 +358,7 @@ export function setupSceneSelection(hooks = {}) {
         // applied to the (now different) HUD state — see the staleness check
         // below.
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, weaponId: evalCtx.weaponId, targetCharacterId: evalCtx.targetCharacterId };
+        const bodyZoneLabel = getZoneLabel(DEFAULT_PROFILE_ID, evalCtx.bodyZoneId) || evalCtx.bodyZoneId;
         const ctx = buildBasicAttackCtx({
           sourceCharacterId: evalCtx.sourceCharacterId,
           weaponId: evalCtx.weaponId,
@@ -314,6 +368,7 @@ export function setupSceneSelection(hooks = {}) {
         });
 
         ephemeral.basicAttackInFlight = true;
+        logDebugEvent("attack", "payload-prepared", { weaponId: ctx.weaponId, targetCharacterId: ctx.targetCharacterId, bodyZone: evalCtx.bodyZoneId });
         if (lastState) publishState(lastState); // Action disables immediately
 
         let outcome;
@@ -335,6 +390,16 @@ export function setupSceneSelection(hooks = {}) {
         const stale = isAttackResultStale(requestCtx, currentCtx);
 
         ephemeral.basicAttackResult = { ok: outcome.ok, error: outcome.code ?? null, message: outcome.error ?? null };
+        // Logged regardless of staleness — a stale result is still a REAL
+        // thing that happened, attributed to the request it actually
+        // belongs to (requestCtx), never to whatever is currently selected.
+        pushLog(buildAttackLogEntry({
+          sourceCharacterId: requestCtx.sourceCharacterId,
+          targetCharacterId: requestCtx.targetCharacterId,
+          bodyZoneLabel,
+          outcome,
+        }));
+        logDebugEvent("attack", "result", { ok: outcome.ok, error: outcome.code ?? null, stale }, outcome.ok);
 
         if (stale) {
           // Source/weapon/target changed mid-flight: never apply this result
@@ -346,13 +411,19 @@ export function setupSceneSelection(hooks = {}) {
 
         if (outcome.ok) {
           ephemeral.commandStatus = { type: "ok", message: "Attack resolved." };
-          // Only the temporary selection state that should end after a
-          // normal attack: the selected target + its body zone. No modifier
-          // state to reset — v1 wires none into the payload (see the report).
-          try { OBR.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "clear" }, { destination: "LOCAL" }); } catch (_e) { /* best-effort */ }
+          // Phase 3D.1: the selected target + body zone are NOT reset after a
+          // successful attack — the player must be able to re-attack the same
+          // target without re-picking it. Target/zone are only ever cleared by
+          // explicit Cancel/Escape/clear, a source-character change, or the
+          // target token/link disappearing (all owned by the targeting
+          // controller itself). Only a best-effort, NON-clearing refresh of the
+          // target's own (safe, combat-only) body-zone condition is requested,
+          // so its silhouette colors reflect the damage this attack just did.
+          try { OBR.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "refreshBodyZones" }, { destination: "LOCAL" }); } catch (_e) { /* best-effort */ }
           // Authoritative refresh of THIS source's armory/inventory/runtime —
           // never the target's private bundle.
           await refetchCurrent();
+          logDebugEvent("refresh", "source-refresh-result", { reason: "attack-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Attack failed." };
           // Target/body zone are intentionally left untouched on failure. A
@@ -360,6 +431,7 @@ export function setupSceneSelection(hooks = {}) {
           // changed elsewhere), so refresh the SOURCE's own state — this never
           // touches target/zone selection either.
           await refetchCurrent();
+          logDebugEvent("refresh", "source-refresh-result", { reason: "attack-failure" }, true);
         }
         return;
       }
@@ -371,7 +443,9 @@ export function setupSceneSelection(hooks = {}) {
         // mapper re-derives weapon.primary from selectedWeaponId on every publish,
         // so a local publishState immediately swaps the active weapon. (The overlay
         // controller closes/relays the gun popover off the same BC_HUD_COMMAND.)
+        logDebugEvent("weapon", "selected", { weaponId: String(command.weaponId ?? "").trim() || null });
         ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
+        selectedWeaponMemory.set(ephemeral.characterId, ephemeral.selectedWeaponId);
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.reloadRpcResult = null;
         ephemeral.weaponSelectorOpen = false;
@@ -384,6 +458,7 @@ export function setupSceneSelection(hooks = {}) {
       }
       if (type === "toggle-weapon-selector") {
         ephemeral.weaponSelectorOpen = !ephemeral.weaponSelectorOpen;
+        logDebugEvent("weapon", "selector-toggled", { open: ephemeral.weaponSelectorOpen });
         if (lastState) publishState(lastState);
         return;
       }
@@ -394,6 +469,7 @@ export function setupSceneSelection(hooks = {}) {
       }
       if (type === "select-reload-mag") {
         ephemeral.selectedReloadMagazineId = String(command.magazineId ?? "").trim() || null;
+        logDebugEvent("magazine", "selected", { magazineId: ephemeral.selectedReloadMagazineId });
         if (lastState) publishState(lastState);
         return;
       }
@@ -414,9 +490,12 @@ export function setupSceneSelection(hooks = {}) {
         // reloadPolicy.js for the shared, unit-tested fallback chain.
         const magazineId = resolveReloadMagazineId(command, ephemeral, weapon) ?? "";
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
+        logDebugEvent("magazine", "reload-requested", { weaponId, magazineId });
         if (!weaponId || !magazineId || !profileId) {
           ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
           ephemeral.reloadRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/magazineId missing before RPC call." };
+          pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
+          logDebugEvent("magazine", "reload-result", { error: "MISSING_FIELDS" }, false);
           if (lastState) publishState(lastState);
           return;
         }
@@ -434,14 +513,20 @@ export function setupSceneSelection(hooks = {}) {
           if (normalized.ok) {
             ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
             ephemeral.selectedReloadMagazineId = null;
+            pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Reloaded." }));
+            logDebugEvent("magazine", "reload-result", { weaponId, magazineId }, true);
             await refetchCurrent();
           } else {
             ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
+            pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
+            logDebugEvent("magazine", "reload-result", { weaponId, magazineId, error: normalized.error }, false);
             if (lastState) publishState(lastState);
           }
         } catch (error) {
           ephemeral.reloadRpcResult = { ok: false, error: "RPC_EXCEPTION", message: String(error?.message ?? error ?? "Reload failed.") };
           ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed.") };
+          pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
+          logDebugEvent("magazine", "reload-result", { error: "RPC_EXCEPTION", message: ephemeral.commandStatus.message }, false);
           if (lastState) publishState(lastState);
         }
       }
@@ -450,10 +535,15 @@ export function setupSceneSelection(hooks = {}) {
     async function resolveAndPublish(selectionIds) {
       if (shouldDeferSelection()) return;
       currentSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
+      logDebugEvent("selection", "source-token-selected", { tokenIds: currentSelectionIds });
       const { stale, state } = await adapter.resolveLatest(selectionIds);
       if (disposed || stale) return; // only the freshest selection updates the HUD
-      if (state.status !== "ready") resetEphemeralForCharacter(null);
-      else resetEphemeralForCharacter(state.characterId ?? null);
+      if (state.status !== "ready") {
+        resetEphemeralForCharacter(null);
+      } else {
+        const changed = resetEphemeralForCharacter(state.characterId ?? null);
+        if (changed) restoreSelectedWeapon(state.characterId ?? null, state.runtimeBundle);
+      }
       lastState = state;
       const payload = publishState(state);
       if (onSelectionState) {
@@ -489,7 +579,13 @@ export function setupSceneSelection(hooks = {}) {
     }));
 
     cleanups.push(OBR.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
-      void handleCommand(event?.data).catch(() => {});
+      void handleCommand(event?.data).catch((error) => {
+        logDebugEvent("routing", "unexpected-exception", {
+          type: String(event?.data?.type ?? ""),
+          feature: event?.data?.feature ?? null,
+          message: String(error?.message ?? error ?? "unknown error"),
+        }, false);
+      });
     }));
 
     cleanup.applyTargetingPayload = applyTargetingPayload;

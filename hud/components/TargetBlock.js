@@ -30,7 +30,7 @@ export function renderTargetBlock(state) {
 
   const body = `<div class="ohud-target">
     <div class="ohud-figure ohud-figure--targetable">
-      <div class="ohud-figure-svg">${humanoidSvg({ neutral: true, highlight: svgPart, targetable: true })}</div>
+      <div class="ohud-figure-svg">${humanoidSvg({ zones: tv.zonesMap, highlight: svgPart, targetable: true })}</div>
       <div class="ohud-figure-shield" aria-hidden="true"${tipAttr("Target shield", ["Defence detail hidden for non-owned entities"])}>${ICON_SHIELD}</div>
     </div>
     <div class="ohud-target-meta">

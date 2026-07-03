@@ -6,6 +6,7 @@
 
 import {
   selectCurrentEntity,
+  selectControlledCharacter,
   selectPlayerStatusLabel,
   selectVisibleStatuses,
 } from "../core/combatHudSelectors.js";
@@ -18,6 +19,21 @@ import { esc, tipAttr, cls } from "./hudDom.js";
 function zonesMap(entity) {
   const map = {};
   for (const z of entity.zones ?? []) map[z.id] = z.state;
+  return map;
+}
+
+/** Real numeric body-zone detail lines for the silhouette hover tooltip —
+ *  ONLY when the HUD has authority to show this character's full runtime
+ *  state (a linked, player-owned source; never a GM inspecting someone
+ *  else's character, never a fabricated 0/0). See combatHudSelectors.js's
+ *  selectControlledCharacter — distinct from selectCurrentEntity, which also
+ *  returns NPCs the GM is merely inspecting. */
+function zoneTipsMap(entity, authorized) {
+  if (!authorized) return null;
+  const map = {};
+  for (const z of entity.zones ?? []) {
+    if (Array.isArray(z.detailLines) && z.detailLines.length) map[z.id] = z.detailLines;
+  }
   return map;
 }
 
@@ -62,13 +78,14 @@ export function renderPlayerBlock(state) {
   const turnClass = turn === "YOUR TURN" ? "active" : turn === "WAITING" ? "waiting" : turn === "GM VIEW" ? "gm" : "idle";
   const { shown, overflow } = selectVisibleStatuses(state, 5);
   const isMech = entity.summary?.svgRef === "mech";
+  const authorized = !!selectControlledCharacter(state);
 
   const headerRight = `<span class="ohud-turn ohud-turn--${turnClass}">${esc(turn)}</span>`;
 
   const body = `
     <div class="ohud-player-grid">
       <div class="ohud-figure">
-        <div class="ohud-figure-svg">${entitySilhouetteSvg(entity.summary, { zones: zonesMap(entity) })}</div>
+        <div class="ohud-figure-svg">${entitySilhouetteSvg(entity.summary, { zones: zonesMap(entity), zoneTips: zoneTipsMap(entity, authorized) })}</div>
         <div class="ohud-figure-shield" aria-hidden="true">${ICON_SHIELD}</div>
       </div>
       <div class="ohud-player-stats">

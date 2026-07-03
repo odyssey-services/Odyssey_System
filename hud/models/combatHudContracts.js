@@ -56,6 +56,10 @@ export const ZONE_STATES = Object.freeze({
   serious: "serious",
   critical: "critical",
   disabled: "disabled",
+  // Phase 3D.1: combat data for this zone is missing or the fetch was denied
+  // (e.g. a target refresh blocked by RLS) — must NEVER silently render as
+  // "healthy". See hud/targeting/bodyConditionPolicy.js.
+  unknown: "unknown",
 });
 
 /** Ordered list of zone states, mild → severe. */

@@ -55,6 +55,15 @@ export const BC_HUD_TARGETING_REQUEST = "com.odyssey.combat-hud/targeting-reques
 /** LOCAL broadcast: controller command channel for target picking lifecycle. */
 export const BC_HUD_TARGETING_COMMAND = "com.odyssey.combat-hud/targeting-command";
 
+/** LOCAL broadcast: background (debugLogStore) → the debug-log companion
+ *  popover iframe, carrying the current (?debug=1-only) entries list. Never
+ *  sent/subscribed when debug is off. */
+export const BC_HUD_DEBUG_LOG = "com.odyssey.combat-hud/debug-log";
+
+/** LOCAL broadcast: a freshly-mounted debug-log companion iframe → background,
+ *  asking it to replay the current entries. */
+export const BC_HUD_DEBUG_LOG_REQUEST = "com.odyssey.combat-hud/debug-log-request";
+
 /* ----------------- HUD geometry (Phase 2.1) ----------------- */
 //
 // The HUD is a left-anchored bottom panel: a tall PlayerBlock, a responsive

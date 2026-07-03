@@ -117,6 +117,10 @@
 .ohud-zone--serious { fill: var(--odyssey-hud-zone-serious); }
 .ohud-zone--critical { fill: var(--odyssey-hud-zone-critical); }
 .ohud-zone--disabled { fill: var(--odyssey-hud-zone-disabled); }
+/* Combat data missing/denied — never the same as healthy (Phase 3D.1). */
+.ohud-zone--unknown { fill: var(--odyssey-hud-zone-unknown); }
+/* Selection outline is a STROKE, not a fill override — it must never hide
+ * the zone's actual condition colour underneath. */
 .ohud-zone.is-target { stroke: var(--odyssey-cyan); stroke-width: 2.5; }
 
 /* ===================== Player block ===================== */
@@ -312,6 +316,20 @@
 .ohud-log-delta--miss { color: var(--odyssey-hud-dim); }
 .ohud-log-delta--neutral { color: var(--odyssey-hud-muted); }
 .ohud-log-empty { font-size: 10px; color: var(--odyssey-hud-dim); display: grid; place-items: center; flex: 1; padding: 8px; }
+/* Phase 3D.1: ?debug=1-only — never rendered in normal play. */
+.ohud-log-debug-btn {
+  font-size: 8px; font-weight: 800; letter-spacing: 0.3px; padding: 1px 5px;
+  border: 1px solid var(--odyssey-hud-border); border-radius: 6px;
+  background: rgba(255, 92, 108, 0.12); color: var(--odyssey-red, #e74c3c); cursor: pointer;
+}
+.ohud-log-debug-btn:hover { border-color: var(--odyssey-red, #e74c3c); }
+/* Real combat-result entries (Phase 3D.1) — a title line + short detail lines,
+ * stacked instead of the single-line actor/action/target/delta mock layout. */
+.ohud-log-row--result { flex-direction: column; align-items: stretch; gap: 1px; }
+.ohud-log-result-title { font-weight: 700; font-size: 10px; }
+.ohud-log-result-title.ohud-log-delta--hit { color: var(--odyssey-green); }
+.ohud-log-result-title.ohud-log-delta--miss { color: var(--odyssey-hud-dim); }
+.ohud-log-result-detail { color: var(--odyssey-hud-muted); font-size: 9.5px; }
 
 /* ===================== Empty / error / loading ===================== */
 .ohud-state-wrap { flex: 1 1 auto; display: grid; place-items: center; background: var(--odyssey-hud-panel);

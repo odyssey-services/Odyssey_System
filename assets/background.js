@@ -130,9 +130,9 @@ var require_events = __commonJS({
         ReflectApply(handler, this, args);
       } else {
         var len = handler.length;
-        var listeners2 = arrayClone(handler, len);
+        var listeners3 = arrayClone(handler, len);
         for (var i = 0; i < len; ++i)
-          ReflectApply(listeners2[i], this, args);
+          ReflectApply(listeners3[i], this, args);
       }
       return true;
     };
@@ -255,7 +255,7 @@ var require_events = __commonJS({
     };
     EventEmitter2.prototype.off = EventEmitter2.prototype.removeListener;
     EventEmitter2.prototype.removeAllListeners = function removeAllListeners(type) {
-      var listeners2, events, i;
+      var listeners3, events, i;
       events = this._events;
       if (events === void 0)
         return this;
@@ -284,12 +284,12 @@ var require_events = __commonJS({
         this._eventsCount = 0;
         return this;
       }
-      listeners2 = events[type];
-      if (typeof listeners2 === "function") {
-        this.removeListener(type, listeners2);
-      } else if (listeners2 !== void 0) {
-        for (i = listeners2.length - 1; i >= 0; i--) {
-          this.removeListener(type, listeners2[i]);
+      listeners3 = events[type];
+      if (typeof listeners3 === "function") {
+        this.removeListener(type, listeners3);
+      } else if (listeners3 !== void 0) {
+        for (i = listeners3.length - 1; i >= 0; i--) {
+          this.removeListener(type, listeners3[i]);
         }
       }
       return this;
@@ -305,7 +305,7 @@ var require_events = __commonJS({
         return unwrap ? [evlistener.listener || evlistener] : [evlistener];
       return unwrap ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
     }
-    EventEmitter2.prototype.listeners = function listeners2(type) {
+    EventEmitter2.prototype.listeners = function listeners3(type) {
       return _listeners(this, type, true);
     };
     EventEmitter2.prototype.rawListeners = function rawListeners(type) {
@@ -4085,6 +4085,8 @@ var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
 var BC_HUD_TARGETING = "com.odyssey.combat-hud/targeting";
 var BC_HUD_TARGETING_REQUEST = "com.odyssey.combat-hud/targeting-request";
 var BC_HUD_TARGETING_COMMAND = "com.odyssey.combat-hud/targeting-command";
+var BC_HUD_DEBUG_LOG = "com.odyssey.combat-hud/debug-log";
+var BC_HUD_DEBUG_LOG_REQUEST = "com.odyssey.combat-hud/debug-log-request";
 var PLAYER_W = 144;
 var PLAYER_HEIGHT = 146;
 var RAIL_GAP = 10;
@@ -4134,6 +4136,45 @@ function normalizeHudUiState(partial) {
     selectedTokenId: Object.prototype.hasOwnProperty.call(p, "selectedTokenId") ? p.selectedTokenId : DEFAULT_HUD_UI_STATE.selectedTokenId,
     hudPlacement: clampPlacement(p.hudPlacement ?? DEFAULT_HUD_UI_STATE.hudPlacement)
   };
+}
+
+// hud/debug/debugLogStore.js
+var MAX_ENTRIES = 200;
+var enabled = false;
+var entries = [];
+var listeners = /* @__PURE__ */ new Set();
+function initDebugLog(isEnabled) {
+  enabled = !!isEnabled;
+}
+function notify() {
+  for (const fn of listeners) {
+    try {
+      fn(entries);
+    } catch (_e) {
+    }
+  }
+}
+function logDebugEvent(category, action, details2 = {}, success = true) {
+  if (!enabled) return;
+  entries = [
+    { timestamp: Date.now(), category: String(category ?? ""), action: String(action ?? ""), details: details2 ?? {}, success: !!success },
+    ...entries
+  ];
+  if (entries.length > MAX_ENTRIES) entries = entries.slice(0, MAX_ENTRIES);
+  notify();
+}
+function getDebugLogEntries() {
+  return entries;
+}
+function clearDebugLog() {
+  entries = [];
+  notify();
+}
+function subscribeDebugLog(fn) {
+  if (typeof fn !== "function") return () => {
+  };
+  listeners.add(fn);
+  return () => listeners.delete(fn);
 }
 
 // api/characterPlacementApi.js
@@ -4311,12 +4352,12 @@ __export(supabaseBridge_exports, {
 
 // utils/diagnostics.js
 var ENTRY_LIMIT = 40;
-var listeners = /* @__PURE__ */ new Set();
-var entries = [];
-function notify() {
-  for (const listener of listeners) {
+var listeners2 = /* @__PURE__ */ new Set();
+var entries2 = [];
+function notify2() {
+  for (const listener of listeners2) {
     try {
-      listener(entries.slice());
+      listener(entries2.slice());
     } catch (_error) {
     }
   }
@@ -4329,8 +4370,8 @@ function addDiagnosticEntry(level, title, details2 = "") {
     details: String(details2 ?? "").trim(),
     createdAt: (/* @__PURE__ */ new Date()).toISOString()
   };
-  entries = [entry, ...entries].slice(0, ENTRY_LIMIT);
-  notify();
+  entries2 = [entry, ...entries2].slice(0, ENTRY_LIMIT);
+  notify2();
   return entry;
 }
 
@@ -5223,6 +5264,145 @@ function buildBasicAttackCtx(input = {}) {
   };
 }
 
+// hud/scene/selectedWeaponMemory.js
+function createSelectedWeaponMemory() {
+  const map = /* @__PURE__ */ new Map();
+  return {
+    get(characterId) {
+      if (!characterId) return null;
+      return map.get(characterId) ?? null;
+    },
+    set(characterId, weaponId) {
+      if (!characterId) return;
+      const id = weaponId ? String(weaponId) : null;
+      if (id) map.set(characterId, id);
+      else map.delete(characterId);
+    },
+    forget(characterId) {
+      if (characterId) map.delete(characterId);
+    }
+  };
+}
+function resolveStoredWeaponId(storedWeaponId, armoryWeapons) {
+  if (!storedWeaponId) return null;
+  const weapons = Array.isArray(armoryWeapons) ? armoryWeapons : [];
+  const stillValid = weapons.some((w) => String(w?.id ?? "") === String(storedWeaponId));
+  return stillValid ? String(storedWeaponId) : null;
+}
+
+// hud/log/combatResultLogPolicy.js
+var LOG_TYPE = Object.freeze({
+  attack: "attack",
+  reload: "reload",
+  fireMode: "fire-mode"
+});
+var LOG_OUTCOME = Object.freeze({
+  success: "success",
+  failure: "failure"
+});
+var COMBAT_LOG_MAX_ENTRIES = 100;
+function appendCombatLogEntry(list, entry) {
+  const next = [entry, ...Array.isArray(list) ? list : []];
+  return next.length > COMBAT_LOG_MAX_ENTRIES ? next.slice(0, COMBAT_LOG_MAX_ENTRIES) : next;
+}
+function buildAttackLogEntry({ sourceCharacterId, targetCharacterId, bodyZoneLabel, outcome }) {
+  const ok = !!outcome?.ok;
+  const n = outcome?.normalized ?? null;
+  const details2 = [];
+  if (ok) {
+    if (Number.isFinite(n?.attackTotal) && Number.isFinite(n?.defenseTotal)) {
+      details2.push(`Attack: ${n.attackTotal} vs Defense: ${n.defenseTotal}`);
+    } else if (Number.isFinite(n?.attackRoll)) {
+      details2.push(`Attack roll: ${n.attackRoll}`);
+    }
+    if (typeof n?.hit === "boolean") details2.push(n.hit ? "Hit" : "Miss");
+    if (bodyZoneLabel) details2.push(String(bodyZoneLabel));
+    if (n?.damageLevel) details2.push(`Damage: ${n.damageLevel}`);
+    if (Number.isFinite(n?.ammoRemaining)) details2.push(`Ammo left: ${n.ammoRemaining}`);
+  } else {
+    details2.push(String(outcome?.error || "Attack denied."));
+  }
+  return {
+    timestamp: Date.now(),
+    type: LOG_TYPE.attack,
+    outcome: ok ? LOG_OUTCOME.success : LOG_OUTCOME.failure,
+    title: ok ? "Attack" : "Attack failed",
+    details: details2,
+    sourceCharacterId: sourceCharacterId ?? null,
+    targetCharacterId: targetCharacterId ?? null
+  };
+}
+function buildReloadLogEntry({ sourceCharacterId, ok, message }) {
+  return {
+    timestamp: Date.now(),
+    type: LOG_TYPE.reload,
+    outcome: ok ? LOG_OUTCOME.success : LOG_OUTCOME.failure,
+    title: ok ? "Reload" : "Reload failed",
+    details: [String(message || (ok ? "Reloaded." : "Reload denied."))],
+    sourceCharacterId: sourceCharacterId ?? null,
+    targetCharacterId: null
+  };
+}
+function buildFireModeLogEntry({ sourceCharacterId, ok, message }) {
+  return {
+    timestamp: Date.now(),
+    type: LOG_TYPE.fireMode,
+    outcome: ok ? LOG_OUTCOME.success : LOG_OUTCOME.failure,
+    title: ok ? "Fire mode changed" : "Fire mode change failed",
+    details: [String(message || (ok ? "Fire mode changed." : "Fire mode change denied."))],
+    sourceCharacterId: sourceCharacterId ?? null,
+    targetCharacterId: null
+  };
+}
+
+// hud/targeting/targetProfiles.js
+var DEFAULT_PROFILE_ID = "humanoid";
+var HUMANOID_PROFILE = Object.freeze({
+  id: "humanoid",
+  zones: Object.freeze([
+    Object.freeze({ id: "HEAD", label: "Head" }),
+    Object.freeze({ id: "TORSO", label: "Torso" }),
+    Object.freeze({ id: "LEFT_ARM", label: "Left arm" }),
+    Object.freeze({ id: "RIGHT_ARM", label: "Right arm" }),
+    Object.freeze({ id: "LEFT_LEG", label: "Left leg" }),
+    Object.freeze({ id: "RIGHT_LEG", label: "Right leg" })
+  ]),
+  defaultZoneId: "TORSO"
+});
+var PROFILES = Object.freeze({
+  humanoid: HUMANOID_PROFILE
+});
+function getTargetProfile(profileId) {
+  return PROFILES[String(profileId ?? "")] ?? HUMANOID_PROFILE;
+}
+function getDefaultZoneId(profileId) {
+  return getTargetProfile(profileId).defaultZoneId;
+}
+function isValidZoneId(profileId, zoneId) {
+  return getTargetProfile(profileId).zones.some((z) => z.id === zoneId);
+}
+function getZoneLabel(profileId, zoneId) {
+  const zone = getTargetProfile(profileId).zones.find((z) => z.id === zoneId);
+  return zone ? zone.label : "";
+}
+var ZONE_TO_SVG_PART = Object.freeze({
+  HEAD: "head",
+  TORSO: "torso",
+  LEFT_ARM: "l_arm",
+  RIGHT_ARM: "r_arm",
+  LEFT_LEG: "l_leg",
+  RIGHT_LEG: "r_leg"
+});
+function zoneIdToSvgPart(zoneId) {
+  return ZONE_TO_SVG_PART[String(zoneId ?? "")] ?? null;
+}
+var SVG_PART_TO_ZONE = Object.freeze(
+  Object.fromEntries(Object.entries(ZONE_TO_SVG_PART).map(([zoneId, svgPart]) => [svgPart, zoneId]))
+);
+function svgPartToZoneId(svgPart) {
+  return SVG_PART_TO_ZONE[String(svgPart ?? "")] ?? null;
+}
+
 // hud/models/combatHudContracts.js
 var HUD_STATUS = Object.freeze({
   idle: "idle",
@@ -5251,7 +5431,11 @@ var ZONE_STATES = Object.freeze({
   wounded: "wounded",
   serious: "serious",
   critical: "critical",
-  disabled: "disabled"
+  disabled: "disabled",
+  // Phase 3D.1: combat data for this zone is missing or the fetch was denied
+  // (e.g. a target refresh blocked by RLS) — must NEVER silently render as
+  // "healthy". See hud/targeting/bodyConditionPolicy.js.
+  unknown: "unknown"
 });
 var ZONE_STATE_ORDER = Object.freeze([
   ZONE_STATES.healthy,
@@ -5335,12 +5519,78 @@ function createInactiveCombatSession() {
   };
 }
 
+// hud/targeting/bodyConditionPolicy.js
+var BODY_CONDITION_STATE = Object.freeze({
+  healthy: "healthy",
+  minor: "minor",
+  serious: "serious",
+  critical: "critical",
+  disabled: "disabled",
+  // Combat data for this body part is missing, not yet fetched, or the fetch
+  // was denied (target refresh blocked by RLS/access) — NEVER "healthy".
+  unknown: "unknown"
+});
+var TO_ZONE_STATE = Object.freeze({
+  healthy: "healthy",
+  minor: "wounded",
+  serious: "serious",
+  critical: "critical",
+  disabled: "disabled",
+  unknown: "unknown"
+});
+var COLOR_TOKEN = Object.freeze({
+  healthy: "--odyssey-hud-zone-healthy",
+  minor: "--odyssey-hud-zone-wounded",
+  serious: "--odyssey-hud-zone-serious",
+  critical: "--odyssey-hud-zone-critical",
+  disabled: "--odyssey-hud-zone-disabled",
+  unknown: "--odyssey-hud-zone-unknown"
+});
+var LABEL = Object.freeze({
+  healthy: "Healthy",
+  minor: "Minor damage",
+  serious: "Serious damage",
+  critical: "Critical damage",
+  disabled: "Disabled",
+  unknown: "Unknown"
+});
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+function evaluateBodyCondition(bp) {
+  if (!bp || typeof bp !== "object") {
+    return build(BODY_CONDITION_STATE.unknown);
+  }
+  if (bp.destroyed || bp.disabled) return build(BODY_CONDITION_STATE.disabled);
+  if (num(bp.critical) > 0) return build(BODY_CONDITION_STATE.critical);
+  if (num(bp.serious) > 0) return build(BODY_CONDITION_STATE.serious);
+  if (num(bp.minor) > 0) return build(BODY_CONDITION_STATE.minor);
+  return build(BODY_CONDITION_STATE.healthy);
+}
+function build(state) {
+  return { state, zoneState: TO_ZONE_STATE[state], colorToken: COLOR_TOKEN[state], label: LABEL[state] };
+}
+function bodyConditionDetailLines(bp) {
+  if (!bp || typeof bp !== "object") return [];
+  const lines = [];
+  if (bp.destroyed) lines.push("Destroyed");
+  else if (bp.disabled) lines.push("Disabled");
+  if (num(bp.critical) > 0) lines.push(`Critical damage: ${num(bp.critical)}`);
+  if (num(bp.serious) > 0) lines.push(`Serious wounds: ${num(bp.serious)}`);
+  if (num(bp.minor) > 0) lines.push(`Minor wounds: ${num(bp.minor)}`);
+  if (Number.isFinite(Number(bp.armor_value)) && Number(bp.armor_value) > 0) {
+    lines.push(`Armor: ${num(bp.armor_value)}`);
+  }
+  return lines;
+}
+
 // hud/runtime/runtimeBundleMapper.js
 function str(v) {
   const s = String(v ?? "").trim();
   return s || null;
 }
-function num(v, fallback = 0) {
+function num2(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -5384,11 +5634,7 @@ function normalizePartId(bp) {
   return aliases[v] ?? v;
 }
 function zoneStateFromBodyPart(bp) {
-  if (bool(bp?.destroyed) || bool(bp?.disabled)) return ZONE_STATES.disabled;
-  if (num(bp?.critical) > 0) return ZONE_STATES.critical;
-  if (num(bp?.serious) > 0) return ZONE_STATES.serious;
-  if (num(bp?.minor) > 0) return ZONE_STATES.wounded;
-  return ZONE_STATES.healthy;
+  return evaluateBodyCondition(bp).zoneState;
 }
 var ZONE_LABELS = Object.freeze({
   head: "Head",
@@ -5406,7 +5652,11 @@ function mapZones(bodyParts) {
       id,
       label: str(bp?.name) ?? ZONE_LABELS[id] ?? id,
       state: zoneStateFromBodyPart(bp),
-      canBeTargeted: bp?.can_be_targeted === false ? false : !bool(bp?.disabled) && !bool(bp?.destroyed)
+      canBeTargeted: bp?.can_be_targeted === false ? false : !bool(bp?.disabled) && !bool(bp?.destroyed),
+      // Real wound-count detail lines for the Player Block hover tooltip
+      // (source only — see PlayerBlock.js). Never a fabricated current/max
+      // fraction; empty when healthy (nothing to report beyond the label).
+      detailLines: bodyConditionDetailLines(bp)
     };
   });
 }
@@ -5421,7 +5671,7 @@ function mapEffect(ef) {
     id: str(ef?.id) ?? `ef-${Math.random().toString(36).slice(2)}`,
     name: str(ef?.effect_name) ?? str(ef?.name) ?? "Unknown effect",
     polarity: normalizePolarity(ef?.polarity),
-    durationTurns: ef?.remaining_turns != null ? num(ef.remaining_turns) : null,
+    durationTurns: ef?.remaining_turns != null ? num2(ef.remaining_turns) : null,
     description: str(ef?.description) ?? ""
   };
 }
@@ -5431,8 +5681,8 @@ function mapEntity(bundle) {
   const combat = section(bundle, "combat") ?? {};
   const abilities = section(bundle, "abilities") ?? {};
   const flags = combat?.combat_flags ?? state?.combat_flags ?? {};
-  const shieldCur = num(combat.shield_current ?? state.shield_current, 0);
-  const shieldMax = num(combat.shield_max ?? state.shield_max, 0);
+  const shieldCur = num2(combat.shield_current ?? state.shield_current, 0);
+  const shieldMax = num2(combat.shield_max ?? state.shield_max, 0);
   const psiPool = arr(abilities?.resource_pools).find((pool) => {
     const code = String(pool?.code ?? pool?.resource_pool_code ?? "").toLowerCase();
     const name = String(pool?.name ?? "").toLowerCase();
@@ -5441,8 +5691,8 @@ function mapEntity(bundle) {
   });
   const psiCurrentRaw = combat.psi_current ?? state.psi_current ?? psiPool?.current_value ?? psiPool?.current;
   const psiMaxRaw = combat.psi_max ?? state.psi_max ?? psiPool?.max_value ?? psiPool?.max;
-  const psiCur = hasValue(psiCurrentRaw) ? num(psiCurrentRaw, 0) : null;
-  const psiMax = hasValue(psiMaxRaw) ? num(psiMaxRaw, 0) : null;
+  const psiCur = hasValue(psiCurrentRaw) ? num2(psiCurrentRaw, 0) : null;
+  const psiMax = hasValue(psiMaxRaw) ? num2(psiMaxRaw, 0) : null;
   const zones = mapZones(combat.body_parts ?? []);
   const effectsSection = section(bundle, "effects");
   const effects = Array.isArray(effectsSection) ? effectsSection.map(mapEffect) : [];
@@ -5494,8 +5744,8 @@ function rawMagCaliberCode(m) {
 }
 function readMagazine(mag) {
   if (!mag || typeof mag !== "object") return null;
-  const max = num(mag.capacity ?? mag.magazine_def?.capacity ?? mag.max_rounds ?? mag.max, 0);
-  const current2 = num(mag.current_rounds ?? mag.current, 0);
+  const max = num2(mag.capacity ?? mag.magazine_def?.capacity ?? mag.max_rounds ?? mag.max, 0);
+  const current2 = num2(mag.current_rounds ?? mag.current, 0);
   const ammoType = str(mag.ammo_type_name) ?? str(mag.ammo_type?.name) ?? str(mag.ammo_type_key) ?? str(typeof mag.ammo_type === "string" ? mag.ammo_type : null) ?? "\u2014";
   const caliber = str(mag.magazine_def?.caliber) ?? str(mag.caliber) ?? str(mag.magazine_def?.caliber_name) ?? str(mag.caliber_name) ?? "";
   const caliberLabel = str(mag.magazine_def?.caliber_name) ?? str(mag.caliber_name) ?? caliber ?? "";
@@ -5594,8 +5844,8 @@ function mapWeapon(armory, selectedWeaponId = null) {
     loadedMagazine: loadedMag,
     reserveMagazines: reserve,
     ammo: {
-      current: loadedMag ? loadedMag.current : num(w.ammo_current, 0),
-      max: loadedMag ? loadedMag.max : num(w.ammo_max, 0)
+      current: loadedMag ? loadedMag.current : num2(w.ammo_current, 0),
+      max: loadedMag ? loadedMag.max : num2(w.ammo_max, 0)
     },
     reloadCandidateId: reserve[0]?.id ?? null,
     canReload,
@@ -5676,13 +5926,13 @@ function mapSkillAction(qa) {
     icon: str(qa?.icon_key) ?? str(qa?.icon) ?? "bolt",
     color: normalizeEnum(qa?.color_key ?? qa?.color, VALID_COLORS, mapSkillColor(source)),
     actionCost: normalizeActionCost(qa?.action_cost),
-    resourceCost: resourceCost != null && Number(resourceCost) > 0 ? { type: str(qa?.resource?.pool_code) ?? "resource", amount: num(resourceCost, 0) } : null,
-    cooldownTurns: num(qa?.cooldown_remaining_turns ?? qa?.cooldown_remaining ?? qa?.current_cooldown_rounds, 0),
+    resourceCost: resourceCost != null && Number(resourceCost) > 0 ? { type: str(qa?.resource?.pool_code) ?? "resource", amount: num2(resourceCost, 0) } : null,
+    cooldownTurns: num2(qa?.cooldown_remaining_turns ?? qa?.cooldown_remaining ?? qa?.current_cooldown_rounds, 0),
     weaponRequirements: Array.isArray(qa?.weapon_requirements) ? qa.weapon_requirements.map(String) : [],
     targeting: normalizeEnum(qa?.targeting_mode ?? qa?.targeting, VALID_TARGETING, TARGETING_MODES.none),
     allowsMultipleTargets: bool(qa?.allows_multiple_targets, false),
     usesPoint: bool(qa?.uses_point, false),
-    radius: qa?.radius != null ? num(qa.radius) : null,
+    radius: qa?.radius != null ? num2(qa.radius) : null,
     isToggled: bool(qa?.is_toggled, false),
     disabledReason: str(qa?.disabled_reason) ?? (qa?.is_enabled === false ? "Disabled" : null),
     tooltip: str(qa?.tooltip) ?? str(qa?.description) ?? str(qa?.level_data?.effect_data?.summary) ?? ""
@@ -5704,7 +5954,7 @@ function mapSkills(abilitiesSection) {
   const quickSlots = slotsSource.map((s) => {
     const sid = str(s?.ability_id ?? s?.skill_id ?? s?.action_id);
     return {
-      index: num(s?.slot_index ?? s?.index, 0),
+      index: num2(s?.slot_index ?? s?.index, 0),
       skillId: sid && idSet.has(sid) ? sid : null
     };
   }).sort((a, b) => a.index - b.index);
@@ -5718,11 +5968,11 @@ function mapCombatSession() {
 }
 function mapBattleLog(bundle) {
   const log = section(bundle, "battle_log") ?? section(bundle, "log") ?? section(bundle, "combat_log");
-  const entries2 = Array.isArray(log?.entries) ? log.entries : Array.isArray(log) ? log : [];
+  const entries3 = Array.isArray(log?.entries) ? log.entries : Array.isArray(log) ? log : [];
   return {
-    entries: entries2.map((entry, index) => ({
+    entries: entries3.map((entry, index) => ({
       id: str(entry?.id) ?? `log-${index}`,
-      sequence: num(entry?.sequence ?? index, index),
+      sequence: num2(entry?.sequence ?? index, index),
       kind: str(entry?.kind) ?? "system",
       actor: str(entry?.actor) ?? str(entry?.actor_name) ?? "",
       action: str(entry?.action) ?? str(entry?.message) ?? str(entry?.summary) ?? "",
@@ -6117,6 +6367,9 @@ function buildBroadcastPayload(state, ephemeral = {}) {
     } catch (_e) {
     }
   }
+  if (hudSnapshot && Array.isArray(ephemeral.combatLog)) {
+    hudSnapshot = { ...hudSnapshot, battleLog: { entries: ephemeral.combatLog } };
+  }
   const debug = ready && s.runtimeBundle ? buildRuntimeDebugSummary(s.runtimeBundle, hudSnapshot, {
     selectionStatus: s.status,
     selectedTokenId: s.selectedItemId ?? null,
@@ -6170,7 +6423,10 @@ function buildBroadcastPayload(state, ephemeral = {}) {
         inFlight: !!ephemeral.basicAttackInFlight,
         uiAllowed: basicAttackEval.uiAllowed,
         uiBlockReason: basicAttackEval.uiBlockReason
-      }
+      },
+      // Client-side gate for the Log Block's DEBUG button — the popover/UI
+      // must not exist at all outside ?debug=1 (see DebugLogPanel.js).
+      debugEnabled: !!ephemeral.debugEnabled
     },
     debug: ready ? debug : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null }
@@ -6287,6 +6543,11 @@ function setupSceneSelection(hooks = {}) {
   let lastState = null;
   let sceneTimer = null;
   let currentSelectionIds = [];
+  const selectedWeaponMemory = createSelectedWeaponMemory();
+  let combatLog = [];
+  function pushLog(entry) {
+    combatLog = appendCombatLogEntry(combatLog, entry);
+  }
   const ephemeral = {
     characterId: null,
     selectedWeaponId: null,
@@ -6322,6 +6583,7 @@ function setupSceneSelection(hooks = {}) {
   } catch (_e) {
     debugEnabled = false;
   }
+  initDebugLog(debugEnabled);
   const cleanups2 = [];
   function broadcast(payload) {
     try {
@@ -6367,7 +6629,7 @@ function setupSceneSelection(hooks = {}) {
       }
     });
     function resetEphemeralForCharacter(characterId) {
-      if (ephemeral.characterId === characterId) return;
+      if (ephemeral.characterId === characterId) return false;
       ephemeral.characterId = characterId ?? null;
       ephemeral.selectedWeaponId = null;
       ephemeral.selectedReloadMagazineId = null;
@@ -6379,6 +6641,18 @@ function setupSceneSelection(hooks = {}) {
       ephemeral.fireModeSelectorOpen = false;
       ephemeral.fireModeRpcResult = null;
       ephemeral.basicAttackResult = null;
+      return true;
+    }
+    function restoreSelectedWeapon(characterId, bundle) {
+      if (!characterId) return;
+      const armory = bundle?.armory ?? bundle?.sections?.armory ?? null;
+      const stored = selectedWeaponMemory.get(characterId);
+      const valid = resolveStoredWeaponId(stored, armory?.weapons);
+      if (valid) {
+        ephemeral.selectedWeaponId = valid;
+      } else if (stored) {
+        selectedWeaponMemory.forget(characterId);
+      }
     }
     function buildEphemeralForPayload() {
       const prepared = ephemeral.preparedAction;
@@ -6396,7 +6670,8 @@ function setupSceneSelection(hooks = {}) {
         fireModeSelectorOpen: ephemeral.fireModeSelectorOpen,
         fireModeRpcResult: ephemeral.fireModeRpcResult,
         basicAttackInFlight: ephemeral.basicAttackInFlight,
-        basicAttackResult: ephemeral.basicAttackResult
+        basicAttackResult: ephemeral.basicAttackResult,
+        combatLog
       };
     }
     function publishState(state) {
@@ -6421,6 +6696,9 @@ function setupSceneSelection(hooks = {}) {
         selectedBodyPartId: target?.selectedZoneId ?? "torso",
         selectedTargetCharacterId: target?.characterId ?? null,
         resolvedBodyPartId: target?.resolvedBodyPartId ?? null,
+        // COLOR-ONLY body-zone condition map (svgPartId -> ZONE_STATES value)
+        // for the Target Block silhouette — see targetBodyZones.buildTargetZonesMap.
+        zonesMap: target?.zonesMap && typeof target.zonesMap === "object" ? target.zonesMap : {},
         distance: Number.isFinite(Number(target?.distance?.value)) ? Number(target.distance.value) : null,
         error: payload?.error ?? null
       };
@@ -6433,11 +6711,13 @@ function setupSceneSelection(hooks = {}) {
         const fmType = String(command.type ?? "");
         if (fmType === "toggle-selector") {
           ephemeral.fireModeSelectorOpen = !ephemeral.fireModeSelectorOpen;
+          logDebugEvent("fire-mode", "selector-toggled", { open: ephemeral.fireModeSelectorOpen });
           if (lastState) publishState(lastState);
           return;
         }
         if (fmType === "close-selector") {
           ephemeral.fireModeSelectorOpen = false;
+          logDebugEvent("fire-mode", "selector-closed", {});
           if (lastState) publishState(lastState);
           return;
         }
@@ -6448,9 +6728,11 @@ function setupSceneSelection(hooks = {}) {
           const fireModeId = String(command.fireModeId ?? "").trim() || null;
           ephemeral.fireModeSelectorOpen = false;
           ephemeral.commandStatus = null;
+          logDebugEvent("fire-mode", "selected", { weaponId, fireModeId });
           if (!weaponId || !profileId || !fireModeId) {
             ephemeral.commandStatus = { type: "error", message: "Fire mode switch unavailable: missing weapon, profile, or mode." };
             ephemeral.fireModeRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/fireModeId missing before RPC call." };
+            logDebugEvent("fire-mode", "result", { error: "MISSING_FIELDS" }, false);
             if (lastState) publishState(lastState);
             return;
           }
@@ -6458,11 +6740,15 @@ function setupSceneSelection(hooks = {}) {
             await switchWeaponFireMode(ephemeral.characterId, weaponId, fireModeId, settings);
             ephemeral.fireModeRpcResult = normalizeFireModeRpcResult(null);
             ephemeral.commandStatus = { type: "ok", message: "Fire mode changed." };
+            pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Fire mode changed." }));
+            logDebugEvent("fire-mode", "result", { weaponId, fireModeId }, true);
             await refetchCurrent();
           } catch (error) {
             const normalized = normalizeFireModeRpcResult(error);
             ephemeral.fireModeRpcResult = normalized;
             ephemeral.commandStatus = { type: "error", message: normalized.message || "Fire mode switch failed." };
+            pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: normalized.message }));
+            logDebugEvent("fire-mode", "result", { weaponId, fireModeId, error: normalized.error, message: normalized.message }, false);
             if (lastState) publishState(lastState);
           }
           return;
@@ -6472,6 +6758,7 @@ function setupSceneSelection(hooks = {}) {
       if (command?.scope === "combat-hud" && command?.feature === "basic-attack") {
         const baType = String(command.type ?? "");
         if (baType !== "execute") return;
+        logDebugEvent("attack", "requested", {});
         if (ephemeral.basicAttackInFlight) return;
         const weapon = lastPayload.hudSnapshot?.weapon?.primary ?? null;
         const targeting = ephemeral.targeting ?? {};
@@ -6489,10 +6776,12 @@ function setupSceneSelection(hooks = {}) {
         if (!evalResult.uiAllowed) {
           ephemeral.commandStatus = { type: "error", message: evalResult.uiBlockReason };
           ephemeral.basicAttackResult = { ok: false, error: "PRECONDITION_FAILED", message: evalResult.uiBlockReason };
+          logDebugEvent("attack", "blocked", { reason: evalResult.uiBlockReason }, false);
           if (lastState) publishState(lastState);
           return;
         }
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, weaponId: evalCtx.weaponId, targetCharacterId: evalCtx.targetCharacterId };
+        const bodyZoneLabel = getZoneLabel(DEFAULT_PROFILE_ID, evalCtx.bodyZoneId) || evalCtx.bodyZoneId;
         const ctx = buildBasicAttackCtx({
           sourceCharacterId: evalCtx.sourceCharacterId,
           weaponId: evalCtx.weaponId,
@@ -6501,6 +6790,7 @@ function setupSceneSelection(hooks = {}) {
           distance: targeting.distance ?? 0
         });
         ephemeral.basicAttackInFlight = true;
+        logDebugEvent("attack", "payload-prepared", { weaponId: ctx.weaponId, targetCharacterId: ctx.targetCharacterId, bodyZone: evalCtx.bodyZoneId });
         if (lastState) publishState(lastState);
         let outcome;
         try {
@@ -6516,6 +6806,13 @@ function setupSceneSelection(hooks = {}) {
         };
         const stale = isAttackResultStale(requestCtx, currentCtx);
         ephemeral.basicAttackResult = { ok: outcome.ok, error: outcome.code ?? null, message: outcome.error ?? null };
+        pushLog(buildAttackLogEntry({
+          sourceCharacterId: requestCtx.sourceCharacterId,
+          targetCharacterId: requestCtx.targetCharacterId,
+          bodyZoneLabel,
+          outcome
+        }));
+        logDebugEvent("attack", "result", { ok: outcome.ok, error: outcome.code ?? null, stale }, outcome.ok);
         if (stale) {
           if (lastState) publishState(lastState);
           return;
@@ -6523,20 +6820,24 @@ function setupSceneSelection(hooks = {}) {
         if (outcome.ok) {
           ephemeral.commandStatus = { type: "ok", message: "Attack resolved." };
           try {
-            lib_default.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "clear" }, { destination: "LOCAL" });
+            lib_default.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "refreshBodyZones" }, { destination: "LOCAL" });
           } catch (_e) {
           }
           await refetchCurrent();
+          logDebugEvent("refresh", "source-refresh-result", { reason: "attack-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Attack failed." };
           await refetchCurrent();
+          logDebugEvent("refresh", "source-refresh-result", { reason: "attack-failure" }, true);
         }
         return;
       }
       const type = String(command.type ?? "");
       ephemeral.commandStatus = null;
       if (type === "select-weapon") {
+        logDebugEvent("weapon", "selected", { weaponId: String(command.weaponId ?? "").trim() || null });
         ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
+        selectedWeaponMemory.set(ephemeral.characterId, ephemeral.selectedWeaponId);
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.reloadRpcResult = null;
         ephemeral.weaponSelectorOpen = false;
@@ -6547,6 +6848,7 @@ function setupSceneSelection(hooks = {}) {
       }
       if (type === "toggle-weapon-selector") {
         ephemeral.weaponSelectorOpen = !ephemeral.weaponSelectorOpen;
+        logDebugEvent("weapon", "selector-toggled", { open: ephemeral.weaponSelectorOpen });
         if (lastState) publishState(lastState);
         return;
       }
@@ -6557,6 +6859,7 @@ function setupSceneSelection(hooks = {}) {
       }
       if (type === "select-reload-mag") {
         ephemeral.selectedReloadMagazineId = String(command.magazineId ?? "").trim() || null;
+        logDebugEvent("magazine", "selected", { magazineId: ephemeral.selectedReloadMagazineId });
         if (lastState) publishState(lastState);
         return;
       }
@@ -6574,9 +6877,12 @@ function setupSceneSelection(hooks = {}) {
         const weaponId = String(command.weaponId ?? weapon?.id ?? "").trim();
         const magazineId = resolveReloadMagazineId(command, ephemeral, weapon) ?? "";
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
+        logDebugEvent("magazine", "reload-requested", { weaponId, magazineId });
         if (!weaponId || !magazineId || !profileId) {
           ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
           ephemeral.reloadRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/magazineId missing before RPC call." };
+          pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
+          logDebugEvent("magazine", "reload-result", { error: "MISSING_FIELDS" }, false);
           if (lastState) publishState(lastState);
           return;
         }
@@ -6590,14 +6896,20 @@ function setupSceneSelection(hooks = {}) {
           if (normalized.ok) {
             ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
             ephemeral.selectedReloadMagazineId = null;
+            pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Reloaded." }));
+            logDebugEvent("magazine", "reload-result", { weaponId, magazineId }, true);
             await refetchCurrent();
           } else {
             ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
+            pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
+            logDebugEvent("magazine", "reload-result", { weaponId, magazineId, error: normalized.error }, false);
             if (lastState) publishState(lastState);
           }
         } catch (error) {
           ephemeral.reloadRpcResult = { ok: false, error: "RPC_EXCEPTION", message: String(error?.message ?? error ?? "Reload failed.") };
           ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed.") };
+          pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
+          logDebugEvent("magazine", "reload-result", { error: "RPC_EXCEPTION", message: ephemeral.commandStatus.message }, false);
           if (lastState) publishState(lastState);
         }
       }
@@ -6605,10 +6917,15 @@ function setupSceneSelection(hooks = {}) {
     async function resolveAndPublish(selectionIds) {
       if (shouldDeferSelection()) return;
       currentSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
+      logDebugEvent("selection", "source-token-selected", { tokenIds: currentSelectionIds });
       const { stale, state } = await adapter.resolveLatest(selectionIds);
       if (disposed || stale) return;
-      if (state.status !== "ready") resetEphemeralForCharacter(null);
-      else resetEphemeralForCharacter(state.characterId ?? null);
+      if (state.status !== "ready") {
+        resetEphemeralForCharacter(null);
+      } else {
+        const changed = resetEphemeralForCharacter(state.characterId ?? null);
+        if (changed) restoreSelectedWeapon(state.characterId ?? null, state.runtimeBundle);
+      }
       lastState = state;
       const payload = publishState(state);
       if (onSelectionState) {
@@ -6638,7 +6955,12 @@ function setupSceneSelection(hooks = {}) {
       if (lastPayload) broadcast(lastPayload);
     }));
     cleanups2.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
-      void handleCommand(event?.data).catch(() => {
+      void handleCommand(event?.data).catch((error) => {
+        logDebugEvent("routing", "unexpected-exception", {
+          type: String(event?.data?.type ?? ""),
+          feature: event?.data?.feature ?? null,
+          message: String(error?.message ?? error ?? "unknown error")
+        }, false);
       });
     }));
     cleanup.applyTargetingPayload = applyTargetingPayload;
@@ -6667,47 +6989,6 @@ function setupSceneSelection(hooks = {}) {
   return cleanup;
 }
 
-// hud/targeting/targetProfiles.js
-var DEFAULT_PROFILE_ID = "humanoid";
-var HUMANOID_PROFILE = Object.freeze({
-  id: "humanoid",
-  zones: Object.freeze([
-    Object.freeze({ id: "HEAD", label: "Head" }),
-    Object.freeze({ id: "TORSO", label: "Torso" }),
-    Object.freeze({ id: "LEFT_ARM", label: "Left arm" }),
-    Object.freeze({ id: "RIGHT_ARM", label: "Right arm" }),
-    Object.freeze({ id: "LEFT_LEG", label: "Left leg" }),
-    Object.freeze({ id: "RIGHT_LEG", label: "Right leg" })
-  ]),
-  defaultZoneId: "TORSO"
-});
-var PROFILES = Object.freeze({
-  humanoid: HUMANOID_PROFILE
-});
-function getTargetProfile(profileId) {
-  return PROFILES[String(profileId ?? "")] ?? HUMANOID_PROFILE;
-}
-function getDefaultZoneId(profileId) {
-  return getTargetProfile(profileId).defaultZoneId;
-}
-function isValidZoneId(profileId, zoneId) {
-  return getTargetProfile(profileId).zones.some((z) => z.id === zoneId);
-}
-var ZONE_TO_SVG_PART = Object.freeze({
-  HEAD: "head",
-  TORSO: "torso",
-  LEFT_ARM: "l_arm",
-  RIGHT_ARM: "r_arm",
-  LEFT_LEG: "l_leg",
-  RIGHT_LEG: "r_leg"
-});
-var SVG_PART_TO_ZONE = Object.freeze(
-  Object.fromEntries(Object.entries(ZONE_TO_SVG_PART).map(([zoneId, svgPart]) => [svgPart, zoneId]))
-);
-function svgPartToZoneId(svgPart) {
-  return SVG_PART_TO_ZONE[String(svgPart ?? "")] ?? null;
-}
-
 // hud/targeting/targetBodyZones.js
 function mapTargetBodyZones(bundle) {
   const combat = bundle?.sections?.combat ?? bundle?.combat ?? null;
@@ -6719,9 +7000,29 @@ function mapTargetBodyZones(bundle) {
     const zoneId = svgPartToZoneId(normalizePartId(bp));
     if (!zoneId) continue;
     const canBeTargeted = bp?.can_be_targeted === false ? false : !(bp?.disabled || bp?.destroyed);
-    out.push({ zoneId, bodyPartId, canBeTargeted });
+    const condition = evaluateBodyCondition(bp);
+    out.push({
+      zoneId,
+      bodyPartId,
+      canBeTargeted,
+      state: condition.state,
+      colorToken: condition.colorToken,
+      label: condition.label,
+      // The ZONE_STATES-enum-compatible value humanoidSvg()/zoneStateClass()
+      // actually render from (bodyConditionPolicy's "minor" maps to "wounded"
+      // here) — see buildTargetZonesMap() below.
+      zoneState: condition.zoneState
+    });
   }
   return out;
+}
+function buildTargetZonesMap(bodyZones) {
+  const map = {};
+  for (const z of Array.isArray(bodyZones) ? bodyZones : []) {
+    const svgPart = zoneIdToSvgPart(z.zoneId);
+    if (svgPart) map[svgPart] = z.zoneState;
+  }
+  return map;
 }
 function resolveBodyPartId(bodyZones, zoneId) {
   if (!Array.isArray(bodyZones) || !zoneId) return null;
@@ -6803,6 +7104,11 @@ function applyResolvedTarget(state, candidate) {
     error: noError()
   };
 }
+function refreshTargetBodyZones(state, bodyZones) {
+  const s = state ?? createInitialTargetState();
+  if (!s.target) return s;
+  return { ...s, target: { ...s.target, bodyZones: Array.isArray(bodyZones) ? bodyZones : s.target.bodyZones } };
+}
 function clearTarget(state) {
   const s = state ?? createInitialTargetState();
   return { ...s, mode: TARGETING_MODE.idle, target: null, error: noError() };
@@ -6876,7 +7182,13 @@ function buildTargetingBroadcast(state) {
       distance: s.target.distance ?? null,
       // Resolved fresh from bodyZones on every broadcast (never stale) —
       // the raw bodyZones list itself is NOT shipped over the wire.
-      resolvedBodyPartId: resolveBodyPartId(s.target.bodyZones, s.target.selectedZoneId)
+      resolvedBodyPartId: resolveBodyPartId(s.target.bodyZones, s.target.selectedZoneId),
+      // COLOR ONLY (svgPartId -> ZONE_STATES value) for the silhouette —
+      // never the raw wound counts a hover tooltip would need. A zone
+      // absent from bodyZones (fetch never completed/denied) is simply
+      // absent from this map; hudIcons renders that as "unknown", not
+      // a false "healthy".
+      zonesMap: buildTargetZonesMap(s.target.bodyZones)
     } : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null }
   };
@@ -7132,6 +7444,7 @@ function setupTargetSelection(options = {}) {
   let state = createInitialTargetState();
   let adapter = null;
   let restoreInProgress = false;
+  let fetchTargetBodyZonesFn = null;
   const cleanups2 = [];
   function broadcast() {
     const payload = buildTargetingBroadcast(state);
@@ -7175,6 +7488,18 @@ function setupTargetSelection(options = {}) {
   function onSelectZone(zoneId) {
     commit(selectZone(state, zoneId));
   }
+  async function onRefreshBodyZones() {
+    const characterId = state.target?.characterId;
+    if (!characterId || !fetchTargetBodyZonesFn) return;
+    try {
+      const bodyZones = await fetchTargetBodyZonesFn(characterId);
+      if (disposed) return;
+      commit(refreshTargetBodyZones(state, bodyZones));
+      logDebugEvent("refresh", "target-body-zone-refresh-result", { characterId, zoneCount: bodyZones.length }, true);
+    } catch (_e) {
+      logDebugEvent("refresh", "target-body-zone-refresh-result", { characterId, reason: "fetch-failed" }, false);
+    }
+  }
   function handleTargetingCommand(cmd) {
     switch (cmd?.type) {
       case "pick":
@@ -7189,6 +7514,9 @@ function setupTargetSelection(options = {}) {
       case "selectZone":
         onSelectZone(cmd.zoneId);
         break;
+      case "refreshBodyZones":
+        void onRefreshBodyZones();
+        break;
       default:
         break;
     }
@@ -7200,10 +7528,12 @@ function setupTargetSelection(options = {}) {
     if (state.mode !== TARGETING_MODE.picking) return;
     if (!result.ok) {
       commit(cancelPicking({ ...state, error: { code: result.code, message: result.message ?? null } }));
+      logDebugEvent("targeting", "target-selection-failed", { tokenId, reason: result.code }, false);
       await restoreSourceSelection();
       return;
     }
     commit(applyResolvedTarget(state, result.candidate));
+    logDebugEvent("targeting", "target-selected", { tokenId, characterId: result.candidate?.characterId ?? null });
     await restoreSourceSelection();
   }
   function handleActiveSelection(payload) {
@@ -7222,6 +7552,10 @@ function setupTargetSelection(options = {}) {
       loadRoomSupabaseSettings()
     ]);
     if (disposed) return;
+    fetchTargetBodyZonesFn = async (characterId) => {
+      const bundle = await getCharacterRuntimeBundle({ character_id: characterId, sections: ["combat"] }, settings);
+      return mapTargetBodyZones(bundle);
+    };
     adapter = createTargetSelectionAdapter({
       fetchSceneTokenLink: (tokenId) => getSceneTokenLinks(
         { room_id: context.roomId, scene_id: context.sceneId, campaign_id: context.campaignId, token_id: tokenId },
@@ -7234,14 +7568,7 @@ function setupTargetSelection(options = {}) {
         return { displayName: String(item.name ?? ""), position: item.position ?? null };
       },
       getGrid: () => getSceneGrid(),
-      // Basic Weapon Attack v1: resolve the target's OWN body-part zone→uuid
-      // map via the existing get_character_runtime_bundle RPC, "combat"
-      // section only (see targetBodyZones.js for exactly why and what is
-      // discarded). Best-effort — a failure just leaves bodyZones empty.
-      fetchTargetBodyZones: async (characterId) => {
-        const bundle = await getCharacterRuntimeBundle({ character_id: characterId, sections: ["combat"] }, settings);
-        return mapTargetBodyZones(bundle);
-      },
+      fetchTargetBodyZones: fetchTargetBodyZonesFn,
       getSourceContext: () => state.source ?? {}
     });
     cleanups2.push(await subscribePlayerChanges((p) => {
@@ -7330,6 +7657,7 @@ var LEGACY_HUD_POPOVER_IDS = Object.freeze([
 var GUN_WEAPON_SELECTOR_POPOVER_ID = "odyssey-hud-gun-weapon-selector";
 var GUN_MAGAZINE_SELECTOR_POPOVER_ID = "odyssey-hud-gun-magazine-selector";
 var GUN_FIRE_MODE_SELECTOR_POPOVER_ID = "odyssey-hud-gun-fire-mode-selector";
+var DEBUG_LOG_POPOVER_ID = "odyssey-hud-debug-log";
 var HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";
 var HUD_PILL_POPOVER_ID = "odyssey-hud-pill";
 var BC_HUD_LAYOUT = "com.odyssey.combat-hud/layout";
@@ -7523,7 +7851,9 @@ var targetSelection = null;
 var gunWeaponSelectorOpen = false;
 var gunMagazineSelectorOpen = false;
 var gunFireModeSelectorOpen = false;
+var debugLogOpen = false;
 var lastActiveCharacterId = null;
+var isDebugMode = false;
 var lastSelectionPayload = null;
 var cleanups = [];
 var SECONDARY_SET2 = new Set(SECONDARY_MODULE_IDS);
@@ -7707,6 +8037,39 @@ async function closeAllCompanionSelectors() {
   } catch (_e) {
   }
 }
+function debugLogRect() {
+  if (!lastLayout.modules?.log) return null;
+  const logRect = moduleRect("log");
+  const width = 260;
+  const height = 240;
+  const gap = 4;
+  return {
+    left: Math.max(0, logRect.left + (logRect.width - width) / 2),
+    top: Math.max(0, logRect.top - height - gap),
+    width,
+    height
+  };
+}
+async function setDebugLogOpen(open) {
+  const next = Boolean(open) && isDebugMode;
+  if (next === debugLogOpen) return;
+  debugLogOpen = next;
+  if (mode !== "modules") return;
+  if (next) {
+    const rect = debugLogRect();
+    if (rect) {
+      try {
+        await lib_default.popover.open({ id: DEBUG_LOG_POPOVER_ID, url: pageUrl("debug-log"), ...paramsForRect(rect) });
+      } catch (_e) {
+      }
+    }
+  } else {
+    try {
+      await lib_default.popover.close(DEBUG_LOG_POPOVER_ID);
+    } catch (_e) {
+    }
+  }
+}
 function sendTargetingCommand(command) {
   try {
     lib_default.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, command, { destination: "LOCAL" });
@@ -7790,11 +8153,14 @@ async function applyMode() {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
     gunFireModeSelectorOpen = false;
+    debugLogOpen = false;
     await lib_default.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {
     });
     await lib_default.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {
     });
     await lib_default.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {
+    });
+    await lib_default.popover.close(DEBUG_LOG_POPOVER_ID).catch(() => {
     });
     await closeEditorPopover();
     await closeAllModules();
@@ -7803,11 +8169,14 @@ async function applyMode() {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
     gunFireModeSelectorOpen = false;
+    debugLogOpen = false;
     await lib_default.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {
     });
     await lib_default.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {
     });
     await lib_default.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {
+    });
+    await lib_default.popover.close(DEBUG_LOG_POPOVER_ID).catch(() => {
     });
     await closePill();
     await closeAllModules();
@@ -7843,11 +8212,29 @@ function setupCombatHudOverlay() {
   started = true;
   lib_default.onReady(async () => {
     try {
+      try {
+        isDebugMode = new URL(baseHref()).searchParams.get("debug") === "1";
+      } catch (_e) {
+        isDebugMode = false;
+      }
+      initDebugLog(isDebugMode);
       await readViewport();
       await closeLegacyPopovers();
       mode = isCollapsed() ? "collapsed" : "modules";
       await applyMode();
       startViewportPoll();
+      cleanups.push(subscribeDebugLog((entries3) => {
+        try {
+          lib_default.broadcast.sendMessage(BC_HUD_DEBUG_LOG, { entries: entries3 }, { destination: "LOCAL" });
+        } catch (_e) {
+        }
+      }));
+      cleanups.push(lib_default.broadcast.onMessage(BC_HUD_DEBUG_LOG_REQUEST, () => {
+        try {
+          lib_default.broadcast.sendMessage(BC_HUD_DEBUG_LOG, { entries: getDebugLogEntries() }, { destination: "LOCAL" });
+        } catch (_e) {
+        }
+      }));
       targetSelection = setupTargetSelection({
         onTargetingState: (payload) => {
           try {
@@ -7867,6 +8254,7 @@ function setupCombatHudOverlay() {
           try {
             const nextCharId = payload?.characterId ?? null;
             if (characterChangeClosesCompanions(lastActiveCharacterId, nextCharId)) {
+              if (nextCharId) logDebugEvent("selection", "source-character-resolved", { characterId: nextCharId });
               lastActiveCharacterId = nextCharId;
               await closeAllCompanionSelectors();
             }
@@ -7887,6 +8275,7 @@ function setupCombatHudOverlay() {
             gunWeaponSelectorOpen = false;
             gunMagazineSelectorOpen = false;
             gunFireModeSelectorOpen = false;
+            debugLogOpen = false;
           }
           await applyMode();
         }
@@ -7899,22 +8288,38 @@ function setupCombatHudOverlay() {
           else if (fmType === "select" || fmType === "close-selector") await setGunFireModeSelectorOpen(false);
           return;
         }
+        if (data?.scope === "combat-hud" && data?.feature === "debug-log") {
+          const dlType = String(data.type ?? "");
+          if (!isDebugMode) return;
+          if (dlType === "toggle") await setDebugLogOpen(!debugLogOpen);
+          else if (dlType === "clear") clearDebugLog();
+          return;
+        }
         const type = String(data.type ?? "");
         if (type === "toggle-weapon-selector") await setGunWeaponSelectorOpen(!gunWeaponSelectorOpen);
         else if (type === "close-weapon-selector") await setGunWeaponSelectorOpen(false);
         else if (type === "select-weapon") {
           await setGunWeaponSelectorOpen(false);
           await setGunFireModeSelectorOpen(false);
-        } else if (type === "toggle-magazine-selector") await setGunMagazineSelectorOpen(!gunMagazineSelectorOpen);
-        else if (type === "select-reload-mag") await setGunMagazineSelectorOpen(false);
+        } else if (type === "toggle-magazine-selector") {
+          await setGunMagazineSelectorOpen(!gunMagazineSelectorOpen);
+          logDebugEvent("magazine", "selector-toggled", { open: gunMagazineSelectorOpen });
+        } else if (type === "select-reload-mag") await setGunMagazineSelectorOpen(false);
         else if (type === "reload") {
           await setGunWeaponSelectorOpen(false);
           await setGunMagazineSelectorOpen(false);
         }
-        if (type === "pick-target") sendTargetingCommand({ type: "pick" });
-        else if (type === "cancel-target") sendTargetingCommand({ type: "cancel" });
-        else if (type === "clear-target") sendTargetingCommand({ type: "clear" });
-        else if (type === "select-target-zone") sendTargetingCommand({ type: "selectZone", zoneId: data.zoneId });
+        if (type === "pick-target") {
+          logDebugEvent("targeting", "picking-started", {});
+          sendTargetingCommand({ type: "pick" });
+        } else if (type === "cancel-target") sendTargetingCommand({ type: "cancel" });
+        else if (type === "clear-target") {
+          logDebugEvent("targeting", "target-cleared", {});
+          sendTargetingCommand({ type: "clear" });
+        } else if (type === "select-target-zone") {
+          logDebugEvent("targeting", "zone-selected", { zoneId: data.zoneId });
+          sendTargetingCommand({ type: "selectZone", zoneId: data.zoneId });
+        }
       }));
       cleanups.push(lib_default.broadcast.onMessage(BC_HUD_EDITOR, async (event) => {
         const open = Boolean(event?.data && event.data.open);
@@ -8901,7 +9306,7 @@ function setupTacticalMoveTool({ runtime }) {
   let unsubscribeBroadcast = null;
   let unsubscribeSceneItems = null;
   let disposed = false;
-  async function notify2(message, variant = "INFO") {
+  async function notify3(message, variant = "INFO") {
     try {
       await lib_default.notification.show(message, variant);
     } catch {
@@ -8994,7 +9399,7 @@ function setupTacticalMoveTool({ runtime }) {
         characterId: String(commandPayload.characterId ?? "").trim(),
         tokenId: String(commandPayload.tokenId ?? "").trim()
       });
-      await notify2(message, "WARNING");
+      await notify3(message, "WARNING");
       return false;
     }
     const token = selectedTokens[0];
@@ -9011,7 +9416,7 @@ function setupTacticalMoveTool({ runtime }) {
         tokenId: selectedTokenId,
         characterId: String(commandPayload.characterId ?? "").trim()
       });
-      await notify2(message, "WARNING");
+      await notify3(message, "WARNING");
       return false;
     }
     try {
@@ -9084,7 +9489,7 @@ function setupTacticalMoveTool({ runtime }) {
         tokenId: selectedTokenId,
         characterId: String(commandPayload.characterId ?? "").trim()
       });
-      await notify2(message, "WARNING");
+      await notify3(message, "WARNING");
       return false;
     }
   }
@@ -9150,7 +9555,7 @@ function setupTacticalMoveTool({ runtime }) {
         state.pending = false;
         await publishStatus({ error: message });
         await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, { message, code: result?.error ?? "" });
-        await notify2(message, result?.error === "STATE_VERSION_CONFLICT" ? "WARNING" : "ERROR");
+        await notify3(message, result?.error === "STATE_VERSION_CONFLICT" ? "WARNING" : "ERROR");
         return;
       }
       const nextPosition = result?.position ?? {};
@@ -9180,7 +9585,7 @@ function setupTacticalMoveTool({ runtime }) {
         ...buildStatus(state, { applied: true }),
         runtime: result.runtime ?? null
       });
-      await notify2(
+      await notify3(
         result.move_cost_m > 0 ? `${state.characterName} moved ${result.move_cost_m} m.` : `${state.characterName} position confirmed.`,
         "SUCCESS"
       );
@@ -9191,7 +9596,7 @@ function setupTacticalMoveTool({ runtime }) {
       addDiagnosticEntry("error", "Move RPC failed", normalized.message);
       await publishStatus({ error: normalized.message });
       await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, { message: normalized.message });
-      await notify2(normalized.message, "ERROR");
+      await notify3(normalized.message, "ERROR");
     }
   }
   async function cancelMove(reason = "cancelled") {
@@ -9217,7 +9622,7 @@ function setupTacticalMoveTool({ runtime }) {
     if (!preview) return;
     if (!preview.inRange) {
       await updatePreview(preview);
-      await notify2("\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E MOVE", "WARNING");
+      await notify3("\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E MOVE", "WARNING");
       return;
     }
     await applyMove(preview);
@@ -9320,7 +9725,7 @@ function setupTacticalMoveTool({ runtime }) {
         },
         "LOCAL"
       );
-      await notify2(
+      await notify3(
         `Tactical Move registration failed: ${normalized.message}`,
         "ERROR"
       );

@@ -7,6 +7,7 @@
 // stylesheet maps semantic condition → token colour.
 
 import { zoneStateClass } from "./hudLayoutModel.js";
+import { tipAttr } from "./hudDom.js";
 
 /* ----------------- small UI glyphs ----------------- */
 
@@ -99,7 +100,12 @@ export function skillIconSvg(name) {
 /* ----------------- entity silhouettes ----------------- */
 
 function zoneAttr(zoneId, zonesMap, neutral) {
-  const stateName = neutral ? "healthy" : (zonesMap?.[zoneId] ?? "healthy");
+  // `neutral` is an explicit request for a placeholder/ghost silhouette (e.g.
+  // "no target selected yet") — healthy is correct there, it isn't real data.
+  // Otherwise a zone missing from the map means its condition genuinely isn't
+  // known yet (or the fetch was denied) — it must render as "unknown", never
+  // a false "healthy".
+  const stateName = neutral ? "healthy" : (zonesMap?.[zoneId] ?? "unknown");
   return zoneStateClass(stateName);
 }
 
@@ -123,16 +129,25 @@ const SVG_PART_LABEL = Object.freeze({
 
 /**
  * Humanoid silhouette with six targetable zones. Each zone is filled by its
- * condition class. `highlight` outlines the selected target zone.
+ * condition class. `highlight` outlines the selected target zone (the outline
+ * never hides the fill colour — it's a stroke, not a fill override).
  * When `targetable` is true, each silhouette part becomes the zone picker.
- * @param {{ zones?:Record<string,string>, highlight?:(string|null), neutral?:boolean, targetable?:boolean }} [opts]
+ * `zoneTips` (Player Block only — see PlayerBlock.js's authorization gate)
+ * attaches a real numeric hover tooltip per zone via the existing generic
+ * Tooltip.js infra (data-tip-title/data-tip-lines) — never shown for a
+ * Target Block silhouette.
+ * @param {{ zones?:Record<string,string>, highlight?:(string|null), neutral?:boolean,
+ *           targetable?:boolean, zoneTips?:(Record<string,string[]>|null) }} [opts]
  */
 export function humanoidSvg(opts = {}) {
-  const { zones = {}, highlight = null, neutral = false, targetable = false } = opts;
+  const { zones = {}, highlight = null, neutral = false, targetable = false, zoneTips = null } = opts;
   const z = (id) => `ohud-zone ohud-zone--${zoneAttr(id, zones, neutral)}${highlight === id ? " is-target" : ""}${targetable ? " ohud-zone--clickable" : ""}`;
+  const tipFor = (id) => (zoneTips && Array.isArray(zoneTips[id]) && zoneTips[id].length)
+    ? tipAttr(SVG_PART_LABEL[id], zoneTips[id])
+    : "";
   const a = (id) => targetable
-    ? ` data-zone="${id}" data-action="select-target-zone" data-zone-id="${SVG_PART_TO_ZONE_ID[id]}" role="button" tabindex="0" aria-label="${SVG_PART_LABEL[id]}"`
-    : ` data-zone="${id}"`;
+    ? ` data-zone="${id}" data-action="select-target-zone" data-zone-id="${SVG_PART_TO_ZONE_ID[id]}" role="button" tabindex="0" aria-label="${SVG_PART_LABEL[id]}"${tipFor(id)}`
+    : ` data-zone="${id}"${tipFor(id)}`;
   return `<svg viewBox="0 0 120 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="${targetable ? "false" : "true"}" class="ohud-silhouette">
     <circle cx="60" cy="24" r="16" class="${z("head")}"${a("head")}/>
     <rect x="42" y="44" width="36" height="46" rx="11" class="${z("torso")}"${a("torso")}/>

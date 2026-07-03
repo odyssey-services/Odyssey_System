@@ -12,7 +12,7 @@
 // players.
 
 import { DEFAULT_PROFILE_ID, getDefaultZoneId, isValidZoneId } from "./targetProfiles.js";
-import { resolveBodyPartId } from "./targetBodyZones.js";
+import { resolveBodyPartId, buildTargetZonesMap } from "./targetBodyZones.js";
 
 /** Targeting modes (string values are part of the broadcast wire contract). */
 export const TARGETING_MODE = Object.freeze({
@@ -114,6 +114,19 @@ export function applyResolvedTarget(state, candidate) {
     },
     error: noError(),
   };
+}
+
+/**
+ * Refresh ONLY the current target's body-zone condition data (e.g. right
+ * after a successful attack) — never touches mode/selectedZoneId/distance,
+ * and no-ops if there is no longer a target (a stale refresh from an
+ * already-cleared/changed target must not resurrect one).
+ * @param {Array<{zoneId:string, bodyPartId:string, canBeTargeted:boolean}>} bodyZones
+ */
+export function refreshTargetBodyZones(state, bodyZones) {
+  const s = state ?? createInitialTargetState();
+  if (!s.target) return s;
+  return { ...s, target: { ...s.target, bodyZones: Array.isArray(bodyZones) ? bodyZones : s.target.bodyZones } };
 }
 
 /** Clear the current target. Zone resets implicitly (next target → default). */
@@ -227,6 +240,12 @@ export function buildTargetingBroadcast(state) {
           // Resolved fresh from bodyZones on every broadcast (never stale) —
           // the raw bodyZones list itself is NOT shipped over the wire.
           resolvedBodyPartId: resolveBodyPartId(s.target.bodyZones, s.target.selectedZoneId),
+          // COLOR ONLY (svgPartId -> ZONE_STATES value) for the silhouette —
+          // never the raw wound counts a hover tooltip would need. A zone
+          // absent from bodyZones (fetch never completed/denied) is simply
+          // absent from this map; hudIcons renders that as "unknown", not
+          // a false "healthy".
+          zonesMap: buildTargetZonesMap(s.target.bodyZones),
         }
       : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null },
@@ -246,6 +265,7 @@ export function normalizeTargetingPayload(raw) {
         selectedZoneId: String(raw.target.selectedZoneId ?? getDefaultZoneId(raw.target.profileId)),
         distance: normalizeDistance(raw.target.distance),
         resolvedBodyPartId: raw.target.resolvedBodyPartId ?? null,
+        zonesMap: raw.target.zonesMap && typeof raw.target.zonesMap === "object" ? raw.target.zonesMap : {},
       }
     : null;
   return {

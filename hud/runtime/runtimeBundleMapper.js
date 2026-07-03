@@ -68,7 +68,6 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 import {
-  ZONE_STATES,
   MODIFIER_POLARITY,
   SKILL_TYPES,
   SKILL_SOURCES,
@@ -77,6 +76,7 @@ import {
   ACTION_COSTS,
   createInactiveCombatSession,
 } from "../models/combatHudContracts.js";
+import { evaluateBodyCondition, bodyConditionDetailLines } from "../targeting/bodyConditionPolicy.js";
 
 // ─── Tiny coerce helpers ────────────────────────────────────────────────────
 
@@ -139,15 +139,13 @@ export function normalizePartId(bp) {
 }
 
 // ─── Zone state ─────────────────────────────────────────────────────────────
-// body_part columns: minor, serious, critical, disabled, destroyed.
-// Map to the internal ZONE_STATES enum (worsening severity).
+// body_part columns: minor, serious, critical, disabled, destroyed. Severity
+// mapping now lives in bodyConditionPolicy.js (single source of truth shared
+// with the target silhouette) — this just maps its state to the ZONE_STATES
+// enum components render from.
 
 function zoneStateFromBodyPart(bp) {
-  if (bool(bp?.destroyed) || bool(bp?.disabled)) return ZONE_STATES.disabled;
-  if (num(bp?.critical) > 0) return ZONE_STATES.critical;
-  if (num(bp?.serious) > 0) return ZONE_STATES.serious;
-  if (num(bp?.minor) > 0) return ZONE_STATES.wounded;
-  return ZONE_STATES.healthy;
+  return evaluateBodyCondition(bp).zoneState;
 }
 
 const ZONE_LABELS = Object.freeze({
@@ -165,6 +163,10 @@ function mapZones(bodyParts) {
       label: str(bp?.name) ?? ZONE_LABELS[id] ?? id,
       state: zoneStateFromBodyPart(bp),
       canBeTargeted: bp?.can_be_targeted === false ? false : (!bool(bp?.disabled) && !bool(bp?.destroyed)),
+      // Real wound-count detail lines for the Player Block hover tooltip
+      // (source only — see PlayerBlock.js). Never a fabricated current/max
+      // fraction; empty when healthy (nothing to report beyond the label).
+      detailLines: bodyConditionDetailLines(bp),
     };
   });
 }

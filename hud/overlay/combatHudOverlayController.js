@@ -21,10 +21,13 @@ import {
   BC_HUD_COMMAND,
   BC_HUD_UI_STATE,
   BC_HUD_TARGETING_COMMAND,
+  BC_HUD_DEBUG_LOG,
+  BC_HUD_DEBUG_LOG_REQUEST,
   DEFAULT_HUD_UI_STATE,
   normalizeHudUiState,
   serializeHudUiState,
 } from "./overlayConstants.js";
+import { initDebugLog, logDebugEvent, getDebugLogEntries, clearDebugLog, subscribeDebugLog } from "../debug/debugLogStore.js";
 import { setupSceneSelection } from "../scene/sceneSelectionController.js";
 import { setupTargetSelection } from "../targeting/targetSelectionController.js";
 import {
@@ -46,6 +49,7 @@ import {
   GUN_WEAPON_SELECTOR_POPOVER_ID,
   GUN_MAGAZINE_SELECTOR_POPOVER_ID,
   GUN_FIRE_MODE_SELECTOR_POPOVER_ID,
+  DEBUG_LOG_POPOVER_ID,
   HUD_EDITOR_POPOVER_ID,
   HUD_PILL_POPOVER_ID,
   DEFAULT_HUD_LAYOUT_V2,
@@ -81,7 +85,12 @@ let targetSelection = null;
 let gunWeaponSelectorOpen = false;
 let gunMagazineSelectorOpen = false;
 let gunFireModeSelectorOpen = false;
+let debugLogOpen = false;
 let lastActiveCharacterId = null;
+/** Whether this session is running with `?debug=1` — read once from the
+ *  background page's own URL (same origin/search as sceneSelectionController's
+ *  own debugEnabled flag). The DEBUG button/popover simply don't exist without it. */
+let isDebugMode = false;
 /** Latest full trimmed selection payload (the same one module iframes get),
  *  kept ONLY to size the magazine-selector companion popover to its content
  *  (row count) at open time — never read for anything else here. */
@@ -278,6 +287,40 @@ async function closeAllCompanionSelectors() {
   try { await setGunFireModeSelectorOpen(false); } catch (_e) { /* best effort */ }
 }
 
+/** Debug Log companion popover — anchored above the Log module (not Gun),
+ *  fixed content-scrollable size (the list itself scrolls internally). Only
+ *  ever opened when isDebugMode is true. */
+function debugLogRect() {
+  if (!lastLayout.modules?.log) return null;
+  const logRect = moduleRect("log");
+  const width = 260;
+  const height = 240;
+  const gap = 4;
+  return {
+    left: Math.max(0, logRect.left + (logRect.width - width) / 2),
+    top: Math.max(0, logRect.top - height - gap),
+    width,
+    height,
+  };
+}
+
+async function setDebugLogOpen(open) {
+  const next = Boolean(open) && isDebugMode;
+  if (next === debugLogOpen) return;
+  debugLogOpen = next;
+  if (mode !== "modules") return;
+  if (next) {
+    const rect = debugLogRect();
+    if (rect) {
+      try {
+        await OBR.popover.open({ id: DEBUG_LOG_POPOVER_ID, url: pageUrl("debug-log"), ...paramsForRect(rect) });
+      } catch (_e) { /* best effort */ }
+    }
+  } else {
+    try { await OBR.popover.close(DEBUG_LOG_POPOVER_ID); } catch (_e) { /* ignore */ }
+  }
+}
+
 function sendTargetingCommand(command) {
   try { OBR.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, command, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
 }
@@ -359,9 +402,11 @@ async function applyMode() {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
     gunFireModeSelectorOpen = false;
+    debugLogOpen = false;
     await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
     await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
     await OBR.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {});
+    await OBR.popover.close(DEBUG_LOG_POPOVER_ID).catch(() => {});
     await closeEditorPopover();
     await closeAllModules();
     await openPill();
@@ -369,9 +414,11 @@ async function applyMode() {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
     gunFireModeSelectorOpen = false;
+    debugLogOpen = false;
     await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
     await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
     await OBR.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {});
+    await OBR.popover.close(DEBUG_LOG_POPOVER_ID).catch(() => {});
     await closePill();
     await closeAllModules();
     await openEditor();
@@ -402,11 +449,23 @@ export function setupCombatHudOverlay() {
 
   OBR.onReady(async () => {
     try {
+      try { isDebugMode = new URL(baseHref()).searchParams.get("debug") === "1"; } catch (_e) { isDebugMode = false; }
+      initDebugLog(isDebugMode);
       await readViewport();
       await closeLegacyPopovers(); // drop any 2.2.2 Target/Modifiers/Action popovers
       mode = isCollapsed() ? "collapsed" : "modules";
       await applyMode();
       startViewportPoll();
+
+      // Debug Log (?debug=1 only): rebroadcast the in-memory entries to the
+      // companion popover iframe whenever they change. A no-op subscription
+      // when isDebugMode is false, since logDebugEvent() never adds entries.
+      cleanups.push(subscribeDebugLog((entries) => {
+        try { OBR.broadcast.sendMessage(BC_HUD_DEBUG_LOG, { entries }, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
+      }));
+      cleanups.push(OBR.broadcast.onMessage(BC_HUD_DEBUG_LOG_REQUEST, () => {
+        try { OBR.broadcast.sendMessage(BC_HUD_DEBUG_LOG, { entries: getDebugLogEntries() }, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
+      }));
 
       // Phase 3A: scene-selection layer. The scene controller broadcasts the
       // trimmed selection payload to the iframes (and replays it on request);
@@ -426,6 +485,7 @@ export function setupCombatHudOverlay() {
           try {
             const nextCharId = payload?.characterId ?? null;
             if (characterChangeClosesCompanions(lastActiveCharacterId, nextCharId)) {
+              if (nextCharId) logDebugEvent("selection", "source-character-resolved", { characterId: nextCharId });
               lastActiveCharacterId = nextCharId;
               await closeAllCompanionSelectors();
             }
@@ -447,6 +507,7 @@ export function setupCombatHudOverlay() {
             gunWeaponSelectorOpen = false;
             gunMagazineSelectorOpen = false;
             gunFireModeSelectorOpen = false;
+            debugLogOpen = false;
           }
           await applyMode();
         }
@@ -466,6 +527,15 @@ export function setupCombatHudOverlay() {
           return;
         }
 
+        // Debug Log (?debug=1 only) — namespaced, same reasoning as fire-mode.
+        if (data?.scope === "combat-hud" && data?.feature === "debug-log") {
+          const dlType = String(data.type ?? "");
+          if (!isDebugMode) return; // no-op outside debug mode, even if a stray command arrives
+          if (dlType === "toggle") await setDebugLogOpen(!debugLogOpen);
+          else if (dlType === "clear") clearDebugLog();
+          return;
+        }
+
         const type = String(data.type ?? "");
         if (type === "toggle-weapon-selector") await setGunWeaponSelectorOpen(!gunWeaponSelectorOpen);
         else if (type === "close-weapon-selector") await setGunWeaponSelectorOpen(false);
@@ -476,17 +546,20 @@ export function setupCombatHudOverlay() {
           await setGunWeaponSelectorOpen(false);
           await setGunFireModeSelectorOpen(false);
         }
-        else if (type === "toggle-magazine-selector") await setGunMagazineSelectorOpen(!gunMagazineSelectorOpen);
+        else if (type === "toggle-magazine-selector") {
+          await setGunMagazineSelectorOpen(!gunMagazineSelectorOpen);
+          logDebugEvent("magazine", "selector-toggled", { open: gunMagazineSelectorOpen });
+        }
         else if (type === "select-reload-mag") await setGunMagazineSelectorOpen(false);
         else if (type === "reload") {
           await setGunWeaponSelectorOpen(false);
           await setGunMagazineSelectorOpen(false);
         }
 
-        if (type === "pick-target") sendTargetingCommand({ type: "pick" });
+        if (type === "pick-target") { logDebugEvent("targeting", "picking-started", {}); sendTargetingCommand({ type: "pick" }); }
         else if (type === "cancel-target") sendTargetingCommand({ type: "cancel" });
-        else if (type === "clear-target") sendTargetingCommand({ type: "clear" });
-        else if (type === "select-target-zone") sendTargetingCommand({ type: "selectZone", zoneId: data.zoneId });
+        else if (type === "clear-target") { logDebugEvent("targeting", "target-cleared", {}); sendTargetingCommand({ type: "clear" }); }
+        else if (type === "select-target-zone") { logDebugEvent("targeting", "zone-selected", { zoneId: data.zoneId }); sendTargetingCommand({ type: "selectZone", zoneId: data.zoneId }); }
       }));
 
       // Arrange-HUD editor open/close.
@@ -528,6 +601,7 @@ export async function teardownCombatHudOverlay() {
   gunWeaponSelectorOpen = false;
   gunMagazineSelectorOpen = false;
   gunFireModeSelectorOpen = false;
+  debugLogOpen = false;
   lastActiveCharacterId = null;
   lastSelectionPayload = null;
   mode = "modules";
@@ -537,5 +611,6 @@ export async function teardownCombatHudOverlay() {
   await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
   await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
   await OBR.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {});
+  await OBR.popover.close(DEBUG_LOG_POPOVER_ID).catch(() => {});
   await closeLegacyPopovers();
 }

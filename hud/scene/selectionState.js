@@ -336,6 +336,12 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
   if (ready && s.runtimeBundle) {
     try { hudSnapshot = mapBundleToHudSnapshot(s.runtimeBundle, ephemeral); } catch (_e) { /* mapper errors → null → neutral fallback */ }
   }
+  // Phase 3D.1: the real (server-result-only) local Combat Log replaces the
+  // runtime bundle's own (currently always-empty) battleLog section — see
+  // hud/log/combatResultLogPolicy.js. Never Supabase-persisted, never shared.
+  if (hudSnapshot && Array.isArray(ephemeral.combatLog)) {
+    hudSnapshot = { ...hudSnapshot, battleLog: { entries: ephemeral.combatLog } };
+  }
   const debug = ready && s.runtimeBundle
     ? buildRuntimeDebugSummary(s.runtimeBundle, hudSnapshot, {
         selectionStatus: s.status,
@@ -398,6 +404,9 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
         uiAllowed: basicAttackEval.uiAllowed,
         uiBlockReason: basicAttackEval.uiBlockReason,
       },
+      // Client-side gate for the Log Block's DEBUG button — the popover/UI
+      // must not exist at all outside ?debug=1 (see DebugLogPanel.js).
+      debugEnabled: !!ephemeral.debugEnabled,
     },
     debug: ready ? debug : null,
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null },
