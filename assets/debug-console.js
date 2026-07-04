@@ -3545,7 +3545,7 @@ function visibleEntries(entries, filter) {
 }
 function truncateValue(value) {
   const s = String(value);
-  if (s.length <= 20) return s;
+  if (s.length <= 20 || /\s/.test(s)) return s;
   return `${s.slice(0, 10)}\u2026${s.slice(-4)}`;
 }
 function esc(value) {
@@ -3553,12 +3553,30 @@ function esc(value) {
 }
 function formatDetailsCompact(details2) {
   if (!details2 || typeof details2 !== "object") return "";
-  const parts = Object.entries(details2).filter(([, v]) => v !== void 0).map(([k, v]) => `${k}=${truncateValue(v)}`);
+  const parts = [];
+  if (typeof details2.summary === "string" && details2.summary) parts.push(details2.summary);
+  for (const [k, v] of Object.entries(details2)) {
+    if (v === void 0 || k === "summary") continue;
+    if (v && typeof v === "object") continue;
+    parts.push(`${k}=${truncateValue(v)}`);
+  }
   return parts.join(" ");
 }
-function detailLines(details2) {
+function detailLines(details2, indent = "") {
   if (!details2 || typeof details2 !== "object") return [];
-  return Object.entries(details2).filter(([, v]) => v !== void 0).map(([k, v]) => `${k}: ${truncateValue(v)}`);
+  const lines = [];
+  for (const [k, v] of Object.entries(details2)) {
+    if (v === void 0) continue;
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      lines.push(`${indent}${k}:`);
+      lines.push(...detailLines(v, `${indent}  `));
+    } else if (Array.isArray(v)) {
+      lines.push(`${indent}${k}: ${v.map((item) => truncateValue(item)).join(", ")}`);
+    } else {
+      lines.push(`${indent}${k}: ${truncateValue(v)}`);
+    }
+  }
+  return lines;
 }
 function formatTimestamp(ts) {
   try {

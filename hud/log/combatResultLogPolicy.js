@@ -8,8 +8,14 @@
 // Every builder returns the same compact, safe shape:
 //   { timestamp, type, outcome, title, details, sourceCharacterId, targetCharacterId }
 // `details` is a plain array of short strings — never private target data
-// (inventory/skills/PSI/hidden statuses), only what perform_attack's own
-// normalized result (resolveAttackService.normalizeResult) already exposes.
+// (inventory/skills/PSI/hidden statuses).
+//
+// Attack entries source their numbers from hud/combat/attackResolutionTrace.js
+// — the SAME shared normalization the Debug Console's roll-resolution event
+// uses, so the game log and the debug trace can never disagree about one
+// server result.
+
+import { buildAttackResolutionTrace, buildCombatLogLines } from "../combat/attackResolutionTrace.js";
 
 export const LOG_TYPE = Object.freeze({
   attack: "attack",
@@ -46,21 +52,9 @@ export function appendCombatLogEntry(list, entry) {
  */
 export function buildAttackLogEntry({ sourceCharacterId, targetCharacterId, bodyZoneLabel, outcome }) {
   const ok = !!outcome?.ok;
-  const n = outcome?.normalized ?? null;
-  const details = [];
-  if (ok) {
-    if (Number.isFinite(n?.attackTotal) && Number.isFinite(n?.defenseTotal)) {
-      details.push(`Attack: ${n.attackTotal} vs Defense: ${n.defenseTotal}`);
-    } else if (Number.isFinite(n?.attackRoll)) {
-      details.push(`Attack roll: ${n.attackRoll}`);
-    }
-    if (typeof n?.hit === "boolean") details.push(n.hit ? "Hit" : "Miss");
-    if (bodyZoneLabel) details.push(String(bodyZoneLabel));
-    if (n?.damageLevel) details.push(`Damage: ${n.damageLevel}`);
-    if (Number.isFinite(n?.ammoRemaining)) details.push(`Ammo left: ${n.ammoRemaining}`);
-  } else {
-    details.push(String(outcome?.error || "Attack denied."));
-  }
+  const details = ok
+    ? buildCombatLogLines(buildAttackResolutionTrace(outcome), bodyZoneLabel)
+    : [String(outcome?.error || "Attack denied.")];
   return {
     timestamp: Date.now(),
     type: LOG_TYPE.attack,

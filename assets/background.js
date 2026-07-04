@@ -5262,6 +5262,148 @@ function buildBasicAttackCtx(input = {}) {
   };
 }
 
+// hud/combat/attackResolutionTrace.js
+var NOT_RETURNED = "Not returned by server";
+function pick(value) {
+  return value === void 0 || value === null ? NOT_RETURNED : value;
+}
+function section(obj) {
+  return obj && typeof obj === "object" ? obj : {};
+}
+function isReturnedNumber(v) {
+  return typeof v === "number" && Number.isFinite(v);
+}
+function buildAttackResolutionTrace(outcome) {
+  const o = outcome && typeof outcome === "object" ? outcome : {};
+  const raw = section(o.raw);
+  const n = section(o.normalized);
+  const attack = section(raw.attack);
+  const defense = section(raw.defense);
+  const damage = section(raw.damage);
+  const bodyPart = section(raw.body_part);
+  const magazine = section(raw.magazine);
+  const ammo = section(raw.ammo);
+  const range = section(raw.range);
+  const weapon = section(raw.weapon);
+  const fireMode = section(raw.fire_mode);
+  const ok = o.ok === true;
+  const trace = {
+    ok,
+    context: {
+      sourceCharacterId: pick(raw.attacker_character_id),
+      targetCharacterId: pick(raw.target_character_id),
+      weapon: pick(weapon.name ?? weapon.id),
+      targetZone: pick(bodyPart.name ?? n.targetBodyPartName),
+      attackType: pick(raw.attack_type ?? n.attackType),
+      distanceM: pick(range.distance_m),
+      rangeBand: pick(range.band),
+      rangeModifier: pick(range.modifier),
+      fireMode: pick(fireMode.code)
+    },
+    accuracy: {
+      attackRoll: pick(attack.roll ?? n.attackRoll),
+      attackSkillLevel: pick(attack.skill_level),
+      attackSkillBonus: pick(attack.skill_bonus),
+      attackManualBonus: pick(attack.manual_bonus),
+      attackManualPenalty: pick(attack.manual_penalty),
+      weaponAccuracyBonus: pick(weapon.base_accuracy_bonus),
+      fireModeAccuracyModifier: pick(fireMode.accuracy_modifier),
+      ammoAccuracyModifier: pick(ammo.accuracy_modifier),
+      attackTotal: pick(attack.total ?? n.attackTotal),
+      defenseRoll: pick(defense.roll),
+      defenseSkillLevel: pick(defense.skill_level),
+      defenseEffectiveSkillLevel: pick(defense.effective_skill_level),
+      defenseSkillSource: pick(defense.skill_source),
+      defenseManualBonus: pick(defense.manual_bonus),
+      defenseManualPenalty: pick(defense.manual_penalty),
+      defenseTotal: pick(defense.total ?? n.defenseTotal),
+      hit: typeof raw.hit === "boolean" ? raw.hit : typeof n.hit === "boolean" ? n.hit : NOT_RETURNED,
+      auto: pick(raw.auto ?? n.auto)
+      // 'crit' | 'fail' | null → NOT_RETURNED
+    },
+    damage: {
+      attackTotalUsed: pick(damage.damage_attack_total),
+      defenseTotalUsed: pick(damage.damage_defense_total),
+      damageDiff: pick(damage.diff ?? n.damageDiff),
+      damageLevel: pick(damage.level ?? n.damageLevel),
+      bulletDamage: pick(ammo.bullet_damage),
+      ammoDamageModifier: pick(ammo.damage_modifier),
+      meleeStrengthBonus: pick(damage.melee_strength_bonus),
+      armorValueUsed: pick(damage.armor_value_used),
+      armorPierceUsed: pick(damage.armor_pierce_used),
+      effectiveArmor: pick(bodyPart.effective_armor ?? n.effectiveArmor),
+      bodyMinorDelta: pick(damage.body_minor_delta ?? damage.minor_delta),
+      bodySeriousDelta: pick(damage.body_serious_delta ?? damage.serious_delta),
+      bodyCriticalDelta: pick(damage.body_critical_delta ?? n.bodyCriticalDelta),
+      armorMinorAbsorbed: pick(damage.armor_minor_absorbed),
+      armorSeriousAbsorbed: pick(damage.armor_serious_absorbed),
+      armorCriticalAbsorbed: pick(damage.armor_critical_absorbed ?? damage.armor_critical_delta)
+    },
+    ammo: {
+      // The server decrements the magazine internally but returns only
+      // spent/remaining — the pre-attack count is NOT in the response, and we
+      // never derive it client-side (spent+remaining would be client math).
+      before: NOT_RETURNED,
+      spent: pick(magazine.bullets_spent ?? n.ammoSpent),
+      remaining: pick(magazine.remaining_rounds ?? n.ammoRemaining),
+      caliber: pick(ammo.caliber),
+      ammoType: pick(ammo.ammo_type)
+    }
+  };
+  trace.summary = buildTraceSummary(trace, o);
+  return trace;
+}
+function buildTraceSummary(trace, outcome) {
+  if (!trace.ok) return String(outcome?.error || outcome?.code || "Attack failed.");
+  const acc = trace.accuracy;
+  const parts = [];
+  if (acc.hit === true) parts.push("HIT");
+  else if (acc.hit === false) parts.push("MISS");
+  if (isReturnedNumber(acc.attackTotal) && isReturnedNumber(acc.defenseTotal)) {
+    parts.push(`${acc.attackTotal} vs ${acc.defenseTotal}`);
+  }
+  if (trace.damage.damageLevel !== NOT_RETURNED && trace.damage.damageLevel !== "none") {
+    parts.push(String(trace.damage.damageLevel));
+  }
+  return parts.length ? parts.join(" \xB7 ") : "resolved";
+}
+function buildCombatLogLines(trace, bodyZoneLabel) {
+  const t = trace && typeof trace === "object" ? trace : { accuracy: {}, damage: {}, ammo: {} };
+  const acc = section(t.accuracy);
+  const dmg = section(t.damage);
+  const ammo = section(t.ammo);
+  const details2 = [];
+  if (isReturnedNumber(acc.attackTotal) && isReturnedNumber(acc.defenseTotal)) {
+    details2.push(`Attack: ${acc.attackTotal} vs Defense: ${acc.defenseTotal}`);
+  } else if (isReturnedNumber(acc.attackRoll)) {
+    details2.push(`Attack roll: ${acc.attackRoll}`);
+  }
+  if (acc.hit === true) details2.push("Hit");
+  else if (acc.hit === false) details2.push("Miss");
+  if (bodyZoneLabel) details2.push(String(bodyZoneLabel));
+  if (dmg.damageLevel !== NOT_RETURNED && dmg.damageLevel != null) details2.push(`Damage: ${dmg.damageLevel}`);
+  if (isReturnedNumber(ammo.remaining)) details2.push(`Ammo left: ${ammo.remaining}`);
+  return details2;
+}
+function buildRollResolutionDetails(trace) {
+  const t = trace && typeof trace === "object" ? trace : buildAttackResolutionTrace(null);
+  return {
+    summary: t.summary,
+    source: t.context?.sourceCharacterId,
+    target: t.context?.targetCharacterId,
+    weapon: t.context?.weapon,
+    targetZone: t.context?.targetZone,
+    attackType: t.context?.attackType,
+    distanceM: t.context?.distanceM,
+    fireMode: t.context?.fireMode,
+    rangeBand: t.context?.rangeBand,
+    rangeModifier: t.context?.rangeModifier,
+    accuracy: t.accuracy,
+    damage: t.damage,
+    ammo: t.ammo
+  };
+}
+
 // hud/scene/selectedWeaponMemory.js
 function createSelectedWeaponMemory() {
   const map = /* @__PURE__ */ new Map();
@@ -5305,21 +5447,7 @@ function appendCombatLogEntry(list, entry) {
 }
 function buildAttackLogEntry({ sourceCharacterId, targetCharacterId, bodyZoneLabel, outcome }) {
   const ok = !!outcome?.ok;
-  const n = outcome?.normalized ?? null;
-  const details2 = [];
-  if (ok) {
-    if (Number.isFinite(n?.attackTotal) && Number.isFinite(n?.defenseTotal)) {
-      details2.push(`Attack: ${n.attackTotal} vs Defense: ${n.defenseTotal}`);
-    } else if (Number.isFinite(n?.attackRoll)) {
-      details2.push(`Attack roll: ${n.attackRoll}`);
-    }
-    if (typeof n?.hit === "boolean") details2.push(n.hit ? "Hit" : "Miss");
-    if (bodyZoneLabel) details2.push(String(bodyZoneLabel));
-    if (n?.damageLevel) details2.push(`Damage: ${n.damageLevel}`);
-    if (Number.isFinite(n?.ammoRemaining)) details2.push(`Ammo left: ${n.ammoRemaining}`);
-  } else {
-    details2.push(String(outcome?.error || "Attack denied."));
-  }
+  const details2 = ok ? buildCombatLogLines(buildAttackResolutionTrace(outcome), bodyZoneLabel) : [String(outcome?.error || "Attack denied.")];
   return {
     timestamp: Date.now(),
     type: LOG_TYPE.attack,
@@ -5601,7 +5729,7 @@ function arr(v) {
 function sectionsOf(bundle) {
   return bundle?.sections && typeof bundle.sections === "object" ? bundle.sections : {};
 }
-function section(bundle, key) {
+function section2(bundle, key) {
   const sections = sectionsOf(bundle);
   return sections[key] ?? bundle?.[key] ?? null;
 }
@@ -5676,8 +5804,8 @@ function mapEffect(ef) {
 function mapEntity(bundle) {
   const char = bundle?.character ?? {};
   const state = bundle?.state ?? {};
-  const combat = section(bundle, "combat") ?? {};
-  const abilities = section(bundle, "abilities") ?? {};
+  const combat = section2(bundle, "combat") ?? {};
+  const abilities = section2(bundle, "abilities") ?? {};
   const flags = combat?.combat_flags ?? state?.combat_flags ?? {};
   const shieldCur = num2(combat.shield_current ?? state.shield_current, 0);
   const shieldMax = num2(combat.shield_max ?? state.shield_max, 0);
@@ -5692,7 +5820,7 @@ function mapEntity(bundle) {
   const psiCur = hasValue(psiCurrentRaw) ? num2(psiCurrentRaw, 0) : null;
   const psiMax = hasValue(psiMaxRaw) ? num2(psiMaxRaw, 0) : null;
   const zones = mapZones(combat.body_parts ?? []);
-  const effectsSection = section(bundle, "effects");
+  const effectsSection = section2(bundle, "effects");
   const effects = Array.isArray(effectsSection) ? effectsSection.map(mapEffect) : [];
   return {
     summary: {
@@ -5965,7 +6093,7 @@ function mapCombatSession() {
   return createInactiveCombatSession();
 }
 function mapBattleLog(bundle) {
-  const log = section(bundle, "battle_log") ?? section(bundle, "log") ?? section(bundle, "combat_log");
+  const log = section2(bundle, "battle_log") ?? section2(bundle, "log") ?? section2(bundle, "combat_log");
   const entries3 = Array.isArray(log?.entries) ? log.entries : Array.isArray(log) ? log : [];
   return {
     entries: entries3.map((entry, index) => ({
@@ -6032,7 +6160,7 @@ function mapBundleToHudSnapshot(bundle, options = {}) {
     entity = null;
   }
   let weaponPrimary = null;
-  const armory = section(bundle, "armory");
+  const armory = section2(bundle, "armory");
   const selectedWeaponId = str(options.selectedWeaponId) ?? null;
   try {
     weaponPrimary = armory ? mapWeapon(armory, selectedWeaponId) : null;
@@ -6041,7 +6169,7 @@ function mapBundleToHudSnapshot(bundle, options = {}) {
   }
   let skills = { library: [], quickSlots: [] };
   try {
-    skills = mapSkills(section(bundle, "abilities"));
+    skills = mapSkills(section2(bundle, "abilities"));
   } catch (_e) {
     skills = { library: [], quickSlots: [] };
   }
@@ -6067,10 +6195,10 @@ function mapBundleToHudSnapshot(bundle, options = {}) {
 }
 function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {}) {
   const sections = sectionsOf(bundle);
-  const armory = section(bundle, "armory");
-  const abilities = section(bundle, "abilities");
-  const effects = section(bundle, "effects");
-  const combat = section(bundle, "combat");
+  const armory = section2(bundle, "armory");
+  const abilities = section2(bundle, "abilities");
+  const effects = section2(bundle, "effects");
+  const combat = section2(bundle, "combat");
   const weaponCount = arr(armory?.weapons).length + (armory?.equipped_weapon ? 1 : 0);
   const quickActionCount = Array.isArray(abilities?.quick_actions) ? abilities.quick_actions.length : arr(abilities?.abilities).filter((ability) => {
     const kind = String(ability?.ability_kind ?? "").toLowerCase();
@@ -6807,6 +6935,14 @@ function setupSceneSelection(hooks = {}) {
           outcome
         }));
         logDebugEvent("attack", "result", { ok: outcome.ok, error: outcome.code ?? null, stale }, outcome.ok);
+        if (outcome.ok) {
+          logDebugEvent(
+            "attack",
+            "roll-resolution",
+            buildRollResolutionDetails(buildAttackResolutionTrace(outcome)),
+            true
+          );
+        }
         if (stale) {
           if (lastState) publishState(lastState);
           return;

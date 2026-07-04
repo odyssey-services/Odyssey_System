@@ -29,6 +29,7 @@ import { resolveReloadMagazineId, normalizeReloadRpcResult } from "./reloadPolic
 import { normalizeFireModeRpcResult } from "./fireModePolicy.js";
 import { evaluateBasicAttack, buildAttackRequestSignature, isAttackResultStale } from "../combat/basicAttackPolicy.js";
 import { buildBasicAttackCtx, resolveAttack } from "../combat/basicAttackPayload.js";
+import { buildAttackResolutionTrace, buildRollResolutionDetails } from "../combat/attackResolutionTrace.js";
 import { createSelectedWeaponMemory, resolveStoredWeaponId } from "./selectedWeaponMemory.js";
 import {
   appendCombatLogEntry,
@@ -402,6 +403,18 @@ export function setupSceneSelection(hooks = {}) {
           outcome,
         }));
         logDebugEvent("attack", "result", { ok: outcome.ok, error: outcome.code ?? null, stale }, outcome.ok);
+        // Full authoritative roll trace (Debug Console detail area / Copy
+        // event). ONLY for a genuinely resolved attack — an { ok:false }
+        // denial or an exception must never produce a fake roll-resolution
+        // entry (the failure is already recorded by the `result` event above).
+        if (outcome.ok) {
+          logDebugEvent(
+            "attack",
+            "roll-resolution",
+            buildRollResolutionDetails(buildAttackResolutionTrace(outcome)),
+            true,
+          );
+        }
 
         if (stale) {
           // Source/weapon/target changed mid-flight: never apply this result

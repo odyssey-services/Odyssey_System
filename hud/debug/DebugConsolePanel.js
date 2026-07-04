@@ -38,11 +38,14 @@ function visibleEntries(entries, filter) {
 
 /** UUID-shaped values are shown truncated even inside the Console — e.g.
  *  "char_12ab6f3e-9d21-4a10-9f20" -> "char_12ab…9f20". Short values pass
- *  through unchanged. Used for BOTH the on-screen row/detail rendering and
- *  the Copy text, so copied text never contains more than what's displayed. */
+ *  through unchanged, and so does any human-readable phrase (contains
+ *  whitespace — e.g. the "Not returned by server" sentinel): only long
+ *  id-shaped tokens are truncated. Used for BOTH the on-screen row/detail
+ *  rendering and the Copy text, so copied text never contains more than
+ *  what's displayed. */
 export function truncateValue(value) {
   const s = String(value);
-  if (s.length <= 20) return s;
+  if (s.length <= 20 || /\s/.test(s)) return s;
   return `${s.slice(0, 10)}…${s.slice(-4)}`;
 }
 
@@ -57,23 +60,43 @@ function esc(value) {
 /** Compact, single-line rendering of an entry's `details` object for the
  *  summary row — safe strings only (the store's callers are responsible for
  *  never putting raw bundles/tokens/auth data in here; this just formats
- *  what's given). Truncated by CSS ellipsis in the row, never wrapped. */
+ *  what's given). Truncated by CSS ellipsis in the row, never wrapped.
+ *  A string `summary` field leads the row verbatim (no `summary=` prefix) —
+ *  that's how structured events like attack/roll-resolution get a readable
+ *  row ("HIT · 81 vs 49 · serious") — and nested objects are skipped here
+ *  (they belong to the detail area, not the one-line summary). */
 function formatDetailsCompact(details) {
   if (!details || typeof details !== "object") return "";
-  const parts = Object.entries(details)
-    .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${k}=${truncateValue(v)}`);
+  const parts = [];
+  if (typeof details.summary === "string" && details.summary) parts.push(details.summary);
+  for (const [k, v] of Object.entries(details)) {
+    if (v === undefined || k === "summary") continue;
+    if (v && typeof v === "object") continue; // nested trace sections → detail area only
+    parts.push(`${k}=${truncateValue(v)}`);
+  }
   return parts.join(" ");
 }
 
 /** Full key/value lines for the detail area AND for Copy — one "key: value"
  *  string per field, values truncated the same way as the row (so Copy never
- *  contains more than what's already visible on screen). */
-export function detailLines(details) {
+ *  contains more than what's already visible on screen). Nested objects
+ *  (e.g. a roll-resolution trace's accuracy/damage/ammo sections) expand
+ *  recursively with two-space indentation. */
+export function detailLines(details, indent = "") {
   if (!details || typeof details !== "object") return [];
-  return Object.entries(details)
-    .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${k}: ${truncateValue(v)}`);
+  const lines = [];
+  for (const [k, v] of Object.entries(details)) {
+    if (v === undefined) continue;
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      lines.push(`${indent}${k}:`);
+      lines.push(...detailLines(v, `${indent}  `));
+    } else if (Array.isArray(v)) {
+      lines.push(`${indent}${k}: ${v.map((item) => truncateValue(item)).join(", ")}`);
+    } else {
+      lines.push(`${indent}${k}: ${truncateValue(v)}`);
+    }
+  }
+  return lines;
 }
 
 function formatTimestamp(ts) {
