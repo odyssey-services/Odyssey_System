@@ -24,7 +24,17 @@ import {
   BC_DEBUG_CONSOLE_REQUEST,
   BC_DEBUG_CONSOLE_COMMAND,
 } from "../hud/debug/debugConsoleConstants.js";
-import { renderDebugConsolePanel, renderDebugLauncher, groupsForEntry, truncateValue, FILTERS } from "../hud/debug/DebugConsolePanel.js";
+import {
+  renderDebugConsolePanel,
+  renderDebugLauncher,
+  groupsForEntry,
+  truncateValue,
+  FILTERS,
+  entryKey,
+  detailLines,
+  buildEntryCopyText,
+  buildVisibleCopyText,
+} from "../hud/debug/DebugConsolePanel.js";
 import { HUD_MODULE_POPOVER_IDS } from "../hud/overlay/hudLayout.js";
 import { BC_HUD_SELECTION, BC_HUD_COMMAND } from "../hud/overlay/overlayConstants.js";
 import { initDebugLog, clearDebugLog, logDebugEvent, getDebugLogEntries } from "../hud/debug/debugLogStore.js";
@@ -274,6 +284,117 @@ test("15. Clear (via debugLogStore.clearDebugLog) only empties the in-memory arr
   clearDebugLog();
   assert.equal(getDebugLogEntries().length, 0);
   initDebugLog(false);
+});
+
+// ── 16-26. Summary/detail split, selection, Copy event/visible ─────────────
+
+function longDetailEntries() {
+  const longId = "char_weap_9f3c7a21-4b6e-4d10-8a55-000000000000-EXTRA-LONG-TAIL-THAT-WOULD-OVERFLOW-A-400PX-CONSOLE";
+  return [
+    {
+      timestamp: 3000, category: "attack", action: "payload-prepared", success: true,
+      details: { weaponId: longId, targetCharacterId: "char_target_aaaa1111bbbb2222", targetBodyPartId: "body_torso_zzzz9999", distance: 12, reason: "attack-ready" },
+    },
+    { timestamp: 2000, category: "magazine", action: "reload-result", details: { error: "JAMMED" }, success: false },
+    { timestamp: 1000, category: "hud", action: "initialized", details: {}, success: true },
+  ];
+}
+
+test("16. A long details value never widens the CSS layout — the details cell is ellipsis-clipped, not left to overflow", () => {
+  const html = renderDebugConsolePanel(longDetailEntries(), { filter: "ALL" });
+  // The row markup keeps the long value INSIDE a single '.odc-details' cell that
+  // CSS clips (text-overflow:ellipsis + min-width:0) — it is never split across
+  // extra elements or given its own wide wrapper that could force layout width.
+  assert.equal((html.match(/class="odc-cell odc-details"/g) || []).length, longDetailEntries().length);
+});
+
+test("17. Summary row still shows timestamp/category/action/status alongside the (clippable) details cell", () => {
+  const html = renderDebugConsolePanel(longDetailEntries(), { filter: "ALL" });
+  assert.ok(/odc-cell odc-time/.test(html));
+  assert.ok(/odc-cell odc-category">attack/.test(html));
+  assert.ok(/odc-cell odc-action">payload-prepared/.test(html));
+  assert.ok(/odc-cell odc-status">(OK|FAIL)/.test(html));
+});
+
+test("18. Each row carries a stable selection key and is marked selected when it matches view.selectedKey", () => {
+  const entries = longDetailEntries();
+  const key = entryKey(entries[0]);
+  const html = renderDebugConsolePanel(entries, { filter: "ALL", selectedKey: key });
+  assert.ok(html.includes(`data-odc-row-key="${key}"`));
+  assert.ok(new RegExp(`odc-row is-success is-selected" data-odc-row-key="${key.replace(/[|]/g, "\\|")}"`).test(html));
+});
+
+test("19. Selecting a row renders a detail area with the full, wrapped, safe text — never ellipsis in the detail area", () => {
+  const entries = longDetailEntries();
+  const key = entryKey(entries[0]);
+  const html = renderDebugConsolePanel(entries, { filter: "ALL", selectedKey: key });
+  assert.ok(html.includes("odc-detail"));
+  assert.ok(html.includes("odc-detail-kv"));
+  assert.ok(html.includes("weaponId:"));
+  assert.ok(!/odc-detail-kv[^>]*text-overflow/.test(html));
+  // The full (truncated-for-safety, but not ellipsis-shortened-for-space) value is present.
+  const lines = detailLines(entries[0].details);
+  for (const line of lines) assert.ok(html.includes(esc(line)), `detail area missing line: ${line}`);
+});
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+test("20. No selectedKey means no detail area is rendered at all", () => {
+  const html = renderDebugConsolePanel(longDetailEntries(), { filter: "ALL" });
+  assert.ok(!html.includes("odc-detail-kv"));
+  assert.ok(!html.includes("odc-list--split"));
+});
+
+test("21. 'Close details' control is present whenever a detail area is open", () => {
+  const entries = longDetailEntries();
+  const html = renderDebugConsolePanel(entries, { filter: "ALL", selectedKey: entryKey(entries[0]) });
+  assert.ok(html.includes('data-odc-action="close-details"'));
+  assert.ok(html.includes('data-odc-action="copy-event"'));
+});
+
+test("22. buildEntryCopyText produces the documented safe key/value block (timestamp/category/action/status/details)", () => {
+  const [entry] = longDetailEntries();
+  const text = buildEntryCopyText(entry);
+  assert.ok(/^timestamp: /.test(text));
+  assert.ok(text.includes("category: attack"));
+  assert.ok(text.includes("action: payload-prepared"));
+  assert.ok(text.includes("status: ok"));
+  assert.ok(text.includes("details:"));
+  assert.ok(text.includes("  weaponId:"));
+  assert.ok(text.includes("  distance: 12"));
+});
+
+test("23. buildVisibleCopyText only includes entries that pass the CURRENT filter, capped at 200", () => {
+  const entries = longDetailEntries(); // attack, magazine(fail), hud
+  const gunText = buildVisibleCopyText(entries, "GUN");
+  assert.ok(gunText.includes("action: reload-result"));
+  assert.ok(!gunText.includes("action: payload-prepared"));
+  assert.ok(!gunText.includes("action: initialized"));
+  const allText = buildVisibleCopyText(entries, "ALL");
+  assert.ok(allText.includes("payload-prepared") && allText.includes("reload-result") && allText.includes("initialized"));
+
+  const many = Array.from({ length: 250 }, (_, i) => ({ timestamp: i, category: "hud", action: `evt-${i}`, details: {}, success: true }));
+  const cappedText = buildVisibleCopyText(many, "ALL");
+  assert.equal(cappedText.split("\n\n").length, 200);
+});
+
+test("24. Copy text (event and visible) never contains raw-bundle/inventory/armory/auth-shaped keys or values", () => {
+  const entries = longDetailEntries();
+  const combined = `${buildEntryCopyText(entries[0])}\n${buildVisibleCopyText(entries, "ALL")}`;
+  assert.ok(!/armory|inventory|abilities|access_token|auth_header|runtimeBundle/i.test(combined));
+});
+
+test("25. Copy header controls (Copy visible) and per-entry copy status affordance exist in the header", () => {
+  const html = renderDebugConsolePanel(longDetailEntries(), { filter: "ALL", copyStatus: "visible" });
+  assert.ok(html.includes('data-odc-action="copy-visible"'));
+  assert.ok(/odc-copy-status is-visible/.test(html));
+});
+
+test("26. Clear (Clear entries) closing the detail area is a controller-level concern; the panel itself simply renders 'no detail' once entries are empty/selectedKey no longer matches", () => {
+  const html = renderDebugConsolePanel([], { filter: "ALL", selectedKey: "stale|key|here" });
+  assert.ok(!html.includes("odc-detail-kv"), "a selectedKey with no matching entry renders no detail area");
 });
 
 setTimeout(() => {

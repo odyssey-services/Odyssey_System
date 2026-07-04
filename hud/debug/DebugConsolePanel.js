@@ -1,9 +1,11 @@
 // Odyssey Debug Console — pure render (TEMPORARY, see debugConsoleController.js).
 //
-// Renders the Console body (header + filters + scrollable entry list) and the
-// small floating Launcher shown while the Console is closed. Pure string
-// templates only — no OBR, no broadcast — so this file has zero coupling to
-// the real HUD components (CombatHudModule.js, GunBlock.js, etc.).
+// Renders the Console body (header + filters + scrollable summary list + an
+// optional detail area for the selected entry) and the small floating
+// Launcher shown while the Console is closed. Pure string templates only —
+// no OBR, no broadcast, no clipboard — so this file has zero coupling to the
+// real HUD components (CombatHudModule.js, GunBlock.js, etc.) and stays
+// trivially unit-testable.
 
 export const FILTERS = ["ALL", "HUD", "TARGET", "GUN", "ATTACK", "RPC", "ERROR"];
 
@@ -29,9 +31,15 @@ function entryMatchesFilter(entry, filter) {
   return groupsForEntry(entry).has(filter);
 }
 
+function visibleEntries(entries, filter) {
+  const list = Array.isArray(entries) ? entries : [];
+  return list.filter((e) => entryMatchesFilter(e, filter));
+}
+
 /** UUID-shaped values are shown truncated even inside the Console — e.g.
  *  "char_12ab6f3e-9d21-4a10-9f20" -> "char_12ab…9f20". Short values pass
- *  through unchanged. */
+ *  through unchanged. Used for BOTH the on-screen row/detail rendering and
+ *  the Copy text, so copied text never contains more than what's displayed. */
 export function truncateValue(value) {
   const s = String(value);
   if (s.length <= 20) return s;
@@ -46,15 +54,26 @@ function esc(value) {
     .replace(/"/g, "&quot;");
 }
 
-/** Compact, single-line rendering of an entry's `details` object — safe
- *  strings only (the store's callers are responsible for never putting raw
- *  bundles/tokens/auth data in here; this just formats what's given). */
-function formatDetails(details) {
+/** Compact, single-line rendering of an entry's `details` object for the
+ *  summary row — safe strings only (the store's callers are responsible for
+ *  never putting raw bundles/tokens/auth data in here; this just formats
+ *  what's given). Truncated by CSS ellipsis in the row, never wrapped. */
+function formatDetailsCompact(details) {
   if (!details || typeof details !== "object") return "";
   const parts = Object.entries(details)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `${k}=${truncateValue(v)}`);
   return parts.join(" ");
+}
+
+/** Full key/value lines for the detail area AND for Copy — one "key: value"
+ *  string per field, values truncated the same way as the row (so Copy never
+ *  contains more than what's already visible on screen). */
+export function detailLines(details) {
+  if (!details || typeof details !== "object") return [];
+  return Object.entries(details)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}: ${truncateValue(v)}`);
 }
 
 function formatTimestamp(ts) {
@@ -66,15 +85,52 @@ function formatTimestamp(ts) {
   }
 }
 
-function entryRow(entry) {
+/** Stable-enough identity for a stored entry within a single session — used
+ *  to track row selection across re-renders (a fresh broadcast delivers a
+ *  new array, never the same object references). */
+export function entryKey(entry) {
+  return `${entry?.timestamp ?? ""}|${entry?.category ?? ""}|${entry?.action ?? ""}`;
+}
+
+function statusLabel(entry) {
+  return entry?.success === false ? "FAIL" : "OK";
+}
+
+/** Full, safe, human-readable text for ONE entry — used by "Copy event". */
+export function buildEntryCopyText(entry) {
+  const lines = [
+    `timestamp: ${formatTimestamp(entry.timestamp)}`,
+    `category: ${entry.category ?? ""}`,
+    `action: ${entry.action ?? ""}`,
+    `status: ${entry?.success === false ? "fail" : "ok"}`,
+  ];
+  const details = detailLines(entry.details);
+  if (details.length) {
+    lines.push("details:");
+    for (const line of details) lines.push(`  ${line}`);
+  }
+  return lines.join("\n");
+}
+
+/** Full, safe text for every currently-VISIBLE (post-filter) entry, capped at
+ *  200 — used by "Copy visible". Entries are already newest-first & capped at
+ *  200 by debugLogStore itself; the slice here is a defensive belt-and-braces
+ *  cap, not a second source of truth. */
+export function buildVisibleCopyText(entries, filter) {
+  const visible = visibleEntries(entries, filter).slice(0, 200);
+  return visible.map(buildEntryCopyText).join("\n\n");
+}
+
+function entryRow(entry, selectedKey) {
+  const key = entryKey(entry);
   const statusClass = entry.success === false ? "is-failure" : "is-success";
-  const statusLabel = entry.success === false ? "FAIL" : "OK";
-  return `<li class="odc-row ${statusClass}">
+  const selectedClass = key === selectedKey ? " is-selected" : "";
+  return `<li class="odc-row ${statusClass}${selectedClass}" data-odc-row-key="${esc(key)}">
     <span class="odc-cell odc-time">${esc(formatTimestamp(entry.timestamp))}</span>
     <span class="odc-cell odc-category">${esc(entry.category)}</span>
     <span class="odc-cell odc-action">${esc(entry.action)}</span>
-    <span class="odc-cell odc-status">${statusLabel}</span>
-    <span class="odc-cell odc-details">${esc(formatDetails(entry.details))}</span>
+    <span class="odc-cell odc-status">${statusLabel(entry)}</span>
+    <span class="odc-cell odc-details">${esc(formatDetailsCompact(entry.details))}</span>
   </li>`;
 }
 
@@ -82,26 +138,51 @@ function filterButton(filter, active) {
   return `<button type="button" class="odc-filter${active ? " is-active" : ""}" data-odc-filter="${filter}">${filter}</button>`;
 }
 
+function renderDetailArea(entry, copyStatus) {
+  if (!entry) return "";
+  const lines = detailLines(entry.details);
+  const body = lines.length ? esc(lines.join("\n")) : "(no details)";
+  return `<div class="odc-detail">
+    <div class="odc-detail-head">
+      <span class="odc-detail-title">${esc(String(entry.category).toUpperCase())} · ${esc(entry.action)} · ${statusLabel(entry)}</span>
+      <span class="odc-detail-time">${esc(formatTimestamp(entry.timestamp))}</span>
+    </div>
+    <div class="odc-detail-body">
+      <pre class="odc-detail-kv">${body}</pre>
+    </div>
+    <div class="odc-detail-actions">
+      <button type="button" class="odc-btn" data-odc-action="copy-event">Copy event</button>
+      <span class="odc-copy-status${copyStatus === "event" ? " is-visible" : ""}">Copied</span>
+      <button type="button" class="odc-btn" data-odc-action="close-details">Close details</button>
+    </div>
+  </div>`;
+}
+
 /**
  * @param {Array<object>} entries  newest-first (debugLogStore contract)
- * @param {{filter?:string, collapsed?:boolean}} [view]
+ * @param {{filter?:string, collapsed?:boolean, selectedKey?:string|null, copyStatus?:string|null}} [view]
  */
 export function renderDebugConsolePanel(entries, view = {}) {
   const filter = FILTERS.includes(view.filter) ? view.filter : "ALL";
   const collapsed = !!view.collapsed;
   const list = Array.isArray(entries) ? entries : [];
-  const visible = list.filter((e) => entryMatchesFilter(e, filter));
+  const visible = visibleEntries(list, filter);
+  const selectedKey = view.selectedKey ?? null;
+  const selectedEntry = selectedKey ? list.find((e) => entryKey(e) === selectedKey) ?? null : null;
 
   const body = collapsed ? "" : `
     <div class="odc-filters">${FILTERS.map((f) => filterButton(f, f === filter)).join("")}</div>
-    <ul class="odc-list">
-      ${visible.length ? visible.map(entryRow).join("") : `<li class="odc-empty">No entries.</li>`}
-    </ul>`;
+    <ul class="odc-list${selectedEntry ? " odc-list--split" : ""}">
+      ${visible.length ? visible.map((e) => entryRow(e, selectedKey)).join("") : `<li class="odc-empty">No entries.</li>`}
+    </ul>
+    ${renderDetailArea(selectedEntry, view.copyStatus ?? null)}`;
 
   return `<div class="odc-root">
     <div class="odc-head">
       <span class="odc-title">DEBUG CONSOLE</span>
       <span class="odc-count">${visible.length}/${list.length}</span>
+      <button type="button" class="odc-btn" data-odc-action="copy-visible" title="Copy all visible entries">Copy visible</button>
+      <span class="odc-copy-status${view.copyStatus === "visible" ? " is-visible" : ""}">Copied</span>
       <button type="button" class="odc-btn" data-odc-action="clear" title="Clear entries">Clear</button>
       <button type="button" class="odc-btn" data-odc-action="toggle-collapse" title="Collapse/Expand">${collapsed ? "Expand" : "Collapse"}</button>
       <button type="button" class="odc-btn odc-close" data-odc-action="close" aria-label="Close Debug Console" title="Close">×</button>

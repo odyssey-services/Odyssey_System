@@ -3515,7 +3515,7 @@ var OBR = {
 var lib_default = OBR;
 
 // hud/debug/debugConsole.css
-var debugConsole_default = '/* Odyssey Debug Console \u2014 TEMPORARY styles, isolated from the real HUD CSS. */\n\n.odc-root {\n  box-sizing: border-box;\n  width: 100%;\n  height: 100%;\n  display: flex;\n  flex-direction: column;\n  background: rgba(18, 20, 26, 0.96);\n  border: 1px solid rgba(255, 255, 255, 0.14);\n  border-radius: 8px;\n  color: #e6e8ec;\n  font: 12px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;\n  overflow: hidden;\n}\n\n.odc-head {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  padding: 6px 8px;\n  background: rgba(255, 255, 255, 0.04);\n  border-bottom: 1px solid rgba(255, 255, 255, 0.1);\n  flex: 0 0 auto;\n}\n\n.odc-title {\n  font-weight: 700;\n  letter-spacing: 0.04em;\n  flex: 1 1 auto;\n}\n\n.odc-count {\n  opacity: 0.6;\n  font-size: 11px;\n  margin-right: 4px;\n}\n\n.odc-btn {\n  background: rgba(255, 255, 255, 0.08);\n  border: 1px solid rgba(255, 255, 255, 0.16);\n  color: inherit;\n  border-radius: 4px;\n  padding: 2px 8px;\n  font: inherit;\n  cursor: pointer;\n}\n.odc-btn:hover { background: rgba(255, 255, 255, 0.16); }\n.odc-close { padding: 2px 8px; font-weight: 700; }\n\n.odc-filters {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 4px;\n  padding: 6px 8px;\n  flex: 0 0 auto;\n  border-bottom: 1px solid rgba(255, 255, 255, 0.08);\n}\n.odc-filter {\n  background: transparent;\n  border: 1px solid rgba(255, 255, 255, 0.16);\n  color: rgba(230, 232, 236, 0.7);\n  border-radius: 999px;\n  padding: 2px 9px;\n  font: 11px inherit;\n  cursor: pointer;\n}\n.odc-filter.is-active {\n  background: rgba(120, 170, 255, 0.22);\n  border-color: rgba(120, 170, 255, 0.6);\n  color: #e6e8ec;\n}\n\n.odc-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  overflow-y: auto;\n  flex: 1 1 auto;\n}\n\n.odc-row {\n  display: flex;\n  gap: 6px;\n  padding: 3px 8px;\n  border-bottom: 1px solid rgba(255, 255, 255, 0.05);\n  white-space: nowrap;\n}\n.odc-row.is-failure { background: rgba(220, 80, 80, 0.12); }\n\n.odc-cell.odc-time { color: rgba(230, 232, 236, 0.5); flex: 0 0 auto; }\n.odc-cell.odc-category { color: #7fb3ff; flex: 0 0 auto; }\n.odc-cell.odc-action { flex: 0 0 auto; }\n.odc-cell.odc-status { flex: 0 0 auto; font-weight: 700; }\n.odc-row.is-success .odc-status { color: #7fd88f; }\n.odc-row.is-failure .odc-status { color: #ff8a8a; }\n.odc-cell.odc-details {\n  color: rgba(230, 232, 236, 0.65);\n  overflow: hidden;\n  text-overflow: ellipsis;\n  flex: 1 1 auto;\n}\n\n.odc-empty {\n  padding: 12px 8px;\n  opacity: 0.6;\n}\n\n.odc-launcher {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: rgba(18, 20, 26, 0.96);\n  border: 1px solid rgba(255, 255, 255, 0.16);\n  border-radius: 6px;\n  color: #e6e8ec;\n  font: 700 12px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;\n  letter-spacing: 0.04em;\n  cursor: pointer;\n}\n.odc-launcher:hover { background: rgba(255, 255, 255, 0.1); }\n';
+var debugConsole_default = '/* Odyssey Debug Console \u2014 TEMPORARY styles, isolated from the real HUD CSS. */\n\n.odc-root {\n  box-sizing: border-box;\n  width: 100%;\n  height: 100%;\n  display: flex;\n  flex-direction: column;\n  background: rgba(18, 20, 26, 0.96);\n  border: 1px solid rgba(255, 255, 255, 0.14);\n  border-radius: 8px;\n  color: #e6e8ec;\n  font: 12px/1.4 ui-monospace, "SFMono-Regular", Consolas, monospace;\n  overflow: hidden;\n}\n\n.odc-head {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  padding: 6px 8px;\n  background: rgba(255, 255, 255, 0.04);\n  border-bottom: 1px solid rgba(255, 255, 255, 0.1);\n  flex: 0 0 auto;\n}\n\n.odc-title {\n  font-weight: 700;\n  letter-spacing: 0.04em;\n  flex: 1 1 auto;\n}\n\n.odc-count {\n  opacity: 0.6;\n  font-size: 11px;\n  margin-right: 4px;\n}\n\n.odc-btn {\n  background: rgba(255, 255, 255, 0.08);\n  border: 1px solid rgba(255, 255, 255, 0.16);\n  color: inherit;\n  border-radius: 4px;\n  padding: 2px 8px;\n  font: inherit;\n  cursor: pointer;\n  flex: 0 0 auto;\n  white-space: nowrap;\n}\n.odc-btn:hover { background: rgba(255, 255, 255, 0.16); }\n.odc-close { padding: 2px 8px; font-weight: 700; }\n\n.odc-copy-status {\n  font-size: 11px;\n  color: #7fd88f;\n  opacity: 0;\n  transition: opacity 0.15s ease;\n  flex: 0 0 auto;\n  white-space: nowrap;\n}\n.odc-copy-status.is-visible { opacity: 1; }\n\n.odc-filters {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 4px;\n  padding: 6px 8px;\n  flex: 0 0 auto;\n  border-bottom: 1px solid rgba(255, 255, 255, 0.08);\n}\n.odc-filter {\n  background: transparent;\n  border: 1px solid rgba(255, 255, 255, 0.16);\n  color: rgba(230, 232, 236, 0.7);\n  border-radius: 999px;\n  padding: 2px 9px;\n  font: 11px inherit;\n  cursor: pointer;\n}\n.odc-filter.is-active {\n  background: rgba(120, 170, 255, 0.22);\n  border-color: rgba(120, 170, 255, 0.6);\n  color: #e6e8ec;\n}\n\n/* \u2500\u2500 Summary list \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n * Root cause of the old "text runs off the right edge" bug: `white-space:\n * nowrap` was set on the WHOLE row (inherited by every cell), and the details\n * cell had no `min-width: 0` \u2014 a flex item\'s default min-width is `auto`\n * (its own unwrapped content size), so `overflow:hidden`/`text-overflow:\n * ellipsis` never actually had room to kick in; the row just grew past the\n * list/Console width instead of being clipped. Fix: nowrap + ellipsis is\n * scoped to the details cell ONLY, and every flexing box in the chain\n * (.odc-list, .odc-row, .odc-cell.odc-details) gets `min-width: 0` so it CAN\n * shrink below its content\'s natural width. */\n.odc-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n  overflow-y: auto;\n  overflow-x: hidden;\n  min-width: 0;\n  flex: 1 1 auto;\n}\n/* When a detail area is open, the list only gets part of the Console\'s\n * remaining height (~55%), leaving ~40-45% for the detail area below it. */\n.odc-list.odc-list--split { flex: 1 1 55%; }\n\n.odc-row {\n  display: flex;\n  align-items: baseline;\n  gap: 6px;\n  padding: 3px 8px;\n  border-bottom: 1px solid rgba(255, 255, 255, 0.05);\n  min-width: 0;\n  cursor: pointer;\n}\n.odc-row:hover { background: rgba(255, 255, 255, 0.05); }\n.odc-row.is-failure { background: rgba(220, 80, 80, 0.12); }\n.odc-row.is-selected { background: rgba(120, 170, 255, 0.16); }\n.odc-row.is-failure.is-selected { background: rgba(220, 80, 80, 0.22); }\n\n.odc-cell { white-space: nowrap; }\n.odc-cell.odc-time { color: rgba(230, 232, 236, 0.5); flex: 0 0 auto; }\n.odc-cell.odc-category { color: #7fb3ff; flex: 0 0 auto; }\n.odc-cell.odc-action { flex: 0 0 auto; }\n.odc-cell.odc-status { flex: 0 0 auto; font-weight: 700; }\n.odc-row.is-success .odc-status { color: #7fd88f; }\n.odc-row.is-failure .odc-status { color: #ff8a8a; }\n.odc-cell.odc-details {\n  color: rgba(230, 232, 236, 0.65);\n  flex: 1 1 auto;\n  min-width: 0; /* lets ellipsis actually engage instead of overflowing */\n  overflow: hidden;\n  text-overflow: ellipsis;\n}\n\n.odc-empty {\n  padding: 12px 8px;\n  opacity: 0.6;\n}\n\n/* \u2500\u2500 Detail area (selected entry) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */\n\n.odc-detail {\n  flex: 0 0 42%;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  border-top: 1px solid rgba(255, 255, 255, 0.18);\n  background: rgba(255, 255, 255, 0.02);\n}\n\n.odc-detail-head {\n  display: flex;\n  align-items: baseline;\n  justify-content: space-between;\n  gap: 8px;\n  padding: 6px 8px;\n  flex: 0 0 auto;\n  border-bottom: 1px solid rgba(255, 255, 255, 0.08);\n}\n.odc-detail-title { font-weight: 700; }\n.odc-detail-time { opacity: 0.6; font-size: 11px; white-space: nowrap; }\n\n.odc-detail-body {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow-y: auto;\n  padding: 8px;\n}\n\n/* Deliberately NO ellipsis/nowrap here \u2014 long values must wrap, and the text\n * must stay fully selectable/copyable (no pointer-events/user-select tricks\n * anywhere in this file that would block selection). */\n.odc-detail-kv {\n  margin: 0;\n  font: inherit;\n  white-space: pre-wrap;\n  overflow-wrap: anywhere;\n  word-break: break-word;\n}\n\n.odc-detail-actions {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  padding: 6px 8px;\n  flex: 0 0 auto;\n  border-top: 1px solid rgba(255, 255, 255, 0.08);\n}\n\n.odc-launcher {\n  width: 100%;\n  height: 100%;\n  box-sizing: border-box;\n  background: rgba(18, 20, 26, 0.96);\n  border: 1px solid rgba(255, 255, 255, 0.16);\n  border-radius: 6px;\n  color: #e6e8ec;\n  font: 700 12px/1 ui-monospace, "SFMono-Regular", Consolas, monospace;\n  letter-spacing: 0.04em;\n  cursor: pointer;\n}\n.odc-launcher:hover { background: rgba(255, 255, 255, 0.1); }\n';
 
 // hud/debug/DebugConsolePanel.js
 var FILTERS = ["ALL", "HUD", "TARGET", "GUN", "ATTACK", "RPC", "ERROR"];
@@ -3539,6 +3539,10 @@ function entryMatchesFilter(entry, filter) {
   if (filter === "ALL") return true;
   return groupsForEntry(entry).has(filter);
 }
+function visibleEntries(entries, filter) {
+  const list = Array.isArray(entries) ? entries : [];
+  return list.filter((e) => entryMatchesFilter(e, filter));
+}
 function truncateValue(value) {
   const s = String(value);
   if (s.length <= 20) return s;
@@ -3547,10 +3551,14 @@ function truncateValue(value) {
 function esc(value) {
   return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
-function formatDetails(details2) {
+function formatDetailsCompact(details2) {
   if (!details2 || typeof details2 !== "object") return "";
   const parts = Object.entries(details2).filter(([, v]) => v !== void 0).map(([k, v]) => `${k}=${truncateValue(v)}`);
   return parts.join(" ");
+}
+function detailLines(details2) {
+  if (!details2 || typeof details2 !== "object") return [];
+  return Object.entries(details2).filter(([, v]) => v !== void 0).map(([k, v]) => `${k}: ${truncateValue(v)}`);
 }
 function formatTimestamp(ts) {
   try {
@@ -3560,34 +3568,83 @@ function formatTimestamp(ts) {
     return String(ts);
   }
 }
-function entryRow(entry) {
+function entryKey(entry) {
+  return `${entry?.timestamp ?? ""}|${entry?.category ?? ""}|${entry?.action ?? ""}`;
+}
+function statusLabel(entry) {
+  return entry?.success === false ? "FAIL" : "OK";
+}
+function buildEntryCopyText(entry) {
+  const lines = [
+    `timestamp: ${formatTimestamp(entry.timestamp)}`,
+    `category: ${entry.category ?? ""}`,
+    `action: ${entry.action ?? ""}`,
+    `status: ${entry?.success === false ? "fail" : "ok"}`
+  ];
+  const details2 = detailLines(entry.details);
+  if (details2.length) {
+    lines.push("details:");
+    for (const line of details2) lines.push(`  ${line}`);
+  }
+  return lines.join("\n");
+}
+function buildVisibleCopyText(entries, filter) {
+  const visible = visibleEntries(entries, filter).slice(0, 200);
+  return visible.map(buildEntryCopyText).join("\n\n");
+}
+function entryRow(entry, selectedKey) {
+  const key = entryKey(entry);
   const statusClass = entry.success === false ? "is-failure" : "is-success";
-  const statusLabel = entry.success === false ? "FAIL" : "OK";
-  return `<li class="odc-row ${statusClass}">
+  const selectedClass = key === selectedKey ? " is-selected" : "";
+  return `<li class="odc-row ${statusClass}${selectedClass}" data-odc-row-key="${esc(key)}">
     <span class="odc-cell odc-time">${esc(formatTimestamp(entry.timestamp))}</span>
     <span class="odc-cell odc-category">${esc(entry.category)}</span>
     <span class="odc-cell odc-action">${esc(entry.action)}</span>
-    <span class="odc-cell odc-status">${statusLabel}</span>
-    <span class="odc-cell odc-details">${esc(formatDetails(entry.details))}</span>
+    <span class="odc-cell odc-status">${statusLabel(entry)}</span>
+    <span class="odc-cell odc-details">${esc(formatDetailsCompact(entry.details))}</span>
   </li>`;
 }
 function filterButton(filter, active) {
   return `<button type="button" class="odc-filter${active ? " is-active" : ""}" data-odc-filter="${filter}">${filter}</button>`;
 }
+function renderDetailArea(entry, copyStatus) {
+  if (!entry) return "";
+  const lines = detailLines(entry.details);
+  const body = lines.length ? esc(lines.join("\n")) : "(no details)";
+  return `<div class="odc-detail">
+    <div class="odc-detail-head">
+      <span class="odc-detail-title">${esc(String(entry.category).toUpperCase())} \xB7 ${esc(entry.action)} \xB7 ${statusLabel(entry)}</span>
+      <span class="odc-detail-time">${esc(formatTimestamp(entry.timestamp))}</span>
+    </div>
+    <div class="odc-detail-body">
+      <pre class="odc-detail-kv">${body}</pre>
+    </div>
+    <div class="odc-detail-actions">
+      <button type="button" class="odc-btn" data-odc-action="copy-event">Copy event</button>
+      <span class="odc-copy-status${copyStatus === "event" ? " is-visible" : ""}">Copied</span>
+      <button type="button" class="odc-btn" data-odc-action="close-details">Close details</button>
+    </div>
+  </div>`;
+}
 function renderDebugConsolePanel(entries, view = {}) {
   const filter = FILTERS.includes(view.filter) ? view.filter : "ALL";
   const collapsed = !!view.collapsed;
   const list = Array.isArray(entries) ? entries : [];
-  const visible = list.filter((e) => entryMatchesFilter(e, filter));
+  const visible = visibleEntries(list, filter);
+  const selectedKey = view.selectedKey ?? null;
+  const selectedEntry = selectedKey ? list.find((e) => entryKey(e) === selectedKey) ?? null : null;
   const body = collapsed ? "" : `
     <div class="odc-filters">${FILTERS.map((f) => filterButton(f, f === filter)).join("")}</div>
-    <ul class="odc-list">
-      ${visible.length ? visible.map(entryRow).join("") : `<li class="odc-empty">No entries.</li>`}
-    </ul>`;
+    <ul class="odc-list${selectedEntry ? " odc-list--split" : ""}">
+      ${visible.length ? visible.map((e) => entryRow(e, selectedKey)).join("") : `<li class="odc-empty">No entries.</li>`}
+    </ul>
+    ${renderDetailArea(selectedEntry, view.copyStatus ?? null)}`;
   return `<div class="odc-root">
     <div class="odc-head">
       <span class="odc-title">DEBUG CONSOLE</span>
       <span class="odc-count">${visible.length}/${list.length}</span>
+      <button type="button" class="odc-btn" data-odc-action="copy-visible" title="Copy all visible entries">Copy visible</button>
+      <span class="odc-copy-status${view.copyStatus === "visible" ? " is-visible" : ""}">Copied</span>
       <button type="button" class="odc-btn" data-odc-action="clear" title="Clear entries">Clear</button>
       <button type="button" class="odc-btn" data-odc-action="toggle-collapse" title="Collapse/Expand">${collapsed ? "Expand" : "Collapse"}</button>
       <button type="button" class="odc-btn odc-close" data-odc-action="close" aria-label="Close Debug Console" title="Close">\xD7</button>
@@ -3605,6 +3662,30 @@ var BC_DEBUG_CONSOLE_REQUEST = "com.odyssey.debug-console/request";
 var BC_DEBUG_CONSOLE_COMMAND = "com.odyssey.debug-console/command";
 
 // hud/debug/debugConsolePage.js
+var COPY_STATUS_MS = 1500;
+async function copyToClipboard(text) {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (_e) {
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch (_e) {
+    return false;
+  }
+}
 function injectStyles() {
   if (document.getElementById("odc-styles")) return;
   const el = document.createElement("style");
@@ -3645,8 +3726,21 @@ function start() {
   let entries = [];
   let filter = "ALL";
   let collapsed = false;
+  let selectedKey = null;
+  let copyStatus = null;
+  let copyStatusTimer = null;
+  function showCopyStatus(which) {
+    copyStatus = which;
+    render();
+    if (copyStatusTimer) clearTimeout(copyStatusTimer);
+    copyStatusTimer = setTimeout(() => {
+      copyStatus = null;
+      render();
+    }, COPY_STATUS_MS);
+  }
   function render() {
-    root.innerHTML = renderDebugConsolePanel(entries, { filter, collapsed });
+    if (selectedKey && !entries.some((e) => entryKey(e) === selectedKey)) selectedKey = null;
+    root.innerHTML = renderDebugConsolePanel(entries, { filter, collapsed, selectedKey, copyStatus });
     const list = root.querySelector(".odc-list");
     if (list) list.scrollTop = 0;
   }
@@ -3658,14 +3752,31 @@ function start() {
       return;
     }
     const actionBtn = e.target.closest("[data-odc-action]");
-    if (!actionBtn) return;
-    const action = actionBtn.getAttribute("data-odc-action");
-    if (action === "clear") {
-      if (available) send(BC_DEBUG_CONSOLE_COMMAND, { type: "clear" });
-    } else if (action === "close") {
-      if (available) send(BC_DEBUG_CONSOLE_COMMAND, { type: "close" });
-    } else if (action === "toggle-collapse") {
-      collapsed = !collapsed;
+    if (actionBtn) {
+      const action = actionBtn.getAttribute("data-odc-action");
+      if (action === "clear") {
+        selectedKey = null;
+        if (available) send(BC_DEBUG_CONSOLE_COMMAND, { type: "clear" });
+      } else if (action === "close") {
+        if (available) send(BC_DEBUG_CONSOLE_COMMAND, { type: "close" });
+      } else if (action === "toggle-collapse") {
+        collapsed = !collapsed;
+        render();
+      } else if (action === "close-details") {
+        selectedKey = null;
+        render();
+      } else if (action === "copy-event") {
+        const entry = entries.find((en) => entryKey(en) === selectedKey);
+        if (entry) copyToClipboard(buildEntryCopyText(entry)).then(() => showCopyStatus("event"));
+      } else if (action === "copy-visible") {
+        copyToClipboard(buildVisibleCopyText(entries, filter)).then(() => showCopyStatus("visible"));
+      }
+      return;
+    }
+    const row = e.target.closest("[data-odc-row-key]");
+    if (row) {
+      const key = row.getAttribute("data-odc-row-key");
+      selectedKey = selectedKey === key ? null : key;
       render();
     }
   });
