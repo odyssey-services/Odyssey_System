@@ -6024,10 +6024,6 @@ function computeDistanceCells(grid, fromCell, toCell) {
   }
   return (dx + dy + Math.abs(toQ + toR - (fromQ + fromR))) / 2;
 }
-function sameCell(a, b) {
-  if (!a || !b) return false;
-  return (Number(a.q ?? a.cell_q ?? 0) || 0) === (Number(b.q ?? b.cell_q ?? 0) || 0) && (Number(a.r ?? a.cell_r ?? 0) || 0) === (Number(b.r ?? b.cell_r ?? 0) || 0);
-}
 
 // movement/tacticalSync.js
 function ensureArray2(value) {
@@ -10121,21 +10117,39 @@ function buildGhostToken(sourceToken, position) {
   }
   return ghost.build();
 }
+function getPreviewLabelPosition(originScene, targetScene) {
+  const dx = Number(targetScene?.x ?? 0) - Number(originScene?.x ?? 0);
+  const dy = Number(targetScene?.y ?? 0) - Number(originScene?.y ?? 0);
+  const length = Math.hypot(dx, dy);
+  const middle = {
+    x: Number(originScene?.x ?? 0) + dx / 2,
+    y: Number(originScene?.y ?? 0) + dy / 2
+  };
+  if (length < 1) {
+    return {
+      x: middle.x + 12,
+      y: middle.y - 22
+    };
+  }
+  const normal = {
+    x: -dy / length,
+    y: dx / length
+  };
+  return {
+    x: middle.x + normal.x * 22,
+    y: middle.y + normal.y * 22
+  };
+}
 function buildPreviewLabel(preview) {
   if (!preview) return "";
-  const top = `${preview.moveCostM} m / ${preview.moveLimitM} m`;
-  if (preview.inRange) {
-    return `${top}
-Remaining: ${preview.remainingMoveM} m`;
-  }
-  return `${top}
-Too far`;
+  return `${preview.moveCostM} m / ${preview.moveLimitM} m`;
 }
 function buildPreviewItems({ preview, originScene, selectedToken }) {
   const lineColor = preview?.inRange ? "#71f79f" : "#ff7c6d";
   const textColor = preview?.inRange ? "#d5ffe0" : "#ffd9d3";
+  const labelPosition = getPreviewLabelPosition(originScene, preview.scene);
   const line = buildLine().id(PREVIEW_LINE_ID).name("Combat Movement Preview").layer("POINTER").locked(true).disableHit(true).startPosition(originScene).endPosition(preview.scene).strokeColor(lineColor).strokeOpacity(0.98).strokeWidth(6).strokeDash([12, 8]).disableAutoZIndex(true).build();
-  const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).position({ x: preview.scene.x + 12, y: preview.scene.y - 22 }).plainText(buildPreviewLabel(preview)).fontSize(18).fontWeight(700).padding(10).textAlign("LEFT").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor("#08111f").strokeOpacity(0.92).strokeWidth(5).build();
+  const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).position(labelPosition).plainText(buildPreviewLabel(preview)).fontSize(18).fontWeight(700).padding(10).textAlign("LEFT").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor("#08111f").strokeOpacity(0.92).strokeWidth(5).build();
   let ghost = null;
   let ghostError = null;
   try {
@@ -10268,10 +10282,11 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.37";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.38";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;
+var PREVIEW_POSITION_EPSILON = 0.5;
 var INTERNAL_MOVEMENT_SOURCES = /* @__PURE__ */ new Set([
   "combat-movement",
   "combat-gm-reposition",
@@ -10299,6 +10314,10 @@ function formatPreviewDiagnostics(details2 = {}) {
 function positionsMatch(a, b) {
   if (!a || !b) return false;
   return Math.abs((Number(a.x) || 0) - (Number(b.x) || 0)) <= POSITION_EPSILON && Math.abs((Number(a.y) || 0) - (Number(b.y) || 0)) <= POSITION_EPSILON;
+}
+function sameScenePosition(a, b, epsilon = PREVIEW_POSITION_EPSILON) {
+  if (!a || !b) return false;
+  return Math.abs((Number(a.x) || 0) - (Number(b.x) || 0)) <= epsilon && Math.abs((Number(a.y) || 0) - (Number(b.y) || 0)) <= epsilon;
 }
 function createInitialState() {
   return {
@@ -10584,7 +10603,11 @@ function setupTacticalMoveTool({ runtime }) {
   async function updatePreview(preview) {
     if (!state.selectedToken || !state.selectedParticipant) return;
     const current2 = state.preview;
-    if (current2 && sameCell(current2.cell, preview.cell) && current2.inRange === preview.inRange && current2.moveCostM === preview.moveCostM && current2.remainingMoveM === preview.remainingMoveM) {
+    const previewPositionUnchanged = sameScenePosition(
+      current2?.scene,
+      preview?.scene
+    );
+    if (current2 && previewPositionUnchanged && current2.inRange === preview.inRange && current2.moveCostM === preview.moveCostM && current2.remainingMoveM === preview.remainingMoveM) {
       return;
     }
     state.preview = preview;
@@ -10822,12 +10845,17 @@ function setupTacticalMoveTool({ runtime }) {
     addDiagnosticEntry(
       "info",
       "Combat preview built",
-      buildPreviewDiagnosticDetails({
+      formatPreviewDiagnostics({
         tokenId,
-        cell,
-        scene: preview.scene,
-        distanceCells,
-        moveCostM
+        cellQ: Number(cell?.q ?? 0) || 0,
+        cellR: Number(cell?.r ?? 0) || 0,
+        sceneX: Number(preview.scene?.x ?? 0) || 0,
+        sceneY: Number(preview.scene?.y ?? 0) || 0,
+        distanceCells: Number(distanceCells ?? 0) || 0,
+        moveCostM: Number(moveCostM ?? 0) || 0,
+        gridDpi: Number(grid?.gridDpi ?? 0) || 0,
+        anchorX: Number(grid?.anchor?.x ?? 0) || 0,
+        anchorY: Number(grid?.anchor?.y ?? 0) || 0
       })
     );
     return preview;

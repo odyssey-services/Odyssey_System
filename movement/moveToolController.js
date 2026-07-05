@@ -42,11 +42,12 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.37";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.38";
 
 const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
 const POSITION_EPSILON = 0.01;
+const PREVIEW_POSITION_EPSILON = 0.5;
 const INTERNAL_MOVEMENT_SOURCES = new Set([
   "combat-movement",
   "combat-gm-reposition",
@@ -82,6 +83,12 @@ function positionsMatch(a, b) {
   if (!a || !b) return false;
   return Math.abs((Number(a.x) || 0) - (Number(b.x) || 0)) <= POSITION_EPSILON
     && Math.abs((Number(a.y) || 0) - (Number(b.y) || 0)) <= POSITION_EPSILON;
+}
+
+function sameScenePosition(a, b, epsilon = PREVIEW_POSITION_EPSILON) {
+  if (!a || !b) return false;
+  return Math.abs((Number(a.x) || 0) - (Number(b.x) || 0)) <= epsilon
+    && Math.abs((Number(a.y) || 0) - (Number(b.y) || 0)) <= epsilon;
 }
 
 function createInitialState() {
@@ -409,9 +416,13 @@ export function setupTacticalMoveTool({ runtime }) {
     if (!state.selectedToken || !state.selectedParticipant) return;
 
     const current = state.preview;
+    const previewPositionUnchanged = sameScenePosition(
+      current?.scene,
+      preview?.scene,
+    );
     if (
       current
-      && sameCell(current.cell, preview.cell)
+      && previewPositionUnchanged
       && current.inRange === preview.inRange
       && current.moveCostM === preview.moveCostM
       && current.remainingMoveM === preview.remainingMoveM
@@ -671,12 +682,17 @@ export function setupTacticalMoveTool({ runtime }) {
     addDiagnosticEntry(
       "info",
       "Combat preview built",
-      buildPreviewDiagnosticDetails({
+      formatPreviewDiagnostics({
         tokenId,
-        cell,
-        scene: preview.scene,
-        distanceCells,
-        moveCostM,
+        cellQ: Number(cell?.q ?? 0) || 0,
+        cellR: Number(cell?.r ?? 0) || 0,
+        sceneX: Number(preview.scene?.x ?? 0) || 0,
+        sceneY: Number(preview.scene?.y ?? 0) || 0,
+        distanceCells: Number(distanceCells ?? 0) || 0,
+        moveCostM: Number(moveCostM ?? 0) || 0,
+        gridDpi: Number(grid?.gridDpi ?? 0) || 0,
+        anchorX: Number(grid?.anchor?.x ?? 0) || 0,
+        anchorY: Number(grid?.anchor?.y ?? 0) || 0,
       }),
     );
 
