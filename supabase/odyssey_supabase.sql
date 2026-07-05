@@ -51899,7 +51899,8 @@ begin
     update public.odyssey_initiative_entries
     set
       action_current = action_max,
-      move_current = move_max,
+      move_max = 10,
+      move_current = 10,
       reaction_action_current = reaction_action_max,
       action_converted_to_move = false,
       turn_version = coalesce(turn_version, 0) + 1,
@@ -61468,4 +61469,28 @@ update public.odyssey_combat_encounters
 set move_default = 10
 where coalesce(move_default, 0) <> 10;
 -- ===== END 96_move_default_10m.sql =====
+
+-- ===== BEGIN 97_force_existing_move_entries_to_10m.sql =====
+-- Hard-normalize initiative movement to the fixed 10m baseline while preserving
+-- already-spent movement on active encounters.
+
+alter table public.odyssey_initiative_entries
+  alter column move_max set default 10,
+  alter column move_current set default 10;
+
+update public.odyssey_initiative_entries e
+set
+  move_max = 10,
+  move_current = case
+    when coalesce(e.move_current, 0) <= 0 then 0
+    when coalesce(e.move_current, 0) = coalesce(e.move_max, 0) then 10
+    else least(coalesce(e.move_current, 0), 10)
+  end
+where coalesce(e.move_max, 0) <> 10
+   or coalesce(e.move_current, 0) > 10
+   or (
+     coalesce(e.move_current, 0) = coalesce(e.move_max, 0)
+     and coalesce(e.move_current, 0) <> 10
+   );
+-- ===== END 97_force_existing_move_entries_to_10m.sql =====
 

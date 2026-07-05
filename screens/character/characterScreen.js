@@ -198,6 +198,8 @@ export function mountCharacterScreen({ root, runtime }) {
     selectionSyncTimer: null,
     selectionSyncRequestId: 0,
     lastSelectionSignature: "",
+    autoTacticalSyncInFlight: "",
+    lastAutoTacticalSyncKey: "",
     selectedTokenResolution: null,
     selectedToken: null,
     moveToolStatus: null,
@@ -228,6 +230,96 @@ export function mountCharacterScreen({ root, runtime }) {
         console.warn("[Odyssey] Selection sync failed:", error);
       });
     }, 100);
+  }
+
+  function buildAutoTacticalSyncKey(mode) {
+    const snapshot = state.tacticalSnapshot;
+    if (!snapshot?.encounterId) return "";
+    const participant = snapshot.participant ?? null;
+    const selectedToken = getSelectedTokenForLoadedCharacter();
+    if (mode === "grid") {
+      return `grid:${snapshot.encounterId}:${snapshot.stateVersion}`;
+    }
+    if (!participant?.character_id || !selectedToken?.id) return "";
+    const participantPosition = participant.position ?? {};
+    const tokenPosition = selectedToken.position ?? {};
+    return [
+      "token",
+      snapshot.encounterId,
+      String(participant.character_id ?? "").trim(),
+      String(selectedToken.id ?? "").trim(),
+      Number(tokenPosition.x ?? 0) || 0,
+      Number(tokenPosition.y ?? 0) || 0,
+      Number(participantPosition.scene_x ?? 0) || 0,
+      Number(participantPosition.scene_y ?? 0) || 0,
+      Number(snapshot.stateVersion ?? 0) || 0,
+    ].join(":");
+  }
+
+  function maybeAutoSyncTacticalState() {
+    if (!isGM() || state.busy || !hasUsableSettings(settings())) return;
+    const snapshot = state.tacticalSnapshot;
+    if (!snapshot?.encounterId) return;
+
+    const gridMissing = !snapshot.grid;
+    const mismatch = !gridMissing && getTokenPositionMismatch();
+    if (!gridMissing && !mismatch) return;
+
+    const mode = gridMissing ? "grid" : "token";
+    const syncKey = buildAutoTacticalSyncKey(mode);
+    if (!syncKey || state.autoTacticalSyncInFlight === syncKey || state.lastAutoTacticalSyncKey === syncKey) {
+      return;
+    }
+
+    state.autoTacticalSyncInFlight = syncKey;
+    const onlyCharacterId = mode === "token" ? String(state.characterId ?? "").trim() : "";
+
+    void (async () => {
+      try {
+        await ensureSettings();
+        const [context, player] = await Promise.all([
+          withTimeout(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null),
+          withTimeout(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null),
+        ]);
+        const { result } = await syncCombatScenePositions({
+          combatApi: api.combat,
+          settings: settings(),
+          runtimeResponse: snapshot.runtime ?? state.sceneCombatSnapshot?.runtime ?? null,
+          onlyCharacterId,
+        });
+        if (result?.runtime?.encounter?.id) {
+          state.sceneCombatSnapshot = {
+            encounterId: String(result.runtime.encounter.id ?? "").trim(),
+            stateVersion: Number(
+              result.runtime.state_version ?? result.runtime.encounter?.state_version ?? 0,
+            ) || 0,
+            runtime: result.runtime,
+          };
+        } else if (context?.campaignId && context?.roomId && context?.sceneId) {
+          const runtime = await fetchActiveCombatRuntimeForScene(
+            context,
+            player,
+            true,
+          );
+          if (runtime?.encounter?.id) {
+            state.sceneCombatSnapshot = {
+              encounterId: String(runtime.encounter.id ?? "").trim(),
+              stateVersion: Number(
+                runtime.state_version ?? runtime.encounter?.state_version ?? 0,
+              ) || 0,
+              runtime,
+            };
+          }
+        }
+        await refreshSelectedTokenContext();
+        await refreshTacticalSnapshot(true);
+      } catch (error) {
+        console.warn("[Odyssey] Automatic tactical sync failed:", error);
+      } finally {
+        state.lastAutoTacticalSyncKey = syncKey;
+        state.autoTacticalSyncInFlight = "";
+      }
+    })();
   }
 
   async function refreshSelectedTokenContext() {
@@ -574,6 +666,7 @@ export function mountCharacterScreen({ root, runtime }) {
           participant,
           runtime: runtimeRes,
         };
+        maybeAutoSyncTacticalState();
       }
     } catch (error) {
       console.warn("[Odyssey] Tactical snapshot refresh failed:", error);
@@ -1290,50 +1383,6 @@ export function mountCharacterScreen({ root, runtime }) {
     });
   }
 
-  async function syncTacticalGrid(selectedOnly = false) {
-    if (!isGM()) {
-      setNotice("err", "Only the GM can sync tactical positions.");
-      render();
-      return;
-    }
-    const snapshot = state.tacticalSnapshot;
-    if (!snapshot?.encounterId) {
-      setNotice("err", "No active encounter is loaded for this character.");
-      render();
-      return;
-    }
-    const selectedForCharacter = getSelectedTokenForLoadedCharacter();
-    if (selectedOnly && !selectedForCharacter) {
-      setNotice("err", "Select this character's token in Owlbear before syncing its position.");
-      render();
-      return;
-    }
-    state.busy = true;
-    render();
-    try {
-      await ensureSettings();
-      const [context, player] = await Promise.all([
-        withTimeout(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null),
-        withTimeout(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null),
-      ]);
-      const { result, positions } = await syncCombatScenePositions({
-        combatApi: api.combat,
-        settings: settings(),
-        onlyCharacterId: selectedOnly ? state.characterId : "",
-      });
-      setNotice("ok", selectedOnly ? "Token position synced." : `Tactical grid synced for ${positions.length} token(s).`);
-      await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
-      await refreshSelectedTokenContext();
-      scheduleSelectionSync(true);
-    } catch (error) {
-      setNotice("err", esc(toErrorMessage(error, "Unable to sync tactical positions.")));
-      render();
-    } finally {
-      state.busy = false;
-      render();
-    }
-  }
-
   async function refreshAfterCombatStart() {
     setCombatStartStage("Syncing tactical grid...");
     const syncPromise = withTimeout(
@@ -1579,6 +1628,7 @@ export function mountCharacterScreen({ root, runtime }) {
     const moveCurrent = Number(participant.move_current ?? 0) || 0;
     const moveMax = Number(participant.move_max ?? 0) || 0;
     const gridReady = !!state.tacticalSnapshot?.grid;
+    const autoSyncInFlight = !!state.autoTacticalSyncInFlight;
     const preview = toolStatus?.preview ?? null;
     const tokenLine = selectedToken
       ? `${esc(selectedToken.name || "Selected token")} · ${esc(selectedToken.id.slice(0, 8))}`
@@ -1589,7 +1639,7 @@ export function mountCharacterScreen({ root, runtime }) {
     const moveHint = !selectedToken
       ? "Select this character's token in Owlbear to use combat movement."
       : !gridReady
-        ? "Tactical grid is not synced yet."
+        ? (isGM() ? "Tactical grid is syncing automatically." : "Tactical grid is not synced yet.")
         : gmOverrideEnabled
           ? "GM override is active. Drag this token on the map to reposition it without spending MOVE."
           : canCommit
@@ -1612,11 +1662,9 @@ export function mountCharacterScreen({ root, runtime }) {
         <div class="cp-muted" style="margin-top:6px">${esc(moveHint)}</div>
         ${preview ? `<div class="cp-muted" style="margin-top:6px">Preview: ${preview.moveCostM} m, remaining ${preview.remainingMoveM} m${preview.inRange ? "" : " - out of range"}</div>` : ""}
         ${toolStatus?.error ? `<div class="cp-muted" style="margin-top:6px;color:#ff9b9b">${esc(toolStatus.error)}</div>` : ""}
-        ${mismatch ? `<div class="cp-muted" style="margin-top:6px;color:#ffd58a">Scene token position differs from Supabase. Sync it before moving.</div>` : ""}
+        ${mismatch ? `<div class="cp-muted" style="margin-top:6px;color:#ffd58a">${autoSyncInFlight ? "Scene token position differs from Supabase. Auto-syncing now." : "Scene token position differs from Supabase. It will be auto-synced automatically."}</div>` : ""}
         <div class="button-row" style="margin-top:8px">
           ${isGM() ? `<button type="button" class="${gmOverrideEnabled ? "" : "secondary"}" data-ref="toggleGmMoveOverride" ${state.busy ? "disabled" : ""}>${gmOverrideEnabled ? "Disable GM override" : "Enable GM override"}</button>` : ""}
-          ${isGM() ? `<button type="button" class="secondary" data-ref="syncTacticalGrid" ${state.busy ? "disabled" : ""}>Sync tactical grid</button>` : ""}
-          ${isGM() ? `<button type="button" class="secondary" data-ref="syncTokenPosition" ${(selectedToken && !state.busy) ? "" : "disabled"}>Sync token position</button>` : ""}
         </div>
       </div>
     `;
@@ -2437,12 +2485,6 @@ export function mountCharacterScreen({ root, runtime }) {
         MOVE_TOOL_COMMANDS.SetGmOverride,
         { enabled: !(state.moveToolStatus?.gmOverrideEnabled === true) },
       ).catch(() => {});
-    });
-    $("syncTacticalGrid")?.addEventListener("click", () => {
-      syncTacticalGrid(false).catch(() => {});
-    });
-    $("syncTokenPosition")?.addEventListener("click", () => {
-      syncTacticalGrid(true).catch(() => {});
     });
     $("devRole")?.addEventListener("change", async (e) => {
       state.devRole = e.target.value;
