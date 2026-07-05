@@ -50,6 +50,7 @@ import {
   GUN_WEAPON_SELECTOR_POPOVER_ID,
   GUN_MAGAZINE_SELECTOR_POPOVER_ID,
   GUN_FIRE_MODE_SELECTOR_POPOVER_ID,
+  GM_COMBAT_TRACKER_POPOVER_ID,
   HUD_EDITOR_POPOVER_ID,
   HUD_PILL_POPOVER_ID,
   DEFAULT_HUD_LAYOUT_V2,
@@ -85,6 +86,7 @@ let targetSelection = null;
 let gunWeaponSelectorOpen = false;
 let gunMagazineSelectorOpen = false;
 let gunFireModeSelectorOpen = false;
+let gmTrackerOpen = false;
 let lastActiveCharacterId = null;
 /** Latest full trimmed selection payload (the same one module iframes get),
  *  kept ONLY to size the magazine-selector companion popover to its content
@@ -275,11 +277,55 @@ async function setGunFireModeSelectorOpen(open) {
 }
 
 /** Close every Gun companion popover (weapon/magazine/fire-mode selectors).
- *  Used on character change, invalid selection, collapse, and editor mode. */
+ *  Used on character change, invalid selection, collapse, and editor mode.
+ *  Deliberately does NOT touch the GM Combat Tracker — a GM tool that must
+ *  survive source-token/selection changes. */
 async function closeAllCompanionSelectors() {
   try { await setGunWeaponSelectorOpen(false); } catch (_e) { /* best effort */ }
   try { await setGunMagazineSelectorOpen(false); } catch (_e) { /* best effort */ }
   try { await setGunFireModeSelectorOpen(false); } catch (_e) { /* best effort */ }
+}
+
+/** Phase 3E.0: GM Combat Tracker companion popover — anchored above the
+ *  Combat Control module, GM-only (checked at toggle time from the latest
+ *  selection payload's viewer role). */
+function gmTrackerRect() {
+  if (!lastLayout.modules?.combatControl) return null;
+  const ccRect = moduleRect("combatControl");
+  const width = 300;
+  const height = 360;
+  const gap = 4;
+  return {
+    left: Math.max(0, ccRect.left + (ccRect.width - width) / 2),
+    top: Math.max(0, ccRect.top - height - gap),
+    width,
+    height,
+  };
+}
+
+async function setGmTrackerOpen(open) {
+  const next = Boolean(open);
+  if (next === gmTrackerOpen) return;
+  gmTrackerOpen = next;
+  if (mode !== "modules") return;
+  if (next) {
+    const rect = gmTrackerRect();
+    if (rect) {
+      try {
+        // Only ever opened for a GM (checked at the command site), so the
+        // iframe's role param is authoritative here.
+        const url = new URL(pageUrl("gm-combat-tracker"));
+        url.searchParams.set("role", "gm");
+        await OBR.popover.open({
+          id: GM_COMBAT_TRACKER_POPOVER_ID,
+          url: url.toString(),
+          ...paramsForRect(rect),
+        });
+      } catch (_e) { /* best effort */ }
+    }
+  } else {
+    try { await OBR.popover.close(GM_COMBAT_TRACKER_POPOVER_ID); } catch (_e) { /* ignore */ }
+  }
 }
 
 function sendTargetingCommand(command) {
@@ -364,9 +410,11 @@ async function applyMode() {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
     gunFireModeSelectorOpen = false;
+    gmTrackerOpen = false;
     await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
     await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
     await OBR.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {});
+    await OBR.popover.close(GM_COMBAT_TRACKER_POPOVER_ID).catch(() => {});
     await closeEditorPopover();
     await closeAllModules();
     await openPill();
@@ -374,9 +422,11 @@ async function applyMode() {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
     gunFireModeSelectorOpen = false;
+    gmTrackerOpen = false;
     await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
     await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
     await OBR.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {});
+    await OBR.popover.close(GM_COMBAT_TRACKER_POPOVER_ID).catch(() => {});
     await closePill();
     await closeAllModules();
     await openEditor();
@@ -472,6 +522,19 @@ export function setupCombatHudOverlay() {
           return;
         }
 
+        // Phase 3E.0: GM Combat Tracker popover lifecycle (the session
+        // controller handles all other combat-session commands itself). The
+        // GM gate is checked HERE too — a player-sent toggle is a no-op.
+        if (data?.scope === "combat-hud" && data?.feature === "combat-session") {
+          if (String(data.type ?? "") === "toggle-tracker") {
+            const role = String(lastSelectionPayload?.viewer?.role ?? "").toUpperCase();
+            if (role !== "GM") return;
+            logDebugEvent("popover", gmTrackerOpen ? "gm-tracker-closed" : "gm-tracker-opened", {});
+            await setGmTrackerOpen(!gmTrackerOpen);
+          }
+          return;
+        }
+
         const type = String(data.type ?? "");
         if (type === "toggle-weapon-selector") await setGunWeaponSelectorOpen(!gunWeaponSelectorOpen);
         else if (type === "close-weapon-selector") await setGunWeaponSelectorOpen(false);
@@ -537,6 +600,7 @@ export async function teardownCombatHudOverlay() {
   gunWeaponSelectorOpen = false;
   gunMagazineSelectorOpen = false;
   gunFireModeSelectorOpen = false;
+  gmTrackerOpen = false;
   lastActiveCharacterId = null;
   lastSelectionPayload = null;
   mode = "modules";
@@ -546,5 +610,6 @@ export async function teardownCombatHudOverlay() {
   await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
   await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
   await OBR.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {});
+  await OBR.popover.close(GM_COMBAT_TRACKER_POPOVER_ID).catch(() => {});
   await closeLegacyPopovers();
 }

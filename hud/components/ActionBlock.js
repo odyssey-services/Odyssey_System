@@ -13,12 +13,26 @@ import {
   selectCurrentActionCost,
   selectSelectedSkill,
 } from "../core/combatHudSelectors.js";
+import { canEndTurn } from "../session/combatSessionPolicy.js";
 import { esc, tipAttr, cls } from "./hudDom.js";
 
 /** Title-case the ALL-CAPS verb from the selector. */
 function titleCase(word) {
   if (!word) return "";
   return word.charAt(0) + word.slice(1).toLowerCase();
+}
+
+/** Phase 3E.0: compact END TURN control — rendered only while a real combat
+ *  session is active AND this viewer may end the current turn (owner of the
+ *  current participant, or the GM inspecting them). Clicking it never clears
+ *  the selected target/weapon — it only asks the server to advance the turn;
+ *  the click handler disables it immediately (single request until the next
+ *  authoritative re-render). */
+function renderEndTurnButton(state) {
+  const session = state?.snapshot?.combatSession ?? null;
+  if (!canEndTurn(session, state?.viewer?.role)) return "";
+  return `<button type="button" class="ohud-action-btn ohud-endturn-btn" data-action="end-turn"
+    ${tipAttr("End turn", ["Unspent MAIN/MOVE are lost"])}>END TURN</button>`;
 }
 
 /** Basic Weapon Attack v1 — no skill/technique drafted (plain "Attack"). The
@@ -39,6 +53,7 @@ function renderBasicAttackButton(state) {
     </span>
     <button type="button" class="${cls("ohud-action-btn", disabled ? "is-disabled" : "is-ready")}"
       data-action="basic-attack"${disabled ? ' aria-disabled="true"' : ""}${tip}>Attack</button>
+    ${renderEndTurnButton(state)}
   </div>`;
 }
 
@@ -63,6 +78,7 @@ export function renderActionButton(state) {
     </span>
     <button type="button" class="${cls("ohud-action-btn", disabled ? "is-disabled" : "is-ready")}"
       data-action="primary"${disabled ? ' aria-disabled="true"' : ""}${tip}>${esc(displayLabel)}</button>
+    ${renderEndTurnButton(state)}
   </div>`;
 }
 

@@ -5,6 +5,7 @@
 // popovers, not part of this block.
 
 import { selectVisibleReserveMagazines, selectSelectedReloadMagazine } from "../core/combatHudSelectors.js";
+import { sessionReloadGate } from "../session/combatSessionPolicy.js";
 import { weaponSvg, ICON_MAGAZINE, ICON_CARET_DOWN, ICON_RELOAD } from "./hudIcons.js";
 import { panel } from "./HudPanel.js";
 import { esc, tipAttr, cls } from "./hudDom.js";
@@ -50,7 +51,14 @@ export function renderGunBlock(state) {
   const reserve = selectVisibleReserveMagazines(state);
   const selectedReload = selectSelectedReloadMagazine(state);
   const reloadMag = selectedReload ?? reserve[0] ?? null;
-  const canReload = Boolean(weapon.canReload) && reserve.length > 0;
+  // Phase 3E.0: during an active combat session the reload button also obeys
+  // the server MOVE economy — the SAME reason wording the server gate uses,
+  // never a fabricated UI reason.
+  const reloadGate = sessionReloadGate(state?.snapshot?.combatSession ?? null);
+  const canReload = Boolean(weapon.canReload) && reserve.length > 0 && !reloadGate.blocked;
+  const reloadBlockReason = reloadGate.blocked
+    ? reloadGate.reason
+    : (Boolean(weapon.canReload) && reserve.length > 0 ? null : "No compatible magazine");
   const isEmpty = weapon.requiresAmmo && ammoCur <= 0;
   const disabled = Boolean(weapon.disabledReason) || (isEmpty && !canReload);
 
@@ -65,7 +73,7 @@ export function renderGunBlock(state) {
 
   const body = `<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
     ${mainCard}
-    <div class="ohud-gun-side">${renderMagazineCard(weapon, reserve, reloadMag)}${renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag)}</div>
+    <div class="ohud-gun-side">${renderMagazineCard(weapon, reserve, reloadMag)}${renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockReason)}</div>
   </div>`;
 
   return panel({ key: "gun", label: "Weapon", bodyHtml: body });
@@ -85,7 +93,7 @@ function renderMagazineCard(weapon, reserve, reloadMag) {
   </div>`;
 }
 
-function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag) {
+function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockReason) {
   let ammoDisplay = "—";
   if (mag && (mag.current || mag.max)) {
     ammoDisplay = `${Number(mag.current ?? 0)}/${Number(mag.max ?? 0)}`;
@@ -96,7 +104,7 @@ function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag) {
   return `<div class="ohud-ammo-card">
     <span class="ohud-ammo-head">
       <span class="ohud-ammo-label">ammo</span>
-      <button type="button" class="${cls("ohud-ammo-reload", canReload ? "" : "is-off")}" data-action="reload" data-weapon-id="${esc(weapon.id)}" data-magazine-id="${esc(reloadMag?.id ?? "")}" ${canReload ? "" : "disabled"} title="${canReload ? "Insert compatible magazine" : "No compatible magazine"}">${ICON_RELOAD}</button>
+      <button type="button" class="${cls("ohud-ammo-reload", canReload ? "" : "is-off")}" data-action="reload" data-weapon-id="${esc(weapon.id)}" data-magazine-id="${esc(reloadMag?.id ?? "")}" ${canReload ? "" : "disabled"} title="${esc(canReload ? "Insert compatible magazine" : (reloadBlockReason || "No compatible magazine"))}">${ICON_RELOAD}</button>
     </span>
     <span class="${cls("ohud-ammo-count", isEmpty ? "ohud-ammo-count--empty" : "")}">
       <span>${esc(ammoDisplay)}</span>

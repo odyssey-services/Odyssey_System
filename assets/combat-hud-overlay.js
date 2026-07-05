@@ -3655,6 +3655,56 @@ var combatHudLayout_default = `/*\r
 .ohud-turn--waiting { color: #2a1c00; background: var(--odyssey-hud-warning); }\r
 .ohud-turn--gm { color: #fff; background: var(--odyssey-purple-strong); }\r
 .ohud-turn--idle { color: var(--odyssey-hud-muted); border-color: var(--odyssey-hud-border); }\r
+/* Phase 3E.0: server round number shown next to the turn label in combat. */\r
+.ohud-turn-round {\r
+  font-size: 8.5px; font-weight: 800; letter-spacing: 0.4px; padding: 1px 5px; border-radius: 7px;\r
+  margin-right: 3px; color: var(--odyssey-hud-muted); border: 1px solid var(--odyssey-hud-border);\r
+  white-space: nowrap;\r
+}\r
+\r
+/* Phase 3E.0: compact END TURN button inside the Action strip. */\r
+.ohud-endturn-btn {\r
+  flex: 0 0 auto; margin-left: 4px; padding: 0 7px;\r
+  font-size: 9px; font-weight: 800; letter-spacing: 0.4px;\r
+  color: #2a1c00; background: var(--odyssey-hud-warning);\r
+  border: 1px solid transparent; border-radius: 6px; cursor: pointer;\r
+}\r
+.ohud-endturn-btn[disabled] { opacity: 0.5; cursor: default; }\r
+\r
+/* Phase 3E.0: GM-only COMBAT button in the Mod header. */\r
+.ohud-cc-combat-btn {\r
+  margin-left: auto; padding: 0 6px; font-size: 8.5px; font-weight: 800; letter-spacing: 0.4px;\r
+  color: #fff; background: var(--odyssey-purple-strong);\r
+  border: 1px solid transparent; border-radius: 6px; cursor: pointer;\r
+}\r
+\r
+/* Phase 3E.0: GM Combat Tracker companion popover. */\r
+.ohud-gmct { display: flex; flex-direction: column; height: 100%; overflow: hidden; }\r
+.ohud-gmct .ohud-panel-head { flex: 0 0 auto; display: flex; align-items: baseline; gap: 8px; }\r
+.ohud-gmct-current { font-size: 10px; color: var(--odyssey-hud-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\r
+.ohud-gmct-candidates { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }\r
+.ohud-gmct-candidate { display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; }\r
+.ohud-gmct-candidate .ohud-gmct-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\r
+.ohud-gmct-tag { font-size: 8.5px; font-weight: 800; color: var(--odyssey-hud-muted); border: 1px solid var(--odyssey-hud-border); border-radius: 6px; padding: 0 4px; }\r
+.ohud-gmct-tag.is-skip { color: #2a1c00; background: var(--odyssey-hud-warning); border-color: transparent; }\r
+.ohud-gmct-list { list-style: none; margin: 0; padding: 4px 8px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }\r
+.ohud-gmct-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; font-size: 11px; }\r
+.ohud-gmct-row.is-current { color: var(--odyssey-hud-state-active); font-weight: 700; }\r
+.ohud-gmct-row.is-skipped { opacity: 0.55; }\r
+.ohud-gmct-marker { width: 10px; flex: 0 0 auto; }\r
+.ohud-gmct-row .ohud-gmct-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\r
+.ohud-gmct-init { flex: 0 0 auto; font-weight: 700; }\r
+.ohud-gmct-actions { flex: 0 0 auto; display: flex; gap: 6px; padding: 6px 8px; border-top: 1px solid var(--odyssey-hud-border); }\r
+.ohud-gmct-btn {\r
+  flex: 1 1 auto; padding: 4px 6px; font-size: 10px; font-weight: 700;\r
+  color: var(--odyssey-hud-text); background: transparent;\r
+  border: 1px solid var(--odyssey-hud-border); border-radius: 6px; cursor: pointer;\r
+}\r
+.ohud-gmct-btn.is-primary { color: #06210f; background: var(--odyssey-hud-state-active); border-color: transparent; }\r
+.ohud-gmct-btn.is-danger { color: #fff; background: var(--odyssey-hud-danger, #a33); border-color: transparent; }\r
+.ohud-gmct-btn[disabled] { opacity: 0.5; cursor: default; }\r
+.ohud-gmct-denied { padding: 12px; color: var(--odyssey-hud-muted); }\r
+.ohud-gmct-empty { padding: 8px 0; color: var(--odyssey-hud-muted); font-size: 11px; }\r
 \r
 .ohud-player-grid { display: grid; grid-template-columns: 46px 1fr; gap: 7px; align-items: center; flex: 1; min-height: 0; }\r
 .ohud-figure { position: relative; width: 46px; height: 100%; min-height: 50px; display: grid; place-items: center; }\r
@@ -5129,6 +5179,8 @@ var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 var BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
 var BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
 var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
+var BC_HUD_SESSION = "com.odyssey.combat-hud/session-state";
+var BC_HUD_SESSION_REQUEST = "com.odyssey.combat-hud/session-state-request";
 var PLAYER_W = 144;
 var PLAYER_HEIGHT = 146;
 var RAIL_GAP = 10;
@@ -5700,7 +5752,9 @@ function renderPlayerBlock(state) {
   const { shown, overflow } = selectVisibleStatuses(state, 5);
   const isMech = entity.summary?.svgRef === "mech";
   const authorized = !!selectControlledCharacter(state);
-  const headerRight = `<span class="ohud-turn ohud-turn--${turnClass}">${esc(turn)}</span>`;
+  const session = state?.snapshot?.combatSession ?? null;
+  const roundTag = session && session.status === "active" ? `<span class="ohud-turn-round"${tipAttr("Combat round", [`Round ${session.roundNumber ?? session.round ?? 0}`])}>R${esc(session.roundNumber ?? session.round ?? 0)}</span>` : "";
+  const headerRight = `${roundTag}<span class="ohud-turn ohud-turn--${turnClass}">${esc(turn)}</span>`;
   const body = `
     <div class="ohud-player-grid">
       <div class="ohud-figure">
@@ -5726,6 +5780,34 @@ function renderPlayerBlock(state) {
     bodyHtml: body,
     headerRightHtml: headerRight
   });
+}
+
+// hud/session/combatSessionPolicy.js
+var SESSION_BLOCK_REASONS = Object.freeze({
+  waitingForTurn: "Waiting for your turn",
+  mainSpent: "MAIN already spent",
+  moveSpent: "MOVE already spent"
+});
+function isActiveSession(session) {
+  return !!session && session.exists === true && session.status === "active";
+}
+function selectedIsParticipant(session) {
+  return isActiveSession(session) && session.selectedCharacterParticipantId != null;
+}
+function sessionReloadGate(session) {
+  if (!selectedIsParticipant(session)) return { blocked: false, reason: null };
+  if (!session.isSelectedCharacterTurn) return { blocked: true, reason: SESSION_BLOCK_REASONS.waitingForTurn };
+  if (!session.moveAvailable) return { blocked: true, reason: SESSION_BLOCK_REASONS.moveSpent };
+  return { blocked: false, reason: null };
+}
+function canEndTurn(session, viewerRole) {
+  if (!isActiveSession(session) || session.currentParticipantId == null) return false;
+  const isGm = String(viewerRole ?? "").toLowerCase() === "gm";
+  if (isGm && session.isSelectedCharacterTurn) return true;
+  return session.isCurrentPlayerTurn === true;
+}
+function canSeeGmTracker(viewerRole) {
+  return String(viewerRole ?? "").toLowerCase() === "gm";
 }
 
 // hud/components/GunBlock.js
@@ -5759,7 +5841,9 @@ function renderGunBlock(state) {
   const reserve = selectVisibleReserveMagazines(state);
   const selectedReload = selectSelectedReloadMagazine(state);
   const reloadMag = selectedReload ?? reserve[0] ?? null;
-  const canReload = Boolean(weapon.canReload) && reserve.length > 0;
+  const reloadGate = sessionReloadGate(state?.snapshot?.combatSession ?? null);
+  const canReload = Boolean(weapon.canReload) && reserve.length > 0 && !reloadGate.blocked;
+  const reloadBlockReason = reloadGate.blocked ? reloadGate.reason : Boolean(weapon.canReload) && reserve.length > 0 ? null : "No compatible magazine";
   const isEmpty = weapon.requiresAmmo && ammoCur <= 0;
   const disabled = Boolean(weapon.disabledReason) || isEmpty && !canReload;
   const mainCard = `
@@ -5772,7 +5856,7 @@ function renderGunBlock(state) {
     </div>`;
   const body = `<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
     ${mainCard}
-    <div class="ohud-gun-side">${renderMagazineCard(weapon, reserve, reloadMag)}${renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag)}</div>
+    <div class="ohud-gun-side">${renderMagazineCard(weapon, reserve, reloadMag)}${renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockReason)}</div>
   </div>`;
   return panel({ key: "gun", label: "Weapon", bodyHtml: body });
 }
@@ -5785,7 +5869,7 @@ function renderMagazineCard(weapon, reserve, reloadMag) {
     <span class="ohud-mag-type"${tipAttr("Selected spare magazine", [esc(spareLabel)])}>${esc(spareLabel)}</span>
   </div>`;
 }
-function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag) {
+function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockReason) {
   let ammoDisplay = "\u2014";
   if (mag && (mag.current || mag.max)) {
     ammoDisplay = `${Number(mag.current ?? 0)}/${Number(mag.max ?? 0)}`;
@@ -5795,7 +5879,7 @@ function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag) {
   return `<div class="ohud-ammo-card">
     <span class="ohud-ammo-head">
       <span class="ohud-ammo-label">ammo</span>
-      <button type="button" class="${cls("ohud-ammo-reload", canReload ? "" : "is-off")}" data-action="reload" data-weapon-id="${esc(weapon.id)}" data-magazine-id="${esc(reloadMag?.id ?? "")}" ${canReload ? "" : "disabled"} title="${canReload ? "Insert compatible magazine" : "No compatible magazine"}">${ICON_RELOAD}</button>
+      <button type="button" class="${cls("ohud-ammo-reload", canReload ? "" : "is-off")}" data-action="reload" data-weapon-id="${esc(weapon.id)}" data-magazine-id="${esc(reloadMag?.id ?? "")}" ${canReload ? "" : "disabled"} title="${esc(canReload ? "Insert compatible magazine" : reloadBlockReason || "No compatible magazine")}">${ICON_RELOAD}</button>
     </span>
     <span class="${cls("ohud-ammo-count", isEmpty ? "ohud-ammo-count--empty" : "")}">
       <span>${esc(ammoDisplay)}</span>
@@ -5922,6 +6006,12 @@ function titleCase(word) {
   if (!word) return "";
   return word.charAt(0) + word.slice(1).toLowerCase();
 }
+function renderEndTurnButton(state) {
+  const session = state?.snapshot?.combatSession ?? null;
+  if (!canEndTurn(session, state?.viewer?.role)) return "";
+  return `<button type="button" class="ohud-action-btn ohud-endturn-btn" data-action="end-turn"
+    ${tipAttr("End turn", ["Unspent MAIN/MOVE are lost"])}>END TURN</button>`;
+}
 function renderBasicAttackButton(state) {
   const ba = state?.ui?.basicAttack ?? { inFlight: false, uiAllowed: false, uiBlockReason: "No character loaded." };
   const disabled = ba.inFlight || !ba.uiAllowed;
@@ -5933,6 +6023,7 @@ function renderBasicAttackButton(state) {
     </span>
     <button type="button" class="${cls("ohud-action-btn", disabled ? "is-disabled" : "is-ready")}"
       data-action="basic-attack"${disabled ? ' aria-disabled="true"' : ""}${tip}>Attack</button>
+    ${renderEndTurnButton(state)}
   </div>`;
 }
 function renderActionButton(state) {
@@ -5951,6 +6042,7 @@ function renderActionButton(state) {
     </span>
     <button type="button" class="${cls("ohud-action-btn", disabled ? "is-disabled" : "is-ready")}"
       data-action="primary"${disabled ? ' aria-disabled="true"' : ""}${tip}>${esc(displayLabel)}</button>
+    ${renderEndTurnButton(state)}
   </div>`;
 }
 
@@ -5992,12 +6084,13 @@ function renderModifierChips(state, limit = MAX_CHIPS) {
 // hud/components/CombatControlBlock.js
 var COMBAT_CONTROL_MAX_CHIPS = 6;
 function renderCombatControlBlock(state) {
+  const combatButton = state?.viewer?.role === "gm" ? `<button type="button" class="ohud-cc-combat-btn" data-action="toggle-gm-tracker" title="GM Combat Tracker">COMBAT</button>` : "";
   return `<section class="ohud-panel ohud-panel--cc" data-block="combatControl">
     <div class="ohud-cc">
       <div class="ohud-cc-target">${renderTargetBlock(state)}</div>
       <div class="ohud-cc-right">
         <section class="ohud-panel ohud-panel--modifiers ohud-cc-mod" data-block="modifiers">
-          <div class="ohud-panel-head"><span class="ohud-panel-label">Mod</span></div>
+          <div class="ohud-panel-head"><span class="ohud-panel-label">Mod</span>${combatButton}</div>
           ${renderModifierChips(state, COMBAT_CONTROL_MAX_CHIPS)}
         </section>
         <section class="ohud-panel ohud-panel--action ohud-panel--bare ohud-cc-action" data-block="action">
@@ -6413,6 +6506,8 @@ function buildSyntheticState(payload) {
     selectedTokenId: payload.selectedItemId ?? null,
     selectedCharacterId: payload.characterId ?? null,
     access: { canViewSelectedCharacter: true, reason: null },
+    // Phase 3E.0: when hudSnapshot is present it already carries the live
+    // server-mapped combatSession (see selectionState.buildBroadcastPayload).
     snapshot: snap ?? {
       entity: null,
       weapon: { primary: null, secondary: null },
@@ -6752,6 +6847,13 @@ function mountCombatHudModule(options) {
         break;
       case "prepare-skill":
         integration.onCommand && integration.onCommand({ type: "prepare-skill", skillId: t.getAttribute("data-skill-id") });
+        break;
+      case "end-turn":
+        t.setAttribute("disabled", "disabled");
+        integration.onCommand && integration.onCommand({ scope: "combat-hud", feature: "combat-session", type: "end-turn" });
+        break;
+      case "toggle-gm-tracker":
+        integration.onCommand && integration.onCommand({ scope: "combat-hud", feature: "combat-session", type: "toggle-tracker" });
         break;
       default:
         break;
@@ -7186,6 +7288,55 @@ function mountCombatHudLayoutEditor(options) {
   };
 }
 
+// hud/session/GmCombatTrackerPanel.js
+function candidateRow(candidate) {
+  return `<label class="ohud-gmct-candidate">
+    <input type="checkbox" data-gmct-candidate="${esc(candidate.characterId)}" checked />
+    <span class="ohud-gmct-name">${esc(candidate.displayName || "Unnamed")}</span>
+    <span class="ohud-gmct-tag">${candidate.isPlayerCharacter ? "PC" : "NPC"}</span>
+  </label>`;
+}
+function participantRow(p) {
+  return `<li class="${cls("ohud-gmct-row", p.isCurrent && "is-current", !p.isEligible && "is-skipped")}">
+    <span class="ohud-gmct-marker">${p.isCurrent ? "\u25B6" : ""}</span>
+    <span class="ohud-gmct-name">${esc(p.displayName || "Unnamed")}</span>
+    <span class="ohud-gmct-init">${p.initiativeTotal ?? "\u2014"}</span>
+    ${p.isEligible ? "" : `<span class="ohud-gmct-tag is-skip">SKIP</span>`}
+  </li>`;
+}
+function renderGmCombatTracker({ session, candidates, viewerRole, busy = false } = {}) {
+  if (!canSeeGmTracker(viewerRole)) {
+    return `<section class="ohud-panel ohud-gmct" data-block="gm-combat-tracker">
+      <div class="ohud-gmct-denied">GM only.</div>
+    </section>`;
+  }
+  const active = !!session && session.exists === true && session.status === "active";
+  if (!active) {
+    const list = Array.isArray(candidates) && candidates.length ? candidates.map(candidateRow).join("") : `<div class="ohud-gmct-empty">No linked characters in this scene.</div>`;
+    return `<section class="ohud-panel ohud-gmct" data-block="gm-combat-tracker">
+      <div class="ohud-panel-head"><span class="ohud-panel-label">Combat</span></div>
+      <div class="ohud-gmct-candidates">${list}</div>
+      <div class="ohud-gmct-actions">
+        <button type="button" class="ohud-gmct-btn is-primary" data-action="gm-start-combat"${busy ? " disabled" : ""}>Start Combat</button>
+      </div>
+    </section>`;
+  }
+  const current2 = session.participants.find((p) => p.isCurrent) ?? null;
+  const rows = session.participants.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(participantRow).join("");
+  return `<section class="ohud-panel ohud-gmct" data-block="gm-combat-tracker">
+    <div class="ohud-panel-head">
+      <span class="ohud-panel-label">ROUND ${esc(session.roundNumber ?? 0)}</span>
+      <span class="ohud-gmct-current">Current: ${esc(current2?.displayName ?? "\u2014")}</span>
+    </div>
+    <ul class="ohud-gmct-list">${rows}</ul>
+    <div class="ohud-gmct-actions">
+      <button type="button" class="ohud-gmct-btn" data-action="gm-skip-turn"${busy ? " disabled" : ""}>Skip Turn</button>
+      <button type="button" class="ohud-gmct-btn" data-action="gm-force-next"${busy ? " disabled" : ""}>Force Next</button>
+      <button type="button" class="ohud-gmct-btn is-danger" data-action="gm-end-combat"${busy ? " disabled" : ""}>End Combat</button>
+    </div>
+  </section>`;
+}
+
 // hud/overlay/combatHudOverlayPage.js
 var COMPANION_DEBUG = (() => {
   try {
@@ -7359,6 +7510,63 @@ function start() {
       }
     }
     renderCompanion();
+    return;
+  }
+  if (moduleParam === "gm-combat-tracker") {
+    let renderTracker = function() {
+      root.innerHTML = "";
+      const host = document.createElement("div");
+      host.className = "odyssey-hud ohud-module";
+      host.setAttribute("data-module", "gm-combat-tracker");
+      host.innerHTML = renderGmCombatTracker({
+        session,
+        candidates,
+        viewerRole: uiState.viewerRole === "gm" ? "gm" : "player",
+        busy
+      });
+      root.appendChild(host);
+    };
+    let session = null;
+    let candidates = [];
+    let busy = false;
+    root.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-action]");
+      if (!target || !available || busy) return;
+      const action = target.getAttribute("data-action");
+      const sendSession = (type, extra = {}) => send(BC_HUD_COMMAND, { scope: "combat-hud", feature: "combat-session", type, ...extra });
+      if (action === "gm-start-combat") {
+        const excluded = [...root.querySelectorAll("[data-gmct-candidate]")].filter((box) => !box.checked).map((box) => box.getAttribute("data-gmct-candidate"));
+        busy = true;
+        renderTracker();
+        sendSession("gm-start", { excludedCharacterIds: excluded });
+      } else if (action === "gm-skip-turn") {
+        busy = true;
+        renderTracker();
+        sendSession("gm-skip-turn");
+      } else if (action === "gm-force-next") {
+        busy = true;
+        renderTracker();
+        sendSession("gm-force-next");
+      } else if (action === "gm-end-combat") {
+        busy = true;
+        renderTracker();
+        sendSession("gm-end");
+      }
+    });
+    if (available) {
+      try {
+        lib_default.broadcast.onMessage(BC_HUD_SESSION, (event) => {
+          session = event?.data?.session ?? null;
+          candidates = Array.isArray(event?.data?.candidates) ? event.data.candidates : [];
+          busy = false;
+          renderTracker();
+        });
+        send(BC_HUD_SESSION_REQUEST, {});
+        send(BC_HUD_COMMAND, { scope: "combat-hud", feature: "combat-session", type: "load-start-candidates" });
+      } catch (_e) {
+      }
+    }
+    renderTracker();
     return;
   }
   mountCombatHudLayoutEditor({ root, uiState, layout: readStoredLayout(window.localStorage), integration: {} });

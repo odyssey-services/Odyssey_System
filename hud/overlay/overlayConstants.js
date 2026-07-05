@@ -55,6 +55,16 @@ export const BC_HUD_TARGETING_REQUEST = "com.odyssey.combat-hud/targeting-reques
 /** LOCAL broadcast: controller command channel for target picking lifecycle. */
 export const BC_HUD_TARGETING_COMMAND = "com.odyssey.combat-hud/targeting-command";
 
+/** LOCAL broadcast: combat-session controller (background) → GM tracker iframe,
+ *  carrying the pre-mapped SAFE session snapshot + Start-Combat candidates.
+ *  Module blocks do NOT use this — they read snapshot.combatSession from the
+ *  normal selection broadcast. */
+export const BC_HUD_SESSION = "com.odyssey.combat-hud/session-state";
+
+/** LOCAL broadcast: freshly-mounted GM tracker iframe → session controller,
+ *  asking it to replay the current session state. */
+export const BC_HUD_SESSION_REQUEST = "com.odyssey.combat-hud/session-state-request";
+
 // NOTE: the temporary Debug Console (hud/debug/*) intentionally does NOT use
 // this shared overlay-constants file — it defines its own, fully separate
 // broadcast channels so it stays trivially deletable later without touching

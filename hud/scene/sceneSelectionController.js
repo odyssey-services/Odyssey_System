@@ -39,6 +39,9 @@ import {
 } from "../log/combatResultLogPolicy.js";
 import { getZoneLabel, DEFAULT_PROFILE_ID } from "../targeting/targetProfiles.js";
 import { logDebugEvent } from "../debug/debugLogStore.js";
+import { setupCombatSessionController } from "../session/combatSessionController.js";
+import { mapCombatRuntimeToSession } from "../session/combatSessionMapper.js";
+import { sessionAttackGate, sessionReloadGate, expectedVersionOf } from "../session/combatSessionPolicy.js";
 import { BC_HUD_COMMAND, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_TARGETING_COMMAND } from "../overlay/overlayConstants.js";
 import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
 import { buildCanonicalArmory } from "../runtime/runtimeBundleMapper.js";
@@ -124,6 +127,35 @@ export function setupSceneSelection(hooks = {}) {
 
     let viewer = normalizeViewer({ playerId: player.id, role: player.role });
     const configured = hasSupabaseSettings(settings);
+
+    // Phase 3E.0: live combat-session layer. The session controller owns ALL
+    // session fetching/commands; this controller only keeps the latest raw
+    // runtime so buildBroadcastPayload can map it (via the single shared
+    // mapper) into snapshot.combatSession on every publish.
+    let sessionRuntime = null;
+    const sessionController = configured
+      ? setupCombatSessionController({
+          context,
+          settings,
+          getViewer: () => viewer,
+          onSessionRuntime: (runtime) => {
+            sessionRuntime = runtime;
+            if (lastState) publishState(lastState);
+          },
+        })
+      : null;
+    if (sessionController) cleanups.push(() => sessionController.cleanup());
+
+    /** Latest mapped session for the currently selected character — used only
+     *  for the client-side pre-gates + request payload context; the server
+     *  re-checks everything. */
+    function currentMappedSession() {
+      return mapCombatRuntimeToSession(sessionRuntime, {
+        viewerPlayerId: viewer?.playerId ?? null,
+        viewerIsGm: String(viewer?.role ?? "").toUpperCase() === "GM",
+        selectedCharacterId: ephemeral.characterId,
+      });
+    }
 
     const adapter = createSceneSelectionAdapter({
       backendConfigured: configured,
@@ -220,6 +252,7 @@ export function setupSceneSelection(hooks = {}) {
         basicAttackInFlight: ephemeral.basicAttackInFlight,
         basicAttackResult: ephemeral.basicAttackResult,
         combatLog,
+        sessionRuntime,
       };
     }
 
@@ -356,6 +389,19 @@ export function setupSceneSelection(hooks = {}) {
           return;
         }
 
+        // Phase 3E.0: client-side session pre-gate (UX mirror only — the
+        // server re-checks turn/MAIN inside perform_attack regardless). A
+        // blocked attack never reaches the RPC and never spends anything.
+        const sessionAtRequest = currentMappedSession();
+        const sessionGate = sessionAttackGate(sessionAtRequest);
+        if (sessionGate.blocked) {
+          ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
+          ephemeral.basicAttackResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
+          logDebugEvent("attack", "session-gate-blocked", { reason: sessionGate.reason, sessionId: sessionAtRequest.id, round: sessionAtRequest.roundNumber }, false);
+          if (lastState) publishState(lastState);
+          return;
+        }
+
         // Snapshot the source/weapon/target this request is FOR. If any of
         // them changed by the time the RPC resolves, the result must not be
         // applied to the (now different) HUD state — see the staleness check
@@ -368,6 +414,13 @@ export function setupSceneSelection(hooks = {}) {
           targetCharacterId: evalCtx.targetCharacterId,
           bodyPartId: evalCtx.resolvedBodyPartId,
           distance: targeting.distance ?? 0,
+          // Active session → carry the authoritative session context so the
+          // server can optimistic-concurrency-check it. (The server gate does
+          // NOT trust these fields — it derives participation itself.)
+          roomContext: sessionAtRequest.exists
+            ? { encounterId: sessionAtRequest.id ?? undefined }
+            : {},
+          expectedEncounterVersion: expectedVersionOf(sessionAtRequest),
         });
 
         ephemeral.basicAttackInFlight = true;
@@ -414,6 +467,28 @@ export function setupSceneSelection(hooks = {}) {
             buildRollResolutionDetails(buildAttackResolutionTrace(outcome)),
             true,
           );
+        }
+        // Phase 3E.0: server-confirmed session cost (MAIN spent on hit AND
+        // miss identically) — logged from the server's own summary, then the
+        // authoritative session state is re-read (never mutated locally).
+        const sessionCost = outcome.raw?.combat_session ?? null;
+        if (sessionCost && typeof sessionCost === "object") {
+          logDebugEvent("attack", "action-cost-consumed", {
+            sessionId: sessionCost.encounter_id ?? null,
+            round: sessionCost.round ?? null,
+            participant: sessionCost.participant_entry_id ?? null,
+            versionBefore: sessionCost.state_version_before ?? null,
+            versionAfter: sessionCost.state_version_after ?? null,
+            mainAfter: sessionCost.main_available_after ?? null,
+            moveAfter: sessionCost.move_available_after ?? null,
+            usedReaction: sessionCost.used_reaction ?? null,
+          });
+        }
+        if (outcome.code === "STATE_VERSION_CONFLICT") {
+          logDebugEvent("session", "stale-version", { command: "attack" }, false);
+        }
+        if ((sessionCost || outcome.code === "STATE_VERSION_CONFLICT") && sessionController) {
+          void sessionController.refresh();
         }
 
         if (stale) {
@@ -506,6 +581,19 @@ export function setupSceneSelection(hooks = {}) {
         const magazineId = resolveReloadMagazineId(command, ephemeral, weapon) ?? "";
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
         logDebugEvent("magazine", "reload-requested", { weaponId, magazineId });
+
+        // Phase 3E.0: client-side MOVE pre-gate (UX mirror — the server
+        // re-checks turn/MOVE inside load_weapon_profile_magazine anyway).
+        const reloadSession = currentMappedSession();
+        const reloadGate = sessionReloadGate(reloadSession);
+        if (reloadGate.blocked) {
+          ephemeral.commandStatus = { type: "error", message: reloadGate.reason };
+          ephemeral.reloadRpcResult = { ok: false, error: "SESSION_GATE", message: reloadGate.reason };
+          logDebugEvent("reload", "session-gate-blocked", { reason: reloadGate.reason, sessionId: reloadSession.id, round: reloadSession.roundNumber }, false);
+          if (lastState) publishState(lastState);
+          return;
+        }
+
         if (!weaponId || !magazineId || !profileId) {
           ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
           ephemeral.reloadRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/magazineId missing before RPC call." };
@@ -515,8 +603,14 @@ export function setupSceneSelection(hooks = {}) {
           return;
         }
         try {
+          const expectedVersion = expectedVersionOf(reloadSession);
           const result = await loadWeaponProfileMagazine(
-            { character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magazineId },
+            {
+              character_weapon_id: weaponId,
+              profile_id: profileId,
+              character_magazine_id: magazineId,
+              ...(expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}),
+            },
             settings,
           );
           // The RPC returns { ok:false, error, message } as a normal (HTTP 200)
@@ -530,11 +624,30 @@ export function setupSceneSelection(hooks = {}) {
             ephemeral.selectedReloadMagazineId = null;
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Reloaded." }));
             logDebugEvent("magazine", "reload-result", { weaponId, magazineId }, true);
+            // Phase 3E.0: server-confirmed MOVE cost — only a successful swap
+            // spends it; re-read the authoritative session state afterwards.
+            const reloadCost = result?.combat_session ?? null;
+            if (reloadCost && typeof reloadCost === "object") {
+              logDebugEvent("reload", "action-cost-consumed", {
+                sessionId: reloadCost.encounter_id ?? null,
+                round: reloadCost.round ?? null,
+                participant: reloadCost.participant_entry_id ?? null,
+                versionBefore: reloadCost.state_version_before ?? null,
+                versionAfter: reloadCost.state_version_after ?? null,
+                mainAfter: reloadCost.main_available_after ?? null,
+                moveAfter: reloadCost.move_available_after ?? null,
+              });
+              if (sessionController) void sessionController.refresh();
+            }
             await refetchCurrent();
           } else {
             ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
             logDebugEvent("magazine", "reload-result", { weaponId, magazineId, error: normalized.error }, false);
+            if (normalized.error === "STATE_VERSION_CONFLICT") {
+              logDebugEvent("session", "stale-version", { command: "reload" }, false);
+              if (sessionController) void sessionController.refresh();
+            }
             if (lastState) publishState(lastState);
           }
         } catch (error) {

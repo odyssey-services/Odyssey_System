@@ -12,6 +12,8 @@ import { resolveReloadMagazineId } from "./reloadPolicy.js";
 import { resolveFireModeUpdatePath } from "./fireModePolicy.js";
 import { evaluateBasicAttack } from "../combat/basicAttackPolicy.js";
 import { buildBasicAttackCtx, buildAttackPayload } from "../combat/basicAttackPayload.js";
+import { mapCombatRuntimeToSession } from "../session/combatSessionMapper.js";
+import { sessionAttackGate } from "../session/combatSessionPolicy.js";
 
 /** Canonical selection statuses (string values are part of the wire contract). */
 export const SELECTION_STATUS = Object.freeze({
@@ -342,6 +344,28 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
   if (hudSnapshot && Array.isArray(ephemeral.combatLog)) {
     hudSnapshot = { ...hudSnapshot, battleLog: { entries: ephemeral.combatLog } };
   }
+  // Phase 3E.0: the LIVE combat session (single shared mapper — the same
+  // normalization the GM tracker sees). While the selected character is a
+  // participant of an active session, the Player block's MAIN/MOVE pips come
+  // from SERVER session state only — never from the runtime bundle's own
+  // free-play action flags, and never from a local optimistic mutation.
+  const combatSession = mapCombatRuntimeToSession(ephemeral.sessionRuntime ?? null, {
+    viewerPlayerId: s.viewer?.playerId ?? null,
+    viewerIsGm: String(s.viewer?.role ?? "").toUpperCase() === "GM",
+    selectedCharacterId: ready ? (s.characterId ?? null) : null,
+  });
+  if (hudSnapshot) {
+    hudSnapshot = { ...hudSnapshot, combatSession };
+    if (combatSession.exists && combatSession.selectedCharacterParticipantId && hudSnapshot.entity) {
+      hudSnapshot = {
+        ...hudSnapshot,
+        entity: {
+          ...hudSnapshot.entity,
+          actions: { main: combatSession.mainAvailable, move: combatSession.moveAvailable },
+        },
+      };
+    }
+  }
   const debug = ready && s.runtimeBundle
     ? buildRuntimeDebugSummary(s.runtimeBundle, hudSnapshot, {
         selectionStatus: s.status,
@@ -381,6 +405,15 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
     ? evaluateBasicAttack(buildBasicAttackEvalCtx(s.characterId, hudSnapshot, ephemeral))
     : { uiAllowed: false, uiBlockReason: "No character loaded." };
 
+  // Phase 3E.0: the session gate applies AFTER the free-play preconditions —
+  // a real precondition failure keeps its own (more specific) reason; an
+  // otherwise-ready attack is blocked with the server-derived session reason
+  // ("Waiting for your turn" / "MAIN already spent"), never a fabricated one.
+  const attackGate = sessionAttackGate(hudSnapshot?.combatSession ?? null);
+  const gatedBasicAttack = basicAttackEval.uiAllowed && attackGate.blocked
+    ? { uiAllowed: false, uiBlockReason: attackGate.reason }
+    : basicAttackEval;
+
   return {
     status: s.status,
     selectedItemId: s.selectedItemId ?? null,
@@ -401,8 +434,8 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
       activeIntent,
       basicAttack: {
         inFlight: !!ephemeral.basicAttackInFlight,
-        uiAllowed: basicAttackEval.uiAllowed,
-        uiBlockReason: basicAttackEval.uiBlockReason,
+        uiAllowed: gatedBasicAttack.uiAllowed,
+        uiBlockReason: gatedBasicAttack.uiBlockReason,
       },
     },
     debug: ready ? debug : null,

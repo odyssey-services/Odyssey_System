@@ -80,7 +80,13 @@ export function renderPlayerBlock(state) {
   const isMech = entity.summary?.svgRef === "mech";
   const authorized = !!selectControlledCharacter(state);
 
-  const headerRight = `<span class="ohud-turn ohud-turn--${turnClass}">${esc(turn)}</span>`;
+  // Phase 3E.0: while a real combat session is active the header shows the
+  // server round number next to YOUR TURN / WAITING (both server-derived).
+  const session = state?.snapshot?.combatSession ?? null;
+  const roundTag = session && session.status === "active"
+    ? `<span class="ohud-turn-round"${tipAttr("Combat round", [`Round ${session.roundNumber ?? session.round ?? 0}`])}>R${esc(session.roundNumber ?? session.round ?? 0)}</span>`
+    : "";
+  const headerRight = `${roundTag}<span class="ohud-turn ohud-turn--${turnClass}">${esc(turn)}</span>`;
 
   const body = `
     <div class="ohud-player-grid">

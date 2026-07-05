@@ -18,12 +18,18 @@ import { renderActionButton } from "./ActionBlock.js";
 const COMBAT_CONTROL_MAX_CHIPS = 6;
 
 export function renderCombatControlBlock(state) {
+  // Phase 3E.0: GM-only COMBAT button toggles the GM Combat Tracker companion
+  // popover. Rendered inside the existing Mod header (no geometry change) and
+  // NEVER rendered for a plain player.
+  const combatButton = state?.viewer?.role === "gm"
+    ? `<button type="button" class="ohud-cc-combat-btn" data-action="toggle-gm-tracker" title="GM Combat Tracker">COMBAT</button>`
+    : "";
   return `<section class="ohud-panel ohud-panel--cc" data-block="combatControl">
     <div class="ohud-cc">
       <div class="ohud-cc-target">${renderTargetBlock(state)}</div>
       <div class="ohud-cc-right">
         <section class="ohud-panel ohud-panel--modifiers ohud-cc-mod" data-block="modifiers">
-          <div class="ohud-panel-head"><span class="ohud-panel-label">Mod</span></div>
+          <div class="ohud-panel-head"><span class="ohud-panel-label">Mod</span>${combatButton}</div>
           ${renderModifierChips(state, COMBAT_CONTROL_MAX_CHIPS)}
         </section>
         <section class="ohud-panel ohud-panel--action ohud-panel--bare ohud-cc-action" data-block="action">

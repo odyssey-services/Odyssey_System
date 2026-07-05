@@ -39,6 +39,8 @@ export const LEGACY_HUD_POPOVER_IDS = Object.freeze([
 export const GUN_WEAPON_SELECTOR_POPOVER_ID = "odyssey-hud-gun-weapon-selector";
 export const GUN_MAGAZINE_SELECTOR_POPOVER_ID = "odyssey-hud-gun-magazine-selector";
 export const GUN_FIRE_MODE_SELECTOR_POPOVER_ID = "odyssey-hud-gun-fire-mode-selector";
+/** Phase 3E.0: GM-only Combat Tracker companion popover. */
+export const GM_COMBAT_TRACKER_POPOVER_ID = "odyssey-hud-gm-combat-tracker";
 // The temporary Debug Console (hud/debug/*) owns its own popover ids —
 // intentionally NOT declared here, so it stays fully independent/deletable.
 export const HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";

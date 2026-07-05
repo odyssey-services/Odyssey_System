@@ -119,6 +119,8 @@ function buildSyntheticState(payload) {
     selectedTokenId:    payload.selectedItemId ?? null,
     selectedCharacterId: payload.characterId ?? null,
     access:             { canViewSelectedCharacter: true, reason: null },
+    // Phase 3E.0: when hudSnapshot is present it already carries the live
+    // server-mapped combatSession (see selectionState.buildBroadcastPayload).
     snapshot: snap ?? {
       entity:        null,
       weapon:        { primary: null, secondary: null },

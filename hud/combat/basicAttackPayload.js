@@ -59,5 +59,8 @@ export function buildBasicAttackCtx(input = {}) {
     encounterId: room.encounterId,
     actorTokenId: room.actorTokenId,
     targetTokenId: room.targetTokenId,
+    // Phase 3E.0: optimistic-concurrency check for session-gated attacks —
+    // only ever set while an active combat session exists (never fabricated).
+    expectedEncounterVersion: input.expectedEncounterVersion ?? null,
   };
 }

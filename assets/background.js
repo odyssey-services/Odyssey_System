@@ -4085,6 +4085,8 @@ var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
 var BC_HUD_TARGETING = "com.odyssey.combat-hud/targeting";
 var BC_HUD_TARGETING_REQUEST = "com.odyssey.combat-hud/targeting-request";
 var BC_HUD_TARGETING_COMMAND = "com.odyssey.combat-hud/targeting-command";
+var BC_HUD_SESSION = "com.odyssey.combat-hud/session-state";
+var BC_HUD_SESSION_REQUEST = "com.odyssey.combat-hud/session-state-request";
 var PLAYER_W = 144;
 var PLAYER_HEIGHT = 146;
 var RAIL_GAP = 10;
@@ -5154,6 +5156,9 @@ function buildAttackPayload(ctx = {}) {
     const trimmed = String(value ?? "").trim();
     if (trimmed) payload[key] = trimmed;
   }
+  if (ctx.expectedEncounterVersion !== null && ctx.expectedEncounterVersion !== void 0 && Number.isFinite(Number(ctx.expectedEncounterVersion))) {
+    payload.expected_encounter_version = Number(ctx.expectedEncounterVersion);
+  }
   return payload;
 }
 function firstDefined(...values) {
@@ -5258,7 +5263,10 @@ function buildBasicAttackCtx(input = {}) {
     sceneId: room.sceneId,
     encounterId: room.encounterId,
     actorTokenId: room.actorTokenId,
-    targetTokenId: room.targetTokenId
+    targetTokenId: room.targetTokenId,
+    // Phase 3E.0: optimistic-concurrency check for session-gated attacks —
+    // only ever set while an active combat session exists (never fabricated).
+    expectedEncounterVersion: input.expectedEncounterVersion ?? null
   };
 }
 
@@ -5645,6 +5653,355 @@ function createInactiveCombatSession() {
   };
 }
 
+// hud/session/combatSessionMapper.js
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function mapParticipant(raw, activeEntryId) {
+  const p = raw && typeof raw === "object" ? raw : {};
+  const state = p.state && typeof p.state === "object" ? p.state : {};
+  return {
+    participantId: p.initiative_entry_id ?? null,
+    characterId: p.character_id ?? null,
+    // combat runtime rows do not expose the backing token id (the server
+    // resolved the newest active link at start time) — kept null, not faked.
+    tokenId: null,
+    displayName: String(p.display_name ?? ""),
+    initiativeRoll: num(p.roll_value),
+    initiativeTotal: num(p.initiative_value),
+    order: num(p.order_index),
+    isCurrent: activeEntryId != null && p.initiative_entry_id === activeEntryId,
+    // Eligibility mirrors exactly what the server turn engine can decide
+    // (dead → removed, unconscious/skip_turn → skipped) — nothing simulated.
+    isEligible: p.is_active !== false && state.is_alive !== false && state.is_conscious !== false,
+    isPlayerCharacter: p.character_bucket === "player",
+    mainAvailable: num(p.action_current) != null ? num(p.action_current) > 0 : null,
+    moveAvailable: num(p.move_current) != null ? num(p.move_current) > 0 : null
+  };
+}
+function mapCombatRuntimeToSession(runtime, viewCtx = {}) {
+  const r = runtime && typeof runtime === "object" ? runtime : null;
+  const encounter = r?.encounter && typeof r.encounter === "object" ? r.encounter : null;
+  if (!r || r.ok === false || !encounter || encounter.status !== "active") {
+    return { ...createInactiveCombatSession(), exists: false, version: 0, roundNumber: 0 };
+  }
+  const activeEntryId = encounter.active_entry_id ?? null;
+  const rawParticipants = Array.isArray(r.visible_participants) ? r.visible_participants : [];
+  const participants = rawParticipants.filter((p) => p && p.is_active !== false).map((p) => mapParticipant(p, activeEntryId));
+  const selectedCharacterId = viewCtx.selectedCharacterId ?? null;
+  const viewerIsGm = !!viewCtx.viewerIsGm;
+  const controlledIds = Array.isArray(r.viewer_controlled_character_ids) ? r.viewer_controlled_character_ids : [];
+  const selected = selectedCharacterId ? participants.find((p) => p.characterId === selectedCharacterId) ?? null : null;
+  const currentCharacterId = encounter.active_character_id ?? null;
+  const isSelectedCharacterTurn = !!selected && selected.isCurrent;
+  const viewerControlsSelected = !!selectedCharacterId && controlledIds.includes(selectedCharacterId);
+  const isCurrentPlayerTurn = currentCharacterId != null && controlledIds.includes(currentCharacterId);
+  const round = num(encounter.current_round) ?? 0;
+  return {
+    exists: true,
+    id: encounter.id ?? null,
+    status: "active",
+    version: num(encounter.state_version) ?? 0,
+    round,
+    // Phase 0 component contract
+    roundNumber: round,
+    // Phase 3E.0 name
+    currentParticipantId: activeEntryId,
+    currentCharacterId,
+    selectedCharacterParticipantId: selected?.participantId ?? null,
+    isSelectedCharacterTurn,
+    isCurrentPlayerTurn,
+    // "YOUR TURN" is shown only to the current participant's owner — or to the
+    // GM while inspecting that character (existing GM-inspect access model).
+    isViewerTurn: isSelectedCharacterTurn && (viewerControlsSelected || viewerIsGm),
+    // Server session state ONLY, and actionable only on the selected
+    // character's own turn — a WAITING participant always shows spent pips.
+    mainAvailable: isSelectedCharacterTurn && selected?.mainAvailable === true,
+    moveAvailable: isSelectedCharacterTurn && selected?.moveAvailable === true,
+    participants
+  };
+}
+
+// hud/session/combatSessionPolicy.js
+var SESSION_BLOCK_REASONS = Object.freeze({
+  waitingForTurn: "Waiting for your turn",
+  mainSpent: "MAIN already spent",
+  moveSpent: "MOVE already spent"
+});
+function isActiveSession(session) {
+  return !!session && session.exists === true && session.status === "active";
+}
+function selectedIsParticipant(session) {
+  return isActiveSession(session) && session.selectedCharacterParticipantId != null;
+}
+function sessionAttackGate(session) {
+  if (!selectedIsParticipant(session)) return { blocked: false, reason: null };
+  if (!session.isSelectedCharacterTurn) return { blocked: true, reason: SESSION_BLOCK_REASONS.waitingForTurn };
+  if (!session.mainAvailable) return { blocked: true, reason: SESSION_BLOCK_REASONS.mainSpent };
+  return { blocked: false, reason: null };
+}
+function sessionReloadGate(session) {
+  if (!selectedIsParticipant(session)) return { blocked: false, reason: null };
+  if (!session.isSelectedCharacterTurn) return { blocked: true, reason: SESSION_BLOCK_REASONS.waitingForTurn };
+  if (!session.moveAvailable) return { blocked: true, reason: SESSION_BLOCK_REASONS.moveSpent };
+  return { blocked: false, reason: null };
+}
+function canSeeGmTracker(viewerRole) {
+  return String(viewerRole ?? "").toLowerCase() === "gm";
+}
+function buildStartCandidates(links) {
+  const rows = Array.isArray(links) ? links : [];
+  const byCharacter = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const character = row?.character;
+    if (!character || !character.id) continue;
+    if (row.is_active === false) continue;
+    if (character.is_deleted === true || character.enabled === false) continue;
+    if (character.character_bucket !== "player" && character.character_bucket !== "npc_active") continue;
+    const existing = byCharacter.get(character.id);
+    const updatedAt = Date.parse(row.updated_at ?? "") || 0;
+    if (existing && existing.linkUpdatedAt >= updatedAt) continue;
+    byCharacter.set(character.id, {
+      characterId: character.id,
+      tokenId: row.token_id ?? null,
+      displayName: String(character.display_name ?? row.token_name ?? ""),
+      isPlayerCharacter: character.character_bucket === "player",
+      linkUpdatedAt: updatedAt
+    });
+  }
+  return [...byCharacter.values()].map(({ linkUpdatedAt: _drop, ...candidate }) => candidate).sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+function expectedVersionOf(session) {
+  return isActiveSession(session) ? session.version : null;
+}
+
+// hud/session/combatSessionApi.js
+function actorFields(context, viewer) {
+  return {
+    campaign_id: context?.campaignId ?? "",
+    room_id: context?.roomId ?? "",
+    scene_id: context?.sceneId ?? "",
+    actor_player_id: viewer?.playerId ?? "",
+    actor_is_gm: String(viewer?.role ?? "").toUpperCase() === "GM"
+  };
+}
+function fetchActiveSessionRuntime({ context, viewer, settings }) {
+  return getActiveRuntime(actorFields(context, viewer), settings);
+}
+function fetchSceneLinkCandidates({ context, viewer, settings }) {
+  return getSceneTokenLinks(
+    { ...actorFields(context, viewer), include_inactive: false },
+    settings
+  );
+}
+function startSession({ context, viewer, settings, excludedCharacterIds = [], hiddenTokenIds = [] }) {
+  return startEncounter(
+    {
+      ...actorFields(context, viewer),
+      excluded_character_ids: excludedCharacterIds,
+      hidden_token_ids: hiddenTokenIds
+    },
+    settings
+  );
+}
+function mutationFields({ context, viewer, sessionId, expectedVersion }) {
+  return {
+    ...actorFields(context, viewer),
+    encounter_id: sessionId,
+    ...Number.isFinite(Number(expectedVersion)) ? { expected_encounter_version: Number(expectedVersion) } : {}
+  };
+}
+function endSessionTurn(args) {
+  return endTurn(mutationFields(args), args.settings);
+}
+function gmSkipTurn(args) {
+  return skipTurn(mutationFields(args), args.settings);
+}
+function gmForceNextTurn(args) {
+  return forceNextTurn(mutationFields(args), args.settings);
+}
+function endSession(args) {
+  return endEncounter(mutationFields(args), args.settings);
+}
+
+// hud/session/combatSessionController.js
+function setupCombatSessionController({ context, settings, getViewer, onSessionRuntime }) {
+  let disposed = false;
+  let lastRuntime = null;
+  let lastCandidates = [];
+  let mutationInFlight = false;
+  let prevActiveEntryId = null;
+  let prevSessionId = null;
+  const cleanups3 = [];
+  const viewer = () => (typeof getViewer === "function" ? getViewer() : {}) ?? {};
+  const isGm = () => String(viewer()?.role ?? "").toUpperCase() === "GM";
+  function encounterOf(runtime) {
+    return runtime?.encounter && typeof runtime.encounter === "object" ? runtime.encounter : null;
+  }
+  function broadcastSessionState() {
+    try {
+      lib_default.broadcast.sendMessage(
+        BC_HUD_SESSION,
+        {
+          session: mapCombatRuntimeToSession(lastRuntime, { viewerIsGm: isGm(), viewerPlayerId: viewer()?.playerId ?? null }),
+          candidates: lastCandidates
+        },
+        { destination: "LOCAL" }
+      );
+    } catch (_e) {
+    }
+  }
+  function applyRuntime(runtime, { origin }) {
+    const next = runtime && typeof runtime === "object" ? runtime : null;
+    const nextEncounter = encounterOf(next);
+    const nextSessionId = nextEncounter?.status === "active" ? nextEncounter.id ?? null : null;
+    const nextEntryId = nextEncounter?.active_entry_id ?? null;
+    if (prevSessionId && !nextSessionId) {
+      logDebugEvent("session", "ended", { sessionId: prevSessionId, origin });
+    }
+    if (nextSessionId && nextEntryId && nextEntryId !== prevActiveEntryId) {
+      logDebugEvent("session", "turn-started", {
+        sessionId: nextSessionId,
+        round: nextEncounter?.current_round ?? null,
+        characterId: nextEncounter?.active_character_id ?? null,
+        version: nextEncounter?.state_version ?? null
+      });
+    }
+    prevSessionId = nextSessionId;
+    prevActiveEntryId = nextEntryId;
+    lastRuntime = next;
+    if (typeof onSessionRuntime === "function") {
+      try {
+        onSessionRuntime(lastRuntime);
+      } catch (_e) {
+      }
+    }
+    broadcastSessionState();
+  }
+  async function refresh(origin = "refresh") {
+    try {
+      const runtime = await fetchActiveSessionRuntime({ context, viewer: viewer(), settings });
+      if (disposed) return;
+      logDebugEvent("session", "refresh-result", { ok: runtime?.ok !== false, origin }, runtime?.ok !== false);
+      applyRuntime(runtime, { origin });
+    } catch (error) {
+      if (disposed) return;
+      logDebugEvent("session", "refresh-result", { origin, message: String(error?.message ?? error) }, false);
+    }
+  }
+  function currentSessionRef() {
+    const encounter = encounterOf(lastRuntime);
+    if (!encounter || encounter.status !== "active") return null;
+    return { sessionId: encounter.id, expectedVersion: encounter.state_version ?? null };
+  }
+  async function runMutation(kind, call, extraDetails = {}) {
+    if (mutationInFlight) return;
+    mutationInFlight = true;
+    try {
+      const result = await call();
+      const ok = result?.ok !== false;
+      if (result?.error === "STATE_VERSION_CONFLICT") {
+        logDebugEvent("session", "stale-version", { command: kind, serverVersion: result?.encounter_state_version ?? null }, false);
+      }
+      logDebugEvent("session", kind, { ok, error: ok ? null : result?.error ?? null, ...extraDetails }, ok);
+      if (ok && result && typeof result === "object" && result.encounter !== void 0) {
+        applyRuntime(result, { origin: kind });
+      } else {
+        await refresh(kind);
+      }
+    } catch (error) {
+      logDebugEvent("session", kind, { ok: false, message: String(error?.message ?? error), ...extraDetails }, false);
+      await refresh(kind);
+    } finally {
+      mutationInFlight = false;
+    }
+  }
+  async function handleCommand(data) {
+    const type = String(data?.type ?? "");
+    if (type === "refresh") {
+      await refresh("command");
+      return;
+    }
+    if (type === "load-start-candidates") {
+      if (!canSeeGmTracker(viewer()?.role)) return;
+      try {
+        const links = await fetchSceneLinkCandidates({ context, viewer: viewer(), settings });
+        lastCandidates = buildStartCandidates(links?.links ?? links?.rows ?? (Array.isArray(links) ? links : []));
+      } catch (_e) {
+        lastCandidates = [];
+      }
+      broadcastSessionState();
+      return;
+    }
+    if (type === "end-turn") {
+      const ref = currentSessionRef();
+      if (!ref) return;
+      await runMutation("turn-ended", () => endSessionTurn({ context, viewer: viewer(), settings, ...ref }), { sessionId: ref.sessionId });
+      return;
+    }
+    if (type === "gm-skip-turn" || type === "gm-force-next") {
+      if (!isGm()) return;
+      const ref = currentSessionRef();
+      if (!ref) return;
+      const kind = type === "gm-skip-turn" ? "turn-skipped" : "turn-forced-next";
+      const call = type === "gm-skip-turn" ? () => gmSkipTurn({ context, viewer: viewer(), settings, ...ref }) : () => gmForceNextTurn({ context, viewer: viewer(), settings, ...ref });
+      await runMutation(kind, call, { sessionId: ref.sessionId });
+      return;
+    }
+    if (type === "gm-start") {
+      if (!isGm()) return;
+      const excluded = Array.isArray(data?.excludedCharacterIds) ? data.excludedCharacterIds : [];
+      logDebugEvent("session", "start-requested", { excludedCount: excluded.length });
+      await runMutation(
+        "start-result",
+        () => startSession({ context, viewer: viewer(), settings, excludedCharacterIds: excluded })
+      );
+      const session = mapCombatRuntimeToSession(lastRuntime, { viewerIsGm: true });
+      if (session.exists) {
+        logDebugEvent("session", "initiative-calculated", {
+          sessionId: session.id,
+          participantCount: session.participants.length,
+          order: session.participants.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((p) => `${p.displayName}:${p.initiativeTotal}`).join(", ")
+        });
+      }
+      return;
+    }
+    if (type === "gm-end") {
+      if (!isGm()) return;
+      const ref = currentSessionRef();
+      if (!ref) return;
+      await runMutation("ended", () => endSession({ context, viewer: viewer(), settings, ...ref }), { sessionId: ref.sessionId });
+      return;
+    }
+  }
+  try {
+    cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
+      const data = event?.data ?? {};
+      if (data?.scope !== "combat-hud" || data?.feature !== "combat-session") return;
+      void handleCommand(data).catch((error) => {
+        logDebugEvent("session", "command-exception", { type: String(data?.type ?? ""), message: String(error?.message ?? error) }, false);
+      });
+    }));
+    cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_SESSION_REQUEST, () => broadcastSessionState()));
+  } catch (_e) {
+  }
+  void refresh("startup");
+  return {
+    refresh: () => refresh("external"),
+    getSessionRuntime: () => lastRuntime,
+    cleanup() {
+      disposed = true;
+      for (const fn of cleanups3.splice(0)) {
+        try {
+          fn();
+        } catch (_e) {
+        }
+      }
+    }
+  };
+}
+
 // hud/targeting/bodyConditionPolicy.js
 var BODY_CONDITION_STATE = Object.freeze({
   healthy: "healthy",
@@ -5680,7 +6037,7 @@ var LABEL = Object.freeze({
   disabled: "Disabled",
   unknown: "Unknown"
 });
-function num(v) {
+function num2(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -5689,9 +6046,9 @@ function evaluateBodyCondition(bp) {
     return build(BODY_CONDITION_STATE.unknown);
   }
   if (bp.destroyed || bp.disabled) return build(BODY_CONDITION_STATE.disabled);
-  if (num(bp.critical) > 0) return build(BODY_CONDITION_STATE.critical);
-  if (num(bp.serious) > 0) return build(BODY_CONDITION_STATE.serious);
-  if (num(bp.minor) > 0) return build(BODY_CONDITION_STATE.minor);
+  if (num2(bp.critical) > 0) return build(BODY_CONDITION_STATE.critical);
+  if (num2(bp.serious) > 0) return build(BODY_CONDITION_STATE.serious);
+  if (num2(bp.minor) > 0) return build(BODY_CONDITION_STATE.minor);
   return build(BODY_CONDITION_STATE.healthy);
 }
 function build(state) {
@@ -5702,11 +6059,11 @@ function bodyConditionDetailLines(bp) {
   const lines = [];
   if (bp.destroyed) lines.push("Destroyed");
   else if (bp.disabled) lines.push("Disabled");
-  if (num(bp.critical) > 0) lines.push(`Critical damage: ${num(bp.critical)}`);
-  if (num(bp.serious) > 0) lines.push(`Serious wounds: ${num(bp.serious)}`);
-  if (num(bp.minor) > 0) lines.push(`Minor wounds: ${num(bp.minor)}`);
+  if (num2(bp.critical) > 0) lines.push(`Critical damage: ${num2(bp.critical)}`);
+  if (num2(bp.serious) > 0) lines.push(`Serious wounds: ${num2(bp.serious)}`);
+  if (num2(bp.minor) > 0) lines.push(`Minor wounds: ${num2(bp.minor)}`);
   if (Number.isFinite(Number(bp.armor_value)) && Number(bp.armor_value) > 0) {
-    lines.push(`Armor: ${num(bp.armor_value)}`);
+    lines.push(`Armor: ${num2(bp.armor_value)}`);
   }
   return lines;
 }
@@ -5716,7 +6073,7 @@ function str(v) {
   const s = String(v ?? "").trim();
   return s || null;
 }
-function num2(v, fallback = 0) {
+function num3(v, fallback = 0) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -5797,7 +6154,7 @@ function mapEffect(ef) {
     id: str(ef?.id) ?? `ef-${Math.random().toString(36).slice(2)}`,
     name: str(ef?.effect_name) ?? str(ef?.name) ?? "Unknown effect",
     polarity: normalizePolarity(ef?.polarity),
-    durationTurns: ef?.remaining_turns != null ? num2(ef.remaining_turns) : null,
+    durationTurns: ef?.remaining_turns != null ? num3(ef.remaining_turns) : null,
     description: str(ef?.description) ?? ""
   };
 }
@@ -5807,8 +6164,8 @@ function mapEntity(bundle) {
   const combat = section2(bundle, "combat") ?? {};
   const abilities = section2(bundle, "abilities") ?? {};
   const flags = combat?.combat_flags ?? state?.combat_flags ?? {};
-  const shieldCur = num2(combat.shield_current ?? state.shield_current, 0);
-  const shieldMax = num2(combat.shield_max ?? state.shield_max, 0);
+  const shieldCur = num3(combat.shield_current ?? state.shield_current, 0);
+  const shieldMax = num3(combat.shield_max ?? state.shield_max, 0);
   const psiPool = arr(abilities?.resource_pools).find((pool) => {
     const code = String(pool?.code ?? pool?.resource_pool_code ?? "").toLowerCase();
     const name = String(pool?.name ?? "").toLowerCase();
@@ -5817,8 +6174,8 @@ function mapEntity(bundle) {
   });
   const psiCurrentRaw = combat.psi_current ?? state.psi_current ?? psiPool?.current_value ?? psiPool?.current;
   const psiMaxRaw = combat.psi_max ?? state.psi_max ?? psiPool?.max_value ?? psiPool?.max;
-  const psiCur = hasValue(psiCurrentRaw) ? num2(psiCurrentRaw, 0) : null;
-  const psiMax = hasValue(psiMaxRaw) ? num2(psiMaxRaw, 0) : null;
+  const psiCur = hasValue(psiCurrentRaw) ? num3(psiCurrentRaw, 0) : null;
+  const psiMax = hasValue(psiMaxRaw) ? num3(psiMaxRaw, 0) : null;
   const zones = mapZones(combat.body_parts ?? []);
   const effectsSection = section2(bundle, "effects");
   const effects = Array.isArray(effectsSection) ? effectsSection.map(mapEffect) : [];
@@ -5870,8 +6227,8 @@ function rawMagCaliberCode(m) {
 }
 function readMagazine(mag) {
   if (!mag || typeof mag !== "object") return null;
-  const max = num2(mag.capacity ?? mag.magazine_def?.capacity ?? mag.max_rounds ?? mag.max, 0);
-  const current2 = num2(mag.current_rounds ?? mag.current, 0);
+  const max = num3(mag.capacity ?? mag.magazine_def?.capacity ?? mag.max_rounds ?? mag.max, 0);
+  const current2 = num3(mag.current_rounds ?? mag.current, 0);
   const ammoType = str(mag.ammo_type_name) ?? str(mag.ammo_type?.name) ?? str(mag.ammo_type_key) ?? str(typeof mag.ammo_type === "string" ? mag.ammo_type : null) ?? "\u2014";
   const caliber = str(mag.magazine_def?.caliber) ?? str(mag.caliber) ?? str(mag.magazine_def?.caliber_name) ?? str(mag.caliber_name) ?? "";
   const caliberLabel = str(mag.magazine_def?.caliber_name) ?? str(mag.caliber_name) ?? caliber ?? "";
@@ -5970,8 +6327,8 @@ function mapWeapon(armory, selectedWeaponId = null) {
     loadedMagazine: loadedMag,
     reserveMagazines: reserve,
     ammo: {
-      current: loadedMag ? loadedMag.current : num2(w.ammo_current, 0),
-      max: loadedMag ? loadedMag.max : num2(w.ammo_max, 0)
+      current: loadedMag ? loadedMag.current : num3(w.ammo_current, 0),
+      max: loadedMag ? loadedMag.max : num3(w.ammo_max, 0)
     },
     reloadCandidateId: reserve[0]?.id ?? null,
     canReload,
@@ -6052,13 +6409,13 @@ function mapSkillAction(qa) {
     icon: str(qa?.icon_key) ?? str(qa?.icon) ?? "bolt",
     color: normalizeEnum(qa?.color_key ?? qa?.color, VALID_COLORS, mapSkillColor(source)),
     actionCost: normalizeActionCost(qa?.action_cost),
-    resourceCost: resourceCost != null && Number(resourceCost) > 0 ? { type: str(qa?.resource?.pool_code) ?? "resource", amount: num2(resourceCost, 0) } : null,
-    cooldownTurns: num2(qa?.cooldown_remaining_turns ?? qa?.cooldown_remaining ?? qa?.current_cooldown_rounds, 0),
+    resourceCost: resourceCost != null && Number(resourceCost) > 0 ? { type: str(qa?.resource?.pool_code) ?? "resource", amount: num3(resourceCost, 0) } : null,
+    cooldownTurns: num3(qa?.cooldown_remaining_turns ?? qa?.cooldown_remaining ?? qa?.current_cooldown_rounds, 0),
     weaponRequirements: Array.isArray(qa?.weapon_requirements) ? qa.weapon_requirements.map(String) : [],
     targeting: normalizeEnum(qa?.targeting_mode ?? qa?.targeting, VALID_TARGETING, TARGETING_MODES.none),
     allowsMultipleTargets: bool(qa?.allows_multiple_targets, false),
     usesPoint: bool(qa?.uses_point, false),
-    radius: qa?.radius != null ? num2(qa.radius) : null,
+    radius: qa?.radius != null ? num3(qa.radius) : null,
     isToggled: bool(qa?.is_toggled, false),
     disabledReason: str(qa?.disabled_reason) ?? (qa?.is_enabled === false ? "Disabled" : null),
     tooltip: str(qa?.tooltip) ?? str(qa?.description) ?? str(qa?.level_data?.effect_data?.summary) ?? ""
@@ -6080,7 +6437,7 @@ function mapSkills(abilitiesSection) {
   const quickSlots = slotsSource.map((s) => {
     const sid = str(s?.ability_id ?? s?.skill_id ?? s?.action_id);
     return {
-      index: num2(s?.slot_index ?? s?.index, 0),
+      index: num3(s?.slot_index ?? s?.index, 0),
       skillId: sid && idSet.has(sid) ? sid : null
     };
   }).sort((a, b) => a.index - b.index);
@@ -6098,7 +6455,7 @@ function mapBattleLog(bundle) {
   return {
     entries: entries3.map((entry, index) => ({
       id: str(entry?.id) ?? `log-${index}`,
-      sequence: num2(entry?.sequence ?? index, index),
+      sequence: num3(entry?.sequence ?? index, index),
       kind: str(entry?.kind) ?? "system",
       actor: str(entry?.actor) ?? str(entry?.actor_name) ?? "",
       action: str(entry?.action) ?? str(entry?.message) ?? str(entry?.summary) ?? "",
@@ -6496,6 +6853,23 @@ function buildBroadcastPayload(state, ephemeral = {}) {
   if (hudSnapshot && Array.isArray(ephemeral.combatLog)) {
     hudSnapshot = { ...hudSnapshot, battleLog: { entries: ephemeral.combatLog } };
   }
+  const combatSession = mapCombatRuntimeToSession(ephemeral.sessionRuntime ?? null, {
+    viewerPlayerId: s.viewer?.playerId ?? null,
+    viewerIsGm: String(s.viewer?.role ?? "").toUpperCase() === "GM",
+    selectedCharacterId: ready ? s.characterId ?? null : null
+  });
+  if (hudSnapshot) {
+    hudSnapshot = { ...hudSnapshot, combatSession };
+    if (combatSession.exists && combatSession.selectedCharacterParticipantId && hudSnapshot.entity) {
+      hudSnapshot = {
+        ...hudSnapshot,
+        entity: {
+          ...hudSnapshot.entity,
+          actions: { main: combatSession.mainAvailable, move: combatSession.moveAvailable }
+        }
+      };
+    }
+  }
   const debug = ready && s.runtimeBundle ? buildRuntimeDebugSummary(s.runtimeBundle, hudSnapshot, {
     selectionStatus: s.status,
     selectedTokenId: s.selectedItemId ?? null,
@@ -6527,6 +6901,8 @@ function buildBroadcastPayload(state, ephemeral = {}) {
     }
   }
   const basicAttackEval = ready ? evaluateBasicAttack(buildBasicAttackEvalCtx(s.characterId, hudSnapshot, ephemeral)) : { uiAllowed: false, uiBlockReason: "No character loaded." };
+  const attackGate = sessionAttackGate(hudSnapshot?.combatSession ?? null);
+  const gatedBasicAttack = basicAttackEval.uiAllowed && attackGate.blocked ? { uiAllowed: false, uiBlockReason: attackGate.reason } : basicAttackEval;
   return {
     status: s.status,
     selectedItemId: s.selectedItemId ?? null,
@@ -6547,8 +6923,8 @@ function buildBroadcastPayload(state, ephemeral = {}) {
       activeIntent,
       basicAttack: {
         inFlight: !!ephemeral.basicAttackInFlight,
-        uiAllowed: basicAttackEval.uiAllowed,
-        uiBlockReason: basicAttackEval.uiBlockReason
+        uiAllowed: gatedBasicAttack.uiAllowed,
+        uiBlockReason: gatedBasicAttack.uiBlockReason
       }
     },
     debug: ready ? debug : null,
@@ -6722,6 +7098,24 @@ function setupSceneSelection(hooks = {}) {
     if (disposed) return;
     let viewer = normalizeViewer({ playerId: player.id, role: player.role });
     const configured = hasSupabaseSettings(settings);
+    let sessionRuntime = null;
+    const sessionController = configured ? setupCombatSessionController({
+      context,
+      settings,
+      getViewer: () => viewer,
+      onSessionRuntime: (runtime) => {
+        sessionRuntime = runtime;
+        if (lastState) publishState(lastState);
+      }
+    }) : null;
+    if (sessionController) cleanups3.push(() => sessionController.cleanup());
+    function currentMappedSession() {
+      return mapCombatRuntimeToSession(sessionRuntime, {
+        viewerPlayerId: viewer?.playerId ?? null,
+        viewerIsGm: String(viewer?.role ?? "").toUpperCase() === "GM",
+        selectedCharacterId: ephemeral.characterId
+      });
+    }
     const adapter = createSceneSelectionAdapter({
       backendConfigured: configured,
       getViewer: () => viewer,
@@ -6793,7 +7187,8 @@ function setupSceneSelection(hooks = {}) {
         fireModeRpcResult: ephemeral.fireModeRpcResult,
         basicAttackInFlight: ephemeral.basicAttackInFlight,
         basicAttackResult: ephemeral.basicAttackResult,
-        combatLog
+        combatLog,
+        sessionRuntime
       };
     }
     function publishState(state) {
@@ -6902,6 +7297,15 @@ function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
+        const sessionAtRequest = currentMappedSession();
+        const sessionGate = sessionAttackGate(sessionAtRequest);
+        if (sessionGate.blocked) {
+          ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
+          ephemeral.basicAttackResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
+          logDebugEvent("attack", "session-gate-blocked", { reason: sessionGate.reason, sessionId: sessionAtRequest.id, round: sessionAtRequest.roundNumber }, false);
+          if (lastState) publishState(lastState);
+          return;
+        }
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, weaponId: evalCtx.weaponId, targetCharacterId: evalCtx.targetCharacterId };
         const bodyZoneLabel = getZoneLabel(DEFAULT_PROFILE_ID, evalCtx.bodyZoneId) || evalCtx.bodyZoneId;
         const ctx = buildBasicAttackCtx({
@@ -6909,7 +7313,12 @@ function setupSceneSelection(hooks = {}) {
           weaponId: evalCtx.weaponId,
           targetCharacterId: evalCtx.targetCharacterId,
           bodyPartId: evalCtx.resolvedBodyPartId,
-          distance: targeting.distance ?? 0
+          distance: targeting.distance ?? 0,
+          // Active session → carry the authoritative session context so the
+          // server can optimistic-concurrency-check it. (The server gate does
+          // NOT trust these fields — it derives participation itself.)
+          roomContext: sessionAtRequest.exists ? { encounterId: sessionAtRequest.id ?? void 0 } : {},
+          expectedEncounterVersion: expectedVersionOf(sessionAtRequest)
         });
         ephemeral.basicAttackInFlight = true;
         logDebugEvent("attack", "payload-prepared", { weaponId: ctx.weaponId, targetCharacterId: ctx.targetCharacterId, bodyZone: evalCtx.bodyZoneId });
@@ -6942,6 +7351,25 @@ function setupSceneSelection(hooks = {}) {
             buildRollResolutionDetails(buildAttackResolutionTrace(outcome)),
             true
           );
+        }
+        const sessionCost = outcome.raw?.combat_session ?? null;
+        if (sessionCost && typeof sessionCost === "object") {
+          logDebugEvent("attack", "action-cost-consumed", {
+            sessionId: sessionCost.encounter_id ?? null,
+            round: sessionCost.round ?? null,
+            participant: sessionCost.participant_entry_id ?? null,
+            versionBefore: sessionCost.state_version_before ?? null,
+            versionAfter: sessionCost.state_version_after ?? null,
+            mainAfter: sessionCost.main_available_after ?? null,
+            moveAfter: sessionCost.move_available_after ?? null,
+            usedReaction: sessionCost.used_reaction ?? null
+          });
+        }
+        if (outcome.code === "STATE_VERSION_CONFLICT") {
+          logDebugEvent("session", "stale-version", { command: "attack" }, false);
+        }
+        if ((sessionCost || outcome.code === "STATE_VERSION_CONFLICT") && sessionController) {
+          void sessionController.refresh();
         }
         if (stale) {
           if (lastState) publishState(lastState);
@@ -7008,6 +7436,15 @@ function setupSceneSelection(hooks = {}) {
         const magazineId = resolveReloadMagazineId(command, ephemeral, weapon) ?? "";
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
         logDebugEvent("magazine", "reload-requested", { weaponId, magazineId });
+        const reloadSession = currentMappedSession();
+        const reloadGate = sessionReloadGate(reloadSession);
+        if (reloadGate.blocked) {
+          ephemeral.commandStatus = { type: "error", message: reloadGate.reason };
+          ephemeral.reloadRpcResult = { ok: false, error: "SESSION_GATE", message: reloadGate.reason };
+          logDebugEvent("reload", "session-gate-blocked", { reason: reloadGate.reason, sessionId: reloadSession.id, round: reloadSession.roundNumber }, false);
+          if (lastState) publishState(lastState);
+          return;
+        }
         if (!weaponId || !magazineId || !profileId) {
           ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
           ephemeral.reloadRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/magazineId missing before RPC call." };
@@ -7017,8 +7454,14 @@ function setupSceneSelection(hooks = {}) {
           return;
         }
         try {
+          const expectedVersion = expectedVersionOf(reloadSession);
           const result = await loadWeaponProfileMagazine(
-            { character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magazineId },
+            {
+              character_weapon_id: weaponId,
+              profile_id: profileId,
+              character_magazine_id: magazineId,
+              ...expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}
+            },
             settings
           );
           const normalized = normalizeReloadRpcResult(result);
@@ -7028,11 +7471,28 @@ function setupSceneSelection(hooks = {}) {
             ephemeral.selectedReloadMagazineId = null;
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Reloaded." }));
             logDebugEvent("magazine", "reload-result", { weaponId, magazineId }, true);
+            const reloadCost = result?.combat_session ?? null;
+            if (reloadCost && typeof reloadCost === "object") {
+              logDebugEvent("reload", "action-cost-consumed", {
+                sessionId: reloadCost.encounter_id ?? null,
+                round: reloadCost.round ?? null,
+                participant: reloadCost.participant_entry_id ?? null,
+                versionBefore: reloadCost.state_version_before ?? null,
+                versionAfter: reloadCost.state_version_after ?? null,
+                mainAfter: reloadCost.main_available_after ?? null,
+                moveAfter: reloadCost.move_available_after ?? null
+              });
+              if (sessionController) void sessionController.refresh();
+            }
             await refetchCurrent();
           } else {
             ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
             logDebugEvent("magazine", "reload-result", { weaponId, magazineId, error: normalized.error }, false);
+            if (normalized.error === "STATE_VERSION_CONFLICT") {
+              logDebugEvent("session", "stale-version", { command: "reload" }, false);
+              if (sessionController) void sessionController.refresh();
+            }
             if (lastState) publishState(lastState);
           }
         } catch (error) {
@@ -7788,6 +8248,7 @@ var LEGACY_HUD_POPOVER_IDS = Object.freeze([
 var GUN_WEAPON_SELECTOR_POPOVER_ID = "odyssey-hud-gun-weapon-selector";
 var GUN_MAGAZINE_SELECTOR_POPOVER_ID = "odyssey-hud-gun-magazine-selector";
 var GUN_FIRE_MODE_SELECTOR_POPOVER_ID = "odyssey-hud-gun-fire-mode-selector";
+var GM_COMBAT_TRACKER_POPOVER_ID = "odyssey-hud-gm-combat-tracker";
 var HUD_EDITOR_POPOVER_ID = "odyssey-hud-editor";
 var HUD_PILL_POPOVER_ID = "odyssey-hud-pill";
 var BC_HUD_LAYOUT = "com.odyssey.combat-hud/layout";
@@ -7981,6 +8442,7 @@ var targetSelection = null;
 var gunWeaponSelectorOpen = false;
 var gunMagazineSelectorOpen = false;
 var gunFireModeSelectorOpen = false;
+var gmTrackerOpen = false;
 var lastActiveCharacterId = null;
 var lastSelectionPayload = null;
 var cleanups = [];
@@ -8165,6 +8627,45 @@ async function closeAllCompanionSelectors() {
   } catch (_e) {
   }
 }
+function gmTrackerRect() {
+  if (!lastLayout.modules?.combatControl) return null;
+  const ccRect = moduleRect("combatControl");
+  const width = 300;
+  const height = 360;
+  const gap = 4;
+  return {
+    left: Math.max(0, ccRect.left + (ccRect.width - width) / 2),
+    top: Math.max(0, ccRect.top - height - gap),
+    width,
+    height
+  };
+}
+async function setGmTrackerOpen(open) {
+  const next = Boolean(open);
+  if (next === gmTrackerOpen) return;
+  gmTrackerOpen = next;
+  if (mode !== "modules") return;
+  if (next) {
+    const rect = gmTrackerRect();
+    if (rect) {
+      try {
+        const url = new URL(pageUrl("gm-combat-tracker"));
+        url.searchParams.set("role", "gm");
+        await lib_default.popover.open({
+          id: GM_COMBAT_TRACKER_POPOVER_ID,
+          url: url.toString(),
+          ...paramsForRect(rect)
+        });
+      } catch (_e) {
+      }
+    }
+  } else {
+    try {
+      await lib_default.popover.close(GM_COMBAT_TRACKER_POPOVER_ID);
+    } catch (_e) {
+    }
+  }
+}
 function sendTargetingCommand(command) {
   try {
     lib_default.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, command, { destination: "LOCAL" });
@@ -8249,11 +8750,14 @@ async function applyMode() {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
     gunFireModeSelectorOpen = false;
+    gmTrackerOpen = false;
     await lib_default.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {
     });
     await lib_default.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {
     });
     await lib_default.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {
+    });
+    await lib_default.popover.close(GM_COMBAT_TRACKER_POPOVER_ID).catch(() => {
     });
     await closeEditorPopover();
     await closeAllModules();
@@ -8262,11 +8766,14 @@ async function applyMode() {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
     gunFireModeSelectorOpen = false;
+    gmTrackerOpen = false;
     await lib_default.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {
     });
     await lib_default.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {
     });
     await lib_default.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {
+    });
+    await lib_default.popover.close(GM_COMBAT_TRACKER_POPOVER_ID).catch(() => {
     });
     await closePill();
     await closeAllModules();
@@ -8357,6 +8864,15 @@ function setupCombatHudOverlay() {
           const fmType = String(data.type ?? "");
           if (fmType === "toggle-selector") await setGunFireModeSelectorOpen(!gunFireModeSelectorOpen);
           else if (fmType === "select" || fmType === "close-selector") await setGunFireModeSelectorOpen(false);
+          return;
+        }
+        if (data?.scope === "combat-hud" && data?.feature === "combat-session") {
+          if (String(data.type ?? "") === "toggle-tracker") {
+            const role = String(lastSelectionPayload?.viewer?.role ?? "").toUpperCase();
+            if (role !== "GM") return;
+            logDebugEvent("popover", gmTrackerOpen ? "gm-tracker-closed" : "gm-tracker-opened", {});
+            await setGmTrackerOpen(!gmTrackerOpen);
+          }
           return;
         }
         const type = String(data.type ?? "");

@@ -135,6 +135,14 @@ export function buildAttackPayload(ctx = {}) {
     if (trimmed) payload[key] = trimmed;
   }
 
+  // Phase 3E.0: combat-session optimistic concurrency — included only when
+  // the caller supplies a real version (active session); never fabricated.
+  if (ctx.expectedEncounterVersion !== null
+      && ctx.expectedEncounterVersion !== undefined
+      && Number.isFinite(Number(ctx.expectedEncounterVersion))) {
+    payload.expected_encounter_version = Number(ctx.expectedEncounterVersion);
+  }
+
   return payload;
 }
 

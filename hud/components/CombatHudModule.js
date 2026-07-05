@@ -270,6 +270,16 @@ export function mountCombatHudModule(options) {
       case "prepare-skill":
         integration.onCommand && integration.onCommand({ type: "prepare-skill", skillId: t.getAttribute("data-skill-id") });
         break;
+      case "end-turn":
+        // Phase 3E.0: disable immediately (until the authoritative session
+        // re-render) so a double-click can never fire a second request; the
+        // background controller is single-flight anyway.
+        t.setAttribute("disabled", "disabled");
+        integration.onCommand && integration.onCommand({ scope: "combat-hud", feature: "combat-session", type: "end-turn" });
+        break;
+      case "toggle-gm-tracker":
+        integration.onCommand && integration.onCommand({ scope: "combat-hud", feature: "combat-session", type: "toggle-tracker" });
+        break;
       default: break;
     }
   }

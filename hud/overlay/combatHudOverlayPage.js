@@ -20,7 +20,7 @@ import moduleStyles from "../components/combatHudModule.css";
 
 import { mountCombatHudModule } from "../components/CombatHudModule.js";
 import { mountCombatHudLayoutEditor } from "../components/CombatHudLayoutEditor.js";
-import { BC_HUD_COMMAND, BC_HUD_UI_STATE, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, parseHudUiState } from "./overlayConstants.js";
+import { BC_HUD_COMMAND, BC_HUD_UI_STATE, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_SESSION, BC_HUD_SESSION_REQUEST, parseHudUiState } from "./overlayConstants.js";
 import {
   HUD_MODULE_IDS,
   BC_HUD_LAYOUT,
@@ -32,6 +32,7 @@ import { ICON_MARK } from "../components/hudIcons.js";
 import { renderWeaponSelectorPanel } from "../components/WeaponSelectorPanel.js";
 import { renderMagazineSelectorPanel } from "../components/MagazineSelectorPanel.js";
 import { renderFireModeSelectorPanel } from "../components/FireModeSelectorPanel.js";
+import { renderGmCombatTracker } from "../session/GmCombatTrackerPanel.js";
 import { buildCompanionSelectorState } from "../scene/selectionView.js";
 
 const COMPANION_DEBUG = (() => {
@@ -231,6 +232,71 @@ function start() {
       } catch (_e) { /* standalone */ }
     }
     renderCompanion();
+    return;
+  }
+
+  // --- GM Combat Tracker companion popover (Phase 3E.0, GM-only) ---
+  // Receives the pre-mapped SAFE session snapshot + Start-Combat candidates
+  // over the session channel; every button is a namespaced combat-session
+  // command handled by the background session controller / overlay controller.
+  if (moduleParam === "gm-combat-tracker") {
+    let session = null;
+    let candidates = [];
+    let busy = false;
+
+    function renderTracker() {
+      root.innerHTML = "";
+      const host = document.createElement("div");
+      host.className = "odyssey-hud ohud-module";
+      host.setAttribute("data-module", "gm-combat-tracker");
+      host.innerHTML = renderGmCombatTracker({
+        session,
+        candidates,
+        viewerRole: uiState.viewerRole === "gm" ? "gm" : "player",
+        busy,
+      });
+      root.appendChild(host);
+    }
+
+    root.addEventListener("click", (e) => {
+      const target = e.target.closest("[data-action]");
+      if (!target || !available || busy) return;
+      const action = target.getAttribute("data-action");
+      const sendSession = (type, extra = {}) =>
+        send(BC_HUD_COMMAND, { scope: "combat-hud", feature: "combat-session", type, ...extra });
+      if (action === "gm-start-combat") {
+        // Unchecked characters are EXCLUDED from the encounter.
+        const excluded = [...root.querySelectorAll("[data-gmct-candidate]")]
+          .filter((box) => !box.checked)
+          .map((box) => box.getAttribute("data-gmct-candidate"));
+        busy = true;
+        renderTracker();
+        sendSession("gm-start", { excludedCharacterIds: excluded });
+      } else if (action === "gm-skip-turn") {
+        busy = true; renderTracker();
+        sendSession("gm-skip-turn");
+      } else if (action === "gm-force-next") {
+        busy = true; renderTracker();
+        sendSession("gm-force-next");
+      } else if (action === "gm-end-combat") {
+        busy = true; renderTracker();
+        sendSession("gm-end");
+      }
+    });
+
+    if (available) {
+      try {
+        OBR.broadcast.onMessage(BC_HUD_SESSION, (event) => {
+          session = event?.data?.session ?? null;
+          candidates = Array.isArray(event?.data?.candidates) ? event.data.candidates : [];
+          busy = false;
+          renderTracker();
+        });
+        send(BC_HUD_SESSION_REQUEST, {});
+        send(BC_HUD_COMMAND, { scope: "combat-hud", feature: "combat-session", type: "load-start-candidates" });
+      } catch (_e) { /* standalone */ }
+    }
+    renderTracker();
     return;
   }
 

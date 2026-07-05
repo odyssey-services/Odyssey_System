@@ -11652,6 +11652,9 @@ function buildAttackPayload(ctx = {}) {
     const trimmed = String(value ?? "").trim();
     if (trimmed) payload[key] = trimmed;
   }
+  if (ctx.expectedEncounterVersion !== null && ctx.expectedEncounterVersion !== void 0 && Number.isFinite(Number(ctx.expectedEncounterVersion))) {
+    payload.expected_encounter_version = Number(ctx.expectedEncounterVersion);
+  }
   return payload;
 }
 function firstDefined(...values) {
