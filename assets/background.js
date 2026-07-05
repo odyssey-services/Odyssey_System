@@ -5991,19 +5991,6 @@ function getSquareCellCenterAnchor(settings) {
     y: Number(settings.anchor?.y ?? 0) || 0
   };
 }
-function getSquareCellScenePosition(grid, cell) {
-  const settings = normalizeTacticalGridSettings(grid);
-  if (!settings || settings.gridType !== "square" || !cell) {
-    return null;
-  }
-  const q = Number(cell.q ?? cell.cell_q ?? 0) || 0;
-  const r = Number(cell.r ?? cell.cell_r ?? 0) || 0;
-  const anchor = getSquareCellCenterAnchor(settings);
-  return {
-    x: anchor.x + q * settings.gridDpi,
-    y: anchor.y + r * settings.gridDpi
-  };
-}
 function getSquareCellFromScenePosition(grid, position) {
   const settings = normalizeTacticalGridSettings(grid);
   if (!settings || settings.gridType !== "square" || !position) {
@@ -6040,44 +6027,6 @@ function sceneToCell(grid, position) {
     return axialRound(q, r);
   }
   return null;
-}
-function cellToScene(grid, cell) {
-  const settings = normalizeTacticalGridSettings(grid);
-  if (!settings || !cell) return null;
-  const q = Number(cell.q ?? cell.cell_q ?? 0) || 0;
-  const r = Number(cell.r ?? cell.cell_r ?? 0) || 0;
-  if (settings.gridType === "square") {
-    return getSquareCellScenePosition(settings, { q, r });
-  }
-  if (settings.gridType === "hex_vertical") {
-    const size = settings.gridDpi / SQRT3;
-    return {
-      x: settings.anchor.x + size * SQRT3 * (q + r / 2),
-      y: settings.anchor.y + size * 1.5 * r
-    };
-  }
-  if (settings.gridType === "hex_horizontal") {
-    const size = settings.gridDpi / SQRT3;
-    return {
-      x: settings.anchor.x + size * 1.5 * q,
-      y: settings.anchor.y + size * SQRT3 * (r + q / 2)
-    };
-  }
-  return null;
-}
-function snapSquarePointerToCellCenter(grid, pointerPosition) {
-  const settings = normalizeTacticalGridSettings(grid);
-  if (!settings || settings.gridType !== "square" || !pointerPosition) {
-    return null;
-  }
-  const cell = getSquareCellFromScenePosition(settings, pointerPosition);
-  if (!cell) {
-    return null;
-  }
-  return {
-    cell,
-    scene: getSquareCellScenePosition(settings, cell)
-  };
 }
 function computeDistanceCells(grid, fromCell, toCell) {
   const settings = normalizeTacticalGridSettings(grid);
@@ -6394,7 +6343,7 @@ function setupCombatSessionController({ context, settings, getViewer, onSessionR
       const result = await call();
       const ok = result?.ok !== false;
       if (result?.error === "STATE_VERSION_CONFLICT") {
-        logDebugEvent("session", "stale-version", { command: kind, serverVersion: result?.encounter_state_version ?? null }, false);
+        logDebugEvent("session", "stale-version", { command: kind, serverVersion: result?.encounter_state_version ?? null }, true);
       }
       logDebugEvent("session", kind, { ok, error: ok ? null : result?.error ?? null, ...extraDetails }, ok);
       if (ok && result && typeof result === "object" && result.encounter !== void 0) {
@@ -7862,7 +7811,7 @@ function setupSceneSelection(hooks = {}) {
           });
         }
         if (outcome.code === "STATE_VERSION_CONFLICT") {
-          logDebugEvent("session", "stale-version", { command: "attack" }, false);
+          logDebugEvent("session", "stale-version", { command: "attack" }, true);
         }
         if ((sessionCost || outcome.code === "STATE_VERSION_CONFLICT") && sessionController) {
           void sessionController.refresh();
@@ -7986,7 +7935,7 @@ function setupSceneSelection(hooks = {}) {
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
             logDebugEvent("magazine", "reload-result", { weaponId, magazineId, error: normalized.error }, false);
             if (normalized.error === "STATE_VERSION_CONFLICT") {
-              logDebugEvent("session", "stale-version", { command: "reload" }, false);
+              logDebugEvent("session", "stale-version", { command: "reload" }, true);
               if (sessionController) void sessionController.refresh();
             }
             if (lastState) publishState(lastState);
@@ -10336,7 +10285,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.42";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.44";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;
@@ -10844,129 +10793,10 @@ function setupTacticalMoveTool({ runtime }) {
       reason: String(reason ?? "").trim()
     });
   }
-  function buildSquarePreviewFromPointer(pointerPosition) {
-    const grid = state.grid;
-    const participant = state.selectedParticipant;
-    const tokenId = String(state.selectedToken?.id ?? participant?.token_id ?? "").trim();
-    if (!grid || !participant?.position || !pointerPosition) {
-      return null;
-    }
-    const origin = getSelectedParticipantOrigin();
-    if (!origin) {
-      addDiagnosticEntry(
-        "info",
-        "Combat preview unavailable",
-        buildPreviewDiagnosticDetails({ tokenId, reason: "missing-participant-position" })
-      );
-      return null;
-    }
-    const snapped = snapSquarePointerToCellCenter(grid, pointerPosition);
-    if (!snapped) {
-      addDiagnosticEntry(
-        "info",
-        "Combat preview unavailable",
-        buildPreviewDiagnosticDetails({ tokenId, reason: "square-snap-failed" })
-      );
-      return null;
-    }
-    const distanceCells = computeDistanceCells(grid, origin.cell, snapped.cell);
-    const moveLimitM = Number(participant.move_current ?? 0) || 0;
-    const moveCostM = distanceCells * Math.max(Number(grid.metersPerCell ?? 1) || 1, 1);
-    const preview = {
-      cell: snapped.cell,
-      scene: snapped.scene,
-      distanceCells,
-      moveCostM,
-      moveLimitM,
-      remainingMoveM: moveLimitM - moveCostM,
-      inRange: moveCostM <= moveLimitM
-    };
-    addDiagnosticEntry(
-      "info",
-      "Combat preview built",
-      formatPreviewDiagnostics({
-        tokenId,
-        cellQ: Number(snapped.cell?.q ?? 0) || 0,
-        cellR: Number(snapped.cell?.r ?? 0) || 0,
-        sceneX: Number(snapped.scene?.x ?? 0) || 0,
-        sceneY: Number(snapped.scene?.y ?? 0) || 0,
-        distanceCells: Number(distanceCells ?? 0) || 0,
-        moveCostM: Number(moveCostM ?? 0) || 0,
-        gridDpi: Number(grid?.gridDpi ?? 0) || 0,
-        anchorX: Number(grid?.anchor?.x ?? 0) || 0,
-        anchorY: Number(grid?.anchor?.y ?? 0) || 0
-      })
-    );
-    return preview;
-  }
-  function buildPreviewFromSquareCell(cell) {
-    const grid = state.grid;
-    const participant = state.selectedParticipant;
-    const tokenId = String(state.selectedToken?.id ?? participant?.token_id ?? "").trim();
-    if (!grid || !participant?.position || !cell) {
-      return null;
-    }
-    const origin = getSelectedParticipantOrigin();
-    if (!origin) {
-      return null;
-    }
-    const scene = cellToScene(grid, cell);
-    if (!scene) {
-      addDiagnosticEntry(
-        "info",
-        "Combat preview unavailable",
-        buildPreviewDiagnosticDetails({ tokenId, cell, reason: "square-cell-to-scene-failed" })
-      );
-      return null;
-    }
-    const distanceCells = computeDistanceCells(grid, origin.cell, cell);
-    const moveLimitM = Number(participant.move_current ?? 0) || 0;
-    const moveCostM = distanceCells * Math.max(Number(grid.metersPerCell ?? 1) || 1, 1);
-    return {
-      cell: {
-        q: Number(cell.q ?? 0) || 0,
-        r: Number(cell.r ?? 0) || 0
-      },
-      scene: {
-        x: Number(scene.x ?? 0) || 0,
-        y: Number(scene.y ?? 0) || 0
-      },
-      distanceCells,
-      moveCostM,
-      moveLimitM,
-      remainingMoveM: moveLimitM - moveCostM,
-      inRange: moveCostM <= moveLimitM
-    };
-  }
-  function interpolateSquareCells(fromCell, toCell) {
-    if (!fromCell || !toCell) return [];
-    const fromQ = Number(fromCell.q ?? 0) || 0;
-    const fromR = Number(fromCell.r ?? 0) || 0;
-    const toQ = Number(toCell.q ?? 0) || 0;
-    const toR = Number(toCell.r ?? 0) || 0;
-    const steps = Math.max(Math.abs(toQ - fromQ), Math.abs(toR - fromR));
-    if (steps <= 0) {
-      return [{ q: toQ, r: toR }];
-    }
-    const path = [];
-    for (let step = 1; step <= steps; step += 1) {
-      path.push({
-        q: Math.round(fromQ + (toQ - fromQ) * step / steps),
-        r: Math.round(fromR + (toR - fromR) * step / steps)
-      });
-    }
-    return path;
-  }
-  function getLatestQueuedOrRenderedPreview() {
-    return state.previewRenderQueue.at(-1) ?? state.preview ?? null;
-  }
   async function buildPreviewFromPointer(pointerPosition) {
     const grid = state.grid;
     const participant = state.selectedParticipant;
     const tokenId = String(state.selectedToken?.id ?? participant?.token_id ?? "").trim();
-    if (grid?.gridType === "square") {
-      return buildSquarePreviewFromPointer(pointerPosition);
-    }
     if (!grid) {
       addDiagnosticEntry(
         "info",
@@ -11095,19 +10925,6 @@ function setupTacticalMoveTool({ runtime }) {
   }
   function queuePreviewPointer(pointerPosition) {
     if (!pointerPosition) return;
-    if (state.grid?.gridType === "square") {
-      const nextPreview = buildSquarePreviewFromPointer(pointerPosition);
-      if (!nextPreview) return;
-      const previousPreview = getLatestQueuedOrRenderedPreview();
-      const previousCell = previousPreview?.cell ?? getSelectedParticipantOrigin()?.cell ?? null;
-      const path = interpolateSquareCells(previousCell, nextPreview.cell);
-      for (const pathCell of path) {
-        const preview = buildPreviewFromSquareCell(pathCell);
-        if (!preview) continue;
-        queuePreviewRender(preview);
-      }
-      return;
-    }
     const clonedPointer = {
       x: Number(pointerPosition.x ?? 0) || 0,
       y: Number(pointerPosition.y ?? 0) || 0
@@ -11632,7 +11449,7 @@ function setupTacticalMoveTool({ runtime }) {
         tokenId: String(state.selectedToken?.id ?? "").trim()
       })
     );
-    const finalPreview = state.grid?.gridType === "square" ? buildSquarePreviewFromPointer(event.pointerPosition) : await buildPreviewFromPointer(event.pointerPosition);
+    const finalPreview = await buildPreviewFromPointer(event.pointerPosition);
     state.previewPointerQueue = [];
     state.previewRenderQueue = [];
     if (finalPreview) {

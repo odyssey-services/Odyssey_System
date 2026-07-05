@@ -192,7 +192,7 @@ export function setupCombatSessionController({ context, settings, getViewer, onS
       const result = await call();
       const ok = result?.ok !== false;
       if (result?.error === "STATE_VERSION_CONFLICT") {
-        logDebugEvent("session", "stale-version", { command: kind, serverVersion: result?.encounter_state_version ?? null }, false);
+        logDebugEvent("session", "stale-version", { command: kind, serverVersion: result?.encounter_state_version ?? null }, true);
       }
       logDebugEvent("session", kind, { ok, error: ok ? null : result?.error ?? null, ...extraDetails }, ok);
       if (ok && result && typeof result === "object" && result.encounter !== undefined) {

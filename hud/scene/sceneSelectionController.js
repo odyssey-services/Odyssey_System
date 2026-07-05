@@ -485,7 +485,7 @@ export function setupSceneSelection(hooks = {}) {
           });
         }
         if (outcome.code === "STATE_VERSION_CONFLICT") {
-          logDebugEvent("session", "stale-version", { command: "attack" }, false);
+          logDebugEvent("session", "stale-version", { command: "attack" }, true);
         }
         if ((sessionCost || outcome.code === "STATE_VERSION_CONFLICT") && sessionController) {
           void sessionController.refresh();
@@ -645,7 +645,7 @@ export function setupSceneSelection(hooks = {}) {
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
             logDebugEvent("magazine", "reload-result", { weaponId, magazineId, error: normalized.error }, false);
             if (normalized.error === "STATE_VERSION_CONFLICT") {
-              logDebugEvent("session", "stale-version", { command: "reload" }, false);
+              logDebugEvent("session", "stale-version", { command: "reload" }, true);
               if (sessionController) void sessionController.refresh();
             }
             if (lastState) publishState(lastState);

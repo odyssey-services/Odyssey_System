@@ -35722,6 +35722,18 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         return null;
       }
       if (result && result.ok === false) {
+        if (result.error === "STATE_VERSION_CONFLICT" || result.error === "STALE_MOVEMENT_STATE") {
+          await Promise.allSettled([
+            refresh(),
+            refreshSelectedTokenContext(),
+            refreshSceneCombatSnapshot(),
+            refreshTacticalSnapshot(true)
+          ]);
+          setNotice("info", "Combat state was updated and re-synced.");
+          state.busy = false;
+          render();
+          return null;
+        }
         setNotice("err", `${esc2(describeError(result.error, result.message))}${result.error ? ` <span class="cp-mono">[${esc2(result.error)}]</span>` : ""}`);
         state.busy = false;
         render();
@@ -36180,7 +36192,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         <div class="cp-muted" style="margin-top:6px">${esc2(moveHint)}</div>
         ${preview ? `<div class="cp-muted" style="margin-top:6px">Preview: ${preview.moveCostM} m, remaining ${preview.remainingMoveM} m${preview.inRange ? "" : " - out of range"}</div>` : ""}
         ${toolStatus?.error ? `<div class="cp-muted" style="margin-top:6px;color:#ff9b9b">${esc2(toolStatus.error)}</div>` : ""}
-        ${mismatch ? `<div class="cp-muted" style="margin-top:6px;color:#ffd58a">${autoSyncInFlight ? "Scene token position differs from Supabase. Auto-syncing now." : "Scene token position differs from Supabase. It will be auto-synced automatically."}</div>` : ""}
+        ${isGM() && autoSyncInFlight ? `<div class="cp-muted" style="margin-top:6px">Syncing token position...</div>` : ""}
         <div class="button-row" style="margin-top:8px">
           ${isGM() ? `<button type="button" class="${gmOverrideEnabled ? "" : "secondary"}" data-ref="toggleGmMoveOverride" ${state.busy ? "disabled" : ""}>${gmOverrideEnabled ? "Disable GM override" : "Enable GM override"}</button>` : ""}
         </div>
