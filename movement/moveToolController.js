@@ -9,6 +9,7 @@ import {
   getPlayerInfo,
   getRoomSceneContext,
   getSelectedOwlbearTokens,
+  snapScenePosition,
   subscribePlayerChanges,
   subscribeSceneItems,
   subscribeToolChanges,
@@ -18,7 +19,6 @@ import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../bridge/setting
 import { COMBAT_MOVEMENT_METADATA_KEY } from "../constants/metadataKeys.js";
 import { BC_HUD_SESSION } from "../hud/overlay/overlayConstants.js";
 import {
-  cellToScene,
   computeDistanceCells,
   normalizeTacticalGridSettings,
   sameCell,
@@ -42,7 +42,7 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.35";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.36";
 
 const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
@@ -87,6 +87,8 @@ function createInitialState() {
     permission: null,
     preview: null,
     previewCreated: false,
+    previewGhostCreated: false,
+    previewRequestVersion: 0,
     pending: false,
     dragActive: false,
     toolRegistered: false,
@@ -375,6 +377,7 @@ export function setupTacticalMoveTool({ runtime }) {
   }
 
   async function clearPreview({ reason = "preview-cleared", silent = false } = {}) {
+    state.previewRequestVersion += 1;
     try {
       await OBR.scene.local.deleteItems(PREVIEW_IDS);
     } catch {
@@ -382,6 +385,7 @@ export function setupTacticalMoveTool({ runtime }) {
     }
     state.preview = null;
     state.previewCreated = false;
+    state.previewGhostCreated = false;
     state.dragActive = false;
     if (!silent) {
       await publishStatus({ reason });
@@ -419,9 +423,10 @@ export function setupTacticalMoveTool({ runtime }) {
       if (!state.previewCreated) {
         await OBR.scene.local.addItems(addItems);
         state.previewCreated = true;
+        state.previewGhostCreated = !!items.ghost;
       } else {
         const updateIds = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID];
-        if (items.ghost) updateIds.push(PREVIEW_GHOST_ID);
+        if (items.ghost && state.previewGhostCreated) updateIds.push(PREVIEW_GHOST_ID);
         await OBR.scene.local.updateItems(updateIds, (sceneItems) => {
           for (const item of sceneItems) {
             if (item.id === PREVIEW_LINE_ID && item.type === "LINE") {
@@ -441,6 +446,10 @@ export function setupTacticalMoveTool({ runtime }) {
             }
           }
         });
+        if (items.ghost && !state.previewGhostCreated) {
+          await OBR.scene.local.addItems([items.ghost]);
+          state.previewGhostCreated = true;
+        }
       }
     } catch (error) {
       const normalized = normalizeError(error, "Unable to update movement preview.");
@@ -465,19 +474,25 @@ export function setupTacticalMoveTool({ runtime }) {
     };
   }
 
-  function buildPreviewFromPointer(pointerPosition) {
+  async function buildPreviewFromPointer(pointerPosition) {
     const grid = state.grid;
     const participant = state.selectedParticipant;
-    if (!grid || !participant?.position) return null;
+    if (!grid || !participant?.position || !pointerPosition) return null;
 
     const origin = getSelectedParticipantOrigin();
     if (!origin) return null;
 
-    const cell = sceneToCell(grid, pointerPosition);
-    if (!cell) return null;
+    const snappedScene = await snapScenePosition(
+      pointerPosition,
+      1,
+      false,
+      true,
+    );
 
-    const snappedScene = cellToScene(grid, cell);
     if (!snappedScene) return null;
+
+    const cell = sceneToCell(grid, snappedScene);
+    if (!cell) return null;
 
     const distanceCells = computeDistanceCells(grid, origin.cell, cell);
     const moveCostM = distanceCells * Math.max(Number(grid.metersPerCell ?? 1) || 1, 1);
@@ -485,7 +500,10 @@ export function setupTacticalMoveTool({ runtime }) {
 
     return {
       cell,
-      scene: snappedScene,
+      scene: {
+        x: Number(snappedScene.x) || 0,
+        y: Number(snappedScene.y) || 0,
+      },
       distanceCells,
       moveCostM,
       moveLimitM,
@@ -943,7 +961,12 @@ export function setupTacticalMoveTool({ runtime }) {
     }
 
     state.dragActive = true;
-    const preview = buildPreviewFromPointer(event.pointerPosition);
+    state.previewRequestVersion += 1;
+    const requestVersion = state.previewRequestVersion;
+    const preview = await buildPreviewFromPointer(event.pointerPosition);
+    if (requestVersion !== state.previewRequestVersion || !state.dragActive) {
+      return;
+    }
     if (preview) {
       await updatePreview(preview);
     }
@@ -951,16 +974,32 @@ export function setupTacticalMoveTool({ runtime }) {
 
   async function handleToolDragMove(_context, event) {
     if (!state.dragActive || !state.permission?.canPreview) return;
-    const preview = buildPreviewFromPointer(event.pointerPosition);
+    state.previewRequestVersion += 1;
+    const requestVersion = state.previewRequestVersion;
+    const preview = await buildPreviewFromPointer(event.pointerPosition);
+    if (requestVersion !== state.previewRequestVersion || !state.dragActive) {
+      return;
+    }
     if (!preview) return;
     await updatePreview(preview);
   }
 
   async function handleToolDragEnd(_context, event) {
     if (!state.dragActive) return;
+    state.previewRequestVersion += 1;
+    const requestVersion = state.previewRequestVersion;
+    const preview = await buildPreviewFromPointer(event.pointerPosition);
+    if (requestVersion !== state.previewRequestVersion) {
+      return;
+    }
     state.dragActive = false;
-    const preview = buildPreviewFromPointer(event.pointerPosition) ?? state.preview;
-    await commitPreview(preview);
+    const resolvedPreview = preview ?? state.preview;
+    if (!resolvedPreview) {
+      await clearPreview({ reason: "drag-end-no-preview", silent: true });
+      await publishStatus({ reason: "drag-end-no-preview" });
+      return;
+    }
+    await commitPreview(resolvedPreview);
   }
 
   async function handleToolDragCancel() {

@@ -8,10 +8,63 @@ function ensureObject(value) {
   return value && typeof value === "object" ? value : {};
 }
 
+function ensureVector2(value, fallback = { x: 1, y: 1 }) {
+  return {
+    x: Number(value?.x ?? fallback.x ?? 1) || 1,
+    y: Number(value?.y ?? fallback.y ?? 1) || 1,
+  };
+}
+
+function ensureImageGrid(value) {
+  const grid = value && typeof value === "object" ? value : {};
+  return {
+    dpi: Math.max(1, Number(grid.dpi ?? 1) || 1),
+    offset: ensureVector2(grid.offset, { x: 0, y: 0 }),
+  };
+}
+
 function isImageToken(item) {
   return String(item?.type ?? "").trim().toUpperCase() === "IMAGE"
     && item?.image
-    && item?.grid;
+    && typeof item.image === "object"
+    && typeof item.image.url === "string"
+    && item.image.url.trim() !== "";
+}
+
+function buildGhostToken(sourceToken, position) {
+  if (!isImageToken(sourceToken) || !position) return null;
+
+  const token = ensureObject(sourceToken);
+  const ghost = buildImage(token.image, ensureImageGrid(token.grid))
+    .id(PREVIEW_GHOST_ID)
+    .name("Combat Movement Ghost")
+    .layer("CHARACTER")
+    .locked(true)
+    .disableHit(true)
+    .disableAutoZIndex(true)
+    .position({
+      x: Number(position.x) || 0,
+      y: Number(position.y) || 0,
+    })
+    .rotation(Number(token.rotation ?? 0) || 0)
+    .scale(ensureVector2(token.scale))
+    .visible(true)
+    .metadata({});
+
+  if (Array.isArray(token.disableAttachmentBehavior) && token.disableAttachmentBehavior.length) {
+    ghost.disableAttachmentBehavior(token.disableAttachmentBehavior);
+  }
+  if (typeof token.description === "string" && token.description.trim()) {
+    ghost.description(token.description);
+  }
+  if (token.text && typeof token.text === "object") {
+    ghost.text(token.text);
+  }
+  if (token.textItemType) {
+    ghost.textItemType(token.textItemType);
+  }
+
+  return ghost.build();
 }
 
 export function buildPreviewLabel(preview) {
@@ -63,24 +116,7 @@ export function buildPreviewItems({ preview, originScene, selectedToken }) {
     .build();
 
   let ghost = null;
-  if (isImageToken(selectedToken)) {
-    const token = ensureObject(selectedToken);
-    ghost = buildImage(token.image, token.grid)
-      .id(PREVIEW_GHOST_ID)
-      .name("Combat Movement Ghost")
-      .layer("CHARACTER")
-      .locked(true)
-      .disableHit(true)
-      .disableAutoZIndex(true)
-      .position(preview.scene)
-      .rotation(Number(token.rotation ?? 0) || 0)
-      .scale(token.scale ?? { x: 1, y: 1 })
-      .visible(true)
-      .metadata({})
-      .text(token.text ?? { plainText: "" })
-      .textItemType(token.textItemType ?? "LABEL")
-      .build();
-  }
+  ghost = buildGhostToken(selectedToken, preview.scene);
 
   return {
     line,

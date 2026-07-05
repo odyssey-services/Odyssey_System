@@ -21,7 +21,7 @@ export async function buildOwlbearTacticalGridPayload() {
   if (!gridType || !distanceMode || !(Number(grid.dpi) > 0)) {
     throw new Error("Only Square, Hex Vertical, and Hex Horizontal grids are supported for tactical movement.");
   }
-  const anchor = await snapScenePosition({ x: 0, y: 0 }, 1);
+  const anchor = await snapScenePosition({ x: 0, y: 0 }, 1, false, true);
   if (!anchor) {
     throw new Error("Unable to resolve tactical grid anchor from Owlbear.");
   }
@@ -94,7 +94,7 @@ export async function syncCombatScenePositions({
   for (const participant of participants) {
     const item = sceneItemsById.get(String(participant.token_id ?? "").trim());
     if (!item?.position) continue;
-    const snapped = await snapScenePosition(item.position, 1);
+    const snapped = await snapScenePosition(item.position, 1, false, true);
     if (!snapped) continue;
     const cell = sceneToCell(gridPayload, snapped);
     if (!cell) continue;

@@ -6010,33 +6010,6 @@ function sceneToCell(grid, position) {
   }
   return null;
 }
-function cellToScene(grid, cell) {
-  const settings = normalizeTacticalGridSettings(grid);
-  if (!settings || !cell) return null;
-  const q = Number(cell.q ?? cell.cell_q ?? 0) || 0;
-  const r = Number(cell.r ?? cell.cell_r ?? 0) || 0;
-  if (settings.gridType === "square") {
-    return {
-      x: settings.anchor.x + q * settings.gridDpi,
-      y: settings.anchor.y + r * settings.gridDpi
-    };
-  }
-  if (settings.gridType === "hex_vertical") {
-    const size = settings.gridDpi / SQRT3;
-    return {
-      x: settings.anchor.x + size * SQRT3 * (q + r / 2),
-      y: settings.anchor.y + size * 1.5 * r
-    };
-  }
-  if (settings.gridType === "hex_horizontal") {
-    const size = settings.gridDpi / SQRT3;
-    return {
-      x: settings.anchor.x + size * 1.5 * q,
-      y: settings.anchor.y + size * SQRT3 * (r + q / 2)
-    };
-  }
-  return null;
-}
 function computeDistanceCells(grid, fromCell, toCell) {
   const settings = normalizeTacticalGridSettings(grid);
   if (!settings || !fromCell || !toCell) return 0;
@@ -6070,7 +6043,7 @@ async function buildOwlbearTacticalGridPayload() {
   if (!gridType || !distanceMode || !(Number(grid.dpi) > 0)) {
     throw new Error("Only Square, Hex Vertical, and Hex Horizontal grids are supported for tactical movement.");
   }
-  const anchor = await snapScenePosition({ x: 0, y: 0 }, 1);
+  const anchor = await snapScenePosition({ x: 0, y: 0 }, 1, false, true);
   if (!anchor) {
     throw new Error("Unable to resolve tactical grid anchor from Owlbear.");
   }
@@ -6134,7 +6107,7 @@ async function syncCombatScenePositions({
   for (const participant of participants) {
     const item = sceneItemsById.get(String(participant.token_id ?? "").trim());
     if (!item?.position) continue;
-    const snapped = await snapScenePosition(item.position, 1);
+    const snapped = await snapScenePosition(item.position, 1, false, true);
     if (!snapped) continue;
     const cell = sceneToCell(gridPayload, snapped);
     if (!cell) continue;
@@ -10106,8 +10079,42 @@ var PREVIEW_GHOST_ID = "com.odyssey-system/combat-movement-preview-ghost";
 function ensureObject(value) {
   return value && typeof value === "object" ? value : {};
 }
+function ensureVector2(value, fallback = { x: 1, y: 1 }) {
+  return {
+    x: Number(value?.x ?? fallback.x ?? 1) || 1,
+    y: Number(value?.y ?? fallback.y ?? 1) || 1
+  };
+}
+function ensureImageGrid(value) {
+  const grid = value && typeof value === "object" ? value : {};
+  return {
+    dpi: Math.max(1, Number(grid.dpi ?? 1) || 1),
+    offset: ensureVector2(grid.offset, { x: 0, y: 0 })
+  };
+}
 function isImageToken(item) {
-  return String(item?.type ?? "").trim().toUpperCase() === "IMAGE" && item?.image && item?.grid;
+  return String(item?.type ?? "").trim().toUpperCase() === "IMAGE" && item?.image && typeof item.image === "object" && typeof item.image.url === "string" && item.image.url.trim() !== "";
+}
+function buildGhostToken(sourceToken, position) {
+  if (!isImageToken(sourceToken) || !position) return null;
+  const token = ensureObject(sourceToken);
+  const ghost = buildImage(token.image, ensureImageGrid(token.grid)).id(PREVIEW_GHOST_ID).name("Combat Movement Ghost").layer("CHARACTER").locked(true).disableHit(true).disableAutoZIndex(true).position({
+    x: Number(position.x) || 0,
+    y: Number(position.y) || 0
+  }).rotation(Number(token.rotation ?? 0) || 0).scale(ensureVector2(token.scale)).visible(true).metadata({});
+  if (Array.isArray(token.disableAttachmentBehavior) && token.disableAttachmentBehavior.length) {
+    ghost.disableAttachmentBehavior(token.disableAttachmentBehavior);
+  }
+  if (typeof token.description === "string" && token.description.trim()) {
+    ghost.description(token.description);
+  }
+  if (token.text && typeof token.text === "object") {
+    ghost.text(token.text);
+  }
+  if (token.textItemType) {
+    ghost.textItemType(token.textItemType);
+  }
+  return ghost.build();
 }
 function buildPreviewLabel(preview) {
   if (!preview) return "";
@@ -10125,10 +10132,7 @@ function buildPreviewItems({ preview, originScene, selectedToken }) {
   const line = buildLine().id(PREVIEW_LINE_ID).name("Combat Movement Preview").layer("POINTER").locked(true).disableHit(true).startPosition(originScene).endPosition(preview.scene).strokeColor(lineColor).strokeOpacity(0.98).strokeWidth(6).strokeDash([12, 8]).disableAutoZIndex(true).build();
   const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).position({ x: preview.scene.x + 12, y: preview.scene.y - 22 }).plainText(buildPreviewLabel(preview)).fontSize(18).fontWeight(700).padding(10).textAlign("LEFT").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor("#08111f").strokeOpacity(0.92).strokeWidth(5).build();
   let ghost = null;
-  if (isImageToken(selectedToken)) {
-    const token = ensureObject(selectedToken);
-    ghost = buildImage(token.image, token.grid).id(PREVIEW_GHOST_ID).name("Combat Movement Ghost").layer("CHARACTER").locked(true).disableHit(true).disableAutoZIndex(true).position(preview.scene).rotation(Number(token.rotation ?? 0) || 0).scale(token.scale ?? { x: 1, y: 1 }).visible(true).metadata({}).text(token.text ?? { plainText: "" }).textItemType(token.textItemType ?? "LABEL").build();
-  }
+  ghost = buildGhostToken(selectedToken, preview.scene);
   return {
     line,
     label,
@@ -10252,7 +10256,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.35";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.36";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;
@@ -10288,6 +10292,8 @@ function createInitialState() {
     permission: null,
     preview: null,
     previewCreated: false,
+    previewGhostCreated: false,
+    previewRequestVersion: 0,
     pending: false,
     dragActive: false,
     toolRegistered: false,
@@ -10538,12 +10544,14 @@ function setupTacticalMoveTool({ runtime }) {
     }, 120);
   }
   async function clearPreview({ reason = "preview-cleared", silent = false } = {}) {
+    state.previewRequestVersion += 1;
     try {
       await lib_default.scene.local.deleteItems(PREVIEW_IDS);
     } catch {
     }
     state.preview = null;
     state.previewCreated = false;
+    state.previewGhostCreated = false;
     state.dragActive = false;
     if (!silent) {
       await publishStatus({ reason });
@@ -10571,9 +10579,10 @@ function setupTacticalMoveTool({ runtime }) {
       if (!state.previewCreated) {
         await lib_default.scene.local.addItems(addItems);
         state.previewCreated = true;
+        state.previewGhostCreated = !!items.ghost;
       } else {
         const updateIds = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID];
-        if (items.ghost) updateIds.push(PREVIEW_GHOST_ID);
+        if (items.ghost && state.previewGhostCreated) updateIds.push(PREVIEW_GHOST_ID);
         await lib_default.scene.local.updateItems(updateIds, (sceneItems) => {
           for (const item of sceneItems) {
             if (item.id === PREVIEW_LINE_ID && item.type === "LINE") {
@@ -10593,6 +10602,10 @@ function setupTacticalMoveTool({ runtime }) {
             }
           }
         });
+        if (items.ghost && !state.previewGhostCreated) {
+          await lib_default.scene.local.addItems([items.ghost]);
+          state.previewGhostCreated = true;
+        }
       }
     } catch (error) {
       const normalized = normalizeError(error, "Unable to update movement preview.");
@@ -10614,22 +10627,30 @@ function setupTacticalMoveTool({ runtime }) {
       }
     };
   }
-  function buildPreviewFromPointer(pointerPosition) {
+  async function buildPreviewFromPointer(pointerPosition) {
     const grid = state.grid;
     const participant = state.selectedParticipant;
-    if (!grid || !participant?.position) return null;
+    if (!grid || !participant?.position || !pointerPosition) return null;
     const origin = getSelectedParticipantOrigin();
     if (!origin) return null;
-    const cell = sceneToCell(grid, pointerPosition);
-    if (!cell) return null;
-    const snappedScene = cellToScene(grid, cell);
+    const snappedScene = await snapScenePosition(
+      pointerPosition,
+      1,
+      false,
+      true
+    );
     if (!snappedScene) return null;
+    const cell = sceneToCell(grid, snappedScene);
+    if (!cell) return null;
     const distanceCells = computeDistanceCells(grid, origin.cell, cell);
     const moveCostM = distanceCells * Math.max(Number(grid.metersPerCell ?? 1) || 1, 1);
     const moveLimitM = Number(participant.move_current ?? 0) || 0;
     return {
       cell,
-      scene: snappedScene,
+      scene: {
+        x: Number(snappedScene.x) || 0,
+        y: Number(snappedScene.y) || 0
+      },
       distanceCells,
       moveCostM,
       moveLimitM,
@@ -11027,22 +11048,43 @@ function setupTacticalMoveTool({ runtime }) {
       }
     }
     state.dragActive = true;
-    const preview = buildPreviewFromPointer(event.pointerPosition);
+    state.previewRequestVersion += 1;
+    const requestVersion = state.previewRequestVersion;
+    const preview = await buildPreviewFromPointer(event.pointerPosition);
+    if (requestVersion !== state.previewRequestVersion || !state.dragActive) {
+      return;
+    }
     if (preview) {
       await updatePreview(preview);
     }
   }
   async function handleToolDragMove(_context, event) {
     if (!state.dragActive || !state.permission?.canPreview) return;
-    const preview = buildPreviewFromPointer(event.pointerPosition);
+    state.previewRequestVersion += 1;
+    const requestVersion = state.previewRequestVersion;
+    const preview = await buildPreviewFromPointer(event.pointerPosition);
+    if (requestVersion !== state.previewRequestVersion || !state.dragActive) {
+      return;
+    }
     if (!preview) return;
     await updatePreview(preview);
   }
   async function handleToolDragEnd(_context, event) {
     if (!state.dragActive) return;
+    state.previewRequestVersion += 1;
+    const requestVersion = state.previewRequestVersion;
+    const preview = await buildPreviewFromPointer(event.pointerPosition);
+    if (requestVersion !== state.previewRequestVersion) {
+      return;
+    }
     state.dragActive = false;
-    const preview = buildPreviewFromPointer(event.pointerPosition) ?? state.preview;
-    await commitPreview(preview);
+    const resolvedPreview = preview ?? state.preview;
+    if (!resolvedPreview) {
+      await clearPreview({ reason: "drag-end-no-preview", silent: true });
+      await publishStatus({ reason: "drag-end-no-preview" });
+      return;
+    }
+    await commitPreview(resolvedPreview);
   }
   async function handleToolDragCancel() {
     await clearPreview({ reason: "drag-cancelled", silent: true });
