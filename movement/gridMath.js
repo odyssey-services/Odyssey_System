@@ -144,6 +144,34 @@ export function cellToScene(grid, cell) {
   return null;
 }
 
+export function snapSquarePointerToCellCenter(grid, pointerPosition) {
+  const settings = normalizeTacticalGridSettings(grid);
+
+  if (
+    !settings
+    || settings.gridType !== "square"
+    || !pointerPosition
+  ) {
+    return null;
+  }
+
+  const dpi = settings.gridDpi;
+  const q = Math.round(
+    ((Number(pointerPosition.x) || 0) - settings.anchor.x) / dpi,
+  );
+  const r = Math.round(
+    ((Number(pointerPosition.y) || 0) - settings.anchor.y) / dpi,
+  );
+
+  return {
+    cell: { q, r },
+    scene: {
+      x: settings.anchor.x + q * dpi,
+      y: settings.anchor.y + r * dpi,
+    },
+  };
+}
+
 export function computeDistanceCells(grid, fromCell, toCell) {
   const settings = normalizeTacticalGridSettings(grid);
   if (!settings || !fromCell || !toCell) return 0;

@@ -21,8 +21,8 @@ import { BC_HUD_SESSION } from "../hud/overlay/overlayConstants.js";
 import {
   computeDistanceCells,
   normalizeTacticalGridSettings,
-  sameCell,
   sceneToCell,
+  snapSquarePointerToCellCenter,
 } from "./gridMath.js";
 import {
   buildPreviewItems,
@@ -42,7 +42,7 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.38";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.39";
 
 const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
@@ -109,6 +109,10 @@ function createInitialState() {
     previewCreated: false,
     previewGhostCreated: false,
     previewRequestVersion: 0,
+    previewRenderQueue: [],
+    previewRenderActive: false,
+    previewPointerQueue: [],
+    previewPointerActive: false,
     pending: false,
     dragActive: false,
     toolRegistered: false,
@@ -398,6 +402,8 @@ export function setupTacticalMoveTool({ runtime }) {
 
   async function clearPreview({ reason = "preview-cleared", silent = false } = {}) {
     state.previewRequestVersion += 1;
+    state.previewRenderQueue = [];
+    state.previewPointerQueue = [];
     try {
       await OBR.scene.local.deleteItems(PREVIEW_IDS);
     } catch {
@@ -406,6 +412,8 @@ export function setupTacticalMoveTool({ runtime }) {
     state.preview = null;
     state.previewCreated = false;
     state.previewGhostCreated = false;
+    state.previewRenderActive = false;
+    state.previewPointerActive = false;
     state.dragActive = false;
     if (!silent) {
       await publishStatus({ reason });
@@ -440,6 +448,18 @@ export function setupTacticalMoveTool({ runtime }) {
       originScene,
       selectedToken: state.selectedToken,
     });
+
+    addDiagnosticEntry(
+      "info",
+      "Preview label prepared",
+      formatPreviewDiagnostics({
+        id: items.label?.id,
+        type: items.label?.type,
+        textType: items.label?.text?.type,
+        text: items.label?.text?.plainText,
+        position: items.label?.position,
+      }),
+    );
 
     if (items.ghostError) {
       const normalized = normalizeError(items.ghostError, "Unable to build movement preview ghost.");
@@ -584,10 +604,75 @@ export function setupTacticalMoveTool({ runtime }) {
     });
   }
 
+  function buildSquarePreviewFromPointer(pointerPosition) {
+    const grid = state.grid;
+    const participant = state.selectedParticipant;
+    const tokenId = String(state.selectedToken?.id ?? participant?.token_id ?? "").trim();
+    if (!grid || !participant?.position || !pointerPosition) {
+      return null;
+    }
+
+    const origin = getSelectedParticipantOrigin();
+    if (!origin) {
+      addDiagnosticEntry(
+        "info",
+        "Combat preview unavailable",
+        buildPreviewDiagnosticDetails({ tokenId, reason: "missing-participant-position" }),
+      );
+      return null;
+    }
+
+    const snapped = snapSquarePointerToCellCenter(grid, pointerPosition);
+    if (!snapped) {
+      addDiagnosticEntry(
+        "info",
+        "Combat preview unavailable",
+        buildPreviewDiagnosticDetails({ tokenId, reason: "square-snap-failed" }),
+      );
+      return null;
+    }
+
+    const distanceCells = computeDistanceCells(grid, origin.cell, snapped.cell);
+    const moveLimitM = Number(participant.move_current ?? 0) || 0;
+    const moveCostM = distanceCells * Math.max(Number(grid.metersPerCell ?? 1) || 1, 1);
+
+    const preview = {
+      cell: snapped.cell,
+      scene: snapped.scene,
+      distanceCells,
+      moveCostM,
+      moveLimitM,
+      remainingMoveM: moveLimitM - moveCostM,
+      inRange: moveCostM <= moveLimitM,
+    };
+
+    addDiagnosticEntry(
+      "info",
+      "Combat preview built",
+      formatPreviewDiagnostics({
+        tokenId,
+        cellQ: Number(snapped.cell?.q ?? 0) || 0,
+        cellR: Number(snapped.cell?.r ?? 0) || 0,
+        sceneX: Number(snapped.scene?.x ?? 0) || 0,
+        sceneY: Number(snapped.scene?.y ?? 0) || 0,
+        distanceCells: Number(distanceCells ?? 0) || 0,
+        moveCostM: Number(moveCostM ?? 0) || 0,
+        gridDpi: Number(grid?.gridDpi ?? 0) || 0,
+        anchorX: Number(grid?.anchor?.x ?? 0) || 0,
+        anchorY: Number(grid?.anchor?.y ?? 0) || 0,
+      }),
+    );
+
+    return preview;
+  }
+
   async function buildPreviewFromPointer(pointerPosition) {
     const grid = state.grid;
     const participant = state.selectedParticipant;
     const tokenId = String(state.selectedToken?.id ?? participant?.token_id ?? "").trim();
+    if (grid?.gridType === "square") {
+      return buildSquarePreviewFromPointer(pointerPosition);
+    }
     if (!grid) {
       addDiagnosticEntry(
         "info",
@@ -697,6 +782,66 @@ export function setupTacticalMoveTool({ runtime }) {
     );
 
     return preview;
+  }
+
+  function queuePreviewRender(preview) {
+    if (!preview) return;
+    const previous = state.previewRenderQueue.at(-1);
+    if (previous && sameScenePosition(previous.scene, preview.scene, 0.01)) {
+      return;
+    }
+    state.previewRenderQueue.push(preview);
+    if (!state.previewRenderActive) {
+      void flushPreviewRenderQueue();
+    }
+  }
+
+  async function flushPreviewRenderQueue() {
+    if (state.previewRenderActive) return;
+    state.previewRenderActive = true;
+    try {
+      while (state.previewRenderQueue.length > 0) {
+        const preview = state.previewRenderQueue.shift();
+        if (!preview) continue;
+        await updatePreview(preview);
+      }
+    } finally {
+      state.previewRenderActive = false;
+    }
+  }
+
+  function queuePreviewPointer(pointerPosition) {
+    if (!pointerPosition) return;
+    const clonedPointer = {
+      x: Number(pointerPosition.x ?? 0) || 0,
+      y: Number(pointerPosition.y ?? 0) || 0,
+    };
+    const previous = state.previewPointerQueue.at(-1);
+    if (previous && sameScenePosition(previous, clonedPointer, 0.01)) {
+      return;
+    }
+    state.previewPointerQueue.push(clonedPointer);
+    if (!state.previewPointerActive) {
+      void flushPreviewPointerQueue();
+    }
+  }
+
+  async function flushPreviewPointerQueue() {
+    if (state.previewPointerActive) return;
+    state.previewPointerActive = true;
+    try {
+      while (state.dragActive && state.previewPointerQueue.length > 0) {
+        const pointerPosition = state.previewPointerQueue.shift();
+        if (!pointerPosition) continue;
+        const preview = await buildPreviewFromPointer(pointerPosition);
+        if (!state.dragActive) break;
+        if (!preview) continue;
+        queuePreviewRender(preview);
+      }
+      await flushPreviewRenderQueue();
+    } finally {
+      state.previewPointerActive = false;
+    }
   }
 
   async function capturePreviousTool() {
@@ -1248,27 +1393,14 @@ export function setupTacticalMoveTool({ runtime }) {
     );
 
     state.dragActive = true;
-    state.previewRequestVersion += 1;
-    const requestVersion = state.previewRequestVersion;
-    const preview = await buildPreviewFromPointer(event.pointerPosition);
-    if (requestVersion !== state.previewRequestVersion || !state.dragActive) {
-      return;
-    }
-    if (preview) {
-      await updatePreview(preview);
-    }
+    state.previewRenderQueue = [];
+    state.previewPointerQueue = [];
+    queuePreviewPointer(event.pointerPosition);
   }
 
   async function handleToolDragMove(_context, event) {
     if (!state.dragActive || !state.permission?.canPreview) return;
-    state.previewRequestVersion += 1;
-    const requestVersion = state.previewRequestVersion;
-    const preview = await buildPreviewFromPointer(event.pointerPosition);
-    if (requestVersion !== state.previewRequestVersion || !state.dragActive) {
-      return;
-    }
-    if (!preview) return;
-    await updatePreview(preview);
+    queuePreviewPointer(event.pointerPosition);
   }
 
   async function handleToolDragEnd(_context, event) {
@@ -1280,13 +1412,15 @@ export function setupTacticalMoveTool({ runtime }) {
         tokenId: String(state.selectedToken?.id ?? "").trim(),
       }),
     );
-    state.previewRequestVersion += 1;
-    const requestVersion = state.previewRequestVersion;
     const preview = await buildPreviewFromPointer(event.pointerPosition);
-    if (requestVersion !== state.previewRequestVersion) {
-      return;
+    if (preview) {
+      queuePreviewRender(preview);
     }
+    await flushPreviewPointerQueue();
+    await flushPreviewRenderQueue();
     state.dragActive = false;
+    state.previewPointerQueue = [];
+    state.previewRenderQueue = [];
     const resolvedPreview = preview ?? state.preview;
     if (!resolvedPreview) {
       await clearPreview({ reason: "drag-end-no-preview", silent: true });
