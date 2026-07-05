@@ -75,6 +75,15 @@ function nextAnimationFrame() {
   });
 }
 
+function withTimeout(promise, timeoutMs, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
+}
+
 function formatPreviewDiagnostics(details = {}) {
   try {
     return JSON.stringify(details);
@@ -1269,7 +1278,6 @@ export function setupTacticalMoveTool({ runtime }) {
       updateRuntimeCache(result.runtime);
     }
     await clearPreview({ reason: "move-failed", silent: true });
-    state.pending = false;
     await syncSelectionState("move-failed", { runtimeResponse: result?.runtime ?? state.runtime });
     await publishStatus({ error: message });
     await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
@@ -1282,7 +1290,27 @@ export function setupTacticalMoveTool({ runtime }) {
   }
 
   async function commitPreview(preview) {
-    if (!state.selectedParticipant || !state.permission || state.pending) return;
+    if (!state.selectedParticipant || !state.permission) return;
+
+    if (state.pending) {
+      addDiagnosticEntry(
+        "warn",
+        "Combat movement ignored",
+        "A previous movement request is still pending.",
+      );
+
+      await clearPreview({
+        reason: "movement-already-pending",
+        silent: true,
+      });
+
+      await publishStatus({
+        error: "Previous movement is still being processed. Reloading combat state.",
+      });
+
+      void refreshRuntimeAndSelection("pending-movement-recovery");
+      return;
+    }
 
     if (!preview || preview.distanceCells <= 0) {
       await clearPreview({ reason: "zero-distance", silent: true });
@@ -1337,7 +1365,23 @@ export function setupTacticalMoveTool({ runtime }) {
     };
 
     try {
-      let result = await combatApi.moveCharacter(payloadBase, state.settings);
+      addDiagnosticEntry(
+        "info",
+        "Combat movement RPC started",
+        JSON.stringify({
+          encounterId: state.encounterId,
+          tokenId: payloadBase.token_id,
+          stateVersion: payloadBase.expected_state_version,
+          movementVersion: payloadBase.expected_movement_version,
+          destination: payloadBase.destination,
+        }),
+      );
+
+      let result = await withTimeout(
+        combatApi.moveCharacter(payloadBase, state.settings),
+        12000,
+        "Movement request timed out.",
+      );
       if (result?.ok === false && result?.error === "STALE_MOVEMENT_STATE" && result?.runtime) {
         updateRuntimeCache(result.runtime);
         const retryResult = await tryRetryStaleMovement({
@@ -1350,6 +1394,17 @@ export function setupTacticalMoveTool({ runtime }) {
           result = retryResult;
         }
       }
+
+      addDiagnosticEntry(
+        "info",
+        "Combat movement RPC finished",
+        JSON.stringify({
+          ok: result?.ok,
+          error: result?.error ?? null,
+          message: result?.message ?? null,
+        }),
+      );
+
       if (!result || result.ok === false) {
         await failMutation(result, "Unable to move combatant.");
         return;
@@ -1371,6 +1426,9 @@ export function setupTacticalMoveTool({ runtime }) {
         characterId: String(state.selectedParticipant?.character_id ?? "").trim(),
       });
       await notify(normalized.message, "ERROR");
+    } finally {
+      state.pending = false;
+      await publishStatus({ reason: "movement-request-finished" });
     }
   }
 
@@ -1443,28 +1501,38 @@ export function setupTacticalMoveTool({ runtime }) {
         tokenId: String(state.selectedToken?.id ?? "").trim(),
       }),
     );
-    const finalPreview = await buildPreviewFromPointer(event.pointerPosition);
 
-    state.previewPointerQueue = [];
-    state.previewRenderQueue = [];
+    let finalPreview = null;
 
-    if (finalPreview) {
-      await updatePreview(finalPreview);
-      await nextAnimationFrame();
+    try {
+      finalPreview = state.grid?.gridType === "square"
+        ? buildPreviewFromPointerFast(event.pointerPosition)
+        : await buildPreviewFromPointer(event.pointerPosition);
+
+      state.dragActive = false;
+      state.previewPointerQueue = [];
+      state.previewRenderQueue = [];
+
+      if (!finalPreview) {
+        await clearPreview({ reason: "drag-end-no-preview", silent: true });
+        await publishStatus({ reason: "drag-end-no-preview" });
+        return;
+      }
+
+      void updatePreview(finalPreview).catch(() => {});
+      await commitPreview(finalPreview);
+    } catch (error) {
+      state.pending = false;
+      await clearPreview({ reason: "drag-end-exception", silent: true });
+      addDiagnosticEntry(
+        "error",
+        "Combat drag end failed",
+        normalizeError(error, "Unable to finish combat movement.").message,
+      );
+      await publishStatus({
+        error: normalizeError(error, "Unable to finish combat movement.").message,
+      });
     }
-
-    state.dragActive = false;
-    state.previewPointerQueue = [];
-    state.previewRenderQueue = [];
-
-    if (!finalPreview) {
-      await clearPreview({ reason: "drag-end-no-preview", silent: true });
-      await publishStatus({ reason: "drag-end-no-preview" });
-      return;
-    }
-
-    await clearPreview({ reason: "drag-end-release", silent: true });
-    await commitPreview(finalPreview);
   }
 
   async function handleToolDragCancel() {
