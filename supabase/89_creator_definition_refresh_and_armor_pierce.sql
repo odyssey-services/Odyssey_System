@@ -6,6 +6,7 @@ create or replace function public.get_character_effect_summary(
 returns jsonb
 language plpgsql
 stable
+set search_path = public
 as $$
 declare
   v_active_effects jsonb := '[]'::jsonb;

@@ -4,6 +4,7 @@ export const ROOM_SUPABASE_SETTINGS_KEY = `${EXTENSION_ID}/supabaseSettings`;
 export const ROOM_CONTEXT_KEY = `${EXTENSION_ID}/roomContext`;
 export const TOKEN_LINK_KEY = `${EXTENSION_ID}/link`;
 export const SHELL_GLOBAL_KEY = "OdysseyBridge";
+export const COMBAT_MOVEMENT_METADATA_KEY = "com.odyssey-system/combat-movement";
 
 export function normalizeTokenCharacterLink(raw) {
   return {

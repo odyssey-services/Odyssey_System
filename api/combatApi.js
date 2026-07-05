@@ -17,6 +17,14 @@ export function moveCharacter(payload, settings) {
   );
 }
 
+export function gmRepositionCharacter(payload, settings) {
+  return callSupabaseRpc(
+    COMBAT_RPC_NAMES.gmRepositionCharacter,
+    { p_payload: payload ?? {} },
+    settings,
+  );
+}
+
 export function syncPositionsFromOwlbear(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.syncPositionsFromOwlbear,

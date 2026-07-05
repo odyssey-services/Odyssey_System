@@ -375,10 +375,11 @@ declare
   v_loops integer := 0;
   v_now timestamptz := timezone('utc', now());
   v_candidate public.odyssey_initiative_entries%rowtype;
-  v_refresh jsonb := '{}'::jsonb;
   v_skip_turn boolean := false;
   v_wrapped boolean := false;
   v_round_for_candidate integer := 1;
+  v_candidate_is_alive boolean := true;
+  v_candidate_is_conscious boolean := true;
 begin
   select *
   into v_encounter
@@ -476,69 +477,78 @@ begin
     where id = v_candidate.id
     returning * into v_candidate;
 
-    perform public.advance_character_effects(v_candidate.character_id);
-    v_refresh := public.odyssey_refresh_character_combat_state(v_candidate.character_id);
+    select
+      coalesce(s.is_alive, true),
+      coalesce(s.is_conscious, true)
+    into
+      v_candidate_is_alive,
+      v_candidate_is_conscious
+    from public.odyssey_character_combat_state s
+    where s.character_id = v_candidate.character_id;
+
+    if not found then
+      v_candidate_is_alive := true;
+      v_candidate_is_conscious := true;
+    end if;
 
     v_skip_turn := public.odyssey_character_has_active_effect_flag(v_candidate.character_id, 'skip_turn');
 
-    if coalesce((v_refresh->>'ok')::boolean, false) = true then
-      if coalesce((v_refresh->'combat_state'->>'is_alive')::boolean, true) = false then
-        update public.odyssey_initiative_entries
-        set
-          is_active = false,
-          removed_at = v_now,
-          removed_reason = 'dead'
-        where id = v_candidate.id;
+    if v_candidate_is_alive = false then
+      update public.odyssey_initiative_entries
+      set
+        is_active = false,
+        removed_at = v_now,
+        removed_reason = 'dead'
+      where id = v_candidate.id;
 
-        perform public.odyssey_combat_log_insert(
-          v_encounter.campaign_id,
-          v_encounter.room_id,
-          v_encounter.scene_id,
-          v_encounter.id,
-          v_round_for_candidate,
-          null,
-          v_candidate.character_id,
-          v_candidate.character_id,
-          'gm_only',
-          'system',
-          public.odyssey_character_display_name(v_candidate.character_id) || ' is removed from initiative because they are dead.',
-          jsonb_build_object('reason', 'dead', 'character_id', v_candidate.character_id),
-          jsonb_build_object('reason', 'dead'),
-          'system'
-        );
+      perform public.odyssey_combat_log_insert(
+        v_encounter.campaign_id,
+        v_encounter.room_id,
+        v_encounter.scene_id,
+        v_encounter.id,
+        v_round_for_candidate,
+        null,
+        v_candidate.character_id,
+        v_candidate.character_id,
+        'gm_only',
+        'system',
+        public.odyssey_character_display_name(v_candidate.character_id) || ' is removed from initiative because they are dead.',
+        jsonb_build_object('reason', 'dead', 'character_id', v_candidate.character_id),
+        jsonb_build_object('reason', 'dead'),
+        'system'
+      );
 
-        v_current_pos := v_candidate_pos;
-        v_loops := v_loops + 1;
-        continue;
-      end if;
+      v_current_pos := v_candidate_pos;
+      v_loops := v_loops + 1;
+      continue;
+    end if;
 
-      if coalesce((v_refresh->'combat_state'->>'is_conscious')::boolean, true) = false or v_skip_turn then
-        perform public.odyssey_combat_log_insert(
-          v_encounter.campaign_id,
-          v_encounter.room_id,
-          v_encounter.scene_id,
-          v_encounter.id,
-          v_round_for_candidate,
-          null,
-          v_candidate.character_id,
-          v_candidate.character_id,
-          case when v_candidate.hide_from_initiative_ui then 'gm_only' else 'public' end,
-          'turn_skipped',
-          public.odyssey_character_display_name(v_candidate.character_id) || ' cannot act this turn.',
-          jsonb_build_object(
-            'reason', case when v_skip_turn then 'skip_turn' else 'unconscious' end,
-            'character_id', v_candidate.character_id
-          ),
-          jsonb_build_object(
-            'reason', case when v_skip_turn then 'skip_turn' else 'unconscious' end
-          ),
-          'system'
-        );
+    if v_candidate_is_conscious = false or v_skip_turn then
+      perform public.odyssey_combat_log_insert(
+        v_encounter.campaign_id,
+        v_encounter.room_id,
+        v_encounter.scene_id,
+        v_encounter.id,
+        v_round_for_candidate,
+        null,
+        v_candidate.character_id,
+        v_candidate.character_id,
+        case when v_candidate.hide_from_initiative_ui then 'gm_only' else 'public' end,
+        'turn_skipped',
+        public.odyssey_character_display_name(v_candidate.character_id) || ' cannot act this turn.',
+        jsonb_build_object(
+          'reason', case when v_skip_turn then 'skip_turn' else 'unconscious' end,
+          'character_id', v_candidate.character_id
+        ),
+        jsonb_build_object(
+          'reason', case when v_skip_turn then 'skip_turn' else 'unconscious' end
+        ),
+        'system'
+      );
 
-        v_current_pos := v_candidate_pos;
-        v_loops := v_loops + 1;
-        continue;
-      end if;
+      v_current_pos := v_candidate_pos;
+      v_loops := v_loops + 1;
+      continue;
     end if;
 
     update public.odyssey_combat_encounters

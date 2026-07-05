@@ -499,6 +499,7 @@ __export(settingsBridge_exports, {
 // constants/metadataKeys.js
 var metadataKeys_exports = {};
 __export(metadataKeys_exports, {
+  COMBAT_MOVEMENT_METADATA_KEY: () => COMBAT_MOVEMENT_METADATA_KEY,
   EXTENSION_ID: () => EXTENSION_ID,
   ROOM_CONTEXT_KEY: () => ROOM_CONTEXT_KEY,
   ROOM_SUPABASE_SETTINGS_KEY: () => ROOM_SUPABASE_SETTINGS_KEY,
@@ -512,6 +513,7 @@ var ROOM_SUPABASE_SETTINGS_KEY = `${EXTENSION_ID}/supabaseSettings`;
 var ROOM_CONTEXT_KEY = `${EXTENSION_ID}/roomContext`;
 var TOKEN_LINK_KEY = `${EXTENSION_ID}/link`;
 var SHELL_GLOBAL_KEY = "OdysseyBridge";
+var COMBAT_MOVEMENT_METADATA_KEY = "com.odyssey-system/combat-movement";
 function normalizeTokenCharacterLink(raw) {
   return {
     characterId: String(raw?.characterId ?? raw?.character_id ?? "").trim(),
@@ -9744,6 +9746,7 @@ var WEAPON_RPC_NAMES = Object.freeze({
 var COMBAT_RPC_NAMES = Object.freeze({
   performAttack: "perform_attack",
   moveCharacter: "combat_move_character",
+  gmRepositionCharacter: "combat_gm_reposition_character",
   syncPositionsFromOwlbear: "combat_sync_positions_from_owlbear",
   startEncounter: "combat_start_encounter",
   addParticipant: "combat_add_participant",
@@ -10607,6 +10610,7 @@ __export(combatApi_exports, {
   forceNextTurn: () => forceNextTurn,
   getActiveRuntime: () => getActiveRuntime,
   getCombatLog: () => getCombatLog,
+  gmRepositionCharacter: () => gmRepositionCharacter,
   grantReactionAction: () => grantReactionAction,
   markCharacterDead: () => markCharacterDead,
   moveCharacter: () => moveCharacter,
@@ -10628,6 +10632,13 @@ function performAttack(payload, settings) {
 function moveCharacter(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.moveCharacter,
+    { p_payload: payload ?? {} },
+    settings
+  );
+}
+function gmRepositionCharacter(payload, settings) {
+  return callSupabaseRpc(
+    COMBAT_RPC_NAMES.gmRepositionCharacter,
     { p_payload: payload ?? {} },
     settings
   );
@@ -34486,12 +34497,11 @@ function sameCell(a, b) {
 
 // movement/moveToolBridge.js
 var MOVE_TOOL_CHANNEL = "odyssey:tactical-move";
-var TACTICAL_MOVE_TOOL_ID = "com.odyssey-system/tactical-move";
-var TACTICAL_MOVE_MODE_ID = "com.odyssey-system/tactical-move/move-character";
 var MOVE_TOOL_COMMANDS = Object.freeze({
   ActivateSelected: "ACTIVATE_SELECTED",
   Cancel: "CANCEL",
-  RequestStatus: "REQUEST_STATUS"
+  RequestStatus: "REQUEST_STATUS",
+  SetGmOverride: "SET_GM_OVERRIDE"
 });
 var MOVE_TOOL_EVENTS = Object.freeze({
   Status: "STATUS",
@@ -35818,66 +35828,6 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       render();
     }
   }
-  async function startMoveForLoadedCharacter() {
-    const participant = getLoadedCharacterParticipant();
-    const token = getSelectedTokenForLoadedCharacter();
-    if (!participant || !token) {
-      state.moveToolStatus = {
-        active: false,
-        pending: false,
-        characterId: state.characterId,
-        tokenId: String(state.selectedToken?.id ?? "").trim(),
-        error: "Select this character's token in Owlbear before moving."
-      };
-      render();
-      return;
-    }
-    state.moveToolStatus = {
-      ...state.moveToolStatus ?? {},
-      active: false,
-      pending: true,
-      characterId: state.characterId,
-      tokenId: String(token.id ?? "").trim(),
-      error: ""
-    };
-    render();
-    try {
-      await bridges.obr.activateTool(TACTICAL_MOVE_TOOL_ID);
-      await bridges.obr.activateToolMode(
-        TACTICAL_MOVE_TOOL_ID,
-        TACTICAL_MOVE_MODE_ID
-      );
-      const [activeTool, activeMode] = await Promise.all([
-        bridges.obr.getActiveTool(),
-        bridges.obr.getActiveToolMode()
-      ]);
-      if (activeTool !== TACTICAL_MOVE_TOOL_ID || activeMode !== TACTICAL_MOVE_MODE_ID) {
-        throw new Error("Owlbear did not activate the Tactical Move tool.");
-      }
-      state.moveToolStatus = {
-        ...state.moveToolStatus ?? {},
-        active: true,
-        pending: false,
-        characterId: state.characterId,
-        tokenId: String(token.id ?? "").trim(),
-        error: ""
-      };
-      render();
-    } catch (error) {
-      state.moveToolStatus = {
-        ...state.moveToolStatus ?? {},
-        active: false,
-        pending: false,
-        characterId: state.characterId,
-        tokenId: String(token.id ?? "").trim(),
-        error: toErrorMessage(
-          error,
-          "Unable to activate Tactical Move."
-        )
-      };
-      render();
-    }
-  }
   async function refreshAfterCombatStart() {
     setCombatStartStage("Refreshing character sheet...");
     const refreshPromise = withTimeout3(
@@ -36104,9 +36054,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const moveCurrent = Number(participant.move_current ?? 0) || 0;
     const moveMax = Number(participant.move_max ?? 0) || 0;
     const gridReady = !!state.tacticalSnapshot?.grid;
-    const moveReady = !!selectedToken && gridReady && isCurrentTurn && !mismatch;
     const preview = toolStatus?.preview ?? null;
     const tokenLine = selectedToken ? `${esc2(selectedToken.name || "Selected token")} \xB7 ${esc2(selectedToken.id.slice(0, 8))}` : "Select this character's token in Owlbear to move it.";
+    const gmOverrideEnabled = !!toolStatus?.gmOverrideEnabled;
+    const measureOnly = !!toolStatus?.measureOnly;
+    const canCommit = !!toolStatus?.canCommit;
+    const moveHint = !selectedToken ? "Select this character's token in Owlbear to use combat movement." : !gridReady ? "Tactical grid is not synced yet." : gmOverrideEnabled ? "GM override is active. Drag this token on the map to reposition it without spending MOVE." : canCommit ? "Drag this token on the map to preview and confirm combat movement." : measureOnly ? "Drag this token on the map to measure distance. Drop will not spend MOVE." : "Movement is locked for this token right now.";
     return `
       <div class="cp-section-title">Tactical move</div>
       <div class="cp-card">
@@ -36115,15 +36068,16 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
           <span class="cp-row" style="gap:6px">
             <span class="cp-pill ${isCurrentTurn ? "good" : ""}">${isCurrentTurn ? "Current turn" : "Waiting turn"}</span>
             ${gridReady ? `<span class="cp-pill">grid synced</span>` : `<span class="cp-pill bad">grid not synced</span>`}
+            ${gmOverrideEnabled ? `<span class="cp-pill good">GM override</span>` : ""}
           </span>
         </div>
         <div class="cp-muted" style="margin-top:6px">${tokenLine}</div>
+        <div class="cp-muted" style="margin-top:6px">${esc2(moveHint)}</div>
         ${preview ? `<div class="cp-muted" style="margin-top:6px">Preview: ${preview.moveCostM} m, remaining ${preview.remainingMoveM} m${preview.inRange ? "" : " - out of range"}</div>` : ""}
         ${toolStatus?.error ? `<div class="cp-muted" style="margin-top:6px;color:#ff9b9b">${esc2(toolStatus.error)}</div>` : ""}
         ${mismatch ? `<div class="cp-muted" style="margin-top:6px;color:#ffd58a">Scene token position differs from Supabase. Sync it before moving.</div>` : ""}
         <div class="button-row" style="margin-top:8px">
-          <button type="button" data-ref="startMove" ${moveReady && !state.busy ? "" : "disabled"}>Move</button>
-          <button type="button" class="secondary" data-ref="cancelMove" ${toolStatus?.active ? "" : "disabled"}>Cancel</button>
+          ${isGM() ? `<button type="button" class="${gmOverrideEnabled ? "" : "secondary"}" data-ref="toggleGmMoveOverride" ${state.busy ? "disabled" : ""}>${gmOverrideEnabled ? "Disable GM override" : "Enable GM override"}</button>` : ""}
           ${isGM() ? `<button type="button" class="secondary" data-ref="syncTacticalGrid" ${state.busy ? "disabled" : ""}>Sync tactical grid</button>` : ""}
           ${isGM() ? `<button type="button" class="secondary" data-ref="syncTokenPosition" ${selectedToken && !state.busy ? "" : "disabled"}>Sync token position</button>` : ""}
         </div>
@@ -36822,8 +36776,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       endCombatForScene().catch(() => {
       });
     });
-    $("cancelMove")?.addEventListener("click", async () => {
-      await sendMoveToolCommand(MOVE_TOOL_COMMANDS.Cancel).catch(() => {
+    $("toggleGmMoveOverride")?.addEventListener("click", async () => {
+      await sendMoveToolCommand(
+        MOVE_TOOL_COMMANDS.SetGmOverride,
+        { enabled: !(state.moveToolStatus?.gmOverrideEnabled === true) }
+      ).catch(() => {
       });
     });
     $("syncTacticalGrid")?.addEventListener("click", () => {
@@ -36949,25 +36906,6 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function onSectionClick(e) {
     const t = e.target;
-    const startMoveButton = t.closest('[data-ref="startMove"]');
-    if (startMoveButton) {
-      e.preventDefault();
-      startMoveForLoadedCharacter().catch((error) => {
-        state.moveToolStatus = {
-          ...state.moveToolStatus ?? {},
-          active: false,
-          pending: false,
-          characterId: state.characterId,
-          tokenId: String(state.selectedToken?.id ?? "").trim(),
-          error: toErrorMessage(
-            error,
-            "Unable to start Tactical Move."
-          )
-        };
-        render();
-      });
-      return;
-    }
     const startCombatButton = t.closest('[data-ref="startCombat"]');
     if (startCombatButton) {
       startCombatForScene().catch(() => {

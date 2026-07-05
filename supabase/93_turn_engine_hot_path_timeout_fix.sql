@@ -1,6 +1,255 @@
--- Odyssey System: Phase 3E.0.1
--- Fix statement-timeout risk in combat_start_encounter by resolving the
--- candidate roster + Reaction values only once before encounter creation.
+create or replace function public.odyssey_start_next_eligible_turn(
+  p_encounter_id uuid
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_encounter public.odyssey_combat_encounters%rowtype;
+  v_entry_ids uuid[] := array[]::uuid[];
+  v_entry_count integer := 0;
+  v_current_pos integer := -1;
+  v_candidate_pos integer := -1;
+  v_loops integer := 0;
+  v_now timestamptz := timezone('utc', now());
+  v_candidate public.odyssey_initiative_entries%rowtype;
+  v_skip_turn boolean := false;
+  v_wrapped boolean := false;
+  v_round_for_candidate integer := 1;
+  v_candidate_is_alive boolean := true;
+  v_candidate_is_conscious boolean := true;
+begin
+  select *
+  into v_encounter
+  from public.odyssey_combat_encounters
+  where id = p_encounter_id
+  for update;
+
+  if not found then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'ENCOUNTER_NOT_FOUND',
+      'message', 'Encounter was not found.'
+    );
+  end if;
+
+  if v_encounter.status <> 'active' or v_encounter.ended_at is not null then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'ENCOUNTER_NOT_ACTIVE',
+      'message', 'Encounter is not active.'
+    );
+  end if;
+
+  select coalesce(array_agg(e.id order by e.order_index, e.created_at, e.id), array[]::uuid[])
+  into v_entry_ids
+  from public.odyssey_initiative_entries e
+  where e.encounter_id = p_encounter_id
+    and e.is_active = true;
+
+  v_entry_count := cardinality(v_entry_ids);
+  if v_entry_count = 0 then
+    update public.odyssey_combat_encounters
+    set
+      active_entry_id = null,
+      active_character_id = null
+    where id = p_encounter_id;
+
+    perform public.odyssey_increment_encounter_state_version(p_encounter_id);
+
+    return jsonb_build_object(
+      'ok', true,
+      'encounter_id', p_encounter_id,
+      'active_entry', null
+    );
+  end if;
+
+  if v_encounter.active_entry_id is not null then
+    select ordinality - 1
+    into v_current_pos
+    from unnest(v_entry_ids) with ordinality as t(entry_id, ordinality)
+    where t.entry_id = v_encounter.active_entry_id
+    limit 1;
+  end if;
+
+  loop
+    exit when v_loops >= v_entry_count + 1;
+    v_candidate_pos := coalesce(v_current_pos, -1) + 1;
+    if v_candidate_pos >= v_entry_count then
+      v_candidate_pos := 0;
+      v_wrapped := true;
+      update public.odyssey_combat_encounters
+      set current_round = current_round + 1
+      where id = p_encounter_id
+      returning current_round into v_round_for_candidate;
+    else
+      v_round_for_candidate := v_encounter.current_round;
+    end if;
+
+    select *
+    into v_candidate
+    from public.odyssey_initiative_entries e
+    where e.id = v_entry_ids[v_candidate_pos + 1]
+    for update;
+
+    if not found then
+      v_current_pos := v_candidate_pos;
+      v_loops := v_loops + 1;
+      continue;
+    end if;
+
+    if v_candidate.joined_round > v_round_for_candidate then
+      v_current_pos := v_candidate_pos;
+      v_loops := v_loops + 1;
+      continue;
+    end if;
+
+    update public.odyssey_initiative_entries
+    set
+      action_current = action_max,
+      move_current = move_max,
+      reaction_action_current = reaction_action_max,
+      action_converted_to_move = false,
+      turn_version = coalesce(turn_version, 0) + 1,
+      last_turn_started_at = v_now
+    where id = v_candidate.id
+    returning * into v_candidate;
+
+    select
+      coalesce(s.is_alive, true),
+      coalesce(s.is_conscious, true)
+    into
+      v_candidate_is_alive,
+      v_candidate_is_conscious
+    from public.odyssey_character_combat_state s
+    where s.character_id = v_candidate.character_id;
+
+    if not found then
+      v_candidate_is_alive := true;
+      v_candidate_is_conscious := true;
+    end if;
+
+    v_skip_turn := public.odyssey_character_has_active_effect_flag(v_candidate.character_id, 'skip_turn');
+
+    if v_candidate_is_alive = false then
+      update public.odyssey_initiative_entries
+      set
+        is_active = false,
+        removed_at = v_now,
+        removed_reason = 'dead'
+      where id = v_candidate.id;
+
+      perform public.odyssey_combat_log_insert(
+        v_encounter.campaign_id,
+        v_encounter.room_id,
+        v_encounter.scene_id,
+        v_encounter.id,
+        v_round_for_candidate,
+        null,
+        v_candidate.character_id,
+        v_candidate.character_id,
+        'gm_only',
+        'system',
+        public.odyssey_character_display_name(v_candidate.character_id) || ' is removed from initiative because they are dead.',
+        jsonb_build_object('reason', 'dead', 'character_id', v_candidate.character_id),
+        jsonb_build_object('reason', 'dead'),
+        'system'
+      );
+
+      v_current_pos := v_candidate_pos;
+      v_loops := v_loops + 1;
+      continue;
+    end if;
+
+    if v_candidate_is_conscious = false or v_skip_turn then
+      perform public.odyssey_combat_log_insert(
+        v_encounter.campaign_id,
+        v_encounter.room_id,
+        v_encounter.scene_id,
+        v_encounter.id,
+        v_round_for_candidate,
+        null,
+        v_candidate.character_id,
+        v_candidate.character_id,
+        case when v_candidate.hide_from_initiative_ui then 'gm_only' else 'public' end,
+        'turn_skipped',
+        public.odyssey_character_display_name(v_candidate.character_id) || ' cannot act this turn.',
+        jsonb_build_object(
+          'reason', case when v_skip_turn then 'skip_turn' else 'unconscious' end,
+          'character_id', v_candidate.character_id
+        ),
+        jsonb_build_object(
+          'reason', case when v_skip_turn then 'skip_turn' else 'unconscious' end
+        ),
+        'system'
+      );
+
+      v_current_pos := v_candidate_pos;
+      v_loops := v_loops + 1;
+      continue;
+    end if;
+
+    update public.odyssey_combat_encounters
+    set
+      active_entry_id = v_candidate.id,
+      active_character_id = v_candidate.character_id,
+      current_round = v_round_for_candidate,
+      last_transition_at = v_now
+    where id = p_encounter_id;
+
+    perform public.odyssey_increment_encounter_state_version(p_encounter_id);
+
+    perform public.odyssey_combat_log_insert(
+      v_encounter.campaign_id,
+      v_encounter.room_id,
+      v_encounter.scene_id,
+      v_encounter.id,
+      v_round_for_candidate,
+      v_candidate.character_id,
+      null,
+      v_candidate.character_id,
+      case when v_candidate.hide_from_initiative_ui then 'gm_only' else 'public' end,
+      'turn_started',
+      public.odyssey_character_display_name(v_candidate.character_id) || ' starts their turn.',
+      jsonb_build_object(
+        'initiative_entry_id', v_candidate.id,
+        'character_id', v_candidate.character_id,
+        'wrapped', v_wrapped
+      ),
+      jsonb_build_object(
+        'initiative_entry_id', v_candidate.id,
+        'character_id', v_candidate.character_id,
+        'wrapped', v_wrapped
+      ),
+      'system'
+    );
+
+    return jsonb_build_object(
+      'ok', true,
+      'encounter_id', p_encounter_id,
+      'active_entry_id', v_candidate.id,
+      'active_character_id', v_candidate.character_id,
+      'current_round', v_round_for_candidate
+    );
+  end loop;
+
+  update public.odyssey_combat_encounters
+  set
+    active_entry_id = null,
+    active_character_id = null
+  where id = p_encounter_id;
+
+  perform public.odyssey_increment_encounter_state_version(p_encounter_id);
+
+  return jsonb_build_object(
+    'ok', true,
+    'encounter_id', p_encounter_id,
+    'active_entry_id', null,
+    'active_character_id', null,
+    'message', 'No eligible turn target was found.'
+  );
+end;
+$$;
 
 create or replace function public.combat_start_encounter(
   p_payload jsonb

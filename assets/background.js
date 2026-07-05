@@ -3509,6 +3509,122 @@ var GenericItemBuilder = class {
   }
 };
 
+// node_modules/@owlbear-rodeo/sdk/lib/builders/ImageBuilder.js
+var ImageBuilder = class extends GenericItemBuilder {
+  constructor(player, image, grid) {
+    super(player);
+    this._image = image;
+    this._grid = grid;
+    this._item.name = "Image";
+    this._text = {
+      richText: [
+        {
+          type: "paragraph",
+          children: [{ text: "" }]
+        }
+      ],
+      plainText: "",
+      style: {
+        padding: 8,
+        fontFamily: "Roboto",
+        fontSize: 24,
+        fontWeight: 400,
+        textAlign: "CENTER",
+        textAlignVertical: "BOTTOM",
+        fillColor: "white",
+        fillOpacity: 1,
+        strokeColor: "white",
+        strokeOpacity: 1,
+        strokeWidth: 0,
+        lineHeight: 1.5
+      },
+      type: "PLAIN",
+      width: "AUTO",
+      height: "AUTO"
+    };
+    this._textItemType = "LABEL";
+  }
+  text(text) {
+    this._text = text;
+    return this.self();
+  }
+  textItemType(textItemType) {
+    this._textItemType = textItemType;
+    return this.self();
+  }
+  textWidth(width) {
+    this._text.width = width;
+    return this.self();
+  }
+  textHeight(height) {
+    this._text.height = height;
+    return this.self();
+  }
+  richText(richText) {
+    this._text.richText = richText;
+    return this.self();
+  }
+  plainText(plainText) {
+    this._text.plainText = plainText;
+    return this.self();
+  }
+  textType(textType) {
+    this._text.type = textType;
+    return this.self();
+  }
+  textPadding(padding) {
+    this._text.style.padding = padding;
+    return this.self();
+  }
+  fontFamily(fontFamily) {
+    this._text.style.fontFamily = fontFamily;
+    return this.self();
+  }
+  fontSize(fontSize) {
+    this._text.style.fontSize = fontSize;
+    return this.self();
+  }
+  fontWeight(fontWeight) {
+    this._text.style.fontWeight = fontWeight;
+    return this.self();
+  }
+  textAlign(textAlign) {
+    this._text.style.textAlign = textAlign;
+    return this.self();
+  }
+  textAlignVertical(textAlignVertical) {
+    this._text.style.textAlignVertical = textAlignVertical;
+    return this.self();
+  }
+  textFillColor(fillColor) {
+    this._text.style.fillColor = fillColor;
+    return this.self();
+  }
+  textFillOpacity(fillOpacity) {
+    this._text.style.fillOpacity = fillOpacity;
+    return this.self();
+  }
+  textStrokeColor(strokeColor) {
+    this._text.style.strokeColor = strokeColor;
+    return this.self();
+  }
+  textStrokeOpacity(strokeOpacity) {
+    this._text.style.strokeOpacity = strokeOpacity;
+    return this.self();
+  }
+  textStrokeWidth(strokeWidth) {
+    this._text.style.strokeWidth = strokeWidth;
+    return this.self();
+  }
+  textLineHeight(lineHeight) {
+    this._text.style.lineHeight = lineHeight;
+    return this.self();
+  }
+  build() {
+    return Object.assign(Object.assign({}, this._item), { type: "IMAGE", image: this._image, grid: this._grid, text: this._text, textItemType: this._textItemType });
+  }
+};
+
 // node_modules/@owlbear-rodeo/sdk/lib/builders/LineBuilder.js
 var LineBuilder = class extends GenericItemBuilder {
   constructor(player) {
@@ -3795,6 +3911,9 @@ var OBR = {
   /** True if the current site is embedded in an instance of Owlbear Rodeo */
   isAvailable: Boolean(details.origin)
 };
+function buildImage(image, grid) {
+  return new ImageBuilder(playerApi, image, grid);
+}
 function buildLine() {
   return new LineBuilder(playerApi);
 }
@@ -3806,6 +3925,7 @@ var lib_default = OBR;
 // constants/metadataKeys.js
 var metadataKeys_exports = {};
 __export(metadataKeys_exports, {
+  COMBAT_MOVEMENT_METADATA_KEY: () => COMBAT_MOVEMENT_METADATA_KEY,
   EXTENSION_ID: () => EXTENSION_ID,
   ROOM_CONTEXT_KEY: () => ROOM_CONTEXT_KEY,
   ROOM_SUPABASE_SETTINGS_KEY: () => ROOM_SUPABASE_SETTINGS_KEY,
@@ -3819,6 +3939,7 @@ var ROOM_SUPABASE_SETTINGS_KEY = `${EXTENSION_ID}/supabaseSettings`;
 var ROOM_CONTEXT_KEY = `${EXTENSION_ID}/roomContext`;
 var TOKEN_LINK_KEY = `${EXTENSION_ID}/link`;
 var SHELL_GLOBAL_KEY = "OdysseyBridge";
+var COMBAT_MOVEMENT_METADATA_KEY = "com.odyssey-system/combat-movement";
 function normalizeTokenCharacterLink(raw) {
   return {
     characterId: String(raw?.characterId ?? raw?.character_id ?? "").trim(),
@@ -4227,6 +4348,7 @@ var WEAPON_RPC_NAMES = Object.freeze({
 var COMBAT_RPC_NAMES = Object.freeze({
   performAttack: "perform_attack",
   moveCharacter: "combat_move_character",
+  gmRepositionCharacter: "combat_gm_reposition_character",
   syncPositionsFromOwlbear: "combat_sync_positions_from_owlbear",
   startEncounter: "combat_start_encounter",
   addParticipant: "combat_add_participant",
@@ -4743,6 +4865,7 @@ __export(combatApi_exports, {
   forceNextTurn: () => forceNextTurn,
   getActiveRuntime: () => getActiveRuntime,
   getCombatLog: () => getCombatLog,
+  gmRepositionCharacter: () => gmRepositionCharacter,
   grantReactionAction: () => grantReactionAction,
   markCharacterDead: () => markCharacterDead,
   moveCharacter: () => moveCharacter,
@@ -4764,6 +4887,13 @@ function performAttack(payload, settings) {
 function moveCharacter(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.moveCharacter,
+    { p_payload: payload ?? {} },
+    settings
+  );
+}
+function gmRepositionCharacter(payload, settings) {
+  return callSupabaseRpc(
+    COMBAT_RPC_NAMES.gmRepositionCharacter,
     { p_payload: payload ?? {} },
     settings
   );
@@ -5835,7 +5965,7 @@ function setupCombatSessionController({ context, settings, getViewer, onSessionR
   let prevSessionId = null;
   const cleanups3 = [];
   const viewer = () => (typeof getViewer === "function" ? getViewer() : {}) ?? {};
-  const isGm = () => String(viewer()?.role ?? "").toUpperCase() === "GM";
+  const isGm2 = () => String(viewer()?.role ?? "").toUpperCase() === "GM";
   function encounterOf(runtime) {
     return runtime?.encounter && typeof runtime.encounter === "object" ? runtime.encounter : null;
   }
@@ -5844,7 +5974,7 @@ function setupCombatSessionController({ context, settings, getViewer, onSessionR
       lib_default.broadcast.sendMessage(
         BC_HUD_SESSION,
         {
-          session: mapCombatRuntimeToSession(lastRuntime, { viewerIsGm: isGm(), viewerPlayerId: viewer()?.playerId ?? null }),
+          session: mapCombatRuntimeToSession(lastRuntime, { viewerIsGm: isGm2(), viewerPlayerId: viewer()?.playerId ?? null }),
           candidates: lastCandidates
         },
         { destination: "LOCAL" }
@@ -5944,7 +6074,7 @@ function setupCombatSessionController({ context, settings, getViewer, onSessionR
       return;
     }
     if (type === "gm-skip-turn" || type === "gm-force-next") {
-      if (!isGm()) return;
+      if (!isGm2()) return;
       const ref = currentSessionRef();
       if (!ref) return;
       const kind = type === "gm-skip-turn" ? "turn-skipped" : "turn-forced-next";
@@ -5953,7 +6083,7 @@ function setupCombatSessionController({ context, settings, getViewer, onSessionR
       return;
     }
     if (type === "gm-start") {
-      if (!isGm()) return;
+      if (!isGm2()) return;
       const excluded = Array.isArray(data?.excludedCharacterIds) ? data.excludedCharacterIds : [];
       logDebugEvent("session", "start-requested", { excludedCount: excluded.length });
       await runMutation(
@@ -5971,7 +6101,7 @@ function setupCombatSessionController({ context, settings, getViewer, onSessionR
       return;
     }
     if (type === "gm-end") {
-      if (!isGm()) return;
+      if (!isGm2()) return;
       const ref = currentSessionRef();
       if (!ref) return;
       await runMutation("ended", () => endSession({ context, viewer: viewer(), settings, ...ref }), { sessionId: ref.sessionId });
@@ -7899,6 +8029,33 @@ function sceneToCell(grid, position) {
   }
   return null;
 }
+function cellToScene(grid, cell) {
+  const settings = normalizeTacticalGridSettings(grid);
+  if (!settings || !cell) return null;
+  const q = Number(cell.q ?? cell.cell_q ?? 0) || 0;
+  const r = Number(cell.r ?? cell.cell_r ?? 0) || 0;
+  if (settings.gridType === "square") {
+    return {
+      x: settings.anchor.x + q * settings.gridDpi,
+      y: settings.anchor.y + r * settings.gridDpi
+    };
+  }
+  if (settings.gridType === "hex_vertical") {
+    const size = settings.gridDpi / SQRT3;
+    return {
+      x: settings.anchor.x + size * SQRT3 * (q + r / 2),
+      y: settings.anchor.y + size * 1.5 * r
+    };
+  }
+  if (settings.gridType === "hex_horizontal") {
+    const size = settings.gridDpi / SQRT3;
+    return {
+      x: settings.anchor.x + size * 1.5 * q,
+      y: settings.anchor.y + size * SQRT3 * (r + q / 2)
+    };
+  }
+  return null;
+}
 function computeDistanceCells(grid, fromCell, toCell) {
   const settings = normalizeTacticalGridSettings(grid);
   if (!settings || !fromCell || !toCell) return 0;
@@ -7912,6 +8069,10 @@ function computeDistanceCells(grid, fromCell, toCell) {
     return settings.distanceMode === "manhattan" ? dx + dy : Math.max(dx, dy);
   }
   return (dx + dy + Math.abs(toQ + toR - (fromQ + fromR))) / 2;
+}
+function sameCell(a, b) {
+  if (!a || !b) return false;
+  return (Number(a.q ?? a.cell_q ?? 0) || 0) === (Number(b.q ?? b.cell_q ?? 0) || 0) && (Number(a.r ?? a.cell_r ?? 0) || 0) === (Number(b.r ?? b.cell_r ?? 0) || 0);
 }
 
 // hud/targeting/targetDistance.js
@@ -9752,6 +9913,115 @@ function createOdysseyRuntime() {
   };
 }
 
+// movement/combatMovementPreview.js
+var PREVIEW_LINE_ID = "com.odyssey-system/combat-movement-preview-line";
+var PREVIEW_LABEL_ID = "com.odyssey-system/combat-movement-preview-label";
+var PREVIEW_GHOST_ID = "com.odyssey-system/combat-movement-preview-ghost";
+function ensureObject(value) {
+  return value && typeof value === "object" ? value : {};
+}
+function isImageToken(item) {
+  return String(item?.type ?? "").trim().toUpperCase() === "IMAGE" && item?.image && item?.grid;
+}
+function buildPreviewLabel(preview) {
+  if (!preview) return "";
+  const top = `${preview.moveCostM} m / ${preview.moveLimitM} m`;
+  if (preview.inRange) {
+    return `${top}
+Remaining: ${preview.remainingMoveM} m`;
+  }
+  return `${top}
+Too far`;
+}
+function buildPreviewItems({ preview, originScene, selectedToken }) {
+  const lineColor = preview?.inRange ? "#71f79f" : "#ff7c6d";
+  const textColor = preview?.inRange ? "#d5ffe0" : "#ffd9d3";
+  const line = buildLine().id(PREVIEW_LINE_ID).name("Combat Movement Preview").layer("POINTER").locked(true).disableHit(true).startPosition(originScene).endPosition(preview.scene).strokeColor(lineColor).strokeOpacity(0.98).strokeWidth(6).strokeDash([12, 8]).disableAutoZIndex(true).build();
+  const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).position({ x: preview.scene.x + 12, y: preview.scene.y - 22 }).plainText(buildPreviewLabel(preview)).fontSize(18).fontWeight(700).padding(10).textAlign("LEFT").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor("#08111f").strokeOpacity(0.92).strokeWidth(5).build();
+  let ghost = null;
+  if (isImageToken(selectedToken)) {
+    const token = ensureObject(selectedToken);
+    ghost = buildImage(token.image, token.grid).id(PREVIEW_GHOST_ID).name("Combat Movement Ghost").layer("CHARACTER").locked(true).disableHit(true).disableAutoZIndex(true).position(preview.scene).rotation(Number(token.rotation ?? 0) || 0).scale(token.scale ?? { x: 1, y: 1 }).visible(true).metadata({}).text(token.text ?? { plainText: "" }).textItemType(token.textItemType ?? "LABEL").build();
+  }
+  return {
+    line,
+    label,
+    ghost
+  };
+}
+
+// movement/combatMovementPermissions.js
+function isGm(player) {
+  return String(player?.role ?? "").trim().toUpperCase() === "GM";
+}
+function resolveCombatMovementPermission({
+  player,
+  participant,
+  viewerControlledCharacterIds,
+  gmOverrideEnabled = false
+}) {
+  const controlledIds = viewerControlledCharacterIds instanceof Set ? viewerControlledCharacterIds : new Set(
+    Array.isArray(viewerControlledCharacterIds) ? viewerControlledCharacterIds.map((value) => String(value ?? "").trim()).filter(Boolean) : []
+  );
+  const characterId = String(participant?.character_id ?? "").trim();
+  const playerIsGm = isGm(player);
+  const controlAllowed = playerIsGm || participant?.control?.allowed === true || characterId && controlledIds.has(characterId);
+  const currentTurn = participant?.is_current_turn === true;
+  if (!participant) {
+    return {
+      canPreview: false,
+      canCommit: false,
+      measureOnly: false,
+      currentTurn: false,
+      controlAllowed: false,
+      gmOverrideActive: false,
+      message: "This token is not an active combat participant."
+    };
+  }
+  if (!controlAllowed) {
+    return {
+      canPreview: false,
+      canCommit: false,
+      measureOnly: false,
+      currentTurn,
+      controlAllowed: false,
+      gmOverrideActive: false,
+      message: "You cannot control this combatant."
+    };
+  }
+  if (playerIsGm && gmOverrideEnabled) {
+    return {
+      canPreview: true,
+      canCommit: true,
+      measureOnly: false,
+      currentTurn,
+      controlAllowed: true,
+      gmOverrideActive: true,
+      message: ""
+    };
+  }
+  if (currentTurn) {
+    return {
+      canPreview: true,
+      canCommit: true,
+      measureOnly: false,
+      currentTurn: true,
+      controlAllowed: true,
+      gmOverrideActive: false,
+      message: ""
+    };
+  }
+  return {
+    canPreview: true,
+    canCommit: false,
+    measureOnly: true,
+    currentTurn: false,
+    controlAllowed: true,
+    gmOverrideActive: false,
+    message: "It is not your turn."
+  };
+}
+
 // movement/moveToolBridge.js
 var MOVE_TOOL_CHANNEL = "odyssey:tactical-move";
 var TACTICAL_MOVE_TOOL_ID = "com.odyssey-system/tactical-move";
@@ -9759,7 +10029,8 @@ var TACTICAL_MOVE_MODE_ID = "com.odyssey-system/tactical-move/move-character";
 var MOVE_TOOL_COMMANDS = Object.freeze({
   ActivateSelected: "ACTIVATE_SELECTED",
   Cancel: "CANCEL",
-  RequestStatus: "REQUEST_STATUS"
+  RequestStatus: "REQUEST_STATUS",
+  SetGmOverride: "SET_GM_OVERRIDE"
 });
 var MOVE_TOOL_EVENTS = Object.freeze({
   Status: "STATUS",
@@ -9795,48 +10066,85 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.31e";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.32";
+var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
+var MARKER_TTL_MS = 15e3;
+var POSITION_EPSILON = 0.01;
 function createToolIcon() {
   return MOVE_TOOL_ICON_URL;
 }
 function ensureArray2(value) {
   return Array.isArray(value) ? value : [];
 }
+function nowIso() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function createRequestId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+function positionsMatch(a, b) {
+  if (!a || !b) return false;
+  return Math.abs((Number(a.x) || 0) - (Number(b.x) || 0)) <= POSITION_EPSILON && Math.abs((Number(a.y) || 0) - (Number(b.y) || 0)) <= POSITION_EPSILON;
+}
 function createInitialState() {
   return {
     player: null,
     settings: null,
-    active: false,
-    pending: false,
+    runtime: null,
     encounterId: "",
-    tokenId: "",
-    characterId: "",
-    characterName: "",
     stateVersion: 0,
-    movementVersion: 0,
-    moveCurrent: 0,
-    moveMax: 0,
     grid: null,
-    originCell: null,
-    originScene: null,
+    participantsByTokenId: /* @__PURE__ */ new Map(),
+    viewerControlledCharacterIds: /* @__PURE__ */ new Set(),
+    authoritativeByTokenId: /* @__PURE__ */ new Map(),
+    selectedToken: null,
+    selectedParticipant: null,
+    permission: null,
     preview: null,
-    previewCreated: false
+    previewCreated: false,
+    pending: false,
+    dragActive: false,
+    toolRegistered: false,
+    gmOverrideEnabled: false,
+    previousToolId: "",
+    previousModeId: "",
+    autoToolClaimed: false,
+    runtimeRefreshPromise: null,
+    runtimeRefreshTimer: null,
+    lastSessionSignature: "",
+    localMarkersByTokenId: /* @__PURE__ */ new Map()
   };
 }
 function buildStatus(state, extras = {}) {
+  const participant = state.selectedParticipant ?? null;
+  const permission = state.permission ?? {};
   const preview = state.preview ?? null;
+  const position = participant?.position ?? null;
   return {
-    active: state.active,
+    active: !!participant,
     pending: state.pending,
+    toolRegistered: state.toolRegistered,
     encounterId: state.encounterId,
-    tokenId: state.tokenId,
-    characterId: state.characterId,
-    characterName: state.characterName,
-    moveCurrent: state.moveCurrent,
-    moveMax: state.moveMax,
-    stateVersion: state.stateVersion,
-    movementVersion: state.movementVersion,
+    tokenId: String(state.selectedToken?.id ?? participant?.token_id ?? "").trim(),
+    characterId: String(participant?.character_id ?? "").trim(),
+    characterName: String(participant?.display_name ?? state.selectedToken?.name ?? "").trim(),
+    moveCurrent: Number(participant?.move_current ?? 0) || 0,
+    moveMax: Number(participant?.move_max ?? 0) || 0,
+    stateVersion: Number(state.stateVersion ?? 0) || 0,
+    movementVersion: Number(participant?.movement_version ?? 0) || 0,
     tacticalGrid: state.grid,
+    gridReady: !!state.grid,
+    gmOverrideEnabled: state.gmOverrideEnabled,
+    currentTurn: permission.currentTurn === true,
+    measureOnly: permission.measureOnly === true,
+    canCommit: permission.canCommit === true,
+    controlAllowed: permission.controlAllowed === true,
+    position: position ? {
+      cell_q: Number(position.cell_q ?? 0) || 0,
+      cell_r: Number(position.cell_r ?? 0) || 0,
+      scene_x: Number(position.scene_x ?? 0) || 0,
+      scene_y: Number(position.scene_y ?? 0) || 0
+    } : null,
     preview: preview ? {
       cell_q: preview.cell.q,
       cell_r: preview.cell.r,
@@ -9844,55 +10152,60 @@ function buildStatus(state, extras = {}) {
       scene_y: preview.scene.y,
       distanceCells: preview.distanceCells,
       moveCostM: preview.moveCostM,
+      moveLimitM: preview.moveLimitM,
       remainingMoveM: preview.remainingMoveM,
       inRange: preview.inRange
     } : null,
     ...extras
   };
 }
-function extractParticipant(runtime, characterId, tokenId) {
-  const participants = ensureArray2(runtime?.visible_participants);
-  return participants.find((participant) => {
-    const participantCharacterId = String(participant?.character_id ?? "").trim();
-    const participantTokenId = String(participant?.token_id ?? "").trim();
-    return participantCharacterId && participantCharacterId === characterId || participantTokenId && tokenId && participantTokenId === tokenId;
-  }) ?? null;
-}
-function resolvePreviewIds(playerId = "") {
-  const safe = String(playerId || "viewer").replace(/[^a-z0-9_-]/gi, "_");
+function extractMovementMarker(item) {
+  const raw = item?.metadata?.[COMBAT_MOVEMENT_METADATA_KEY];
+  if (!raw || typeof raw !== "object") return null;
+  const source = String(raw.source ?? "").trim();
+  const requestId = String(raw.requestId ?? "").trim();
+  const updatedAt = String(raw.updatedAt ?? "").trim();
+  const movementVersion = Number(raw.movementVersion ?? 0) || 0;
+  if (!source || !updatedAt) return null;
   return {
-    lineId: `odyssey-move-preview-line-${safe}`,
-    labelId: `odyssey-move-preview-label-${safe}`
+    source,
+    requestId,
+    updatedAt,
+    movementVersion
   };
 }
-function buildPreviewLabel(preview) {
-  if (!preview) return "";
-  if (!preview.inRange) {
-    return `${preview.moveCostM} m | \u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E MOVE`;
-  }
-  return `${preview.moveCostM} m | \u043E\u0441\u0442\u0430\u043B\u043E\u0441\u044C ${preview.remainingMoveM} m`;
+function isFreshMarker(marker) {
+  if (!marker?.updatedAt) return false;
+  const updatedAtMs = Date.parse(marker.updatedAt);
+  if (!Number.isFinite(updatedAtMs)) return false;
+  return Date.now() - updatedAtMs <= MARKER_TTL_MS;
 }
-function buildLineItem(ids, from, to) {
-  return buildLine().id(ids.lineId).name("Odyssey Move Preview").layer("POINTER").locked(true).disableHit(true).startPosition(from).endPosition(to).strokeColor("#ff6b6b").strokeOpacity(0.95).strokeWidth(6).strokeDash([10, 8]).build();
-}
-function buildLabelItem(ids, preview) {
-  return buildText().id(ids.labelId).name("Odyssey Move Preview Label").layer("TEXT").locked(true).disableHit(true).position({ x: preview.scene.x + 10, y: preview.scene.y - 16 }).plainText(buildPreviewLabel(preview)).fontSize(18).fontWeight(700).padding(8).textAlign("LEFT").textAlignVertical("MIDDLE").fillColor(preview.inRange ? "#b9ffd1" : "#ffd5d5").fillOpacity(1).strokeColor("#08111f").strokeOpacity(0.85).strokeWidth(5).build();
+function buildMovementMarker({ requestId, movementVersion, source }) {
+  return {
+    source,
+    requestId,
+    movementVersion,
+    updatedAt: nowIso()
+  };
 }
 function setupTacticalMoveTool({ runtime }) {
   const combatApi = runtime?.api?.combat;
   if (!combatApi) {
-    addDiagnosticEntry("error", "Tactical move init failed", "Combat API is unavailable.");
+    addDiagnosticEntry("error", "Combat movement init failed", "Combat API is unavailable.");
     return {
       dispose() {
       }
     };
   }
   const state = createInitialState();
-  const ids = { lineId: "", labelId: "" };
   let unsubscribeBroadcast = null;
   let unsubscribeSceneItems = null;
+  let unsubscribePlayer = null;
+  let unsubscribeSession = null;
+  let unsubscribeTool = null;
   let disposed = false;
   async function notify3(message, variant = "INFO") {
+    if (!message) return;
     try {
       await lib_default.notification.show(message, variant);
     } catch {
@@ -9904,326 +10217,550 @@ function setupTacticalMoveTool({ runtime }) {
     } catch {
     }
   }
-  async function clearPreview() {
-    if (!ids.lineId || !ids.labelId) return;
+  function clearRuntimeCache() {
+    state.runtime = null;
+    state.encounterId = "";
+    state.stateVersion = 0;
+    state.grid = null;
+    state.participantsByTokenId = /* @__PURE__ */ new Map();
+    state.viewerControlledCharacterIds = /* @__PURE__ */ new Set();
+    state.authoritativeByTokenId = /* @__PURE__ */ new Map();
+  }
+  function updateRuntimeCache(runtimeResponse) {
+    const encounter = runtimeResponse?.encounter ?? null;
+    if (!encounter?.id || String(encounter?.status ?? "").trim() !== "active") {
+      clearRuntimeCache();
+      return;
+    }
+    state.runtime = runtimeResponse;
+    state.encounterId = String(encounter.id ?? "").trim();
+    state.stateVersion = Number(
+      runtimeResponse?.state_version ?? encounter?.state_version ?? 0
+    ) || 0;
+    state.grid = normalizeTacticalGridSettings(runtimeResponse?.tactical_grid);
+    const nextParticipants = /* @__PURE__ */ new Map();
+    const nextPositions = /* @__PURE__ */ new Map();
+    for (const participant of ensureArray2(runtimeResponse?.visible_participants)) {
+      const tokenId = String(participant?.token_id ?? "").trim();
+      const characterId = String(participant?.character_id ?? "").trim();
+      if (!tokenId || !characterId) continue;
+      nextParticipants.set(tokenId, participant);
+      const position = participant?.position ?? null;
+      if (position) {
+        nextPositions.set(tokenId, {
+          encounterId: state.encounterId,
+          tokenId,
+          characterId,
+          cell_q: Number(position.cell_q ?? 0) || 0,
+          cell_r: Number(position.cell_r ?? 0) || 0,
+          scene_x: Number(position.scene_x ?? 0) || 0,
+          scene_y: Number(position.scene_y ?? 0) || 0,
+          movementVersion: Number(participant?.movement_version ?? 0) || 0,
+          stateVersion: state.stateVersion
+        });
+      }
+    }
+    state.participantsByTokenId = nextParticipants;
+    state.authoritativeByTokenId = nextPositions;
+    state.viewerControlledCharacterIds = new Set(
+      ensureArray2(runtimeResponse?.viewer_controlled_character_ids).map((value) => String(value ?? "").trim()).filter(Boolean)
+    );
+  }
+  async function ensureSettingsLoaded() {
+    if (!state.settings) {
+      state.settings = await loadRoomSupabaseSettings();
+    }
+    if (!hasSupabaseSettings(state.settings)) {
+      throw new Error("Supabase room settings are not configured.");
+    }
+  }
+  async function ensurePlayerLoaded() {
+    state.player = await getPlayerInfo();
+    return state.player;
+  }
+  async function fetchRuntime(reason = "refresh") {
+    if (state.runtimeRefreshPromise) {
+      return state.runtimeRefreshPromise;
+    }
+    state.runtimeRefreshPromise = (async () => {
+      await ensureSettingsLoaded();
+      const player = await ensurePlayerLoaded();
+      const roomContext = await getRoomSceneContext();
+      if (!roomContext?.campaignId || !roomContext?.roomId || !roomContext?.sceneId) {
+        throw new Error("Unable to resolve Owlbear room or scene context.");
+      }
+      const runtimeResponse = await combatApi.getActiveRuntime(
+        {
+          campaign_id: roomContext.campaignId,
+          room_id: roomContext.roomId,
+          scene_id: roomContext.sceneId,
+          actor_player_id: player.id,
+          actor_is_gm: player.role === "GM",
+          include_hidden: player.role === "GM"
+        },
+        state.settings
+      );
+      if (runtimeResponse?.ok === false) {
+        throw new Error(runtimeResponse?.message || "Unable to read active combat runtime.");
+      }
+      updateRuntimeCache(runtimeResponse);
+      return runtimeResponse;
+    })().catch((error) => {
+      const normalized = normalizeError(error, `Unable to refresh combat runtime (${reason}).`);
+      addDiagnosticEntry("warn", "Combat movement runtime refresh failed", normalized.message);
+      clearRuntimeCache();
+      throw normalized;
+    }).finally(() => {
+      state.runtimeRefreshPromise = null;
+    });
+    return state.runtimeRefreshPromise;
+  }
+  function scheduleRuntimeRefresh(reason = "scheduled") {
+    if (state.runtimeRefreshTimer) {
+      clearTimeout(state.runtimeRefreshTimer);
+    }
+    state.runtimeRefreshTimer = setTimeout(() => {
+      state.runtimeRefreshTimer = null;
+      void fetchRuntime(reason).then((runtimeResponse) => syncSelectionState(`${reason}-selection`, { runtimeResponse })).catch(() => syncSelectionState(`${reason}-selection`));
+    }, 120);
+  }
+  async function clearPreview({ reason = "preview-cleared", silent = false } = {}) {
     try {
-      await lib_default.scene.local.deleteItems([ids.lineId, ids.labelId]);
+      await lib_default.scene.local.deleteItems(PREVIEW_IDS);
     } catch {
     }
     state.preview = null;
     state.previewCreated = false;
+    state.dragActive = false;
+    if (!silent) {
+      await publishStatus({ reason });
+    }
   }
   async function updatePreview(preview) {
-    state.preview = preview;
-    if (!ids.lineId || !ids.labelId) {
-      const nextIds = resolvePreviewIds(state.player?.id);
-      ids.lineId = nextIds.lineId;
-      ids.labelId = nextIds.labelId;
+    if (!state.selectedToken || !state.selectedParticipant) return;
+    const current2 = state.preview;
+    if (current2 && sameCell(current2.cell, preview.cell) && current2.inRange === preview.inRange && current2.moveCostM === preview.moveCostM && current2.remainingMoveM === preview.remainingMoveM) {
+      return;
     }
-    const line = buildLineItem(ids, state.originScene, preview.scene);
-    const label = buildLabelItem(ids, preview);
+    state.preview = preview;
+    const originScene = {
+      x: Number(state.selectedParticipant.position?.scene_x ?? 0) || 0,
+      y: Number(state.selectedParticipant.position?.scene_y ?? 0) || 0
+    };
+    const items = buildPreviewItems({
+      preview,
+      originScene,
+      selectedToken: state.selectedToken
+    });
+    const addItems = [items.line, items.label];
+    if (items.ghost) addItems.push(items.ghost);
     try {
       if (!state.previewCreated) {
-        await lib_default.scene.local.addItems([line, label]);
+        await lib_default.scene.local.addItems(addItems);
         state.previewCreated = true;
       } else {
-        await lib_default.scene.local.updateItems([ids.lineId, ids.labelId], (items) => {
-          for (const item of items) {
-            if (item.id === ids.lineId && item.type === "LINE") {
-              item.startPosition = line.startPosition;
-              item.endPosition = line.endPosition;
-              item.style = line.style;
+        const updateIds = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID];
+        if (items.ghost) updateIds.push(PREVIEW_GHOST_ID);
+        await lib_default.scene.local.updateItems(updateIds, (sceneItems) => {
+          for (const item of sceneItems) {
+            if (item.id === PREVIEW_LINE_ID && item.type === "LINE") {
+              item.startPosition = items.line.startPosition;
+              item.endPosition = items.line.endPosition;
+              item.style = items.line.style;
             }
-            if (item.id === ids.labelId && item.type === "TEXT") {
-              item.position = label.position;
-              item.text = label.text;
-              item.metadata = label.metadata;
+            if (item.id === PREVIEW_LABEL_ID && item.type === "TEXT") {
+              item.position = items.label.position;
+              item.text = items.label.text;
+              item.style = items.label.style;
+            }
+            if (item.id === PREVIEW_GHOST_ID && item.type === "IMAGE" && items.ghost) {
+              item.position = items.ghost.position;
+              item.rotation = items.ghost.rotation;
+              item.scale = items.ghost.scale;
             }
           }
         });
       }
     } catch (error) {
-      const normalized = normalizeError(error, "Unable to update move preview.");
-      addDiagnosticEntry("error", "Move preview failed", normalized.message);
+      const normalized = normalizeError(error, "Unable to update movement preview.");
+      addDiagnosticEntry("warn", "Combat movement preview failed", normalized.message);
     }
     await publishStatus();
   }
-  async function loadRuntimeForSelection(tokenId = "") {
-    state.settings = await loadRoomSupabaseSettings();
-    if (!hasSupabaseSettings(state.settings)) {
-      throw new Error("Supabase room settings are not configured.");
-    }
-    state.player = await getPlayerInfo();
-    const roomContext = await getRoomSceneContext();
-    const runtimeResponse = await combatApi.getActiveRuntime(
-      {
-        campaign_id: roomContext.campaignId,
-        room_id: roomContext.roomId,
-        scene_id: roomContext.sceneId,
-        actor_player_id: state.player.id,
-        actor_is_gm: state.player.role === "GM",
-        include_hidden: state.player.role === "GM"
-      },
-      state.settings
-    );
-    if (runtimeResponse?.ok === false) {
-      throw new Error(runtimeResponse?.message || "Unable to read active encounter runtime.");
-    }
-    return { roomContext, runtimeResponse };
-  }
-  async function prepareFromSelectedToken(reason = "manual", commandPayload = {}) {
-    const selectedTokens = await getSelectedOwlbearTokens();
-    if (selectedTokens.length !== 1) {
-      await clearPreview();
-      state.active = false;
-      state.pending = false;
-      const message = "Select exactly one token before using Move.";
-      await publishStatus({ error: message, reason });
-      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
-        message,
-        reason,
-        characterId: String(commandPayload.characterId ?? "").trim(),
-        tokenId: String(commandPayload.tokenId ?? "").trim()
-      });
-      await notify3(message, "WARNING");
-      return false;
-    }
-    const token = selectedTokens[0];
-    const selectedTokenId = String(token?.id ?? "").trim();
-    if (commandPayload.tokenId && String(commandPayload.tokenId).trim() !== selectedTokenId) {
-      const message = "Selected token changed before Move could start.";
-      state.active = false;
-      state.pending = false;
-      await clearPreview();
-      await publishStatus({ error: message, reason });
-      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
-        message,
-        reason,
-        tokenId: selectedTokenId,
-        characterId: String(commandPayload.characterId ?? "").trim()
-      });
-      await notify3(message, "WARNING");
-      return false;
-    }
-    try {
-      const { runtimeResponse } = await loadRuntimeForSelection(selectedTokenId);
-      const encounter = runtimeResponse?.encounter;
-      if (!encounter?.id) {
-        throw new Error("No active combat exists for this scene.");
-      }
-      const participant = ensureArray2(
-        runtimeResponse?.visible_participants
-      ).find((row) => String(row?.token_id ?? "").trim() === selectedTokenId) ?? null;
-      if (!participant) {
-        throw new Error("The selected token is not an active combat participant.");
-      }
-      const characterId = String(
-        participant.character_id ?? ""
-      ).trim();
-      if (!characterId) {
-        throw new Error("The selected combat participant has no character ID.");
-      }
-      if (commandPayload.characterId && String(commandPayload.characterId).trim() !== characterId) {
-        throw new Error("The selected token does not match the active character panel.");
-      }
-      if (!participant?.control?.allowed) {
-        throw new Error("You cannot control this character right now.");
-      }
-      if (!participant?.is_current_turn) {
-        throw new Error("It is not this character's turn.");
-      }
-      const tacticalGrid = normalizeTacticalGridSettings(runtimeResponse?.tactical_grid);
-      if (!tacticalGrid) {
-        throw new Error("The tactical grid has not been synced by the GM yet.");
-      }
-      const originPosition = participant?.position ?? null;
-      if (!originPosition) {
-        throw new Error("This token position has not been synced by the GM yet.");
-      }
-      state.active = true;
-      state.pending = false;
-      state.encounterId = String(encounter.id ?? "").trim();
-      state.tokenId = String(participant.token_id ?? token.id ?? "").trim();
-      state.characterId = characterId;
-      state.characterName = String(participant.display_name ?? token.name ?? characterId).trim();
-      state.stateVersion = Number(runtimeResponse?.state_version ?? encounter?.state_version ?? 0) || 0;
-      state.movementVersion = Number(participant?.movement_version ?? 0) || 0;
-      state.moveCurrent = Number(participant?.move_current ?? 0) || 0;
-      state.moveMax = Number(participant?.move_max ?? 0) || 0;
-      state.grid = tacticalGrid;
-      state.originCell = {
-        q: Number(originPosition.cell_q ?? 0) || 0,
-        r: Number(originPosition.cell_r ?? 0) || 0
-      };
-      state.originScene = {
-        x: Number(originPosition.scene_x ?? token.position?.x ?? 0) || 0,
-        y: Number(originPosition.scene_y ?? token.position?.y ?? 0) || 0
-      };
-      await clearPreview();
-      await publishStatus({ reason });
-      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Activated, buildStatus(state, { reason }));
-      return true;
-    } catch (error) {
-      const message = toErrorMessage(error, "Unable to prepare movement for the selected token.");
-      state.active = false;
-      state.pending = false;
-      await clearPreview();
-      await publishStatus({ error: message, reason });
-      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
-        message,
-        reason,
-        tokenId: selectedTokenId,
-        characterId: String(commandPayload.characterId ?? "").trim()
-      });
-      await notify3(message, "WARNING");
-      return false;
-    }
-  }
-  function buildPreviewFromPosition(snappedPosition) {
-    if (!state.active || !state.grid || !state.originCell || !state.originScene) return null;
-    const cell = sceneToCell(state.grid, snappedPosition);
-    if (!cell) return null;
-    const distanceCells = computeDistanceCells(state.grid, state.originCell, cell);
-    const moveCostM = distanceCells * state.grid.metersPerCell;
-    const remainingMoveM = state.moveCurrent - moveCostM;
+  function getSelectedParticipantOrigin() {
+    const position = state.selectedParticipant?.position ?? null;
+    if (!position) return null;
     return {
-      cell,
-      scene: { x: Number(snappedPosition.x) || 0, y: Number(snappedPosition.y) || 0 },
-      distanceCells,
-      moveCostM,
-      remainingMoveM,
-      inRange: remainingMoveM >= 0
+      cell: {
+        q: Number(position.cell_q ?? 0) || 0,
+        r: Number(position.cell_r ?? 0) || 0
+      },
+      scene: {
+        x: Number(position.scene_x ?? 0) || 0,
+        y: Number(position.scene_y ?? 0) || 0
+      }
     };
   }
-  async function applyMove(preview) {
-    if (!preview || !state.active || state.pending) return;
-    state.pending = true;
-    await publishStatus();
-    try {
-      const result = await combatApi.moveCharacter(
-        {
-          encounter_id: state.encounterId,
-          character_id: state.characterId,
-          token_id: state.tokenId,
-          expected_state_version: state.stateVersion,
-          expected_movement_version: state.movementVersion,
-          actor_player_id: state.player?.id ?? "",
-          actor_is_gm: state.player?.role === "GM",
-          destination: {
-            cell_q: preview.cell.q,
-            cell_r: preview.cell.r,
-            scene_x: preview.scene.x,
-            scene_y: preview.scene.y
-          }
-        },
-        state.settings
-      );
-      if (!result || result.ok === false) {
-        const message = String(result?.message ?? result?.error ?? "Unable to move character.");
-        if (result?.runtime) {
-          const participant = extractParticipant(result.runtime, state.characterId, state.tokenId);
-          if (participant?.position) {
-            state.stateVersion = Number(result.runtime?.state_version ?? state.stateVersion) || state.stateVersion;
-            state.movementVersion = Number(participant.movement_version ?? state.movementVersion) || state.movementVersion;
-            state.moveCurrent = Number(participant.move_current ?? state.moveCurrent) || state.moveCurrent;
-            state.moveMax = Number(participant.move_max ?? state.moveMax) || state.moveMax;
-            state.originCell = {
-              q: Number(participant.position.cell_q ?? state.originCell?.q ?? 0) || 0,
-              r: Number(participant.position.cell_r ?? state.originCell?.r ?? 0) || 0
-            };
-            state.originScene = {
-              x: Number(participant.position.scene_x ?? state.originScene?.x ?? 0) || 0,
-              y: Number(participant.position.scene_y ?? state.originScene?.y ?? 0) || 0
-            };
-          }
+  function buildPreviewFromPointer(pointerPosition) {
+    const grid = state.grid;
+    const participant = state.selectedParticipant;
+    if (!grid || !participant?.position) return null;
+    const origin = getSelectedParticipantOrigin();
+    if (!origin) return null;
+    const cell = sceneToCell(grid, pointerPosition);
+    if (!cell) return null;
+    const snappedScene = cellToScene(grid, cell);
+    if (!snappedScene) return null;
+    const distanceCells = computeDistanceCells(grid, origin.cell, cell);
+    const moveCostM = distanceCells * Math.max(Number(grid.metersPerCell ?? 1) || 1, 1);
+    const moveLimitM = Number(participant.move_current ?? 0) || 0;
+    return {
+      cell,
+      scene: snappedScene,
+      distanceCells,
+      moveCostM,
+      moveLimitM,
+      remainingMoveM: moveLimitM - moveCostM,
+      inRange: moveCostM <= moveLimitM
+    };
+  }
+  async function capturePreviousTool() {
+    if (state.autoToolClaimed) return;
+    const [activeTool, activeMode] = await Promise.all([
+      getActiveTool().catch(() => ""),
+      getActiveToolMode().catch(() => "")
+    ]);
+    if (activeTool && activeTool !== TACTICAL_MOVE_TOOL_ID) {
+      state.previousToolId = activeTool;
+      state.previousModeId = activeMode;
+    }
+  }
+  async function ensureToolActivated(reason = "auto-select") {
+    await capturePreviousTool();
+    const [activeTool, activeMode] = await Promise.all([
+      getActiveTool().catch(() => ""),
+      getActiveToolMode().catch(() => "")
+    ]);
+    if (activeTool === TACTICAL_MOVE_TOOL_ID && activeMode === TACTICAL_MOVE_MODE_ID) {
+      state.autoToolClaimed = true;
+      return;
+    }
+    await activateTool(TACTICAL_MOVE_TOOL_ID);
+    await activateToolMode(TACTICAL_MOVE_TOOL_ID, TACTICAL_MOVE_MODE_ID);
+    state.autoToolClaimed = true;
+    await publishStatus({ reason });
+  }
+  async function restorePreviousTool(reason = "restore-tool") {
+    if (!state.autoToolClaimed) return;
+    const activeTool = await getActiveTool().catch(() => "");
+    if (activeTool === TACTICAL_MOVE_TOOL_ID && state.previousToolId) {
+      try {
+        await activateTool(state.previousToolId);
+        if (state.previousModeId) {
+          await activateToolMode(state.previousToolId, state.previousModeId).catch(() => {
+          });
         }
-        await clearPreview();
-        state.pending = false;
-        await publishStatus({ error: message });
-        await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, { message, code: result?.error ?? "" });
-        await notify3(message, result?.error === "STATE_VERSION_CONFLICT" ? "WARNING" : "ERROR");
+      } catch {
+      }
+    }
+    state.autoToolClaimed = false;
+    await publishStatus({ reason });
+  }
+  async function syncSelectionState(reason = "selection-sync", options = {}) {
+    state.player = await getPlayerInfo().catch(() => state.player);
+    const selectedTokens = await getSelectedOwlbearTokens().catch(() => []);
+    const selectedToken = selectedTokens.length === 1 ? selectedTokens[0] : null;
+    const runtimeResponse = options.runtimeResponse ?? state.runtime;
+    if (!selectedToken) {
+      state.selectedToken = null;
+      state.selectedParticipant = null;
+      state.permission = null;
+      await clearPreview({ reason: `${reason}-no-selection`, silent: true });
+      await restorePreviousTool(`${reason}-no-selection`);
+      await publishStatus({ reason: `${reason}-no-selection` });
+      return;
+    }
+    state.selectedToken = selectedToken;
+    if (!runtimeResponse?.encounter?.id || !state.encounterId) {
+      state.selectedParticipant = null;
+      state.permission = null;
+      await clearPreview({ reason: `${reason}-no-encounter`, silent: true });
+      await restorePreviousTool(`${reason}-no-encounter`);
+      await publishStatus({ reason: `${reason}-no-encounter`, tokenId: selectedToken.id });
+      return;
+    }
+    const participant = state.participantsByTokenId.get(String(selectedToken.id ?? "").trim()) ?? null;
+    if (!participant) {
+      state.selectedParticipant = null;
+      state.permission = null;
+      await clearPreview({ reason: `${reason}-non-combat-token`, silent: true });
+      await restorePreviousTool(`${reason}-non-combat-token`);
+      await publishStatus({ reason: `${reason}-non-combat-token`, tokenId: selectedToken.id });
+      return;
+    }
+    const previousCharacterId = String(state.selectedParticipant?.character_id ?? "").trim();
+    state.selectedParticipant = participant;
+    state.permission = resolveCombatMovementPermission({
+      player: state.player,
+      participant,
+      viewerControlledCharacterIds: state.viewerControlledCharacterIds,
+      gmOverrideEnabled: state.gmOverrideEnabled
+    });
+    const nextCharacterId = String(participant.character_id ?? "").trim();
+    const selectionChanged = previousCharacterId !== nextCharacterId;
+    const gridReady = !!state.grid;
+    if (selectionChanged || !gridReady) {
+      await clearPreview({ reason: `${reason}-selection-updated`, silent: true });
+    }
+    await ensureToolActivated(reason);
+    await publishStatus({ reason, gridReady });
+  }
+  async function refreshRuntimeAndSelection(reason = "refresh-runtime") {
+    try {
+      const runtimeResponse = await fetchRuntime(reason);
+      await syncSelectionState(reason, { runtimeResponse });
+    } catch {
+      await syncSelectionState(reason);
+    }
+  }
+  async function writeTokenPositionWithMarker(tokenId, scenePosition, movementVersion, source) {
+    const requestId = createRequestId();
+    const marker = buildMovementMarker({
+      requestId,
+      movementVersion,
+      source
+    });
+    state.localMarkersByTokenId.set(tokenId, marker);
+    await lib_default.scene.items.updateItems([tokenId], (items) => {
+      for (const item of items) {
+        item.position = {
+          x: Number(scenePosition.x ?? scenePosition.scene_x ?? 0) || 0,
+          y: Number(scenePosition.y ?? scenePosition.scene_y ?? 0) || 0
+        };
+        item.metadata = {
+          ...item.metadata ?? {},
+          [COMBAT_MOVEMENT_METADATA_KEY]: marker
+        };
+      }
+    });
+  }
+  async function revertUnauthorizedTokenMove(tokenId, authoritative, message = "Use combat movement during your turn.") {
+    try {
+      await writeTokenPositionWithMarker(
+        tokenId,
+        { x: authoritative.scene_x, y: authoritative.scene_y },
+        authoritative.movementVersion,
+        "combat-movement-revert"
+      );
+      await notify3(message, "WARNING");
+    } catch (error) {
+      const normalized = normalizeError(error, "Unable to restore authoritative combat position.");
+      addDiagnosticEntry("warn", "Combat movement revert failed", normalized.message);
+    }
+  }
+  async function applyMoveResultToScene(result, source) {
+    const nextPosition = result?.position ?? null;
+    const tokenId = String(
+      nextPosition?.token_id ?? state.selectedParticipant?.token_id ?? state.selectedToken?.id ?? ""
+    ).trim();
+    if (!nextPosition || !tokenId) return;
+    await writeTokenPositionWithMarker(
+      tokenId,
+      {
+        x: Number(nextPosition.scene_x ?? 0) || 0,
+        y: Number(nextPosition.scene_y ?? 0) || 0
+      },
+      Number(result?.movement_version ?? state.selectedParticipant?.movement_version ?? 0) || 0,
+      source
+    );
+  }
+  async function finalizeMutationSuccess(result, source, successMessage) {
+    if (result?.runtime) {
+      updateRuntimeCache(result.runtime);
+    }
+    await applyMoveResultToScene(result, source);
+    if (state.gmOverrideEnabled && source === "combat-gm-reposition") {
+      state.gmOverrideEnabled = false;
+    }
+    await clearPreview({ reason: `${source}-applied`, silent: true });
+    state.pending = false;
+    await syncSelectionState(`${source}-applied`, { runtimeResponse: result?.runtime ?? state.runtime });
+    await publishMoveToolEvent(MOVE_TOOL_EVENTS.Applied, {
+      ...buildStatus(state, { applied: true, source }),
+      runtime: result?.runtime ?? null
+    });
+    await notify3(successMessage, "SUCCESS");
+  }
+  async function failMutation(result, fallbackMessage) {
+    const message = String(result?.message ?? result?.error ?? fallbackMessage);
+    if (result?.runtime) {
+      updateRuntimeCache(result.runtime);
+    }
+    await clearPreview({ reason: "move-failed", silent: true });
+    state.pending = false;
+    await syncSelectionState("move-failed", { runtimeResponse: result?.runtime ?? state.runtime });
+    await publishStatus({ error: message });
+    await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
+      message,
+      code: String(result?.error ?? "").trim(),
+      tokenId: String(state.selectedToken?.id ?? "").trim(),
+      characterId: String(state.selectedParticipant?.character_id ?? "").trim()
+    });
+    await notify3(message, result?.error === "STALE_MOVEMENT_STATE" ? "WARNING" : "ERROR");
+  }
+  async function commitPreview(preview) {
+    if (!state.selectedParticipant || !state.permission || state.pending) return;
+    if (!preview || preview.distanceCells <= 0) {
+      await clearPreview({ reason: "zero-distance", silent: true });
+      await publishStatus({ reason: "zero-distance" });
+      return;
+    }
+    if (!state.permission.canCommit) {
+      await clearPreview({ reason: "measure-only", silent: true });
+      await publishStatus({ reason: "measure-only" });
+      await notify3(
+        state.permission.controlAllowed ? "It is not your turn." : "You cannot control this combatant.",
+        "WARNING"
+      );
+      return;
+    }
+    if (!preview.inRange) {
+      await clearPreview({ reason: "move-too-far", silent: true });
+      await publishStatus({ reason: "move-too-far" });
+      await notify3("Movement exceeds remaining distance.", "WARNING");
+      return;
+    }
+    state.pending = true;
+    await publishStatus({ reason: "mutation-start" });
+    const payloadBase = {
+      encounter_id: state.encounterId,
+      character_id: String(state.selectedParticipant.character_id ?? "").trim(),
+      token_id: String(state.selectedParticipant.token_id ?? state.selectedToken?.id ?? "").trim(),
+      expected_state_version: state.stateVersion,
+      expected_movement_version: Number(state.selectedParticipant.movement_version ?? 0) || 0,
+      actor_player_id: state.player?.id ?? "",
+      actor_is_gm: state.player?.role === "GM",
+      destination: {
+        cell_q: preview.cell.q,
+        cell_r: preview.cell.r,
+        scene_x: preview.scene.x,
+        scene_y: preview.scene.y
+      }
+    };
+    try {
+      if (state.gmOverrideEnabled && state.player?.role === "GM") {
+        const result2 = await combatApi.gmRepositionCharacter(
+          {
+            ...payloadBase,
+            consume_movement: false
+          },
+          state.settings
+        );
+        if (!result2 || result2.ok === false) {
+          await failMutation(result2, "Unable to reposition combatant.");
+          return;
+        }
+        await finalizeMutationSuccess(
+          result2,
+          "combat-gm-reposition",
+          `${state.selectedParticipant.display_name || "Combatant"} repositioned.`
+        );
         return;
       }
-      const nextPosition = result?.position ?? {};
-      await lib_default.scene.items.updateItems([state.tokenId], (items) => {
-        for (const item of items) {
-          item.position = {
-            x: Number(nextPosition.scene_x ?? preview.scene.x) || 0,
-            y: Number(nextPosition.scene_y ?? preview.scene.y) || 0
-          };
-        }
-      });
-      state.originCell = {
-        q: Number(nextPosition.cell_q ?? preview.cell.q) || 0,
-        r: Number(nextPosition.cell_r ?? preview.cell.r) || 0
-      };
-      state.originScene = {
-        x: Number(nextPosition.scene_x ?? preview.scene.x) || 0,
-        y: Number(nextPosition.scene_y ?? preview.scene.y) || 0
-      };
-      state.moveCurrent = Number(result.move_current ?? state.moveCurrent) || 0;
-      state.movementVersion = Number(result.movement_version ?? state.movementVersion) || 0;
-      state.stateVersion = Number(result.state_version ?? state.stateVersion) || 0;
-      state.pending = false;
-      await clearPreview();
-      await publishStatus({ applied: true });
-      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Applied, {
-        ...buildStatus(state, { applied: true }),
-        runtime: result.runtime ?? null
-      });
-      await notify3(
-        result.move_cost_m > 0 ? `${state.characterName} moved ${result.move_cost_m} m.` : `${state.characterName} position confirmed.`,
-        "SUCCESS"
+      const result = await combatApi.moveCharacter(payloadBase, state.settings);
+      if (!result || result.ok === false) {
+        await failMutation(result, "Unable to move combatant.");
+        return;
+      }
+      await finalizeMutationSuccess(
+        result,
+        "combat-movement",
+        `Moved ${preview.moveCostM} m \xB7 ${Math.max(preview.remainingMoveM, 0)} m remaining.`
       );
     } catch (error) {
+      const normalized = normalizeError(error, "Unable to move combatant.");
+      addDiagnosticEntry("error", "Combat movement RPC failed", normalized.message);
+      await clearPreview({ reason: "move-exception", silent: true });
       state.pending = false;
-      await clearPreview();
-      const normalized = normalizeError(error, "Unable to move character.");
-      addDiagnosticEntry("error", "Move RPC failed", normalized.message);
       await publishStatus({ error: normalized.message });
-      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, { message: normalized.message });
+      await publishMoveToolEvent(MOVE_TOOL_EVENTS.Error, {
+        message: normalized.message,
+        tokenId: String(state.selectedToken?.id ?? "").trim(),
+        characterId: String(state.selectedParticipant?.character_id ?? "").trim()
+      });
       await notify3(normalized.message, "ERROR");
     }
   }
-  async function cancelMove(reason = "cancelled") {
-    state.active = false;
-    state.pending = false;
-    await clearPreview();
-    await publishStatus({ reason });
-    await publishMoveToolEvent(MOVE_TOOL_EVENTS.Cancelled, { reason });
+  async function handleToolDragStart(_context, event) {
+    if (!state.selectedToken || !state.selectedParticipant) return;
+    const targetId = String(event?.target?.id ?? "").trim();
+    const selectedTokenId = String(state.selectedToken.id ?? "").trim();
+    if (!targetId || targetId !== selectedTokenId) return;
+    if (!state.permission?.canPreview) {
+      await publishStatus({ error: state.permission?.message || "You cannot control this combatant." });
+      await notify3(state.permission?.message || "You cannot control this combatant.", "WARNING");
+      return;
+    }
+    if (!state.grid) {
+      await publishStatus({ error: "Tactical grid is not synced yet." });
+      await notify3("Tactical grid is not synced yet.", "WARNING");
+      return;
+    }
+    state.dragActive = true;
+    const preview = buildPreviewFromPointer(event.pointerPosition);
+    if (preview) {
+      await updatePreview(preview);
+    }
   }
-  async function handleToolMove(_context, event) {
-    if (!state.active || state.pending || !state.grid) return;
-    const snapped = await snapScenePosition(event.pointerPosition, 1);
-    const preview = buildPreviewFromPosition(snapped);
+  async function handleToolDragMove(_context, event) {
+    if (!state.dragActive || !state.permission?.canPreview) return;
+    const preview = buildPreviewFromPointer(event.pointerPosition);
     if (!preview) return;
     await updatePreview(preview);
   }
-  async function handleToolClick(_context, event) {
-    if (!state.active || state.pending || !state.grid) {
-      return;
-    }
-    const snapped = await snapScenePosition(event.pointerPosition, 1);
-    const preview = buildPreviewFromPosition(snapped);
-    if (!preview) return;
-    if (!preview.inRange) {
-      await updatePreview(preview);
-      await notify3("\u041D\u0435\u0434\u043E\u0441\u0442\u0430\u0442\u043E\u0447\u043D\u043E MOVE", "WARNING");
-      return;
-    }
-    await applyMove(preview);
+  async function handleToolDragEnd(_context, event) {
+    if (!state.dragActive) return;
+    state.dragActive = false;
+    const preview = buildPreviewFromPointer(event.pointerPosition) ?? state.preview;
+    await commitPreview(preview);
   }
-  async function handleToolActivate() {
-    await prepareFromSelectedToken("tool-activate");
-  }
-  async function handleToolDeactivate() {
-    await cancelMove("tool-deactivate");
+  async function handleToolDragCancel() {
+    await clearPreview({ reason: "drag-cancelled", silent: true });
+    await publishStatus({ reason: "drag-cancelled" });
   }
   async function handleSceneItemsChanged(items) {
-    if (!state.active || !state.tokenId) return;
-    const exists = ensureArray2(items).some((item) => String(item?.id ?? "").trim() === state.tokenId);
-    if (!exists) {
-      await cancelMove("token-missing");
+    const sceneItems = ensureArray2(items);
+    const indexed = new Map(
+      sceneItems.map((item) => [String(item?.id ?? "").trim(), item])
+    );
+    if (state.selectedToken && !indexed.has(String(state.selectedToken.id ?? "").trim())) {
+      state.selectedToken = null;
+      state.selectedParticipant = null;
+      state.permission = null;
+      await clearPreview({ reason: "selected-token-missing", silent: true });
+      await publishStatus({ reason: "selected-token-missing" });
+    }
+    if (!state.encounterId || !state.authoritativeByTokenId.size) return;
+    for (const [tokenId, authoritative] of state.authoritativeByTokenId.entries()) {
+      const item = indexed.get(tokenId);
+      if (!item?.position) continue;
+      const authoritativeScene = {
+        x: Number(authoritative.scene_x ?? 0) || 0,
+        y: Number(authoritative.scene_y ?? 0) || 0
+      };
+      if (positionsMatch(item.position, authoritativeScene)) {
+        continue;
+      }
+      const marker = extractMovementMarker(item);
+      if (marker && isFreshMarker(marker)) {
+        scheduleRuntimeRefresh("movement-marker");
+        continue;
+      }
+      const localMarker = state.localMarkersByTokenId.get(tokenId);
+      if (localMarker && isFreshMarker(localMarker)) {
+        continue;
+      }
+      await revertUnauthorizedTokenMove(tokenId, authoritative);
     }
   }
   async function handleBroadcastMessage(message) {
@@ -10232,25 +10769,50 @@ function setupTacticalMoveTool({ runtime }) {
         await publishStatus({ reason: "status-request" });
         break;
       case MOVE_TOOL_COMMANDS.Cancel:
-        await cancelMove("broadcast-cancel");
+        await clearPreview({ reason: "broadcast-cancel", silent: true });
+        await publishStatus({ reason: "broadcast-cancel" });
+        break;
+      case MOVE_TOOL_COMMANDS.SetGmOverride:
+        if (String(state.player?.role ?? "").toUpperCase() !== "GM") {
+          return;
+        }
+        state.gmOverrideEnabled = !!message.payload?.enabled;
+        state.permission = resolveCombatMovementPermission({
+          player: state.player,
+          participant: state.selectedParticipant,
+          viewerControlledCharacterIds: state.viewerControlledCharacterIds,
+          gmOverrideEnabled: state.gmOverrideEnabled
+        });
+        if (!state.gmOverrideEnabled) {
+          await clearPreview({ reason: "gm-override-disabled", silent: true });
+        }
+        await publishStatus({ reason: "gm-override-changed" });
         break;
       case MOVE_TOOL_COMMANDS.ActivateSelected:
-        if (await prepareFromSelectedToken(
-          "broadcast-activate",
-          message.payload ?? {}
-        )) {
-          await lib_default.tool.activateTool(TACTICAL_MOVE_TOOL_ID);
-          await lib_default.tool.activateMode(TACTICAL_MOVE_TOOL_ID, TACTICAL_MOVE_MODE_ID);
-        }
+        await refreshRuntimeAndSelection("legacy-activate-selected");
         break;
       default:
         break;
     }
   }
+  async function handleSessionBroadcast(event) {
+    const session = event?.data?.session ?? {};
+    const exists = session?.exists === true;
+    const signature = exists ? `${String(session.id ?? "").trim()}:${Number(session.version ?? 0) || 0}` : "inactive";
+    if (signature === state.lastSessionSignature) return;
+    state.lastSessionSignature = signature;
+    if (!exists) {
+      clearRuntimeCache();
+      state.gmOverrideEnabled = false;
+      await clearPreview({ reason: "encounter-ended", silent: true });
+      await restorePreviousTool("encounter-ended");
+      await publishStatus({ reason: "encounter-ended" });
+      return;
+    }
+    scheduleRuntimeRefresh("session-broadcast");
+  }
   async function registerTool() {
     await waitForObrReady();
-    ids.lineId = resolvePreviewIds((await getPlayerInfo())?.id).lineId;
-    ids.labelId = resolvePreviewIds((await getPlayerInfo())?.id).labelId;
     try {
       await lib_default.tool.removeMode(TACTICAL_MOVE_MODE_ID);
     } catch {
@@ -10262,13 +10824,21 @@ function setupTacticalMoveTool({ runtime }) {
     await lib_default.tool.createMode({
       id: TACTICAL_MOVE_MODE_ID,
       icons: [{ icon: createToolIcon(), label: "Tactical Move" }],
-      onToolMove: handleToolMove,
-      onToolClick: handleToolClick,
-      onActivate: handleToolActivate,
-      onDeactivate: handleToolDeactivate,
+      onToolDragStart: handleToolDragStart,
+      onToolDragMove: handleToolDragMove,
+      onToolDragEnd: handleToolDragEnd,
+      onToolDragCancel: handleToolDragCancel,
+      onActivate: async () => {
+        await publishStatus({ reason: "tool-activate" });
+      },
+      onDeactivate: async () => {
+        await clearPreview({ reason: "tool-deactivate", silent: true });
+        await publishStatus({ reason: "tool-deactivate" });
+      },
       onKeyDown: async (_context, event) => {
         if (event.key === "Escape") {
-          await cancelMove("escape");
+          await clearPreview({ reason: "escape", silent: true });
+          await publishStatus({ reason: "escape" });
         }
       }
     });
@@ -10278,17 +10848,33 @@ function setupTacticalMoveTool({ runtime }) {
       defaultMode: TACTICAL_MOVE_MODE_ID,
       defaultMetadata: { extension: "odyssey" }
     });
-    addDiagnosticEntry("info", "Tactical move tool ready", `tool=${TACTICAL_MOVE_TOOL_ID} mode=${TACTICAL_MOVE_MODE_ID}`);
+    state.toolRegistered = true;
+    addDiagnosticEntry("info", "Combat movement tool ready", `tool=${TACTICAL_MOVE_TOOL_ID} mode=${TACTICAL_MOVE_MODE_ID}`);
   }
   async function start() {
     try {
       await registerTool();
-      unsubscribeBroadcast = await subscribeMoveToolMessages(
-        handleBroadcastMessage
-      );
-      unsubscribeSceneItems = await subscribeSceneItems(
-        handleSceneItemsChanged
-      );
+      unsubscribeBroadcast = await subscribeMoveToolMessages(handleBroadcastMessage);
+      unsubscribeSceneItems = await subscribeSceneItems(handleSceneItemsChanged);
+      unsubscribePlayer = await subscribePlayerChanges((player) => {
+        state.player = player;
+        void syncSelectionState("player-change", { runtimeResponse: state.runtime }).catch(() => {
+        });
+      });
+      unsubscribeTool = await subscribeToolChanges((toolId) => {
+        if (disposed) return;
+        const selectedTokenId = String(state.selectedToken?.id ?? "").trim();
+        const hasSelectedCombatToken = !!selectedTokenId && state.participantsByTokenId.has(selectedTokenId);
+        if (!hasSelectedCombatToken) return;
+        if (toolId === TACTICAL_MOVE_TOOL_ID) return;
+        void ensureToolActivated("tool-reclaim").catch(() => {
+        });
+      });
+      unsubscribeSession = lib_default.broadcast.onMessage(BC_HUD_SESSION, (event) => {
+        void handleSessionBroadcast(event).catch(() => {
+        });
+      });
+      await refreshRuntimeAndSelection("startup");
       await publishStatus({
         ready: true,
         toolRegistered: true
@@ -10296,13 +10882,13 @@ function setupTacticalMoveTool({ runtime }) {
     } catch (error) {
       const normalized = normalizeError(
         error,
-        "Unable to initialize tactical move tool."
+        "Unable to initialize automatic combat movement."
       );
       console.error(
-        "[Odyssey] Tactical move tool registration failed:",
+        "[Odyssey] Automatic combat movement init failed:",
         normalized
       );
-      addDiagnosticEntry("error", "Tactical move init failed", normalized.message);
+      addDiagnosticEntry("error", "Combat movement init failed", normalized.message);
       await publishMoveToolEvent(
         MOVE_TOOL_EVENTS.Error,
         {
@@ -10312,7 +10898,7 @@ function setupTacticalMoveTool({ runtime }) {
         "LOCAL"
       );
       await notify3(
-        `Tactical Move registration failed: ${normalized.message}`,
+        `Combat movement registration failed: ${normalized.message}`,
         "ERROR"
       );
     }
@@ -10324,7 +10910,14 @@ function setupTacticalMoveTool({ runtime }) {
       disposed = true;
       unsubscribeBroadcast?.();
       unsubscribeSceneItems?.();
-      await cancelMove("dispose");
+      unsubscribePlayer?.();
+      unsubscribeSession?.();
+      unsubscribeTool?.();
+      if (state.runtimeRefreshTimer) {
+        clearTimeout(state.runtimeRefreshTimer);
+      }
+      state.gmOverrideEnabled = false;
+      await clearPreview({ reason: "dispose", silent: true });
       try {
         await lib_default.tool.removeMode(TACTICAL_MOVE_MODE_ID);
       } catch {

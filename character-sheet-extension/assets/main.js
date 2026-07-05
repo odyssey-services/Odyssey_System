@@ -499,6 +499,7 @@ __export(settingsBridge_exports, {
 // constants/metadataKeys.js
 var metadataKeys_exports = {};
 __export(metadataKeys_exports, {
+  COMBAT_MOVEMENT_METADATA_KEY: () => COMBAT_MOVEMENT_METADATA_KEY,
   EXTENSION_ID: () => EXTENSION_ID,
   ROOM_CONTEXT_KEY: () => ROOM_CONTEXT_KEY,
   ROOM_SUPABASE_SETTINGS_KEY: () => ROOM_SUPABASE_SETTINGS_KEY,
@@ -512,6 +513,7 @@ var ROOM_SUPABASE_SETTINGS_KEY = `${EXTENSION_ID}/supabaseSettings`;
 var ROOM_CONTEXT_KEY = `${EXTENSION_ID}/roomContext`;
 var TOKEN_LINK_KEY = `${EXTENSION_ID}/link`;
 var SHELL_GLOBAL_KEY = "OdysseyBridge";
+var COMBAT_MOVEMENT_METADATA_KEY = "com.odyssey-system/combat-movement";
 function normalizeTokenCharacterLink(raw) {
   return {
     characterId: String(raw?.characterId ?? raw?.character_id ?? "").trim(),
@@ -9744,6 +9746,7 @@ var WEAPON_RPC_NAMES = Object.freeze({
 var COMBAT_RPC_NAMES = Object.freeze({
   performAttack: "perform_attack",
   moveCharacter: "combat_move_character",
+  gmRepositionCharacter: "combat_gm_reposition_character",
   syncPositionsFromOwlbear: "combat_sync_positions_from_owlbear",
   startEncounter: "combat_start_encounter",
   addParticipant: "combat_add_participant",
@@ -10607,6 +10610,7 @@ __export(combatApi_exports, {
   forceNextTurn: () => forceNextTurn,
   getActiveRuntime: () => getActiveRuntime,
   getCombatLog: () => getCombatLog,
+  gmRepositionCharacter: () => gmRepositionCharacter,
   grantReactionAction: () => grantReactionAction,
   markCharacterDead: () => markCharacterDead,
   moveCharacter: () => moveCharacter,
@@ -10628,6 +10632,13 @@ function performAttack(payload, settings) {
 function moveCharacter(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.moveCharacter,
+    { p_payload: payload ?? {} },
+    settings
+  );
+}
+function gmRepositionCharacter(payload, settings) {
+  return callSupabaseRpc(
+    COMBAT_RPC_NAMES.gmRepositionCharacter,
     { p_payload: payload ?? {} },
     settings
   );
