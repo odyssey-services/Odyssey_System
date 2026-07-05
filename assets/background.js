@@ -10672,7 +10672,7 @@ function setupTacticalMoveTool({ runtime }) {
       current2?.scene,
       preview?.scene
     );
-    if (current2 && previewPositionUnchanged && current2.inRange === preview.inRange && current2.moveCostM === preview.moveCostM && current2.remainingMoveM === preview.remainingMoveM) {
+    if (current2 && previewPositionUnchanged && current2.inRange === preview.inRange && current2.blocked === preview.blocked && String(current2.blockReason ?? "").trim() === String(preview.blockReason ?? "").trim() && current2.moveCostM === preview.moveCostM && current2.remainingMoveM === preview.remainingMoveM) {
       return;
     }
     state.preview = preview;
@@ -11009,29 +11009,15 @@ function setupTacticalMoveTool({ runtime }) {
       );
       return null;
     }
-    const snappedScene = await snapScenePosition(
-      pointerPosition,
-      1,
-      false,
-      true
-    );
-    if (!snappedScene) {
-      addDiagnosticEntry(
-        "info",
-        "Combat preview unavailable",
-        buildPreviewDiagnosticDetails({ tokenId, reason: "snap-returned-null" })
-      );
-      return null;
-    }
     addDiagnosticEntry(
       "info",
-      "Combat preview position snapped",
+      "Combat preview position received",
       buildPreviewDiagnosticDetails({
         tokenId,
-        scene: snappedScene
+        scene: pointerPosition
       })
     );
-    return buildPreviewFromScenePosition(snappedScene, tokenId);
+    return buildPreviewFromScenePosition(pointerPosition, tokenId);
   }
   function queuePreviewRender(preview) {
     if (!preview) return;

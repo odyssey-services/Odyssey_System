@@ -9,7 +9,6 @@ import {
   getPlayerInfo,
   getRoomSceneContext,
   getSelectedOwlbearTokens,
-  snapScenePosition,
   subscribePlayerChanges,
   subscribeSceneItems,
   subscribeToolChanges,
@@ -455,6 +454,8 @@ export function setupTacticalMoveTool({ runtime }) {
       current
       && previewPositionUnchanged
       && current.inRange === preview.inRange
+      && current.blocked === preview.blocked
+      && String(current.blockReason ?? "").trim() === String(preview.blockReason ?? "").trim()
       && current.moveCostM === preview.moveCostM
       && current.remainingMoveM === preview.remainingMoveM
     ) {
@@ -824,32 +825,16 @@ export function setupTacticalMoveTool({ runtime }) {
       return null;
     }
 
-    const snappedScene = await snapScenePosition(
-      pointerPosition,
-      1,
-      false,
-      true,
-    );
-
-    if (!snappedScene) {
-      addDiagnosticEntry(
-        "info",
-        "Combat preview unavailable",
-        buildPreviewDiagnosticDetails({ tokenId, reason: "snap-returned-null" }),
-      );
-      return null;
-    }
-
     addDiagnosticEntry(
       "info",
-      "Combat preview position snapped",
+      "Combat preview position received",
       buildPreviewDiagnosticDetails({
         tokenId,
-        scene: snappedScene,
+        scene: pointerPosition,
       }),
     );
 
-    return buildPreviewFromScenePosition(snappedScene, tokenId);
+    return buildPreviewFromScenePosition(pointerPosition, tokenId);
   }
 
   function queuePreviewRender(preview) {
