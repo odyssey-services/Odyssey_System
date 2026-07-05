@@ -31,6 +31,7 @@ import {
   PREVIEW_LINE_ID,
 } from "./combatMovementPreview.js";
 import { resolveCombatMovementPermission } from "./combatMovementPermissions.js";
+import { syncCombatScenePositions } from "./tacticalSync.js";
 import {
   MOVE_TOOL_COMMANDS,
   MOVE_TOOL_EVENTS,
@@ -41,7 +42,7 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.32";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.33";
 
 const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
@@ -97,6 +98,8 @@ function createInitialState() {
     runtimeRefreshTimer: null,
     lastSessionSignature: "",
     localMarkersByTokenId: new Map(),
+    autoSyncedMarkerByTokenId: new Map(),
+    autoSyncInFlightByKey: new Map(),
   };
 }
 
@@ -647,7 +650,58 @@ export function setupTacticalMoveTool({ runtime }) {
       ...buildStatus(state, { applied: true, source }),
       runtime: result?.runtime ?? null,
     });
+    if (String(state.player?.role ?? "").toUpperCase() === "GM") {
+      void runAutoTacticalSync({
+        onlyCharacterId: String(state.selectedParticipant?.character_id ?? "").trim(),
+        runtimeResponse: result?.runtime ?? state.runtime,
+        reason: `${source}-post-apply`,
+      });
+    }
     await notify(successMessage, "SUCCESS");
+  }
+
+  async function runAutoTacticalSync({
+    onlyCharacterId = "",
+    runtimeResponse = null,
+    reason = "auto-sync",
+  } = {}) {
+    if (String(state.player?.role ?? "").toUpperCase() !== "GM") {
+      return null;
+    }
+
+    const key = String(onlyCharacterId ?? "").trim() || "*";
+    if (state.autoSyncInFlightByKey.has(key)) {
+      return state.autoSyncInFlightByKey.get(key);
+    }
+
+    const syncPromise = syncCombatScenePositions({
+      combatApi,
+      settings: state.settings,
+      runtimeResponse,
+      onlyCharacterId: key === "*" ? "" : key,
+    })
+      .then(({ result, positions }) => {
+        if (result?.runtime) {
+          updateRuntimeCache(result.runtime);
+        }
+        addDiagnosticEntry(
+          "info",
+          "Auto tactical sync complete",
+          `${reason}: synced ${positions.length} token(s).`,
+        );
+        return { result, positions };
+      })
+      .catch((error) => {
+        const normalized = normalizeError(error, "Unable to auto-sync tactical positions.");
+        addDiagnosticEntry("warn", "Auto tactical sync failed", `${reason}: ${normalized.message}`);
+        return null;
+      })
+      .finally(() => {
+        state.autoSyncInFlightByKey.delete(key);
+      });
+
+    state.autoSyncInFlightByKey.set(key, syncPromise);
+    return syncPromise;
   }
 
   async function failMutation(result, fallbackMessage) {
@@ -832,6 +886,20 @@ export function setupTacticalMoveTool({ runtime }) {
 
       const marker = extractMovementMarker(item);
       if (marker && isFreshMarker(marker)) {
+        if (String(state.player?.role ?? "").toUpperCase() === "GM") {
+          const markerKey = marker.requestId || marker.updatedAt;
+          if (state.autoSyncedMarkerByTokenId.get(tokenId) !== markerKey) {
+            state.autoSyncedMarkerByTokenId.set(tokenId, markerKey);
+            const participant = state.participantsByTokenId.get(tokenId);
+            if (participant?.character_id) {
+              void runAutoTacticalSync({
+                onlyCharacterId: String(participant.character_id ?? "").trim(),
+                runtimeResponse: state.runtime,
+                reason: "marker-observed",
+              });
+            }
+          }
+        }
         scheduleRuntimeRefresh("movement-marker");
         continue;
       }

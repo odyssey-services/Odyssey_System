@@ -12,7 +12,8 @@ import {
   resolveEffectiveSettings,
 } from "../resolveAttack/resolveAttackSettings.js";
 import { getRealtimeClient } from "../../bridge/realtimeClient.js";
-import { normalizeDistanceMode, normalizeObrGridType, sceneToCell, sameCell } from "../../movement/gridMath.js";
+import { sceneToCell, sameCell } from "../../movement/gridMath.js";
+import { syncCombatScenePositions } from "../../movement/tacticalSync.js";
 import {
   MOVE_TOOL_COMMANDS,
   MOVE_TOOL_EVENTS,
@@ -1225,35 +1226,6 @@ export function mountCharacterScreen({ root, runtime }) {
     }
   }
 
-  async function buildOwlbearTacticalGridPayload() {
-    const grid = await withTimeout(bridges.obr?.getSceneGrid?.(), OBR_TIMEOUT, null);
-    if (!grid) {
-      throw new Error("Owlbear grid is not available.");
-    }
-    const gridType = normalizeObrGridType(grid.type);
-    const distanceMode = normalizeDistanceMode(grid.type, grid.measurement);
-    if (!gridType || !distanceMode || !(Number(grid.dpi) > 0)) {
-      throw new Error("Only Square, Hex Vertical, and Hex Horizontal grids are supported for tactical movement.");
-    }
-    const anchor = await withTimeout(
-      bridges.obr?.snapScenePosition?.({ x: 0, y: 0 }, 1),
-      OBR_TIMEOUT,
-      null,
-    );
-    if (!anchor) {
-      throw new Error("Unable to resolve tactical grid anchor from Owlbear.");
-    }
-    const metersPerCell = Math.max(1, Math.round(Number(grid?.scale?.parsed?.multiplier ?? 1) || 1));
-    return {
-      grid_type: gridType,
-      distance_mode: distanceMode,
-      meters_per_cell: metersPerCell,
-      anchor_scene_x: Number(anchor.x) || 0,
-      anchor_scene_y: Number(anchor.y) || 0,
-      grid_dpi: Number(grid.dpi) || 0,
-    };
-  }
-
   function getLoadedCharacterParticipant() {
     return state.tacticalSnapshot?.participant ?? null;
   }
@@ -1344,68 +1316,11 @@ export function mountCharacterScreen({ root, runtime }) {
         withTimeout(bridges.obr?.getRoomSceneContext?.(), OBR_TIMEOUT, null),
         withTimeout(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null),
       ]);
-      const [sceneItems, gridPayload, runtimeRes] = await Promise.all([
-        withTimeout(bridges.obr?.getSceneItems?.(), OBR_TIMEOUT, []),
-        buildOwlbearTacticalGridPayload(),
-        api.combat.getActiveRuntime(
-          {
-            campaign_id: context?.campaignId ?? "",
-            room_id: context?.roomId ?? "",
-            scene_id: context?.sceneId ?? "",
-            actor_player_id: player?.id ?? "",
-            actor_is_gm: true,
-            include_hidden: true,
-          },
-          settings(),
-        ),
-      ]);
-      if (!context?.roomId || !context?.sceneId || !runtimeRes?.encounter?.id) {
-        throw new Error("Unable to resolve the active encounter context.");
-      }
-      const itemById = new Map(arr(sceneItems).map((item) => [String(item?.id ?? "").trim(), item]));
-      const participants = arr(runtimeRes.visible_participants).filter((participant) => {
-        if (!participant?.token_id || !participant?.character_id) return false;
-        if (selectedOnly) {
-          return String(participant.character_id ?? "").trim() === state.characterId;
-        }
-        return true;
+      const { result, positions } = await syncCombatScenePositions({
+        combatApi: api.combat,
+        settings: settings(),
+        onlyCharacterId: selectedOnly ? state.characterId : "",
       });
-      const positions = [];
-      for (const participant of participants) {
-        const item = itemById.get(String(participant.token_id ?? "").trim());
-        if (!item) continue;
-        const snapped = await withTimeout(bridges.obr?.snapScenePosition?.(item.position, 1), OBR_TIMEOUT, null);
-        if (!snapped) continue;
-        const cell = sceneToCell(gridPayload, snapped);
-        if (!cell) continue;
-        positions.push({
-          character_id: participant.character_id,
-          token_id: participant.token_id,
-          cell_q: cell.q,
-          cell_r: cell.r,
-          scene_x: Number(snapped.x) || 0,
-          scene_y: Number(snapped.y) || 0,
-        });
-      }
-      if (!positions.length) {
-        throw new Error("No linked encounter tokens were available to sync.");
-      }
-      const result = await api.combat.syncPositionsFromOwlbear(
-        {
-          encounter_id: runtimeRes.encounter.id,
-          campaign_id: context.campaignId,
-          room_id: context.roomId,
-          scene_id: context.sceneId,
-          actor_player_id: player?.id ?? "",
-          actor_is_gm: true,
-          ...gridPayload,
-          positions,
-        },
-        settings(),
-      );
-      if (!result || result.ok === false) {
-        throw new Error(result?.message || result?.error || "Unable to sync tactical positions.");
-      }
       setNotice("ok", selectedOnly ? "Token position synced." : `Tactical grid synced for ${positions.length} token(s).`);
       await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
       await refreshSelectedTokenContext();
@@ -1420,6 +1335,16 @@ export function mountCharacterScreen({ root, runtime }) {
   }
 
   async function refreshAfterCombatStart() {
+    setCombatStartStage("Syncing tactical grid...");
+    const syncPromise = withTimeout(
+      syncCombatScenePositions({
+        combatApi: api.combat,
+        settings: settings(),
+      }),
+      5000,
+      { __timedOut: "tacticalSync" },
+    );
+
     setCombatStartStage("Refreshing character sheet...");
     const refreshPromise = withTimeout(
       refresh({
@@ -1441,7 +1366,7 @@ export function mountCharacterScreen({ root, runtime }) {
         { __timedOut: "selectedTokenContext" },
       );
     })();
-    const results = await Promise.allSettled([refreshPromise, selectedTokenPromise]);
+    const results = await Promise.allSettled([syncPromise, refreshPromise, selectedTokenPromise]);
 
     for (const result of results) {
       if (result.status === "rejected") {
