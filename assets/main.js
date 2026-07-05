@@ -34465,17 +34465,26 @@ function axialRound(q, r) {
   const cube = cubeRound({ x: q, y: -q - r, z: r });
   return { q: cube.x, r: cube.z };
 }
+function getSquareCellCenterAnchor(settings) {
+  return {
+    x: settings.anchor.x + settings.gridDpi / 2,
+    y: settings.anchor.y + settings.gridDpi / 2
+  };
+}
 function sceneToCell(grid, position) {
   const settings = normalizeTacticalGridSettings(grid);
   if (!settings || !position) return null;
-  const x = (Number(position.x) || 0) - settings.anchor.x;
-  const y = (Number(position.y) || 0) - settings.anchor.y;
   if (settings.gridType === "square") {
+    const centerAnchor = getSquareCellCenterAnchor(settings);
+    const x2 = (Number(position.x) || 0) - centerAnchor.x;
+    const y2 = (Number(position.y) || 0) - centerAnchor.y;
     return {
-      q: Math.round(x / settings.gridDpi),
-      r: Math.round(y / settings.gridDpi)
+      q: Math.round(x2 / settings.gridDpi),
+      r: Math.round(y2 / settings.gridDpi)
     };
   }
+  const x = (Number(position.x) || 0) - settings.anchor.x;
+  const y = (Number(position.y) || 0) - settings.anchor.y;
   if (settings.gridType === "hex_vertical") {
     const size = settings.gridDpi / SQRT3;
     const q = (SQRT3 / 3 * x - 1 / 3 * y) / size;

@@ -82,18 +82,29 @@ function axialRound(q, r) {
   return { q: cube.x, r: cube.z };
 }
 
+function getSquareCellCenterAnchor(settings) {
+  return {
+    x: settings.anchor.x + settings.gridDpi / 2,
+    y: settings.anchor.y + settings.gridDpi / 2,
+  };
+}
+
 export function sceneToCell(grid, position) {
   const settings = normalizeTacticalGridSettings(grid);
   if (!settings || !position) return null;
-  const x = (Number(position.x) || 0) - settings.anchor.x;
-  const y = (Number(position.y) || 0) - settings.anchor.y;
 
   if (settings.gridType === "square") {
+    const centerAnchor = getSquareCellCenterAnchor(settings);
+    const x = (Number(position.x) || 0) - centerAnchor.x;
+    const y = (Number(position.y) || 0) - centerAnchor.y;
     return {
       q: Math.round(x / settings.gridDpi),
       r: Math.round(y / settings.gridDpi),
     };
   }
+
+  const x = (Number(position.x) || 0) - settings.anchor.x;
+  const y = (Number(position.y) || 0) - settings.anchor.y;
 
   if (settings.gridType === "hex_vertical") {
     const size = settings.gridDpi / SQRT3;
@@ -119,9 +130,10 @@ export function cellToScene(grid, cell) {
   const r = Number(cell.r ?? cell.cell_r ?? 0) || 0;
 
   if (settings.gridType === "square") {
+    const centerAnchor = getSquareCellCenterAnchor(settings);
     return {
-      x: settings.anchor.x + q * settings.gridDpi,
-      y: settings.anchor.y + r * settings.gridDpi,
+      x: centerAnchor.x + q * settings.gridDpi,
+      y: centerAnchor.y + r * settings.gridDpi,
     };
   }
 
@@ -156,18 +168,19 @@ export function snapSquarePointerToCellCenter(grid, pointerPosition) {
   }
 
   const dpi = settings.gridDpi;
+  const centerAnchor = getSquareCellCenterAnchor(settings);
   const q = Math.round(
-    ((Number(pointerPosition.x) || 0) - settings.anchor.x) / dpi,
+    ((Number(pointerPosition.x) || 0) - centerAnchor.x) / dpi,
   );
   const r = Math.round(
-    ((Number(pointerPosition.y) || 0) - settings.anchor.y) / dpi,
+    ((Number(pointerPosition.y) || 0) - centerAnchor.y) / dpi,
   );
 
   return {
     cell: { q, r },
     scene: {
-      x: settings.anchor.x + q * dpi,
-      y: settings.anchor.y + r * dpi,
+      x: centerAnchor.x + q * dpi,
+      y: centerAnchor.y + r * dpi,
     },
   };
 }

@@ -5985,17 +5985,26 @@ function axialRound(q, r) {
   const cube = cubeRound({ x: q, y: -q - r, z: r });
   return { q: cube.x, r: cube.z };
 }
+function getSquareCellCenterAnchor(settings) {
+  return {
+    x: settings.anchor.x + settings.gridDpi / 2,
+    y: settings.anchor.y + settings.gridDpi / 2
+  };
+}
 function sceneToCell(grid, position) {
   const settings = normalizeTacticalGridSettings(grid);
   if (!settings || !position) return null;
-  const x = (Number(position.x) || 0) - settings.anchor.x;
-  const y = (Number(position.y) || 0) - settings.anchor.y;
   if (settings.gridType === "square") {
+    const centerAnchor = getSquareCellCenterAnchor(settings);
+    const x2 = (Number(position.x) || 0) - centerAnchor.x;
+    const y2 = (Number(position.y) || 0) - centerAnchor.y;
     return {
-      q: Math.round(x / settings.gridDpi),
-      r: Math.round(y / settings.gridDpi)
+      q: Math.round(x2 / settings.gridDpi),
+      r: Math.round(y2 / settings.gridDpi)
     };
   }
+  const x = (Number(position.x) || 0) - settings.anchor.x;
+  const y = (Number(position.y) || 0) - settings.anchor.y;
   if (settings.gridType === "hex_vertical") {
     const size = settings.gridDpi / SQRT3;
     const q = (SQRT3 / 3 * x - 1 / 3 * y) / size;
@@ -6016,17 +6025,18 @@ function snapSquarePointerToCellCenter(grid, pointerPosition) {
     return null;
   }
   const dpi = settings.gridDpi;
+  const centerAnchor = getSquareCellCenterAnchor(settings);
   const q = Math.round(
-    ((Number(pointerPosition.x) || 0) - settings.anchor.x) / dpi
+    ((Number(pointerPosition.x) || 0) - centerAnchor.x) / dpi
   );
   const r = Math.round(
-    ((Number(pointerPosition.y) || 0) - settings.anchor.y) / dpi
+    ((Number(pointerPosition.y) || 0) - centerAnchor.y) / dpi
   );
   return {
     cell: { q, r },
     scene: {
-      x: settings.anchor.x + q * dpi,
-      y: settings.anchor.y + r * dpi
+      x: centerAnchor.x + q * dpi,
+      y: centerAnchor.y + r * dpi
     }
   };
 }
@@ -10140,24 +10150,9 @@ function buildGhostToken(sourceToken, position) {
 function getPreviewLabelPosition(originScene, targetScene) {
   const dx = Number(targetScene?.x ?? 0) - Number(originScene?.x ?? 0);
   const dy = Number(targetScene?.y ?? 0) - Number(originScene?.y ?? 0);
-  const length = Math.hypot(dx, dy);
-  const middle = {
+  return {
     x: Number(originScene?.x ?? 0) + dx / 2,
     y: Number(originScene?.y ?? 0) + dy / 2
-  };
-  if (length < 1) {
-    return {
-      x: middle.x + 12,
-      y: middle.y - 22
-    };
-  }
-  const normal = {
-    x: -dy / length,
-    y: dx / length
-  };
-  return {
-    x: middle.x + normal.x * 22,
-    y: middle.y + normal.y * 22
   };
 }
 function buildPreviewLabel(preview) {
@@ -10166,10 +10161,10 @@ function buildPreviewLabel(preview) {
 }
 function buildPreviewItems({ preview, originScene, selectedToken }) {
   const lineColor = preview?.inRange ? "#71f79f" : "#ff7c6d";
-  const textColor = preview?.inRange ? "#d5ffe0" : "#ffd9d3";
+  const textColor = "#ffffff";
   const labelPosition = getPreviewLabelPosition(originScene, preview.scene);
   const line = buildLine().id(PREVIEW_LINE_ID).name("Combat Movement Preview").layer("POINTER").locked(true).disableHit(true).startPosition(originScene).endPosition(preview.scene).strokeColor(lineColor).strokeOpacity(0.98).strokeWidth(6).strokeDash([12, 8]).disableAutoZIndex(true).build();
-  const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).disableAutoZIndex(true).position(labelPosition).textType("PLAIN").plainText(buildPreviewLabel(preview)).fontSize(20).fontWeight(700).padding(8).textAlign("CENTER").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor("#08111f").strokeOpacity(1).strokeWidth(4).build();
+  const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).disableAutoZIndex(true).position(labelPosition).textType("PLAIN").plainText(buildPreviewLabel(preview)).fontSize(26).fontWeight(700).padding(10).textAlign("CENTER").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor("#08111f").strokeOpacity(1).strokeWidth(6).build();
   let ghost = null;
   let ghostError = null;
   try {
@@ -10302,7 +10297,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.39";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.40";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;

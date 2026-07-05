@@ -76,27 +76,9 @@ function buildGhostToken(sourceToken, position) {
 function getPreviewLabelPosition(originScene, targetScene) {
   const dx = Number(targetScene?.x ?? 0) - Number(originScene?.x ?? 0);
   const dy = Number(targetScene?.y ?? 0) - Number(originScene?.y ?? 0);
-  const length = Math.hypot(dx, dy);
-  const middle = {
+  return {
     x: Number(originScene?.x ?? 0) + dx / 2,
     y: Number(originScene?.y ?? 0) + dy / 2,
-  };
-
-  if (length < 1) {
-    return {
-      x: middle.x + 12,
-      y: middle.y - 22,
-    };
-  }
-
-  const normal = {
-    x: -dy / length,
-    y: dx / length,
-  };
-
-  return {
-    x: middle.x + normal.x * 22,
-    y: middle.y + normal.y * 22,
   };
 }
 
@@ -107,7 +89,7 @@ export function buildPreviewLabel(preview) {
 
 export function buildPreviewItems({ preview, originScene, selectedToken }) {
   const lineColor = preview?.inRange ? "#71f79f" : "#ff7c6d";
-  const textColor = preview?.inRange ? "#d5ffe0" : "#ffd9d3";
+  const textColor = "#ffffff";
   const labelPosition = getPreviewLabelPosition(originScene, preview.scene);
 
   const line = buildLine()
@@ -135,16 +117,16 @@ export function buildPreviewItems({ preview, originScene, selectedToken }) {
     .position(labelPosition)
     .textType("PLAIN")
     .plainText(buildPreviewLabel(preview))
-    .fontSize(20)
+    .fontSize(26)
     .fontWeight(700)
-    .padding(8)
+    .padding(10)
     .textAlign("CENTER")
     .textAlignVertical("MIDDLE")
     .fillColor(textColor)
     .fillOpacity(1)
     .strokeColor("#08111f")
     .strokeOpacity(1)
-    .strokeWidth(4)
+    .strokeWidth(6)
     .build();
 
   let ghost = null;
