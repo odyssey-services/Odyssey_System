@@ -24,11 +24,9 @@ import {
   sceneToCell,
 } from "./gridMath.js";
 import {
-  buildPreviewEndpointItem,
   buildPreviewLabelItem,
   buildPreviewLineItem,
   buildPreviewMarkerItem,
-  PREVIEW_ENDPOINT_ID,
   PREVIEW_GHOST_ID,
   PREVIEW_LABEL_ID,
   PREVIEW_LINE_ID,
@@ -45,9 +43,9 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.52";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.51";
 
-const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID, PREVIEW_ENDPOINT_ID];
+const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
 const POSITION_EPSILON = 0.01;
 const PREVIEW_POSITION_EPSILON = 0.5;
@@ -142,7 +140,6 @@ function createInitialState() {
     previewCreated: false,
     previewLineCreated: false,
     previewGhostCreated: false,
-    previewEndpointCreated: false,
     previewRequestVersion: 0,
     previewRenderQueue: [],
     previewRenderActive: false,
@@ -467,7 +464,6 @@ export function setupTacticalMoveTool({ runtime }) {
     state.previewCreated = false;
     state.previewLineCreated = false;
     state.previewGhostCreated = false;
-    state.previewEndpointCreated = false;
     state.previewRenderActive = false;
     state.previewPointerActive = false;
     state.previewCoreQueued = null;
@@ -571,7 +567,6 @@ export function setupTacticalMoveTool({ runtime }) {
     };
     const line = buildPreviewLineItem(preview, originScene);
     const marker = buildPreviewMarkerItem(preview, state.grid);
-    const endpoint = buildPreviewEndpointItem(preview);
 
     addDiagnosticEntry(
       "info",
@@ -586,7 +581,7 @@ export function setupTacticalMoveTool({ runtime }) {
     );
 
     try {
-      if (!state.previewLineCreated || !state.previewGhostCreated || !state.previewEndpointCreated) {
+      if (!state.previewLineCreated || !state.previewGhostCreated) {
         const toAdd = [];
         if (!state.previewLineCreated) {
           toAdd.push(line);
@@ -594,13 +589,9 @@ export function setupTacticalMoveTool({ runtime }) {
         if (!state.previewGhostCreated) {
           toAdd.push(marker);
         }
-        if (!state.previewEndpointCreated) {
-          toAdd.push(endpoint);
-        }
         await OBR.scene.local.addItems(toAdd);
         state.previewLineCreated = true;
         state.previewGhostCreated = true;
-        state.previewEndpointCreated = true;
         addDiagnosticEntry(
           "info",
           "Combat preview live geometry added",
@@ -613,7 +604,7 @@ export function setupTacticalMoveTool({ runtime }) {
           }),
         );
       } else {
-        await OBR.scene.local.updateItems([PREVIEW_LINE_ID, PREVIEW_GHOST_ID, PREVIEW_ENDPOINT_ID], (sceneItems) => {
+        await OBR.scene.local.updateItems([PREVIEW_LINE_ID, PREVIEW_GHOST_ID], (sceneItems) => {
           for (const item of sceneItems) {
             if (item.id === PREVIEW_LINE_ID && item.type === "LINE") {
               item.startPosition = line.startPosition;
@@ -627,13 +618,6 @@ export function setupTacticalMoveTool({ runtime }) {
               item.shapeType = marker.shapeType;
               item.style = marker.style;
             }
-            if (item.id === PREVIEW_ENDPOINT_ID && item.type === "SHAPE") {
-              item.position = endpoint.position;
-              item.width = endpoint.width;
-              item.height = endpoint.height;
-              item.shapeType = endpoint.shapeType;
-              item.style = endpoint.style;
-            }
           }
         });
       }
@@ -641,7 +625,6 @@ export function setupTacticalMoveTool({ runtime }) {
     } catch (error) {
       state.previewLineCreated = false;
       state.previewGhostCreated = false;
-      state.previewEndpointCreated = false;
       state.previewMarkerSignature = "";
       const normalized = normalizeError(error, "Unable to update movement preview marker.");
       addDiagnosticEntry("warn", "Combat preview marker add failed", normalized.message);

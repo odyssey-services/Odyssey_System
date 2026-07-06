@@ -3,7 +3,6 @@ import { buildLine, buildShape, buildText } from "@owlbear-rodeo/sdk";
 export const PREVIEW_LINE_ID = "com.odyssey-system/combat-movement-preview-line";
 export const PREVIEW_LABEL_ID = "com.odyssey-system/combat-movement-preview-label";
 export const PREVIEW_GHOST_ID = "com.odyssey-system/combat-movement-preview-marker";
-export const PREVIEW_ENDPOINT_ID = "com.odyssey-system/combat-movement-preview-endpoint";
 
 function getPreviewLabelPosition(originScene, targetScene) {
   const dx = Number(targetScene?.x ?? 0) - Number(originScene?.x ?? 0);
@@ -112,47 +111,14 @@ export function buildPreviewMarkerItem(preview, grid) {
     .build();
 }
 
-export function buildPreviewEndpointItem(preview) {
-  const size = 14;
-  const fillColor = preview?.blocked
-    ? "#ffb347"
-    : preview?.inRange
-      ? "#71f79f"
-      : "#ff7c6d";
-
-  return buildShape()
-    .id(PREVIEW_ENDPOINT_ID)
-    .name("Combat Movement Endpoint")
-    .layer("POINTER")
-    .locked(true)
-    .disableHit(true)
-    .disableAutoZIndex(true)
-    .position({
-      x: (Number(preview?.scene?.x ?? 0) || 0) - size / 2,
-      y: (Number(preview?.scene?.y ?? 0) || 0) - size / 2,
-    })
-    .width(size)
-    .height(size)
-    .shapeType("ELLIPSE")
-    .fillColor(fillColor)
-    .fillOpacity(1)
-    .strokeColor("#ffffff")
-    .strokeOpacity(1)
-    .strokeWidth(3)
-    .strokeDash([])
-    .build();
-}
-
 export function buildPreviewItems({ preview, originScene, grid }) {
   const line = buildPreviewLineItem(preview, originScene);
   const label = buildPreviewLabelItem(preview, originScene);
   const ghost = buildPreviewMarkerItem(preview, grid);
-  const endpoint = buildPreviewEndpointItem(preview);
 
   return {
     line,
     label,
     ghost,
-    endpoint,
   };
 }
