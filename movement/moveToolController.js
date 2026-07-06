@@ -24,8 +24,11 @@ import {
   sceneToCell,
 } from "./gridMath.js";
 import {
-  buildPreviewItems,
+  buildPreviewEndpointItem,
+  buildPreviewLabelItem,
+  buildPreviewLineItem,
   buildPreviewMarkerItem,
+  PREVIEW_ENDPOINT_ID,
   PREVIEW_GHOST_ID,
   PREVIEW_LABEL_ID,
   PREVIEW_LINE_ID,
@@ -42,9 +45,9 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.51";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.52";
 
-const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
+const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID, PREVIEW_ENDPOINT_ID];
 const MARKER_TTL_MS = 15_000;
 const POSITION_EPSILON = 0.01;
 const PREVIEW_POSITION_EPSILON = 0.5;
@@ -137,7 +140,9 @@ function createInitialState() {
     permission: null,
     preview: null,
     previewCreated: false,
+    previewLineCreated: false,
     previewGhostCreated: false,
+    previewEndpointCreated: false,
     previewRequestVersion: 0,
     previewRenderQueue: [],
     previewRenderActive: false,
@@ -460,7 +465,9 @@ export function setupTacticalMoveTool({ runtime }) {
     }
     state.preview = null;
     state.previewCreated = false;
+    state.previewLineCreated = false;
     state.previewGhostCreated = false;
+    state.previewEndpointCreated = false;
     state.previewRenderActive = false;
     state.previewPointerActive = false;
     state.previewCoreQueued = null;
@@ -499,31 +506,27 @@ export function setupTacticalMoveTool({ runtime }) {
       x: Number(state.selectedParticipant.position?.scene_x ?? 0) || 0,
       y: Number(state.selectedParticipant.position?.scene_y ?? 0) || 0,
     };
-    const items = buildPreviewItems({
-      preview,
-      originScene,
-      grid: state.grid,
-    });
+    const label = buildPreviewLabelItem(preview, originScene);
 
     addDiagnosticEntry(
       "info",
       "Preview label prepared",
       formatPreviewDiagnostics({
-        id: items.label?.id,
-        type: items.label?.type,
-        textType: items.label?.text?.type,
-        text: items.label?.text?.plainText,
-        position: items.label?.position,
+        id: label?.id,
+        type: label?.type,
+        textType: label?.text?.type,
+        text: label?.text?.plainText,
+        position: label?.position,
       }),
     );
 
     try {
       if (!state.previewCreated) {
-        await OBR.scene.local.addItems([items.line, items.label]);
+        await OBR.scene.local.addItems([label]);
         state.previewCreated = true;
         addDiagnosticEntry(
           "info",
-          "Combat preview core created",
+          "Combat preview label created",
           buildPreviewDiagnosticDetails({
             tokenId: state.selectedToken?.id,
             cell: preview.cell,
@@ -533,17 +536,12 @@ export function setupTacticalMoveTool({ runtime }) {
           }),
         );
       } else {
-        await OBR.scene.local.updateItems([PREVIEW_LINE_ID, PREVIEW_LABEL_ID], (sceneItems) => {
+        await OBR.scene.local.updateItems([PREVIEW_LABEL_ID], (sceneItems) => {
           for (const item of sceneItems) {
-            if (item.id === PREVIEW_LINE_ID && item.type === "LINE") {
-              item.startPosition = items.line.startPosition;
-              item.endPosition = items.line.endPosition;
-              item.style = items.line.style;
-            }
             if (item.id === PREVIEW_LABEL_ID && item.type === "TEXT") {
-              item.position = items.label.position;
-              item.text = items.label.text;
-              item.style = items.label.style;
+              item.position = label.position;
+              item.text = label.text;
+              item.style = label.style;
             }
           }
         });
@@ -567,7 +565,13 @@ export function setupTacticalMoveTool({ runtime }) {
       return;
     }
 
+    const originScene = {
+      x: Number(state.selectedParticipant.position?.scene_x ?? 0) || 0,
+      y: Number(state.selectedParticipant.position?.scene_y ?? 0) || 0,
+    };
+    const line = buildPreviewLineItem(preview, originScene);
     const marker = buildPreviewMarkerItem(preview, state.grid);
+    const endpoint = buildPreviewEndpointItem(preview);
 
     addDiagnosticEntry(
       "info",
@@ -582,12 +586,24 @@ export function setupTacticalMoveTool({ runtime }) {
     );
 
     try {
-      if (!state.previewGhostCreated) {
-        await OBR.scene.local.addItems([marker]);
+      if (!state.previewLineCreated || !state.previewGhostCreated || !state.previewEndpointCreated) {
+        const toAdd = [];
+        if (!state.previewLineCreated) {
+          toAdd.push(line);
+        }
+        if (!state.previewGhostCreated) {
+          toAdd.push(marker);
+        }
+        if (!state.previewEndpointCreated) {
+          toAdd.push(endpoint);
+        }
+        await OBR.scene.local.addItems(toAdd);
+        state.previewLineCreated = true;
         state.previewGhostCreated = true;
+        state.previewEndpointCreated = true;
         addDiagnosticEntry(
           "info",
-          "Combat preview marker added",
+          "Combat preview live geometry added",
           buildPreviewDiagnosticDetails({
             tokenId: state.selectedToken?.id,
             cell: preview.cell,
@@ -597,8 +613,13 @@ export function setupTacticalMoveTool({ runtime }) {
           }),
         );
       } else {
-        await OBR.scene.local.updateItems([PREVIEW_GHOST_ID], (sceneItems) => {
+        await OBR.scene.local.updateItems([PREVIEW_LINE_ID, PREVIEW_GHOST_ID, PREVIEW_ENDPOINT_ID], (sceneItems) => {
           for (const item of sceneItems) {
+            if (item.id === PREVIEW_LINE_ID && item.type === "LINE") {
+              item.startPosition = line.startPosition;
+              item.endPosition = line.endPosition;
+              item.style = line.style;
+            }
             if (item.id === PREVIEW_GHOST_ID && item.type === "SHAPE") {
               item.position = marker.position;
               item.width = marker.width;
@@ -606,12 +627,21 @@ export function setupTacticalMoveTool({ runtime }) {
               item.shapeType = marker.shapeType;
               item.style = marker.style;
             }
+            if (item.id === PREVIEW_ENDPOINT_ID && item.type === "SHAPE") {
+              item.position = endpoint.position;
+              item.width = endpoint.width;
+              item.height = endpoint.height;
+              item.shapeType = endpoint.shapeType;
+              item.style = endpoint.style;
+            }
           }
         });
       }
       state.previewMarkerSignature = markerSignature;
     } catch (error) {
+      state.previewLineCreated = false;
       state.previewGhostCreated = false;
+      state.previewEndpointCreated = false;
       state.previewMarkerSignature = "";
       const normalized = normalizeError(error, "Unable to update movement preview marker.");
       addDiagnosticEntry("warn", "Combat preview marker add failed", normalized.message);

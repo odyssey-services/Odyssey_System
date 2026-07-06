@@ -10091,6 +10091,7 @@ function createOdysseyRuntime() {
 var PREVIEW_LINE_ID = "com.odyssey-system/combat-movement-preview-line";
 var PREVIEW_LABEL_ID = "com.odyssey-system/combat-movement-preview-label";
 var PREVIEW_GHOST_ID = "com.odyssey-system/combat-movement-preview-marker";
+var PREVIEW_ENDPOINT_ID = "com.odyssey-system/combat-movement-preview-endpoint";
 function getPreviewLabelPosition(originScene, targetScene) {
   const dx = Number(targetScene?.x ?? 0) - Number(originScene?.x ?? 0);
   const dy = Number(targetScene?.y ?? 0) - Number(originScene?.y ?? 0);
@@ -10109,6 +10110,15 @@ function buildPreviewLabel(preview) {
   }
   return `${preview.moveCostM} m / ${preview.moveLimitM} m`;
 }
+function buildPreviewLineItem(preview, originScene) {
+  const lineColor = preview?.blocked ? "#ffb347" : preview?.inRange ? "#71f79f" : "#ff7c6d";
+  return buildLine().id(PREVIEW_LINE_ID).name("Combat Movement Preview").layer("POINTER").locked(true).disableHit(true).startPosition(originScene).endPosition(preview.scene).strokeColor(lineColor).strokeOpacity(0.98).strokeWidth(6).strokeDash([12, 8]).disableAutoZIndex(true).build();
+}
+function buildPreviewLabelItem(preview, originScene) {
+  const textColor = "#ffffff";
+  const labelPosition = getPreviewLabelPosition(originScene, preview.scene);
+  return buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).disableAutoZIndex(true).position(labelPosition).textType("PLAIN").plainText(buildPreviewLabel(preview)).fontSize(26).fontWeight(700).padding(10).textAlign("CENTER").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor(preview?.blocked ? "#5a3200" : "#08111f").strokeOpacity(1).strokeWidth(6).build();
+}
 function buildPreviewMarkerItem(preview, grid) {
   const gridDpi = Math.max(Number(grid?.gridDpi ?? 0) || 0, 1);
   const size = Math.max(gridDpi - 8, 12);
@@ -10119,18 +10129,13 @@ function buildPreviewMarkerItem(preview, grid) {
     y: (Number(preview?.scene?.y ?? 0) || 0) - size / 2
   }).width(size).height(size).shapeType("RECTANGLE").fillColor(fillColor).fillOpacity(0.24).strokeColor(strokeColor).strokeOpacity(0.98).strokeWidth(4).strokeDash([]).build();
 }
-function buildPreviewItems({ preview, originScene, grid }) {
-  const lineColor = preview?.blocked ? "#ffb347" : preview?.inRange ? "#71f79f" : "#ff7c6d";
-  const textColor = "#ffffff";
-  const labelPosition = getPreviewLabelPosition(originScene, preview.scene);
-  const line = buildLine().id(PREVIEW_LINE_ID).name("Combat Movement Preview").layer("POINTER").locked(true).disableHit(true).startPosition(originScene).endPosition(preview.scene).strokeColor(lineColor).strokeOpacity(0.98).strokeWidth(6).strokeDash([12, 8]).disableAutoZIndex(true).build();
-  const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).disableAutoZIndex(true).position(labelPosition).textType("PLAIN").plainText(buildPreviewLabel(preview)).fontSize(26).fontWeight(700).padding(10).textAlign("CENTER").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor(preview?.blocked ? "#5a3200" : "#08111f").strokeOpacity(1).strokeWidth(6).build();
-  const ghost = buildPreviewMarkerItem(preview, grid);
-  return {
-    line,
-    label,
-    ghost
-  };
+function buildPreviewEndpointItem(preview) {
+  const size = 14;
+  const fillColor = preview?.blocked ? "#ffb347" : preview?.inRange ? "#71f79f" : "#ff7c6d";
+  return buildShape().id(PREVIEW_ENDPOINT_ID).name("Combat Movement Endpoint").layer("POINTER").locked(true).disableHit(true).disableAutoZIndex(true).position({
+    x: (Number(preview?.scene?.x ?? 0) || 0) - size / 2,
+    y: (Number(preview?.scene?.y ?? 0) || 0) - size / 2
+  }).width(size).height(size).shapeType("ELLIPSE").fillColor(fillColor).fillOpacity(1).strokeColor("#ffffff").strokeOpacity(1).strokeWidth(3).strokeDash([]).build();
 }
 
 // movement/combatMovementPermissions.js
@@ -10236,8 +10241,8 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.51";
-var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.52";
+var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID, PREVIEW_ENDPOINT_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;
 var PREVIEW_POSITION_EPSILON = 0.5;
@@ -10310,7 +10315,9 @@ function createInitialState() {
     permission: null,
     preview: null,
     previewCreated: false,
+    previewLineCreated: false,
     previewGhostCreated: false,
+    previewEndpointCreated: false,
     previewRequestVersion: 0,
     previewRenderQueue: [],
     previewRenderActive: false,
@@ -10590,7 +10597,9 @@ function setupTacticalMoveTool({ runtime }) {
     }
     state.preview = null;
     state.previewCreated = false;
+    state.previewLineCreated = false;
     state.previewGhostCreated = false;
+    state.previewEndpointCreated = false;
     state.previewRenderActive = false;
     state.previewPointerActive = false;
     state.previewCoreQueued = null;
@@ -10618,29 +10627,25 @@ function setupTacticalMoveTool({ runtime }) {
       x: Number(state.selectedParticipant.position?.scene_x ?? 0) || 0,
       y: Number(state.selectedParticipant.position?.scene_y ?? 0) || 0
     };
-    const items = buildPreviewItems({
-      preview,
-      originScene,
-      grid: state.grid
-    });
+    const label = buildPreviewLabelItem(preview, originScene);
     addDiagnosticEntry(
       "info",
       "Preview label prepared",
       formatPreviewDiagnostics({
-        id: items.label?.id,
-        type: items.label?.type,
-        textType: items.label?.text?.type,
-        text: items.label?.text?.plainText,
-        position: items.label?.position
+        id: label?.id,
+        type: label?.type,
+        textType: label?.text?.type,
+        text: label?.text?.plainText,
+        position: label?.position
       })
     );
     try {
       if (!state.previewCreated) {
-        await lib_default.scene.local.addItems([items.line, items.label]);
+        await lib_default.scene.local.addItems([label]);
         state.previewCreated = true;
         addDiagnosticEntry(
           "info",
-          "Combat preview core created",
+          "Combat preview label created",
           buildPreviewDiagnosticDetails({
             tokenId: state.selectedToken?.id,
             cell: preview.cell,
@@ -10650,17 +10655,12 @@ function setupTacticalMoveTool({ runtime }) {
           })
         );
       } else {
-        await lib_default.scene.local.updateItems([PREVIEW_LINE_ID, PREVIEW_LABEL_ID], (sceneItems) => {
+        await lib_default.scene.local.updateItems([PREVIEW_LABEL_ID], (sceneItems) => {
           for (const item of sceneItems) {
-            if (item.id === PREVIEW_LINE_ID && item.type === "LINE") {
-              item.startPosition = items.line.startPosition;
-              item.endPosition = items.line.endPosition;
-              item.style = items.line.style;
-            }
             if (item.id === PREVIEW_LABEL_ID && item.type === "TEXT") {
-              item.position = items.label.position;
-              item.text = items.label.text;
-              item.style = items.label.style;
+              item.position = label.position;
+              item.text = label.text;
+              item.style = label.style;
             }
           }
         });
@@ -10680,7 +10680,13 @@ function setupTacticalMoveTool({ runtime }) {
     if (state.previewGhostCreated && state.previewMarkerSignature === markerSignature) {
       return;
     }
+    const originScene = {
+      x: Number(state.selectedParticipant.position?.scene_x ?? 0) || 0,
+      y: Number(state.selectedParticipant.position?.scene_y ?? 0) || 0
+    };
+    const line = buildPreviewLineItem(preview, originScene);
     const marker = buildPreviewMarkerItem(preview, state.grid);
+    const endpoint = buildPreviewEndpointItem(preview);
     addDiagnosticEntry(
       "info",
       "Combat preview marker render",
@@ -10693,12 +10699,24 @@ function setupTacticalMoveTool({ runtime }) {
       })
     );
     try {
-      if (!state.previewGhostCreated) {
-        await lib_default.scene.local.addItems([marker]);
+      if (!state.previewLineCreated || !state.previewGhostCreated || !state.previewEndpointCreated) {
+        const toAdd = [];
+        if (!state.previewLineCreated) {
+          toAdd.push(line);
+        }
+        if (!state.previewGhostCreated) {
+          toAdd.push(marker);
+        }
+        if (!state.previewEndpointCreated) {
+          toAdd.push(endpoint);
+        }
+        await lib_default.scene.local.addItems(toAdd);
+        state.previewLineCreated = true;
         state.previewGhostCreated = true;
+        state.previewEndpointCreated = true;
         addDiagnosticEntry(
           "info",
-          "Combat preview marker added",
+          "Combat preview live geometry added",
           buildPreviewDiagnosticDetails({
             tokenId: state.selectedToken?.id,
             cell: preview.cell,
@@ -10708,8 +10726,13 @@ function setupTacticalMoveTool({ runtime }) {
           })
         );
       } else {
-        await lib_default.scene.local.updateItems([PREVIEW_GHOST_ID], (sceneItems) => {
+        await lib_default.scene.local.updateItems([PREVIEW_LINE_ID, PREVIEW_GHOST_ID, PREVIEW_ENDPOINT_ID], (sceneItems) => {
           for (const item of sceneItems) {
+            if (item.id === PREVIEW_LINE_ID && item.type === "LINE") {
+              item.startPosition = line.startPosition;
+              item.endPosition = line.endPosition;
+              item.style = line.style;
+            }
             if (item.id === PREVIEW_GHOST_ID && item.type === "SHAPE") {
               item.position = marker.position;
               item.width = marker.width;
@@ -10717,12 +10740,21 @@ function setupTacticalMoveTool({ runtime }) {
               item.shapeType = marker.shapeType;
               item.style = marker.style;
             }
+            if (item.id === PREVIEW_ENDPOINT_ID && item.type === "SHAPE") {
+              item.position = endpoint.position;
+              item.width = endpoint.width;
+              item.height = endpoint.height;
+              item.shapeType = endpoint.shapeType;
+              item.style = endpoint.style;
+            }
           }
         });
       }
       state.previewMarkerSignature = markerSignature;
     } catch (error) {
+      state.previewLineCreated = false;
       state.previewGhostCreated = false;
+      state.previewEndpointCreated = false;
       state.previewMarkerSignature = "";
       const normalized = normalizeError(error, "Unable to update movement preview marker.");
       addDiagnosticEntry("warn", "Combat preview marker add failed", normalized.message);
