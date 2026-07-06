@@ -41,7 +41,7 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.46";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.47";
 
 const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
@@ -479,7 +479,7 @@ export function setupTacticalMoveTool({ runtime }) {
     const items = buildPreviewItems({
       preview,
       originScene,
-      selectedToken: state.selectedToken,
+      grid: state.grid,
     });
 
     addDiagnosticEntry(
@@ -493,19 +493,6 @@ export function setupTacticalMoveTool({ runtime }) {
         position: items.label?.position,
       }),
     );
-
-    if (items.ghostError) {
-      const normalized = normalizeError(items.ghostError, "Unable to build movement preview ghost.");
-      addDiagnosticEntry(
-        "warn",
-        "Combat preview ghost build failed",
-        formatPreviewDiagnostics({
-          ...items.ghostDebugInfo,
-          tokenId: String(state.selectedToken?.id ?? "").trim(),
-          message: normalized.message,
-        }),
-      );
-    }
 
     try {
       if (!state.previewCreated) {
@@ -546,22 +533,9 @@ export function setupTacticalMoveTool({ runtime }) {
       return;
     }
 
-    if (!items.ghost) {
-      if (state.previewGhostCreated) {
-        try {
-          await OBR.scene.local.deleteItems([PREVIEW_GHOST_ID]);
-        } catch {
-          // ignore ghost cleanup failures
-        }
-      }
-      state.previewGhostCreated = false;
-      await publishStatus();
-      return;
-    }
-
     addDiagnosticEntry(
       "info",
-      "Combat preview render",
+      "Combat preview marker render",
       formatPreviewDiagnostics({
         tokenId: String(state.selectedToken?.id ?? "").trim(),
         cellQ: Number(preview.cell?.q ?? 0) || 0,
@@ -577,7 +551,7 @@ export function setupTacticalMoveTool({ runtime }) {
         state.previewGhostCreated = true;
         addDiagnosticEntry(
           "info",
-          "Combat preview ghost added",
+          "Combat preview marker added",
           buildPreviewDiagnosticDetails({
             tokenId: state.selectedToken?.id,
             cell: preview.cell,
@@ -589,10 +563,12 @@ export function setupTacticalMoveTool({ runtime }) {
       } else {
         await OBR.scene.local.updateItems([PREVIEW_GHOST_ID], (sceneItems) => {
           for (const item of sceneItems) {
-            if (item.id === PREVIEW_GHOST_ID && item.type === "IMAGE") {
+            if (item.id === PREVIEW_GHOST_ID && item.type === "SHAPE") {
               item.position = items.ghost.position;
-              item.rotation = items.ghost.rotation;
-              item.scale = items.ghost.scale;
+              item.width = items.ghost.width;
+              item.height = items.ghost.height;
+              item.shapeType = items.ghost.shapeType;
+              item.style = items.ghost.style;
             }
           }
         });
@@ -600,15 +576,7 @@ export function setupTacticalMoveTool({ runtime }) {
     } catch (error) {
       state.previewGhostCreated = false;
       const normalized = normalizeError(error, "Unable to add movement preview ghost.");
-      addDiagnosticEntry(
-        "warn",
-        "Combat preview ghost add failed",
-        formatPreviewDiagnostics({
-          ...items.ghostDebugInfo,
-          tokenId: String(state.selectedToken?.id ?? "").trim(),
-          message: normalized.message,
-        }),
-      );
+      addDiagnosticEntry("warn", "Combat preview marker add failed", normalized.message);
     }
 
     await publishStatus();

@@ -3509,122 +3509,6 @@ var GenericItemBuilder = class {
   }
 };
 
-// node_modules/@owlbear-rodeo/sdk/lib/builders/ImageBuilder.js
-var ImageBuilder = class extends GenericItemBuilder {
-  constructor(player, image, grid) {
-    super(player);
-    this._image = image;
-    this._grid = grid;
-    this._item.name = "Image";
-    this._text = {
-      richText: [
-        {
-          type: "paragraph",
-          children: [{ text: "" }]
-        }
-      ],
-      plainText: "",
-      style: {
-        padding: 8,
-        fontFamily: "Roboto",
-        fontSize: 24,
-        fontWeight: 400,
-        textAlign: "CENTER",
-        textAlignVertical: "BOTTOM",
-        fillColor: "white",
-        fillOpacity: 1,
-        strokeColor: "white",
-        strokeOpacity: 1,
-        strokeWidth: 0,
-        lineHeight: 1.5
-      },
-      type: "PLAIN",
-      width: "AUTO",
-      height: "AUTO"
-    };
-    this._textItemType = "LABEL";
-  }
-  text(text) {
-    this._text = text;
-    return this.self();
-  }
-  textItemType(textItemType) {
-    this._textItemType = textItemType;
-    return this.self();
-  }
-  textWidth(width) {
-    this._text.width = width;
-    return this.self();
-  }
-  textHeight(height) {
-    this._text.height = height;
-    return this.self();
-  }
-  richText(richText) {
-    this._text.richText = richText;
-    return this.self();
-  }
-  plainText(plainText) {
-    this._text.plainText = plainText;
-    return this.self();
-  }
-  textType(textType) {
-    this._text.type = textType;
-    return this.self();
-  }
-  textPadding(padding) {
-    this._text.style.padding = padding;
-    return this.self();
-  }
-  fontFamily(fontFamily) {
-    this._text.style.fontFamily = fontFamily;
-    return this.self();
-  }
-  fontSize(fontSize) {
-    this._text.style.fontSize = fontSize;
-    return this.self();
-  }
-  fontWeight(fontWeight) {
-    this._text.style.fontWeight = fontWeight;
-    return this.self();
-  }
-  textAlign(textAlign) {
-    this._text.style.textAlign = textAlign;
-    return this.self();
-  }
-  textAlignVertical(textAlignVertical) {
-    this._text.style.textAlignVertical = textAlignVertical;
-    return this.self();
-  }
-  textFillColor(fillColor) {
-    this._text.style.fillColor = fillColor;
-    return this.self();
-  }
-  textFillOpacity(fillOpacity) {
-    this._text.style.fillOpacity = fillOpacity;
-    return this.self();
-  }
-  textStrokeColor(strokeColor) {
-    this._text.style.strokeColor = strokeColor;
-    return this.self();
-  }
-  textStrokeOpacity(strokeOpacity) {
-    this._text.style.strokeOpacity = strokeOpacity;
-    return this.self();
-  }
-  textStrokeWidth(strokeWidth) {
-    this._text.style.strokeWidth = strokeWidth;
-    return this.self();
-  }
-  textLineHeight(lineHeight) {
-    this._text.style.lineHeight = lineHeight;
-    return this.self();
-  }
-  build() {
-    return Object.assign(Object.assign({}, this._item), { type: "IMAGE", image: this._image, grid: this._grid, text: this._text, textItemType: this._textItemType });
-  }
-};
-
 // node_modules/@owlbear-rodeo/sdk/lib/builders/LineBuilder.js
 var LineBuilder = class extends GenericItemBuilder {
   constructor(player) {
@@ -3670,6 +3554,69 @@ var LineBuilder = class extends GenericItemBuilder {
   }
   build() {
     return Object.assign(Object.assign({}, this._item), { type: "LINE", startPosition: this._startPosition, endPosition: this._endPosition, style: this._style });
+  }
+};
+
+// node_modules/@owlbear-rodeo/sdk/lib/builders/ShapeBuilder.js
+var ShapeBuilder = class extends GenericItemBuilder {
+  constructor(player) {
+    super(player);
+    this._width = 0;
+    this._height = 0;
+    this._shapeType = "RECTANGLE";
+    this._style = {
+      fillColor: "black",
+      fillOpacity: 1,
+      strokeColor: "white",
+      strokeOpacity: 1,
+      strokeWidth: 5,
+      strokeDash: []
+    };
+    this._item.layer = "DRAWING";
+    this._item.name = "Shape";
+  }
+  width(width) {
+    this._width = width;
+    return this.self();
+  }
+  height(height) {
+    this._height = height;
+    return this.self();
+  }
+  shapeType(shapeType) {
+    this._shapeType = shapeType;
+    return this.self();
+  }
+  style(style) {
+    this._style = style;
+    return this.self();
+  }
+  fillColor(fillColor) {
+    this._style.fillColor = fillColor;
+    return this.self();
+  }
+  fillOpacity(fillOpacity) {
+    this._style.fillOpacity = fillOpacity;
+    return this.self();
+  }
+  strokeColor(strokeColor) {
+    this._style.strokeColor = strokeColor;
+    return this.self();
+  }
+  strokeOpacity(strokeOpacity) {
+    this._style.strokeOpacity = strokeOpacity;
+    return this.self();
+  }
+  strokeWidth(strokeWidth) {
+    this._style.strokeWidth = strokeWidth;
+    return this.self();
+  }
+  strokeDash(strokeDash) {
+    this._style.strokeDash = strokeDash;
+    return this.self();
+  }
+  build() {
+    return Object.assign(Object.assign({}, this._item), { type: "SHAPE", width: this._width, height: this._height, shapeType: this._shapeType, style: this._style });
   }
 };
 
@@ -3911,11 +3858,11 @@ var OBR = {
   /** True if the current site is embedded in an instance of Owlbear Rodeo */
   isAvailable: Boolean(details.origin)
 };
-function buildImage(image, grid) {
-  return new ImageBuilder(playerApi, image, grid);
-}
 function buildLine() {
   return new LineBuilder(playerApi);
+}
+function buildShape() {
+  return new ShapeBuilder(playerApi);
 }
 function buildText() {
   return new TextBuilder(playerApi);
@@ -5986,9 +5933,10 @@ function axialRound(q, r) {
   return { q: cube.x, r: cube.z };
 }
 function getSquareCellCenterAnchor(settings) {
+  const gridDpi = Number(settings?.gridDpi ?? 0) || 0;
   return {
-    x: Number(settings.anchor?.x ?? 0) || 0,
-    y: Number(settings.anchor?.y ?? 0) || 0
+    x: (Number(settings.anchor?.x ?? 0) || 0) + gridDpi / 2,
+    y: (Number(settings.anchor?.y ?? 0) || 0) + gridDpi / 2
   };
 }
 function getSquareCellScenePosition(grid, cell) {
@@ -10142,43 +10090,7 @@ function createOdysseyRuntime() {
 // movement/combatMovementPreview.js
 var PREVIEW_LINE_ID = "com.odyssey-system/combat-movement-preview-line";
 var PREVIEW_LABEL_ID = "com.odyssey-system/combat-movement-preview-label";
-var PREVIEW_GHOST_ID = "com.odyssey-system/combat-movement-preview-ghost";
-function ensureObject(value) {
-  return value && typeof value === "object" ? value : {};
-}
-function ensureVector2(value, fallback = { x: 1, y: 1 }) {
-  return {
-    x: Number(value?.x ?? fallback.x ?? 1) || 1,
-    y: Number(value?.y ?? fallback.y ?? 1) || 1
-  };
-}
-function isImageToken(item) {
-  return String(item?.type ?? "").trim().toUpperCase() === "IMAGE" && item?.image && typeof item.image === "object" && typeof item.image.url === "string" && item.image.url.trim() !== "";
-}
-function buildGhostDebugInfo(sourceToken) {
-  return {
-    type: String(sourceToken?.type ?? "").trim().toUpperCase(),
-    hasImage: !!(sourceToken?.image && typeof sourceToken.image === "object"),
-    hasImageUrl: typeof sourceToken?.image?.url === "string" && sourceToken.image.url.trim() !== "",
-    hasGrid: !!(sourceToken?.grid && typeof sourceToken.grid === "object"),
-    hasPosition: !!(sourceToken?.position && typeof sourceToken.position === "object")
-  };
-}
-function buildGhostToken(sourceToken, position) {
-  if (!isImageToken(sourceToken) || !position) return null;
-  const token = ensureObject(sourceToken);
-  if (!token.grid || typeof token.grid !== "object") {
-    return null;
-  }
-  const ghost = buildImage(token.image, token.grid).id(PREVIEW_GHOST_ID).name("Combat Movement Ghost").layer("CHARACTER").locked(true).disableHit(true).disableAutoZIndex(true).position({
-    x: Number(position.x) || 0,
-    y: Number(position.y) || 0
-  }).rotation(Number(token.rotation ?? 0) || 0).scale(ensureVector2(token.scale)).visible(true).metadata({});
-  if (Array.isArray(token.disableAttachmentBehavior) && token.disableAttachmentBehavior.length) {
-    ghost.disableAttachmentBehavior(token.disableAttachmentBehavior);
-  }
-  return ghost.build();
-}
+var PREVIEW_GHOST_ID = "com.odyssey-system/combat-movement-preview-marker";
 function getPreviewLabelPosition(originScene, targetScene) {
   const dx = Number(targetScene?.x ?? 0) - Number(originScene?.x ?? 0);
   const dy = Number(targetScene?.y ?? 0) - Number(originScene?.y ?? 0);
@@ -10197,25 +10109,27 @@ function buildPreviewLabel(preview) {
   }
   return `${preview.moveCostM} m / ${preview.moveLimitM} m`;
 }
-function buildPreviewItems({ preview, originScene, selectedToken }) {
+function buildCellMarker(preview, grid) {
+  const gridDpi = Math.max(Number(grid?.gridDpi ?? 0) || 0, 1);
+  const size = Math.max(gridDpi - 8, 12);
+  const fillColor = preview?.blocked ? "#ff9a2f" : preview?.inRange ? "#4fd47d" : "#ff5f57";
+  const strokeColor = preview?.blocked ? "#ffd08a" : preview?.inRange ? "#d9ffe5" : "#ffd0cc";
+  return buildShape().id(PREVIEW_GHOST_ID).name("Combat Movement Marker").layer("POINTER").locked(true).disableHit(true).disableAutoZIndex(true).position({
+    x: Number(preview?.scene?.x ?? 0) || 0,
+    y: Number(preview?.scene?.y ?? 0) || 0
+  }).width(size).height(size).shapeType("RECTANGLE").fillColor(fillColor).fillOpacity(0.24).strokeColor(strokeColor).strokeOpacity(0.98).strokeWidth(4).strokeDash([]).build();
+}
+function buildPreviewItems({ preview, originScene, grid }) {
   const lineColor = preview?.blocked ? "#ffb347" : preview?.inRange ? "#71f79f" : "#ff7c6d";
   const textColor = "#ffffff";
   const labelPosition = getPreviewLabelPosition(originScene, preview.scene);
   const line = buildLine().id(PREVIEW_LINE_ID).name("Combat Movement Preview").layer("POINTER").locked(true).disableHit(true).startPosition(originScene).endPosition(preview.scene).strokeColor(lineColor).strokeOpacity(0.98).strokeWidth(6).strokeDash([12, 8]).disableAutoZIndex(true).build();
   const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).disableAutoZIndex(true).position(labelPosition).textType("PLAIN").plainText(buildPreviewLabel(preview)).fontSize(26).fontWeight(700).padding(10).textAlign("CENTER").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor(preview?.blocked ? "#5a3200" : "#08111f").strokeOpacity(1).strokeWidth(6).build();
-  let ghost = null;
-  let ghostError = null;
-  try {
-    ghost = buildGhostToken(selectedToken, preview.scene);
-  } catch (error) {
-    ghostError = error;
-  }
+  const ghost = buildCellMarker(preview, grid);
   return {
     line,
     label,
-    ghost,
-    ghostError,
-    ghostDebugInfo: buildGhostDebugInfo(selectedToken)
+    ghost
   };
 }
 
@@ -10322,7 +10236,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.46";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.47";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;
@@ -10691,7 +10605,7 @@ function setupTacticalMoveTool({ runtime }) {
     const items = buildPreviewItems({
       preview,
       originScene,
-      selectedToken: state.selectedToken
+      grid: state.grid
     });
     addDiagnosticEntry(
       "info",
@@ -10704,18 +10618,6 @@ function setupTacticalMoveTool({ runtime }) {
         position: items.label?.position
       })
     );
-    if (items.ghostError) {
-      const normalized = normalizeError(items.ghostError, "Unable to build movement preview ghost.");
-      addDiagnosticEntry(
-        "warn",
-        "Combat preview ghost build failed",
-        formatPreviewDiagnostics({
-          ...items.ghostDebugInfo,
-          tokenId: String(state.selectedToken?.id ?? "").trim(),
-          message: normalized.message
-        })
-      );
-    }
     try {
       if (!state.previewCreated) {
         await lib_default.scene.local.addItems([items.line, items.label]);
@@ -10754,20 +10656,9 @@ function setupTacticalMoveTool({ runtime }) {
       await publishStatus();
       return;
     }
-    if (!items.ghost) {
-      if (state.previewGhostCreated) {
-        try {
-          await lib_default.scene.local.deleteItems([PREVIEW_GHOST_ID]);
-        } catch {
-        }
-      }
-      state.previewGhostCreated = false;
-      await publishStatus();
-      return;
-    }
     addDiagnosticEntry(
       "info",
-      "Combat preview render",
+      "Combat preview marker render",
       formatPreviewDiagnostics({
         tokenId: String(state.selectedToken?.id ?? "").trim(),
         cellQ: Number(preview.cell?.q ?? 0) || 0,
@@ -10782,7 +10673,7 @@ function setupTacticalMoveTool({ runtime }) {
         state.previewGhostCreated = true;
         addDiagnosticEntry(
           "info",
-          "Combat preview ghost added",
+          "Combat preview marker added",
           buildPreviewDiagnosticDetails({
             tokenId: state.selectedToken?.id,
             cell: preview.cell,
@@ -10794,10 +10685,12 @@ function setupTacticalMoveTool({ runtime }) {
       } else {
         await lib_default.scene.local.updateItems([PREVIEW_GHOST_ID], (sceneItems) => {
           for (const item of sceneItems) {
-            if (item.id === PREVIEW_GHOST_ID && item.type === "IMAGE") {
+            if (item.id === PREVIEW_GHOST_ID && item.type === "SHAPE") {
               item.position = items.ghost.position;
-              item.rotation = items.ghost.rotation;
-              item.scale = items.ghost.scale;
+              item.width = items.ghost.width;
+              item.height = items.ghost.height;
+              item.shapeType = items.ghost.shapeType;
+              item.style = items.ghost.style;
             }
           }
         });
@@ -10805,15 +10698,7 @@ function setupTacticalMoveTool({ runtime }) {
     } catch (error) {
       state.previewGhostCreated = false;
       const normalized = normalizeError(error, "Unable to add movement preview ghost.");
-      addDiagnosticEntry(
-        "warn",
-        "Combat preview ghost add failed",
-        formatPreviewDiagnostics({
-          ...items.ghostDebugInfo,
-          tokenId: String(state.selectedToken?.id ?? "").trim(),
-          message: normalized.message
-        })
-      );
+      addDiagnosticEntry("warn", "Combat preview marker add failed", normalized.message);
     }
     await publishStatus();
   }
