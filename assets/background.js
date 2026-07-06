@@ -10115,8 +10115,8 @@ function buildCellMarker(preview, grid) {
   const fillColor = preview?.blocked ? "#ff9a2f" : preview?.inRange ? "#4fd47d" : "#ff5f57";
   const strokeColor = preview?.blocked ? "#ffd08a" : preview?.inRange ? "#d9ffe5" : "#ffd0cc";
   return buildShape().id(PREVIEW_GHOST_ID).name("Combat Movement Marker").layer("POINTER").locked(true).disableHit(true).disableAutoZIndex(true).position({
-    x: Number(preview?.scene?.x ?? 0) || 0,
-    y: Number(preview?.scene?.y ?? 0) || 0
+    x: (Number(preview?.scene?.x ?? 0) || 0) - size / 2,
+    y: (Number(preview?.scene?.y ?? 0) || 0) - size / 2
   }).width(size).height(size).shapeType("RECTANGLE").fillColor(fillColor).fillOpacity(0.24).strokeColor(strokeColor).strokeOpacity(0.98).strokeWidth(4).strokeDash([]).build();
 }
 function buildPreviewItems({ preview, originScene, grid }) {
@@ -10236,7 +10236,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.47";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.48";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;

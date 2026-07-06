@@ -46,8 +46,8 @@ function buildCellMarker(preview, grid) {
     .disableHit(true)
     .disableAutoZIndex(true)
     .position({
-      x: Number(preview?.scene?.x ?? 0) || 0,
-      y: Number(preview?.scene?.y ?? 0) || 0,
+      x: (Number(preview?.scene?.x ?? 0) || 0) - size / 2,
+      y: (Number(preview?.scene?.y ?? 0) || 0) - size / 2,
     })
     .width(size)
     .height(size)
