@@ -10236,7 +10236,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.50";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.51";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;
@@ -10947,7 +10947,6 @@ function setupTacticalMoveTool({ runtime }) {
     if (!pointerPosition) return;
     const preview = buildPreviewFromPointerFast(pointerPosition);
     if (!preview) return;
-    state.preview = preview;
     state.previewPointerQueue = [];
     state.previewRenderQueue = [];
     state.previewCoreQueued = preview;

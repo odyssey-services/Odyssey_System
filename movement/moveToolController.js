@@ -42,7 +42,7 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.50";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.51";
 
 const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
@@ -860,7 +860,6 @@ export function setupTacticalMoveTool({ runtime }) {
     if (!pointerPosition) return;
     const preview = buildPreviewFromPointerFast(pointerPosition);
     if (!preview) return;
-    state.preview = preview;
     state.previewPointerQueue = [];
     state.previewRenderQueue = [];
     state.previewCoreQueued = preview;
