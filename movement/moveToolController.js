@@ -44,7 +44,7 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.55";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.56";
 
 const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
@@ -354,12 +354,16 @@ function extractMovementMarker(item) {
   const requestId = String(raw.requestId ?? "").trim();
   const updatedAt = String(raw.updatedAt ?? "").trim();
   const movementVersion = Number(raw.movementVersion ?? 0) || 0;
+  const sceneX = Number(raw.sceneX ?? raw.scene_x ?? 0);
+  const sceneY = Number(raw.sceneY ?? raw.scene_y ?? 0);
   if (!source || !updatedAt) return null;
   return {
     source,
     requestId,
     updatedAt,
     movementVersion,
+    sceneX: Number.isFinite(sceneX) ? sceneX : null,
+    sceneY: Number.isFinite(sceneY) ? sceneY : null,
   };
 }
 
@@ -370,13 +374,26 @@ function isFreshMarker(marker) {
   return Date.now() - updatedAtMs <= MARKER_TTL_MS;
 }
 
-function buildMovementMarker({ requestId, movementVersion, source }) {
+function buildMovementMarker({ requestId, movementVersion, source, scenePosition }) {
   return {
     source,
     requestId,
     movementVersion,
     updatedAt: nowIso(),
+    sceneX: Number(scenePosition?.x ?? scenePosition?.scene_x ?? 0) || 0,
+    sceneY: Number(scenePosition?.y ?? scenePosition?.scene_y ?? 0) || 0,
   };
+}
+
+function markerMatchesScenePosition(marker, scenePosition) {
+  if (!marker || !scenePosition) return false;
+  if (!Number.isFinite(Number(marker.sceneX)) || !Number.isFinite(Number(marker.sceneY))) {
+    return false;
+  }
+  return positionsMatch(
+    { x: Number(marker.sceneX) || 0, y: Number(marker.sceneY) || 0 },
+    scenePosition,
+  );
 }
 
 function participantHasAuthoritativePosition(participant) {
@@ -1226,6 +1243,7 @@ export function setupTacticalMoveTool({ runtime }) {
       requestId,
       movementVersion,
       source,
+      scenePosition,
     });
     state.localMarkersByTokenId.set(tokenId, marker);
 
@@ -1294,15 +1312,22 @@ export function setupTacticalMoveTool({ runtime }) {
           };
 
           if (positionsMatch(currentItem.position, authoritativeScene)) {
+            state.localMarkersByTokenId.delete(key);
             clearUnauthorizedRevertTimers(key);
             return;
           }
 
           const marker = extractMovementMarker(currentItem);
-          if (marker && isFreshMarker(marker) && INTERNAL_MOVEMENT_SOURCES.has(marker.source)) {
+          if (
+            marker
+            && isFreshMarker(marker)
+            && INTERNAL_MOVEMENT_SOURCES.has(marker.source)
+            && markerMatchesScenePosition(marker, currentItem.position)
+          ) {
             return;
           }
 
+          state.localMarkersByTokenId.delete(key);
           await revertUnauthorizedTokenMove(key, authoritative, message);
         } catch (error) {
           const normalized = normalizeError(error, "Unable to verify unauthorized movement revert.");
@@ -1827,6 +1852,7 @@ export function setupTacticalMoveTool({ runtime }) {
         y: Number(authoritative.scene_y ?? 0) || 0,
       };
       if (positionsMatch(item.position, authoritativeScene)) {
+        state.localMarkersByTokenId.delete(tokenId);
         clearUnauthorizedRevertTimers(tokenId);
         continue;
       }
@@ -1857,7 +1883,10 @@ export function setupTacticalMoveTool({ runtime }) {
 
       const localMarker = state.localMarkersByTokenId.get(tokenId);
       if (localMarker && isFreshMarker(localMarker)) {
-        continue;
+        if (markerMatchesScenePosition(localMarker, item.position)) {
+          continue;
+        }
+        state.localMarkersByTokenId.delete(tokenId);
       }
 
       await revertUnauthorizedTokenMove(tokenId, authoritative);
