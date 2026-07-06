@@ -24,7 +24,7 @@ export function buildPreviewLabel(preview) {
   return `${preview.moveCostM} m / ${preview.moveLimitM} m`;
 }
 
-function buildCellMarker(preview, grid) {
+export function buildPreviewMarkerItem(preview, grid) {
   const gridDpi = Math.max(Number(grid?.gridDpi ?? 0) || 0, 1);
   const size = Math.max(gridDpi - 8, 12);
   const fillColor = preview?.blocked
@@ -107,7 +107,7 @@ export function buildPreviewItems({ preview, originScene, grid }) {
     .strokeWidth(6)
     .build();
 
-  const ghost = buildCellMarker(preview, grid);
+  const ghost = buildPreviewMarkerItem(preview, grid);
 
   return {
     line,

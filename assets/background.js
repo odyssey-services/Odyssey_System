@@ -10109,7 +10109,7 @@ function buildPreviewLabel(preview) {
   }
   return `${preview.moveCostM} m / ${preview.moveLimitM} m`;
 }
-function buildCellMarker(preview, grid) {
+function buildPreviewMarkerItem(preview, grid) {
   const gridDpi = Math.max(Number(grid?.gridDpi ?? 0) || 0, 1);
   const size = Math.max(gridDpi - 8, 12);
   const fillColor = preview?.blocked ? "#ff9a2f" : preview?.inRange ? "#4fd47d" : "#ff5f57";
@@ -10125,7 +10125,7 @@ function buildPreviewItems({ preview, originScene, grid }) {
   const labelPosition = getPreviewLabelPosition(originScene, preview.scene);
   const line = buildLine().id(PREVIEW_LINE_ID).name("Combat Movement Preview").layer("POINTER").locked(true).disableHit(true).startPosition(originScene).endPosition(preview.scene).strokeColor(lineColor).strokeOpacity(0.98).strokeWidth(6).strokeDash([12, 8]).disableAutoZIndex(true).build();
   const label = buildText().id(PREVIEW_LABEL_ID).name("Combat Movement Label").layer("TEXT").locked(true).disableHit(true).disableAutoZIndex(true).position(labelPosition).textType("PLAIN").plainText(buildPreviewLabel(preview)).fontSize(26).fontWeight(700).padding(10).textAlign("CENTER").textAlignVertical("MIDDLE").fillColor(textColor).fillOpacity(1).strokeColor(preview?.blocked ? "#5a3200" : "#08111f").strokeOpacity(1).strokeWidth(6).build();
-  const ghost = buildCellMarker(preview, grid);
+  const ghost = buildPreviewMarkerItem(preview, grid);
   return {
     line,
     label,
@@ -10236,7 +10236,7 @@ async function subscribeMoveToolMessages(listener) {
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.48";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.49";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;
@@ -10288,6 +10288,17 @@ function sameScenePosition(a, b, epsilon = PREVIEW_POSITION_EPSILON) {
 function getCellKey(cell) {
   return `${Number(cell?.q ?? cell?.cell_q ?? 0) || 0}:${Number(cell?.r ?? cell?.cell_r ?? 0) || 0}`;
 }
+function getPreviewMarkerSignature(preview, grid) {
+  const gridDpi = Math.max(Number(grid?.gridDpi ?? 0) || 0, 0);
+  return JSON.stringify({
+    q: Number(preview?.cell?.q ?? 0) || 0,
+    r: Number(preview?.cell?.r ?? 0) || 0,
+    inRange: preview?.inRange === true,
+    blocked: preview?.blocked === true,
+    blockReason: String(preview?.blockReason ?? "").trim(),
+    gridDpi
+  });
+}
 function createInitialState() {
   return {
     player: null,
@@ -10310,6 +10321,9 @@ function createInitialState() {
     previewRenderActive: false,
     previewPointerQueue: [],
     previewPointerActive: false,
+    previewMarkerQueued: null,
+    previewMarkerActive: false,
+    previewMarkerSignature: "",
     pending: false,
     dragActive: false,
     toolRegistered: false,
@@ -10582,12 +10596,15 @@ function setupTacticalMoveTool({ runtime }) {
     state.previewGhostCreated = false;
     state.previewRenderActive = false;
     state.previewPointerActive = false;
+    state.previewMarkerQueued = null;
+    state.previewMarkerActive = false;
+    state.previewMarkerSignature = "";
     state.dragActive = false;
     if (!silent) {
       await publishStatus({ reason });
     }
   }
-  async function updatePreview(preview) {
+  async function updatePreviewCore(preview) {
     if (!state.selectedToken || !state.selectedParticipant) return;
     const current2 = state.preview;
     const previewPositionUnchanged = sameScenePosition(
@@ -10656,6 +10673,15 @@ function setupTacticalMoveTool({ runtime }) {
       await publishStatus();
       return;
     }
+    await publishStatus();
+  }
+  async function updatePreviewMarker(preview) {
+    if (!state.selectedToken || !state.selectedParticipant || !preview || !state.grid) return;
+    const markerSignature = getPreviewMarkerSignature(preview, state.grid);
+    if (state.previewGhostCreated && state.previewMarkerSignature === markerSignature) {
+      return;
+    }
+    const marker = buildPreviewMarkerItem(preview, state.grid);
     addDiagnosticEntry(
       "info",
       "Combat preview marker render",
@@ -10669,7 +10695,7 @@ function setupTacticalMoveTool({ runtime }) {
     );
     try {
       if (!state.previewGhostCreated) {
-        await lib_default.scene.local.addItems([items.ghost]);
+        await lib_default.scene.local.addItems([marker]);
         state.previewGhostCreated = true;
         addDiagnosticEntry(
           "info",
@@ -10686,21 +10712,27 @@ function setupTacticalMoveTool({ runtime }) {
         await lib_default.scene.local.updateItems([PREVIEW_GHOST_ID], (sceneItems) => {
           for (const item of sceneItems) {
             if (item.id === PREVIEW_GHOST_ID && item.type === "SHAPE") {
-              item.position = items.ghost.position;
-              item.width = items.ghost.width;
-              item.height = items.ghost.height;
-              item.shapeType = items.ghost.shapeType;
-              item.style = items.ghost.style;
+              item.position = marker.position;
+              item.width = marker.width;
+              item.height = marker.height;
+              item.shapeType = marker.shapeType;
+              item.style = marker.style;
             }
           }
         });
       }
+      state.previewMarkerSignature = markerSignature;
     } catch (error) {
       state.previewGhostCreated = false;
-      const normalized = normalizeError(error, "Unable to add movement preview ghost.");
+      state.previewMarkerSignature = "";
+      const normalized = normalizeError(error, "Unable to update movement preview marker.");
       addDiagnosticEntry("warn", "Combat preview marker add failed", normalized.message);
     }
-    await publishStatus();
+  }
+  async function updatePreview(preview) {
+    if (!preview) return;
+    await updatePreviewCore(preview);
+    await updatePreviewMarker(preview);
   }
   function getSelectedParticipantOrigin() {
     const position = state.selectedParticipant?.position ?? null;
@@ -10941,9 +10973,26 @@ function setupTacticalMoveTool({ runtime }) {
     if (!pointerPosition) return;
     const preview = buildPreviewFromPointerFast(pointerPosition);
     if (!preview) return;
+    state.preview = preview;
     state.previewPointerQueue = [];
     state.previewRenderQueue = [];
+    state.previewMarkerQueued = preview;
+    void flushPreviewMarkerQueue();
     queuePreviewRender(preview);
+  }
+  async function flushPreviewMarkerQueue() {
+    if (state.previewMarkerActive) return;
+    state.previewMarkerActive = true;
+    try {
+      while (state.dragActive && state.previewMarkerQueued) {
+        const preview = state.previewMarkerQueued;
+        state.previewMarkerQueued = null;
+        if (!preview) continue;
+        await updatePreviewMarker(preview);
+      }
+    } finally {
+      state.previewMarkerActive = false;
+    }
   }
   async function flushPreviewPointerQueue() {
     if (state.previewPointerActive) return;
