@@ -42,7 +42,7 @@ import {
 } from "./moveToolBridge.js";
 
 const MOVE_TOOL_ICON_URL =
-  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.49";
+  "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.50";
 
 const PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 const MARKER_TTL_MS = 15_000;
@@ -143,6 +143,8 @@ function createInitialState() {
     previewRenderActive: false,
     previewPointerQueue: [],
     previewPointerActive: false,
+    previewCoreQueued: null,
+    previewCoreActive: false,
     previewMarkerQueued: null,
     previewMarkerActive: false,
     previewMarkerSignature: "",
@@ -461,6 +463,8 @@ export function setupTacticalMoveTool({ runtime }) {
     state.previewGhostCreated = false;
     state.previewRenderActive = false;
     state.previewPointerActive = false;
+    state.previewCoreQueued = null;
+    state.previewCoreActive = false;
     state.previewMarkerQueued = null;
     state.previewMarkerActive = false;
     state.previewMarkerSignature = "";
@@ -852,33 +856,6 @@ export function setupTacticalMoveTool({ runtime }) {
     return buildPreviewFromScenePosition(pointerPosition, tokenId);
   }
 
-  function queuePreviewRender(preview) {
-    if (!preview) return;
-    const previous = state.previewRenderQueue.at(-1);
-    if (previous && sameScenePosition(previous.scene, preview.scene, 0.01)) {
-      return;
-    }
-    state.previewRenderQueue.push(preview);
-    if (!state.previewRenderActive) {
-      void flushPreviewRenderQueue();
-    }
-  }
-
-  async function flushPreviewRenderQueue() {
-    if (state.previewRenderActive) return;
-    state.previewRenderActive = true;
-    try {
-      while (state.dragActive && state.previewRenderQueue.length > 0) {
-        const preview = state.previewRenderQueue.shift();
-        if (!preview) continue;
-        await updatePreview(preview);
-        await nextAnimationFrame();
-      }
-    } finally {
-      state.previewRenderActive = false;
-    }
-  }
-
   function queuePreviewPointer(pointerPosition) {
     if (!pointerPosition) return;
     const preview = buildPreviewFromPointerFast(pointerPosition);
@@ -886,9 +863,25 @@ export function setupTacticalMoveTool({ runtime }) {
     state.preview = preview;
     state.previewPointerQueue = [];
     state.previewRenderQueue = [];
+    state.previewCoreQueued = preview;
     state.previewMarkerQueued = preview;
+    void flushPreviewCoreQueue();
     void flushPreviewMarkerQueue();
-    queuePreviewRender(preview);
+  }
+
+  async function flushPreviewCoreQueue() {
+    if (state.previewCoreActive) return;
+    state.previewCoreActive = true;
+    try {
+      while (state.dragActive && state.previewCoreQueued) {
+        const preview = state.previewCoreQueued;
+        state.previewCoreQueued = null;
+        if (!preview) continue;
+        await updatePreviewCore(preview);
+      }
+    } finally {
+      state.previewCoreActive = false;
+    }
   }
 
   async function flushPreviewMarkerQueue() {
@@ -916,9 +909,11 @@ export function setupTacticalMoveTool({ runtime }) {
         const preview = await buildPreviewFromPointer(pointerPosition);
         if (!state.dragActive) break;
         if (!preview) continue;
-        queuePreviewRender(preview);
+        state.previewCoreQueued = preview;
+        state.previewMarkerQueued = preview;
+        await flushPreviewCoreQueue();
+        await flushPreviewMarkerQueue();
       }
-      await flushPreviewRenderQueue();
     } finally {
       state.previewPointerActive = false;
     }
