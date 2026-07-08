@@ -50894,7 +50894,7 @@ create or replace function public.assign_character_owner(
 )
 returns jsonb
 language plpgsql
-as $
+as $body$
 declare
   v_character_id uuid := public.odyssey_try_parse_uuid(p_payload->>'character_id');
   v_owner_player_id text := coalesce(nullif(trim(coalesce(p_payload->>'owner_player_id', '')), ''), '');
@@ -52667,7 +52667,7 @@ begin
     'turn_result', v_next_turn
   );
 end;
-$;
+$body$;
 
 create or replace function public.combat_skip_turn(
   p_payload jsonb
@@ -53127,7 +53127,7 @@ create or replace function public.combat_execute_action(
 )
 returns jsonb
 language plpgsql
-as $
+as $body$
 declare
   v_payload jsonb := coalesce(p_payload, '{}'::jsonb);
   v_encounter_id uuid := public.odyssey_try_parse_uuid(v_payload->>'encounter_id');
@@ -53324,7 +53324,7 @@ exception
     end if;
     raise;
 end;
-$;
+$body$;
 
 grant execute on function public.odyssey_get_character_reaction_value(uuid) to anon, authenticated;
 grant execute on function public.odyssey_character_has_active_effect_flag(uuid, text) to anon, authenticated;
