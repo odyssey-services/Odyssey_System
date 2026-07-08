@@ -53133,6 +53133,7 @@ declare
   v_encounter_id uuid := public.odyssey_try_parse_uuid(v_payload->>'encounter_id');
   v_character_id uuid := public.odyssey_try_parse_uuid(v_payload->>'character_id');
   v_kind text := lower(trim(coalesce(v_payload->>'kind', '')));
+  v_include_runtime boolean := coalesce(nullif(trim(coalesce(v_payload->>'include_runtime', '')), '')::boolean, false);
   v_actor_player_id text := coalesce(nullif(trim(coalesce(v_payload->>'actor_player_id', '')), ''), '');
   v_actor_is_gm boolean := coalesce(nullif(trim(coalesce(v_payload->>'actor_is_gm', '')), '')::boolean, false);
   v_intent jsonb := case when jsonb_typeof(v_payload->'intent') = 'object' then v_payload->'intent' else '{}'::jsonb end;
@@ -53146,7 +53147,11 @@ declare
   v_move_cost integer := 0;
   v_use_reaction boolean := false;
   v_post_refresh jsonb := '{}'::jsonb;
+  v_result_target_character_id uuid := null;
+  v_result_combat_state jsonb := '{}'::jsonb;
 begin
+  perform set_config('lock_timeout', '1500ms', true);
+
   if v_kind not in ('attack', 'reload', 'ability', 'perk', 'item', 'move') then
     return jsonb_build_object('ok', false, 'error', 'INVALID_ACTION_KIND', 'message', 'Unsupported action kind.');
   end if;
@@ -53260,7 +53265,24 @@ begin
     perform public.odyssey_increment_encounter_state_version(v_encounter_id);
   end if;
 
-  v_post_refresh := public.odyssey_refresh_character_combat_state(v_character_id);
+  v_result_target_character_id := public.odyssey_try_parse_uuid(v_result->>'target_character_id');
+  v_result_combat_state := case
+    when jsonb_typeof(v_result->'combat_state') = 'object' then v_result->'combat_state'
+    else '{}'::jsonb
+  end;
+
+  if v_kind = 'ability'
+     and v_result_target_character_id = v_character_id
+     and v_result_combat_state <> '{}'::jsonb then
+    v_post_refresh := jsonb_build_object(
+      'ok', true,
+      'character_id', v_character_id,
+      'combat_state', v_result_combat_state,
+      'state_version', nullif(v_result#>>'{combat_state,state_version}', '')::integer
+    );
+  else
+    v_post_refresh := public.odyssey_refresh_character_combat_state(v_character_id);
+  end if;
 
   if v_kind = 'perk'
      and coalesce(nullif(v_result->>'force_end_turn', '')::boolean, false)
@@ -53280,8 +53302,27 @@ begin
       ),
     'result', v_result,
     'acting_combat_state', coalesce(v_post_refresh->'combat_state', '{}'::jsonb),
-    'runtime', public.odyssey_build_combat_runtime(v_encounter_id, v_actor_player_id, v_actor_is_gm, v_actor_is_gm, 5)
+    'runtime', case
+      when v_include_runtime then public.odyssey_build_combat_runtime(v_encounter_id, v_actor_player_id, v_actor_is_gm, v_actor_is_gm, 5)
+      else null
+    end
   );
+exception
+  when lock_not_available then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'ACTION_BUSY_RETRY',
+      'message', 'Character state is busy. Please retry.'
+    );
+  when query_canceled then
+    if SQLERRM ilike '%statement timeout%' or SQLERRM ilike '%lock timeout%' then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'ACTION_BUSY_RETRY',
+        'message', 'Character state is busy. Please retry.'
+      );
+    end if;
+    raise;
 end;
 $;
 
@@ -64177,8 +64218,6 @@ begin
     );
   end if;
 
-  perform public.odyssey_reconcile_character_abilities(p_character_id);
-
   with resource_rows as (
     select
       d.sort_order,
@@ -64431,10 +64470,6 @@ declare
   v_participant jsonb := null;
   v_combat_session jsonb := null;
 begin
-  if v_character_id is not null then
-    perform public.odyssey_reconcile_character_abilities(v_character_id);
-  end if;
-
   if to_regprocedure('public.odyssey_build_character_runtime_sections(jsonb)') is not null then
     v_runtime_sections_fn := 'public.odyssey_build_character_runtime_sections';
   elsif to_regprocedure('public.odyssey_get_character_runtime_bundle_legacy(jsonb)') is not null then
@@ -64616,8 +64651,6 @@ begin
       'quickbar', jsonb_build_object('slots', '[]'::jsonb, 'maxSlots', 20, 'version', 1)
     );
   end if;
-
-  perform public.odyssey_reconcile_character_abilities(p_character_id);
 
   select coalesce(cs.is_alive, true), coalesce(cs.is_conscious, true)
   into v_is_alive, v_is_conscious

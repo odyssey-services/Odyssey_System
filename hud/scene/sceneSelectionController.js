@@ -94,6 +94,9 @@ export function setupSceneSelection(hooks = {}) {
   let sceneTimer = null;
   let currentSelectionIds = [];
   let skillAdminDeleteInFlight = null;
+  let refetchCurrentPromise = null;
+  let refetchCurrentQueued = false;
+  let lastRefetchAt = 0;
   // Phase 3D.1: controller-local, session-scoped "last weapon per character"
   // memory — see selectedWeaponMemory.js for why this exists (Token A → B → A
   // must restore A's own weapon, not fall back to armory's first weapon).
@@ -372,9 +375,37 @@ export function setupSceneSelection(hooks = {}) {
       return lastPayload;
     }
 
-    async function refetchCurrent() {
-      if (currentSelectionIds.length === 1) await resolveAndPublish(currentSelectionIds);
-      else if (lastState) publishState(lastState);
+    async function refetchCurrent(reason = "generic") {
+      if (refetchCurrentPromise) {
+        refetchCurrentQueued = true;
+        return refetchCurrentPromise;
+      }
+
+      refetchCurrentPromise = (async () => {
+        const now = Date.now();
+        const waitMs = Math.max(0, 350 - (now - lastRefetchAt));
+        if (waitMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+
+        if (currentSelectionIds.length === 1) {
+          await resolveAndPublish(currentSelectionIds);
+        } else if (lastState) {
+          publishState(lastState);
+        }
+
+        lastRefetchAt = Date.now();
+      })();
+
+      try {
+        await refetchCurrentPromise;
+      } finally {
+        refetchCurrentPromise = null;
+        if (refetchCurrentQueued) {
+          refetchCurrentQueued = false;
+          void refetchCurrent(`${reason}:queued`);
+        }
+      }
     }
 
     function applyTargetingPayload(payload) {

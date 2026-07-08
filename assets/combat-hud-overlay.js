@@ -4070,7 +4070,6 @@ var combatHudLayout_default = `/*
 .ohud-qb--empty-clickable:focus-visible { outline: 2px solid var(--odyssey-hud-implant); outline-offset: 2px; }
 .ohud-qb-row { display: flex; gap: 4px; flex-wrap: nowrap; }
 .ohud-qb-card { position: relative; flex: 1 1 0; min-width: 0; max-width: 56px; height: 50px; }
-.ohud-qb-card > .ohud-qb-slot { width: 100%; max-width: none; height: 100%; }
 .ohud-qb-slot {
   /* Width fills the row evenly (flex-basis 0 + grow), capped at 56px so ten
    * slots stay dense rather than stretching to fill a very wide container.
@@ -4082,6 +4081,7 @@ var combatHudLayout_default = `/*
   background: var(--odyssey-hud-panel, rgba(255,255,255,0.04)); color: var(--odyssey-hud-text);
   cursor: pointer; overflow: hidden; transition: border-color .12s ease, background .12s ease;
 }
+.ohud-qb-card > .ohud-qb-slot { width: 100%; max-width: none; height: 100%; }
 .ohud-qb-slot:not(.is-empty):not(.is-disabled):hover { border-color: var(--odyssey-hud-border-strong); background: var(--odyssey-hud-panel-hover); }
 .ohud-qb-slot.is-empty { cursor: default; border-style: dashed; opacity: 0.6; background: transparent; }
 .ohud-qb-slot.is-empty::after { content: "+"; font-size: var(--ohud-font-15); color: var(--odyssey-hud-dim); opacity: 0.5; }

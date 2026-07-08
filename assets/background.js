@@ -5474,6 +5474,7 @@ function isInstantAbilityResultStale(requestCtx, currentCtx) {
 function buildInstantAbilityExecutionPayload(input = {}) {
   const payload = {
     kind: "ability",
+    include_runtime: false,
     character_id: String(input.sourceCharacterId ?? "").trim(),
     encounter_id: String(input.encounterId ?? "").trim(),
     actor_player_id: String(input.actorPlayerId ?? "").trim(),
@@ -5584,6 +5585,7 @@ function isDirectedAbilityResultStale(requestCtx, currentCtx) {
 function buildDirectedAbilityExecutionPayload(input = {}) {
   const payload = {
     kind: "ability",
+    include_runtime: false,
     character_id: String(input.sourceCharacterId ?? "").trim(),
     encounter_id: String(input.encounterId ?? "").trim(),
     actor_player_id: String(input.actorPlayerId ?? "").trim(),
@@ -8564,6 +8566,9 @@ function setupSceneSelection(hooks = {}) {
   let sceneTimer = null;
   let currentSelectionIds = [];
   let skillAdminDeleteInFlight = null;
+  let refetchCurrentPromise = null;
+  let refetchCurrentQueued = false;
+  let lastRefetchAt = 0;
   const selectedWeaponMemory = createSelectedWeaponMemory();
   const armedTechniqueMemory = createArmedTechniqueMemory();
   let combatLog = [];
@@ -8773,9 +8778,33 @@ function setupSceneSelection(hooks = {}) {
       broadcast(lastPayload);
       return lastPayload;
     }
-    async function refetchCurrent() {
-      if (currentSelectionIds.length === 1) await resolveAndPublish(currentSelectionIds);
-      else if (lastState) publishState(lastState);
+    async function refetchCurrent(reason = "generic") {
+      if (refetchCurrentPromise) {
+        refetchCurrentQueued = true;
+        return refetchCurrentPromise;
+      }
+      refetchCurrentPromise = (async () => {
+        const now = Date.now();
+        const waitMs = Math.max(0, 350 - (now - lastRefetchAt));
+        if (waitMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+        }
+        if (currentSelectionIds.length === 1) {
+          await resolveAndPublish(currentSelectionIds);
+        } else if (lastState) {
+          publishState(lastState);
+        }
+        lastRefetchAt = Date.now();
+      })();
+      try {
+        await refetchCurrentPromise;
+      } finally {
+        refetchCurrentPromise = null;
+        if (refetchCurrentQueued) {
+          refetchCurrentQueued = false;
+          void refetchCurrent(`${reason}:queued`);
+        }
+      }
     }
     function applyTargetingPayload(payload) {
       const target = payload?.target && typeof payload.target === "object" ? payload.target : null;
@@ -12564,7 +12593,7 @@ function resolveCombatMovementPermission({
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.64";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.65";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;

@@ -30,6 +30,7 @@ export { describeError, ERROR_MESSAGES };
 export function buildDirectedAbilityExecutionPayload(input = {}) {
   const payload = {
     kind: "ability",
+    include_runtime: false,
     character_id: String(input.sourceCharacterId ?? "").trim(),
     encounter_id: String(input.encounterId ?? "").trim(),
     actor_player_id: String(input.actorPlayerId ?? "").trim(),
