@@ -64374,7 +64374,7 @@ create or replace function public.get_character_runtime_bundle(
 )
 returns jsonb
 language plpgsql
-as $
+as $$
 declare
   v_payload jsonb := coalesce(p_payload, '{}'::jsonb);
   v_sections_raw jsonb := v_payload->'sections';
@@ -64529,7 +64529,7 @@ begin
 
   return v_bundle || jsonb_build_object('sections', v_sections);
 end;
-$;
+$$;
 
 create or replace function public.odyssey_get_character_quick_actions_runtime(
   p_character_id uuid
