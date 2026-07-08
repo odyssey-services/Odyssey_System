@@ -999,6 +999,7 @@ declare
   v_bundle jsonb := '{}'::jsonb;
   v_sections jsonb := '{}'::jsonb;
   v_rule_sheet jsonb := '{}'::jsonb;
+  v_runtime_sections_fn text := '';
   v_character_id uuid := public.odyssey_try_parse_uuid(v_payload->>'character_id');
   v_campaign_id text := coalesce(nullif(trim(coalesce(v_payload->>'campaign_id', '')), ''), '');
   v_room_id text := coalesce(nullif(trim(coalesce(v_payload->>'room_id', '')), ''), '');
@@ -1014,6 +1015,14 @@ begin
     perform public.odyssey_reconcile_character_abilities(v_character_id);
   end if;
 
+  if to_regprocedure('public.odyssey_build_character_runtime_sections(jsonb)') is not null then
+    v_runtime_sections_fn := 'public.odyssey_build_character_runtime_sections';
+  elsif to_regprocedure('public.odyssey_get_character_runtime_bundle_legacy(jsonb)') is not null then
+    v_runtime_sections_fn := 'public.odyssey_get_character_runtime_bundle_legacy';
+  else
+    raise exception 'Missing runtime bundle sections helper function';
+  end if;
+
   if jsonb_typeof(v_sections_raw) = 'array' then
     for v_item in
       select section_name
@@ -1027,17 +1036,28 @@ begin
     end loop;
 
     if jsonb_array_length(v_filtered_sections) = 0 then
-      v_bundle := public.odyssey_get_character_runtime_bundle_legacy(
-        (v_payload - 'sections') || jsonb_build_object('sections', jsonb_build_array('summary'))
-      );
+      execute format(
+        'select %s($1)',
+        v_runtime_sections_fn
+      )
+      into v_bundle
+      using (v_payload - 'sections') || jsonb_build_object('sections', jsonb_build_array('summary'));
     else
-      v_bundle := public.odyssey_get_character_runtime_bundle_legacy(
-        (v_payload - 'sections') || jsonb_build_object('sections', v_filtered_sections)
-      );
+      execute format(
+        'select %s($1)',
+        v_runtime_sections_fn
+      )
+      into v_bundle
+      using (v_payload - 'sections') || jsonb_build_object('sections', v_filtered_sections);
     end if;
   else
     v_wants_combat_session := true;
-    v_bundle := public.odyssey_get_character_runtime_bundle_legacy(v_payload);
+    execute format(
+      'select %s($1)',
+      v_runtime_sections_fn
+    )
+    into v_bundle
+    using v_payload;
   end if;
 
   if coalesce((v_bundle->>'ok')::boolean, false) = false then
