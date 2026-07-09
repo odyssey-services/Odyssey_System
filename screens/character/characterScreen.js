@@ -2173,18 +2173,102 @@ export function mountCharacterScreen({ root, runtime }) {
     ).trim().toLowerCase();
   }
 
+  function getWeaponFeedMode(weapon) {
+    return String(
+      weapon?.feed_mode ||
+      weapon?.active_profile?.feed_mode ||
+      "detachable_magazine"
+    ).trim().toLowerCase() === "internal_magazine"
+      ? "internal_magazine"
+      : "detachable_magazine";
+  }
+
+  function getWeaponCaliberCode(weapon) {
+    return String(
+      weapon?.active_profile?.caliber ||
+      weapon?.model?.caliber ||
+      weapon?.caliber ||
+      ""
+    ).trim().toLowerCase();
+  }
+
+  function getWeaponAmmoState(weapon) {
+    const feedMode = getWeaponFeedMode(weapon);
+    if (feedMode === "internal_magazine") {
+      const ammo = weapon?.ammo || weapon?.active_profile?.ammo || null;
+      return {
+        current: Number(
+          weapon?.internal_current_rounds ??
+          weapon?.active_profile?.internal_current_rounds ??
+          ammo?.current_rounds ??
+          ammo?.current ??
+          0
+        ),
+        max: Number(
+          weapon?.internal_max_rounds ??
+          weapon?.active_profile?.internal_max_rounds ??
+          weapon?.internal_capacity ??
+          weapon?.active_profile?.internal_capacity ??
+          ammo?.max_rounds ??
+          ammo?.max ??
+          0
+        ),
+        ammoTypeCode: String(
+          weapon?.internal_ammo_type?.code ??
+          weapon?.active_profile?.internal_ammo_type?.code ??
+          ammo?.ammo_type ??
+          ammo?.ammo_type_code ??
+          ""
+        ).trim().toLowerCase(),
+        ammoTypeName: String(
+          weapon?.internal_ammo_type?.name ??
+          weapon?.active_profile?.internal_ammo_type?.name ??
+          ammo?.ammo_type_name ??
+          ""
+        ).trim(),
+      };
+    }
+    const mag = weapon?.loaded_magazine || weapon?.active_profile?.loaded_magazine || null;
+    return {
+      current: Number(mag?.current_rounds ?? 0),
+      max: Number(mag?.capacity ?? mag?.magazine_def?.capacity ?? 0),
+      ammoTypeCode: String(mag?.ammo_type?.code || mag?.ammo_type_code || "").trim().toLowerCase(),
+      ammoTypeName: String(mag?.ammo_type?.name || mag?.ammo_type_name || "").trim(),
+    };
+  }
+
+  function compatibleAmmoForWeaponInternal(weapon) {
+    const caliberCode = getWeaponCaliberCode(weapon);
+    const ammoState = getWeaponAmmoState(weapon);
+    return arr(state.inv.ammoStock).filter((row) => {
+      const ammoCaliberCode = getAmmoStockCaliberCode(row);
+      const ammoTypeCode = getAmmoStockTypeCode(row);
+      if (caliberCode && ammoCaliberCode !== caliberCode) return false;
+      if (ammoState.current > 0 && ammoState.ammoTypeCode && ammoTypeCode !== ammoState.ammoTypeCode) return false;
+      return true;
+    });
+  }
+
   function weaponCard(w) {
     const isMelee = !w.model?.caliber;
+    const feedMode = getWeaponFeedMode(w);
+    const isInternal = !isMelee && feedMode === "internal_magazine";
     const mag = w.loaded_magazine || w.active_profile?.loaded_magazine || null;
     const fm = w.selected_fire_mode || w.active_profile?.selected_fire_mode || null;
     const profiles = arr(w.profiles);
     const fireModes = arr(w.available_fire_modes?.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
-    const compatMags = arr(state.armory?.magazines).filter((m) => !w.model?.caliber || (m.magazine_def?.caliber || m.caliber) === w.model.caliber);
+    const compatMags = isInternal
+      ? []
+      : arr(state.armory?.magazines).filter((m) => !getWeaponCaliberCode(w) || getMagazineCaliberCode(m) === getWeaponCaliberCode(w));
+    const compatAmmo = isInternal ? compatibleAmmoForWeaponInternal(w) : [];
+    const ammoState = getWeaponAmmoState(w);
     const ammoChips = isMelee
       ? `<span class="cp-chip">melee</span>`
-      : (mag
-          ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash(mag.current_rounds)}/${dash(mag.capacity || mag.magazine_def?.capacity)} - ${esc(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>`
-          : `<span class="cp-chip bad">no magazine</span>`);
+      : (isInternal
+          ? `<span class="cp-chip ${ammoState.current <= 0 ? "bad" : ""}">${dash(ammoState.current)}/${dash(ammoState.max)} - ${esc(ammoState.ammoTypeName || "empty internal load")}</span>`
+          : (mag
+              ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash(mag.current_rounds)}/${dash(mag.capacity || mag.magazine_def?.capacity)} - ${esc(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>`
+              : `<span class="cp-chip bad">no magazine</span>`));
     const weaponAbilities = getWeaponAbilities(w);
     return `<div class="cp-card" data-weapon="${esc(w.id)}">
       <div class="cp-rowitem"><span><b>${esc(w.name)}</b> <span class="cp-pill">${esc(w.model?.weapon_class_name || w.model?.weapon_class || "")}</span></span>
@@ -2192,7 +2276,8 @@ export function mountCharacterScreen({ root, runtime }) {
       <div class="cp-row" style="gap:8px;margin-top:8px">
         ${profiles.length > 1 ? `<label class="cp-field" style="min-width:130px"><span>Profile</span><select data-wact="profile" data-weapon="${esc(w.id)}">${profiles.map((p) => `<option value="${esc(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc(p.name || p.code)}</option>`).join("")}</select></label>` : ""}
         ${fireModes.length && !isMelee ? `<label class="cp-field" style="min-width:130px"><span>Fire mode</span><select data-wact="firemode" data-weapon="${esc(w.id)}">${fireModes.map((f) => `<option value="${esc(f.id)}" ${f.id === fm?.id ? "selected" : ""}>${esc(f.name || f.code)}</option>`).join("")}</select></label>` : ""}
-        ${!isMelee ? `<label class="cp-field" style="min-width:150px"><span>Insert magazine</span><select data-wact="reloadmag" data-weapon="${esc(w.id)}">${compatMags.length ? compatMags.map((m) => `<option value="${esc(m.id)}">${esc(m.name)} - ${dash(m.current_rounds)}/${dash(m.magazine_def?.capacity ?? m.capacity)}</option>`).join("") : `<option value="">-- none --</option>`}</select></label>` : ""}
+        ${!isMelee && !isInternal ? `<label class="cp-field" style="min-width:150px"><span>Insert magazine</span><select data-wact="reloadmag" data-weapon="${esc(w.id)}">${compatMags.length ? compatMags.map((m) => `<option value="${esc(m.id)}">${esc(m.name)} - ${dash(m.current_rounds)}/${dash(m.magazine_def?.capacity ?? m.capacity)}</option>`).join("") : `<option value="">-- none --</option>`}</select></label>` : ""}
+        ${!isMelee && isInternal ? `<label class="cp-field" style="min-width:170px"><span>Ammo stock</span><select data-wact="reloadammo" data-weapon="${esc(w.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc(a.id)}">${esc(a.display_name)} - ${esc(getAmmoStockTypeName(a))} - x${dash(a.quantity)}</option>`).join("") : `<option value="">-- no compatible ammo --</option>`}</select></label>` : ""}
       </div>
       ${weaponAbilities.length ? `<div class="cp-list" style="margin-top:8px">${weaponAbilities.map((ability) => {
         const passive = ability.activation_type === "passive" || ability.ability_kind === "passive";
@@ -2211,7 +2296,9 @@ export function mountCharacterScreen({ root, runtime }) {
           ${canUse ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" type="button" data-ability-use="${esc(ability.id)}">Use ability</button></div>` : ""}
         </div>`;
       }).join("")}</div>` : ""}
-      ${!isMelee ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="reload" data-weapon="${esc(w.id)}" type="button" ${compatMags.length ? "" : "disabled"}>Reload (insert magazine)</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc(w.id)}" type="button">GM delete</button>` : ""}</div>${compatMags.length ? "" : `<div class="cp-muted">No compatible magazine to insert.</div>`}` : `${isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc(w.id)}" type="button">GM delete</button></div>` : ""}`}
+      ${!isMelee && !isInternal ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="reload" data-weapon="${esc(w.id)}" type="button" ${compatMags.length ? "" : "disabled"}>Reload (insert magazine)</button><button class="cp-btn-sm secondary" data-wbtn="unloadmag" data-weapon="${esc(w.id)}" type="button" ${mag ? "" : "disabled"}>Unload magazine</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc(w.id)}" type="button">GM delete</button>` : ""}</div>${compatMags.length ? "" : `<div class="cp-muted">No compatible magazine to insert.</div>`}` : ""}
+      ${!isMelee && isInternal ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="loadinternalone" data-weapon="${esc(w.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load 1</button><button class="cp-btn-sm" data-wbtn="loadinternalfull" data-weapon="${esc(w.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load full</button><button class="cp-btn-sm secondary" data-wbtn="unloadinternalone" data-weapon="${esc(w.id)}" type="button" ${ammoState.current > 0 ? "" : "disabled"}>Unload 1</button><button class="cp-btn-sm secondary" data-wbtn="unloadinternalall" data-weapon="${esc(w.id)}" type="button" ${ammoState.current > 0 ? "" : "disabled"}>Unload all</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc(w.id)}" type="button">GM delete</button>` : ""}</div>${compatAmmo.length ? "" : `<div class="cp-muted">No compatible ammo in stock for this internal magazine.</div>`}` : ""}
+      ${isMelee ? `${isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc(w.id)}" type="button">GM delete</button></div>` : ""}` : ""}
     </div>`;
   }
 
@@ -2581,7 +2668,16 @@ export function mountCharacterScreen({ root, runtime }) {
     const abilityUse = t.closest("[data-ability-use]"); if (abilityUse) { onUseAbility(abilityUse.dataset.abilityUse); return; }
     const perkUse = t.closest("[data-perk-use]"); if (perkUse) { onUsePerk(perkUse.dataset.perkUse); return; }
     // weapon buttons
-    const wbtn = t.closest("[data-wbtn]"); if (wbtn) { onReloadWeapon(wbtn.dataset.weapon); return; }
+    const wbtn = t.closest("[data-wbtn]");
+    if (wbtn) {
+      if (wbtn.dataset.wbtn === "reload") onReloadWeapon(wbtn.dataset.weapon);
+      if (wbtn.dataset.wbtn === "unloadmag") onUnloadWeaponMagazine(wbtn.dataset.weapon);
+      if (wbtn.dataset.wbtn === "loadinternalone") onLoadWeaponInternalRounds(wbtn.dataset.weapon, 1);
+      if (wbtn.dataset.wbtn === "loadinternalfull") onLoadWeaponInternalRounds(wbtn.dataset.weapon, 0);
+      if (wbtn.dataset.wbtn === "unloadinternalone") onUnloadWeaponInternalRounds(wbtn.dataset.weapon, 1);
+      if (wbtn.dataset.wbtn === "unloadinternalall") onUnloadWeaponInternalRounds(wbtn.dataset.weapon, 0);
+      return;
+    }
     const mbtn = t.closest("[data-mbtn]"); if (mbtn) { mbtn.dataset.mbtn === "load" ? onLoadRounds(mbtn.dataset.mag) : onUnloadRounds(mbtn.dataset.mag); return; }
     const ibtn = t.closest("[data-ibtn]"); if (ibtn) { onUseItem(ibtn.dataset.item); return; }
     // inventory items - click on card to use
@@ -2740,6 +2836,43 @@ export function mountCharacterScreen({ root, runtime }) {
     const magId = root.querySelector(`select[data-wact="reloadmag"][data-weapon="${CSS.escape(weaponId)}"]`)?.value;
     if (!profileId || !magId) { setNotice("err", "Select a magazine to insert."); render(); return; }
     runMutation("Reload", () => api.weapon.loadWeaponProfileMagazine({ character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magId }, settings()), () => refresh({ equipment: false }));
+  }
+  function onUnloadWeaponMagazine(weaponId) {
+    const w = arr(state.armory?.weapons).find((x) => x.id === weaponId);
+    const profileId = w?.active_profile?.id || w?.active_profile_id;
+    if (!profileId) { setNotice("err", "Weapon has no active profile."); render(); return; }
+    runMutation("Unload magazine", () => api.weapon.unloadWeaponMagazine({ character_weapon_id: weaponId, profile_id: profileId }, settings()), () => refresh({ equipment: false }));
+  }
+  function onLoadWeaponInternalRounds(weaponId, quantity) {
+    const w = arr(state.armory?.weapons).find((x) => x.id === weaponId);
+    const profileId = w?.active_profile?.id || w?.active_profile_id;
+    const ammoId = root.querySelector(`select[data-wact="reloadammo"][data-weapon="${CSS.escape(weaponId)}"]`)?.value;
+    if (!profileId || !ammoId) { setNotice("err", "Select ammo to load."); render(); return; }
+    runMutation(
+      quantity === 1 ? "Load 1 round" : "Load internal magazine",
+      () => api.weapon.loadWeaponInternalRounds({
+        character_weapon_id: weaponId,
+        profile_id: profileId,
+        ammo_stock_id: ammoId,
+        quantity,
+        allow_partial: quantity !== 1,
+      }, settings()),
+      () => refresh({ equipment: false }),
+    );
+  }
+  function onUnloadWeaponInternalRounds(weaponId, quantity) {
+    const w = arr(state.armory?.weapons).find((x) => x.id === weaponId);
+    const profileId = w?.active_profile?.id || w?.active_profile_id;
+    if (!profileId) { setNotice("err", "Weapon has no active profile."); render(); return; }
+    runMutation(
+      quantity === 1 ? "Unload 1 round" : "Unload internal magazine",
+      () => api.weapon.unloadWeaponInternalRounds({
+        character_weapon_id: weaponId,
+        profile_id: profileId,
+        quantity,
+      }, settings()),
+      () => refresh({ equipment: false }),
+    );
   }
   function onLoadRounds(magId) {
     const ammoId = root.querySelector(`select[data-mact="ammo"][data-mag="${CSS.escape(magId)}"]`)?.value;

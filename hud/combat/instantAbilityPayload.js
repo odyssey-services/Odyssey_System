@@ -20,6 +20,7 @@ export { describeError, ERROR_MESSAGES };
  * @param {{
  *   sourceCharacterId: string,
  *   abilityId: string,
+ *   selectedWeaponId?: (string|null),
  *   encounterId: string,
  *   expectedEncounterVersion?: (number|null),
  *   actorPlayerId?: (string|null),
@@ -37,6 +38,7 @@ export function buildInstantAbilityExecutionPayload(input = {}) {
     actor_is_gm: !!input.actorIsGm,
     intent: {
       character_ability_id: String(input.abilityId ?? "").trim(),
+      selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim(),
     },
   };
   // Phase 3E.0 optimistic-concurrency check — only ever set when the caller

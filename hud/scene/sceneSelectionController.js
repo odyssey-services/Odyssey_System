@@ -884,6 +884,7 @@ export function setupSceneSelection(hooks = {}) {
         const ctx = {
           sourceCharacterId: evalCtx.sourceCharacterId,
           abilityId: actionId,
+          selectedWeaponId: ephemeral.selectedWeaponId ?? null,
           encounterId: sessionAtRequest.id ?? "",
           actorPlayerId: viewer?.playerId ?? null,
           actorIsGm: String(viewer?.role ?? "").toUpperCase() === "GM",
@@ -1035,6 +1036,7 @@ export function setupSceneSelection(hooks = {}) {
         const ctx = {
           sourceCharacterId: evalCtx.sourceCharacterId,
           abilityId: actionId,
+          selectedWeaponId: ephemeral.selectedWeaponId ?? null,
           targetCharacterId: evalCtx.targetCharacterId,
           encounterId: sessionAtRequest.id ?? "",
           actorPlayerId: viewer?.playerId ?? null,

@@ -19,6 +19,7 @@ export { describeError, ERROR_MESSAGES };
  * @param {{
  *   sourceCharacterId: string,
  *   abilityId: string,
+ *   selectedWeaponId?: (string|null),
  *   targetCharacterId: string,
  *   encounterId: string,
  *   expectedEncounterVersion?: (number|null),
@@ -37,6 +38,7 @@ export function buildDirectedAbilityExecutionPayload(input = {}) {
     actor_is_gm: !!input.actorIsGm,
     intent: {
       character_ability_id: String(input.abilityId ?? "").trim(),
+      selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim(),
       target_character_id: String(input.targetCharacterId ?? "").trim(),
     },
   };

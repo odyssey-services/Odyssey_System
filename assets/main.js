@@ -4092,10 +4092,12 @@ function createEmptyWeaponProfileDraft(index = 0) {
     id: "",
     name: "",
     attackType: index === 0 ? "ranged" : "melee",
+    feedMode: "detachable_magazine",
     weaponClassId: "",
     linkedSkillId: "",
     rangeProfileId: "",
     caliberId: "",
+    internalCapacity: "",
     accuracyModifier: "0",
     baseMeleeDamage: "0",
     armorPierce: "0",
@@ -4905,10 +4907,12 @@ function normalizeWeaponProfileDraft(profile) {
     id: String(profile?.id ?? ""),
     name: String(profile?.name ?? ""),
     attackType: String(profile?.attack_type ?? "ranged"),
+    feedMode: String(profile?.feed_mode ?? "detachable_magazine"),
     weaponClassId: String(profile?.weapon_class_id ?? ""),
     linkedSkillId: String(profile?.linked_skill_id ?? ""),
     rangeProfileId: String(profile?.range_profile_id ?? ""),
     caliberId: String(profile?.caliber_id ?? ""),
+    internalCapacity: profile?.internal_capacity !== void 0 && profile?.internal_capacity !== null ? String(profile.internal_capacity) : "",
     accuracyModifier: String(profile?.accuracy_modifier ?? 0),
     baseMeleeDamage: String(profile?.base_melee_damage ?? 0),
     armorPierce: String(data.armor_pierce ?? 0),
@@ -5564,6 +5568,7 @@ function buildWeaponPayload(draft, auto, references) {
   const meleeRangeProfileId = String((Array.isArray(references?.range_profiles) ? references.range_profiles : []).find((entry) => entry.code === "melee_profile")?.id ?? "");
   const payloadProfiles = profiles.map((profile, index) => {
     const attackType = String(profile.attackType ?? "ranged").trim() === "melee" ? "melee" : "ranged";
+    const feedMode = attackType === "ranged" && String(profile.feedMode ?? "detachable_magazine").trim() === "internal_magazine" ? "internal_magazine" : "detachable_magazine";
     const data = toPlainObject(cloneJson(profile.dataExtraData));
     data.armor_pierce = coerceInteger(profile.armorPierce, 0);
     data.two_handed = Boolean(profile.twoHanded);
@@ -5573,8 +5578,9 @@ function buildWeaponPayload(draft, auto, references) {
       delete data.can_parry;
     }
     const fireModeIds = attackType === "melee" ? meleeFireModeId ? [meleeFireModeId] : [] : Array.from(new Set((Array.isArray(profile.fireModeIds) ? profile.fireModeIds : []).map((entry) => String(entry ?? "").trim()).filter(Boolean)));
-    const magazineDefIds = attackType === "ranged" ? Array.from(new Set((Array.isArray(profile.magazineDefIds) ? profile.magazineDefIds : []).map((entry) => String(entry ?? "").trim()).filter(Boolean))) : [];
+    const magazineDefIds = attackType === "ranged" && feedMode === "detachable_magazine" ? Array.from(new Set((Array.isArray(profile.magazineDefIds) ? profile.magazineDefIds : []).map((entry) => String(entry ?? "").trim()).filter(Boolean))) : [];
     const caliberId = attackType === "ranged" ? String(profile.caliberId ?? "").trim() : null;
+    const internalCapacity = attackType === "ranged" && feedMode === "internal_magazine" ? Math.max(1, coerceInteger(profile.internalCapacity, 1)) : null;
     return {
       id: profile.id || void 0,
       code: resolveWeaponProfileDraftCode(profile, index, profiles),
@@ -5585,6 +5591,8 @@ function buildWeaponPayload(draft, auto, references) {
       linked_skill_id: String(profile.linkedSkillId ?? "").trim() || null,
       caliber_id: caliberId,
       range_profile_id: attackType === "melee" ? String(profile.rangeProfileId ?? "").trim() || meleeRangeProfileId || null : String(profile.rangeProfileId ?? "").trim() || null,
+      feed_mode: feedMode,
+      internal_capacity: internalCapacity,
       accuracy_modifier: coerceInteger(profile.accuracyModifier, 0),
       base_melee_damage: coerceInteger(profile.baseMeleeDamage, 0),
       is_default: Boolean(profile.isDefault),
@@ -6597,6 +6605,7 @@ function buildFlagEditorMarkup(draft) {
 function buildWeaponProfileEditorMarkup(state, references, profile, index) {
   const attackType = String(profile.attackType ?? "ranged").trim() === "melee" ? "melee" : "ranged";
   const isRanged = attackType === "ranged";
+  const feedMode = String(profile.feedMode ?? "detachable_magazine").trim() === "internal_magazine" ? "internal_magazine" : "detachable_magazine";
   const defaultChecked = Boolean(profile.isDefault);
   return `
     <div class="creator-link-card" data-creator-weapon-profile-row="${index}">
@@ -6664,6 +6673,22 @@ function buildWeaponProfileEditorMarkup(state, references, profile, index) {
             <span>Two-handed</span>
           </label>
         </div>
+        <div class="field-grid creator-grid-3">
+          <label class="field-stack">
+            <span>Feed Mode</span>
+            <select data-creator-weapon-profile-input="feedMode" data-weapon-profile-index="${index}">
+              <option value="detachable_magazine"${feedMode === "detachable_magazine" ? " selected" : ""}>Detachable magazine</option>
+              <option value="internal_magazine"${feedMode === "internal_magazine" ? " selected" : ""}>Internal magazine</option>
+            </select>
+          </label>
+          ${feedMode === "internal_magazine" ? `
+            <label class="field-stack">
+              <span>Internal Capacity</span>
+              <input data-creator-weapon-profile-input="internalCapacity" data-weapon-profile-index="${index}" type="number" min="1" value="${escapeHtml(profile.internalCapacity || "1")}">
+            </label>
+          ` : `<div></div>`}
+          <div></div>
+        </div>
         <div class="creator-links-block">
           <div class="creator-links-head">
             <span>Fire Modes</span>
@@ -6672,14 +6697,16 @@ function buildWeaponProfileEditorMarkup(state, references, profile, index) {
             ${buildWeaponFireModeCheckboxMarkup(references, profile, index)}
           </div>
         </div>
-        <div class="creator-links-block">
-          <div class="creator-links-head">
-            <span>Compatible Magazines</span>
+        ${feedMode === "detachable_magazine" ? `
+          <div class="creator-links-block">
+            <div class="creator-links-head">
+              <span>Compatible Magazines</span>
+            </div>
+            <div class="creator-check-grid">
+              ${buildWeaponMagazineCheckboxMarkup(references, profile, index)}
+            </div>
           </div>
-          <div class="creator-check-grid">
-            ${buildWeaponMagazineCheckboxMarkup(references, profile, index)}
-          </div>
-        </div>
+        ` : ""}
       ` : `
         <div class="field-grid creator-grid-3">
           <label class="field-stack">
@@ -7962,16 +7989,19 @@ function readWeaponDraftFromDom(root2, fallbackDraft = createEmptyWeaponDraft())
     const fallbackProfile = Array.isArray(fallbackDraft.profiles) ? fallbackDraft.profiles[Number.parseInt(rowIndex, 10)] ?? createEmptyWeaponProfileDraft(index) : createEmptyWeaponProfileDraft(index);
     const profileQuery = (field) => form.querySelector(`[data-creator-weapon-profile-input="${field}"][data-weapon-profile-index="${rowIndex}"]`);
     const attackType = String(profileQuery("attackType")?.value ?? fallbackProfile.attackType ?? "ranged").trim() === "melee" ? "melee" : "ranged";
+    const feedMode = attackType === "ranged" && String(profileQuery("feedMode")?.value ?? fallbackProfile.feedMode ?? "detachable_magazine").trim() === "internal_magazine" ? "internal_magazine" : "detachable_magazine";
     const fireModeIds = Array.from(form.querySelectorAll(`[data-creator-weapon-profile-fire-mode][data-weapon-profile-index="${rowIndex}"]:checked`)).map((entry) => String(entry.getAttribute("data-creator-weapon-profile-fire-mode") ?? "").trim()).filter(Boolean);
-    const magazineDefIds = Array.from(form.querySelectorAll(`[data-creator-weapon-profile-magazine][data-weapon-profile-index="${rowIndex}"]:checked`)).map((entry) => String(entry.getAttribute("data-creator-weapon-profile-magazine") ?? "").trim()).filter(Boolean);
+    const magazineDefIds = feedMode === "detachable_magazine" ? Array.from(form.querySelectorAll(`[data-creator-weapon-profile-magazine][data-weapon-profile-index="${rowIndex}"]:checked`)).map((entry) => String(entry.getAttribute("data-creator-weapon-profile-magazine") ?? "").trim()).filter(Boolean) : [];
     return {
       id: String(fallbackProfile.id ?? ""),
       name: String(profileQuery("name")?.value ?? fallbackProfile.name ?? ""),
       attackType,
+      feedMode,
       weaponClassId: String(profileQuery("weaponClassId")?.value ?? fallbackProfile.weaponClassId ?? ""),
       linkedSkillId: String(profileQuery("linkedSkillId")?.value ?? fallbackProfile.linkedSkillId ?? ""),
       rangeProfileId: String(profileQuery("rangeProfileId")?.value ?? fallbackProfile.rangeProfileId ?? ""),
       caliberId: String(profileQuery("caliberId")?.value ?? fallbackProfile.caliberId ?? ""),
+      internalCapacity: String(profileQuery("internalCapacity")?.value ?? fallbackProfile.internalCapacity ?? ""),
       accuracyModifier: String(profileQuery("accuracyModifier")?.value ?? fallbackProfile.accuracyModifier ?? "0"),
       baseMeleeDamage: String(profileQuery("baseMeleeDamage")?.value ?? fallbackProfile.baseMeleeDamage ?? "0"),
       armorPierce: String(profileQuery("armorPierce")?.value ?? fallbackProfile.armorPierce ?? "0"),
@@ -9842,6 +9872,7 @@ var ABILITY_RPC_NAMES = Object.freeze({
   getCharacterAbilities: "get_character_abilities",
   syncCharacterResourcePools: "odyssey_sync_character_resource_pools",
   useAbility: "use_ability",
+  reloadCharacterAbility: "reload_character_ability",
   advanceCharacterAbilityStates: "advance_character_ability_states",
   // Phase 4.0 — quick-actions runtime + quickbar layout persistence (migration 92).
   getQuickActionsRuntime: "odyssey_get_character_quick_actions_runtime",
@@ -9856,6 +9887,9 @@ var WEAPON_RPC_NAMES = Object.freeze({
   switchWeaponProfile: "switch_weapon_profile",
   switchWeaponFireMode: "switch_weapon_fire_mode",
   loadWeaponProfileMagazine: "load_weapon_profile_magazine",
+  unloadWeaponMagazine: "unload_weapon_magazine",
+  loadWeaponInternalRounds: "load_weapon_internal_rounds",
+  unloadWeaponInternalRounds: "unload_weapon_internal_rounds",
   activateWeaponFeature: "activate_weapon_feature",
   deactivateWeaponFeature: "deactivate_weapon_feature",
   getCharacterWeaponFeatures: "get_character_weapon_features"
@@ -10501,6 +10535,7 @@ var abilityApi_exports = {};
 __export(abilityApi_exports, {
   advanceCharacterAbilityStates: () => advanceCharacterAbilityStates,
   getCharacterAbilities: () => getCharacterAbilities,
+  reloadCharacterAbility: () => reloadCharacterAbility,
   syncCharacterResourcePools: () => syncCharacterResourcePools,
   useAbility: () => useAbility
 });
@@ -10521,6 +10556,13 @@ function syncCharacterResourcePools(characterId, settings) {
 function useAbility(payload, settings) {
   return callSupabaseRpc(
     ABILITY_RPC_NAMES.useAbility,
+    { p_payload: payload },
+    settings
+  );
+}
+function reloadCharacterAbility(payload, settings) {
+  return callSupabaseRpc(
+    ABILITY_RPC_NAMES.reloadCharacterAbility,
     { p_payload: payload },
     settings
   );
@@ -10655,9 +10697,12 @@ __export(weaponApi_exports, {
   deactivateWeaponFeature: () => deactivateWeaponFeature,
   getCharacterArmory: () => getCharacterArmory,
   getCharacterWeaponFeatures: () => getCharacterWeaponFeatures,
+  loadWeaponInternalRounds: () => loadWeaponInternalRounds,
   loadWeaponProfileMagazine: () => loadWeaponProfileMagazine,
   switchWeaponFireMode: () => switchWeaponFireMode,
-  switchWeaponProfile: () => switchWeaponProfile
+  switchWeaponProfile: () => switchWeaponProfile,
+  unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
+  unloadWeaponMagazine: () => unloadWeaponMagazine
 });
 function getCharacterArmory(characterId, settings) {
   return callSupabaseRpc(
@@ -10690,6 +10735,27 @@ function switchWeaponFireMode(characterId, weaponId, fireModeId, settings) {
 function loadWeaponProfileMagazine(payload, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.loadWeaponProfileMagazine,
+    { p_payload: payload },
+    settings
+  );
+}
+function unloadWeaponMagazine(payload, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.unloadWeaponMagazine,
+    { p_payload: payload },
+    settings
+  );
+}
+function loadWeaponInternalRounds(payload, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.loadWeaponInternalRounds,
+    { p_payload: payload },
+    settings
+  );
+}
+function unloadWeaponInternalRounds(payload, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.unloadWeaponInternalRounds,
     { p_payload: payload },
     settings
   );
@@ -33183,6 +33249,9 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
   const rpcLoadRounds = (payload) => api.inventory.loadRoundsToMagazine(payload, settings());
   const rpcUnloadRounds = (payload) => api.inventory.unloadRoundsFromMagazine(payload, settings());
   const rpcInsertMagazine = (payload) => api.weapon.loadWeaponProfileMagazine(payload, settings());
+  const rpcUnloadMagazine = (payload) => api.weapon.unloadWeaponMagazine(payload, settings());
+  const rpcLoadInternalRounds = (payload) => api.weapon.loadWeaponInternalRounds(payload, settings());
+  const rpcUnloadInternalRounds = (payload) => api.weapon.unloadWeaponInternalRounds(payload, settings());
   refs.cfgUrl.value = state.settings.url;
   refs.cfgKey.value = state.settings.apiKey;
   refs.cfgSave.addEventListener("click", async () => {
@@ -33350,6 +33419,43 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
   function currentWeapon() {
     return arr(state.attacker.armory?.weapons).find((w) => w.id === state.attacker.weaponId) || null;
   }
+  function weaponFeedMode(weapon) {
+    return String(
+      weapon?.feed_mode || weapon?.active_profile?.feed_mode || "detachable_magazine"
+    ).trim().toLowerCase() === "internal_magazine" ? "internal_magazine" : "detachable_magazine";
+  }
+  function weaponCaliberCode(weapon) {
+    return String(
+      weapon?.active_profile?.caliber || weapon?.model?.caliber || weapon?.caliber || ""
+    ).trim().toLowerCase();
+  }
+  function weaponAmmoState(weapon) {
+    const feedMode = weaponFeedMode(weapon);
+    if (feedMode === "internal_magazine") {
+      const ammo = weapon?.ammo || weapon?.active_profile?.ammo || null;
+      return {
+        current: Number(
+          weapon?.internal_current_rounds ?? weapon?.active_profile?.internal_current_rounds ?? ammo?.current_rounds ?? ammo?.current ?? 0
+        ),
+        max: Number(
+          weapon?.internal_max_rounds ?? weapon?.active_profile?.internal_max_rounds ?? weapon?.internal_capacity ?? weapon?.active_profile?.internal_capacity ?? ammo?.max_rounds ?? ammo?.max ?? 0
+        ),
+        ammoTypeCode: String(
+          weapon?.internal_ammo_type?.code ?? weapon?.active_profile?.internal_ammo_type?.code ?? ammo?.ammo_type ?? ammo?.ammo_type_code ?? ""
+        ).trim().toLowerCase(),
+        ammoTypeName: String(
+          weapon?.internal_ammo_type?.name ?? weapon?.active_profile?.internal_ammo_type?.name ?? ammo?.ammo_type_name ?? ""
+        ).trim()
+      };
+    }
+    const mag = weapon?.loaded_magazine || weapon?.active_profile?.loaded_magazine || null;
+    return {
+      current: Number(mag?.current_rounds ?? 0),
+      max: Number(mag?.capacity ?? mag?.magazine_def?.capacity ?? 0),
+      ammoTypeCode: String(mag?.ammo_type?.code || mag?.ammo_type_code || "").trim().toLowerCase(),
+      ammoTypeName: String(mag?.ammo_type?.name || mag?.ammo_type_name || "").trim()
+    };
+  }
   function currentAbility() {
     return state.attacker.abilities.find((a) => a.id === state.attacker.abilityId) || null;
   }
@@ -33416,14 +33522,19 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
         return;
       }
       const isMelee = !w.model?.caliber;
+      const isInternal = !isMelee && weaponFeedMode(w) === "internal_magazine";
       const mag = w.loaded_magazine || w.active_profile?.loaded_magazine || null;
       const fm = w.selected_fire_mode || w.active_profile?.selected_fire_mode || null;
+      const ammoState = weaponAmmoState(w);
       let chips = "";
       if (isMelee) {
         chips += `<span class="ra-chip">melee - str-based</span>`;
       } else {
         chips += fm ? `<span class="ra-chip">mode: ${esc(fm.name || fm.code)}</span>` : `<span class="ra-chip neg">no fire mode</span>`;
-        if (mag) {
+        if (isInternal) {
+          chips += `<span class="ra-chip">internal ${dash(ammoState.current)} / ${dash(ammoState.max)} - ${esc(ammoState.ammoTypeName || "empty")}</span>`;
+          if (ammoState.current <= 0) chips += `<span class="ra-chip neg">internal magazine empty</span>`;
+        } else if (mag) {
           const ammo = mag.ammo_type_name || mag.ammo_type?.name || mag.ammo_type || "-";
           const cal = mag.magazine_def?.caliber_name || mag.caliber_name || mag.caliber || "";
           chips += `<span class="ra-chip">mag ${dash(mag.current_rounds)} / ${dash(mag.capacity || mag.magazine_def?.capacity)} - ${esc(ammo)}${cal ? " - " + esc(cal) : ""}</span>`;
@@ -33536,11 +33647,24 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     return w ? w.name : null;
   }
   function compatibleMagazinesForWeapon(w) {
-    const cal = w?.model?.caliber;
+    const cal = weaponCaliberCode(w);
     const mags = characterMagazines();
     if (!cal) return mags;
     const filtered = mags.filter((m) => magCaliberCode(m) === cal);
     return filtered.length ? filtered : mags;
+  }
+  function compatibleAmmoForInternalWeapon(w) {
+    const cal = weaponCaliberCode(w);
+    const ammoState = weaponAmmoState(w);
+    const list = ammoStockList();
+    if (!cal) return list;
+    return list.filter((a) => {
+      const ammoCal = String(a.caliber_code || a.caliber || "").trim().toLowerCase();
+      const ammoType = String(a.ammo_type_code || "").trim().toLowerCase();
+      if (ammoCal !== cal) return false;
+      if (ammoState.current > 0 && ammoState.ammoTypeCode && ammoType !== ammoState.ammoTypeCode) return false;
+      return true;
+    });
   }
   function compatibleAmmoForMagazine(mag) {
     const cal = magCaliberCode(mag);
@@ -33559,8 +33683,10 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const mags = characterMagazines();
     const w = currentWeapon();
     const compatMags = w ? compatibleMagazinesForWeapon(w) : mags;
+    const compatAmmo = w ? compatibleAmmoForInternalWeapon(w) : ammoStockList();
     state.inv.reloadMagId = (compatMags[0] || mags[0])?.id || "";
     state.inv.opsMagId = mags[0]?.id || "";
+    state.inv.ammoStockId = compatAmmo[0]?.id || state.inv.ammoStockId || "";
     syncAmmoSelectionForMagazine();
   }
   function magOption(m, selId) {
@@ -33584,22 +33710,41 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const mags = characterMagazines();
     const ammo = ammoStockList();
     const profileName = w?.active_profile?.name || w?.active_profile?.code || "-";
+    const isInternal = w ? weaponFeedMode(w) === "internal_magazine" : false;
     const loadedMag = w ? w.loaded_magazine || w.active_profile?.loaded_magazine : null;
+    const weaponAmmo = w ? weaponAmmoState(w) : null;
     const compatMags = w ? compatibleMagazinesForWeapon(w) : mags;
+    const compatInternalAmmo = w ? compatibleAmmoForInternalWeapon(w) : ammo;
     const reloadOpts = compatMags.length ? compatMags.map((m) => magOption(m, state.inv.reloadMagId)).join("") : `<option value="">- no compatible magazines -</option>`;
     const opsOpts = mags.length ? mags.map((m) => magOption(m, state.inv.opsMagId)).join("") : `<option value="">- no magazines -</option>`;
     const compatAmmo = compatibleAmmoForMagazine(magById(state.inv.opsMagId));
     const ammoOpts = compatAmmo.length ? compatAmmo.map((a) => ammoOption(a, state.inv.ammoStockId)).join("") : `<option value="">- no compatible ammo -</option>`;
+    const internalAmmoOpts = compatInternalAmmo.length ? compatInternalAmmo.map((a) => ammoOption(a, state.inv.ammoStockId)).join("") : `<option value="">- no compatible ammo -</option>`;
     refs.inventoryBody.innerHTML = `
       ${state.attacker.inventory.fallback ? `<div class="ra-banner warn">Ammo stock read via fallback (backend get_character_inventory error 25006). Magazines/ammo shown are still server truth.</div>` : ""}
-      <div class="ra-section-title" style="margin-top:0">Reload weapon - insert / replace magazine</div>
-      <div class="ra-block" style="flex-direction:column;align-items:stretch;gap:8px">
-        <div class="ra-muted">${w ? esc(w.name) : "-"} - profile ${esc(profileName)} - loaded ${loadedMag ? `<span class="ra-mono">${dash(loadedMag.current_rounds)}/${dash(loadedMag.capacity || loadedMag.magazine_def?.capacity)}</span> ${esc(loadedMag.ammo_type_name || loadedMag.ammo_type?.name || "")}` : "-"}</div>
-        <div class="ra-row">
-          <label class="ra-field"><span>Magazine to insert</span><select data-inv="reloadMag">${reloadOpts}</select></label>
-          <button data-inv-action="reload" type="button" style="align-self:flex-end">Reload weapon</button>
+      ${isInternal ? `
+        <div class="ra-section-title" style="margin-top:0">Reload weapon - internal magazine</div>
+        <div class="ra-block" style="flex-direction:column;align-items:stretch;gap:8px">
+          <div class="ra-muted">${w ? esc(w.name) : "-"} - profile ${esc(profileName)} - loaded <span class="ra-mono">${dash(weaponAmmo?.current ?? 0)}/${dash(weaponAmmo?.max ?? 0)}</span> ${esc(weaponAmmo?.ammoTypeName || "")}</div>
+          <div class="ra-row">
+            <label class="ra-field"><span>Ammo stock to load</span><select data-inv="ammoStock">${internalAmmoOpts}</select></label>
+            <button data-inv-action="internal-load-one" type="button" class="secondary" style="align-self:flex-end">Load 1</button>
+            <button data-inv-action="internal-load-full" type="button" style="align-self:flex-end">Load full</button>
+            <button data-inv-action="internal-unload-one" type="button" class="secondary" style="align-self:flex-end">Unload 1</button>
+            <button data-inv-action="internal-unload-all" type="button" class="secondary" style="align-self:flex-end">Unload all</button>
+          </div>
         </div>
-      </div>
+      ` : `
+        <div class="ra-section-title" style="margin-top:0">Reload weapon - insert / replace magazine</div>
+        <div class="ra-block" style="flex-direction:column;align-items:stretch;gap:8px">
+          <div class="ra-muted">${w ? esc(w.name) : "-"} - profile ${esc(profileName)} - loaded ${loadedMag ? `<span class="ra-mono">${dash(loadedMag.current_rounds)}/${dash(loadedMag.capacity || loadedMag.magazine_def?.capacity)}</span> ${esc(loadedMag.ammo_type_name || loadedMag.ammo_type?.name || "")}` : "-"}</div>
+          <div class="ra-row">
+            <label class="ra-field"><span>Magazine to insert</span><select data-inv="reloadMag">${reloadOpts}</select></label>
+            <button data-inv-action="reload" type="button" style="align-self:flex-end">Reload weapon</button>
+            <button data-inv-action="unload-magazine" type="button" class="secondary" style="align-self:flex-end">Unload magazine</button>
+          </div>
+        </div>
+      `}
 
       <div class="ra-section-title">Magazine rounds - load / unload</div>
       <div class="ra-block" style="flex-direction:column;align-items:stretch;gap:8px">
@@ -33713,6 +33858,65 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     if (!result) return;
     await refreshAttackerArmoryInventory(result.armory);
     banner(refs.invStatus, "ok", "Magazine inserted into weapon.");
+  }
+  async function onUnloadWeaponMagazine() {
+    const w = currentWeapon();
+    if (!w) return;
+    const profileId = w.active_profile?.id || w.active_profile_id || "";
+    if (!profileId) {
+      banner(refs.invStatus, "err", "Weapon has no active profile.");
+      return;
+    }
+    const result = await runInventoryAction(
+      () => rpcUnloadMagazine({ character_weapon_id: w.id, profile_id: profileId })
+    );
+    if (!result) return;
+    await refreshAttackerArmoryInventory(result.armory);
+    banner(refs.invStatus, "ok", "Magazine detached from weapon.");
+  }
+  async function onLoadInternalRounds(quantity) {
+    const w = currentWeapon();
+    if (!w) return;
+    const profileId = w.active_profile?.id || w.active_profile_id || "";
+    if (!profileId) {
+      banner(refs.invStatus, "err", "Weapon has no active profile.");
+      return;
+    }
+    if (!state.inv.ammoStockId) {
+      banner(refs.invStatus, "err", "Select ammo stock to load.");
+      return;
+    }
+    const result = await runInventoryAction(
+      () => rpcLoadInternalRounds({
+        character_weapon_id: w.id,
+        profile_id: profileId,
+        ammo_stock_id: state.inv.ammoStockId,
+        quantity,
+        allow_partial: quantity !== 1
+      })
+    );
+    if (!result) return;
+    await refreshAttackerArmoryInventory(result.armory);
+    banner(refs.invStatus, "ok", quantity === 1 ? "Loaded 1 round." : "Internal magazine loaded.");
+  }
+  async function onUnloadInternalRounds(quantity) {
+    const w = currentWeapon();
+    if (!w) return;
+    const profileId = w.active_profile?.id || w.active_profile_id || "";
+    if (!profileId) {
+      banner(refs.invStatus, "err", "Weapon has no active profile.");
+      return;
+    }
+    const result = await runInventoryAction(
+      () => rpcUnloadInternalRounds({
+        character_weapon_id: w.id,
+        profile_id: profileId,
+        quantity
+      })
+    );
+    if (!result) return;
+    await refreshAttackerArmoryInventory(result.armory);
+    banner(refs.invStatus, "ok", quantity === 1 ? "Unloaded 1 round." : "Internal magazine unloaded.");
   }
   async function onLoadRounds() {
     if (!state.inv.opsMagId) {
@@ -34083,14 +34287,23 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
         return;
       }
       const isMelee = !w.model?.caliber;
+      const feedMode = weaponFeedMode(w);
+      const isInternal = !isMelee && feedMode === "internal_magazine";
       const mag = w.loaded_magazine || w.active_profile?.loaded_magazine || null;
+      const ammoState = weaponAmmoState(w);
       const fm = w.selected_fire_mode || w.active_profile?.selected_fire_mode || null;
       let chips = "";
       if (isMelee) {
         chips += `<span class="ra-chip">melee - str-based</span>`;
       } else {
         chips += fm ? `<span class="ra-chip">mode: ${esc(fm.name || fm.code)}</span>` : `<span class="ra-chip neg">no fire mode</span>`;
-        if (mag) {
+        chips += `<span class="ra-chip">${esc(isInternal ? "internal magazine" : "detachable magazine")}</span>`;
+        if (isInternal) {
+          chips += `<span class="ra-chip ${ammoState.current <= 0 ? "neg" : ""}">${uiDash(ammoState.current)} / ${uiDash(ammoState.max)} - ${esc(ammoState.ammoTypeName || "empty")}</span>`;
+          if (ammoState.current <= 0) {
+            chips += `<span class="ra-chip neg">no ammo loaded</span>`;
+          }
+        } else if (mag) {
           const ammo = mag.ammo_type_name || mag.ammo_type?.name || mag.ammo_type || "-";
           const cal = mag.magazine_def?.caliber_name || mag.caliber_name || mag.caliber || "";
           chips += `<span class="ra-chip">mag ${uiDash(mag.current_rounds)} / ${uiDash(mag.capacity || mag.magazine_def?.capacity)} - ${esc(ammo)}${cal ? " - " + esc(cal) : ""}</span>`;
@@ -34176,22 +34389,36 @@ function mountResolveAttackScreen({ root: root2, runtime: runtime2 }) {
     const w = currentWeapon();
     const mags = characterMagazines();
     const ammo = ammoStockList();
+    const feedMode = weaponFeedMode(w);
+    const isInternal = Boolean(w) && feedMode === "internal_magazine" && w.model?.caliber;
+    const ammoState = w ? weaponAmmoState(w) : { current: 0, max: 0, ammoTypeName: "" };
     const profileName = w?.active_profile?.name || w?.active_profile?.code || "-";
     const loadedMag = w ? w.loaded_magazine || w.active_profile?.loaded_magazine : null;
-    const compatMags = w ? compatibleMagazinesForWeapon(w) : mags;
+    const compatMags = w && !isInternal ? compatibleMagazinesForWeapon(w) : mags;
+    const compatAmmoForWeapon = w && isInternal ? compatibleAmmoForInternalWeapon(w) : [];
     const reloadOpts = compatMags.length ? compatMags.map((m) => magOption(m, state.inv.reloadMagId)).join("") : `<option value="">- no compatible magazines -</option>`;
+    const internalAmmoOpts = compatAmmoForWeapon.length ? compatAmmoForWeapon.map((a) => ammoOption(a, state.inv.ammoStockId)).join("") : `<option value="">- no compatible ammo -</option>`;
     const opsOpts = mags.length ? mags.map((m) => magOption(m, state.inv.opsMagId)).join("") : `<option value="">- no magazines -</option>`;
     const compatAmmo = compatibleAmmoForMagazine(magById(state.inv.opsMagId));
     const ammoOpts = compatAmmo.length ? compatAmmo.map((a) => ammoOption(a, state.inv.ammoStockId)).join("") : `<option value="">- no compatible ammo -</option>`;
     refs.inventoryBody.innerHTML = `
       ${state.attacker.inventory.fallback ? `<div class="ra-banner warn">Ammo stock read via fallback (backend get_character_inventory error 25006). Magazines/ammo shown are still server truth.</div>` : ""}
-      <div class="ra-section-title" style="margin-top:0">Reload weapon - insert / replace magazine</div>
+      <div class="ra-section-title" style="margin-top:0">${isInternal ? "Reload weapon - internal magazine" : "Reload weapon - insert / replace magazine"}</div>
       <div class="ra-block" style="flex-direction:column;align-items:stretch;gap:8px">
-        <div class="ra-muted">${w ? esc(w.name) : "-"} - profile ${esc(profileName)} - loaded ${loadedMag ? `<span class="ra-mono">${uiDash(loadedMag.current_rounds)}/${uiDash(loadedMag.capacity || loadedMag.magazine_def?.capacity)}</span> ${esc(loadedMag.ammo_type_name || loadedMag.ammo_type?.name || "")}` : "-"}</div>
+        <div class="ra-muted">${w ? esc(w.name) : "-"} - profile ${esc(profileName)} - loaded ${isInternal ? `<span class="ra-mono">${uiDash(ammoState.current)}/${uiDash(ammoState.max)}</span> ${esc(ammoState.ammoTypeName || "")}` : loadedMag ? `<span class="ra-mono">${uiDash(loadedMag.current_rounds)}/${uiDash(loadedMag.capacity || loadedMag.magazine_def?.capacity)}</span> ${esc(loadedMag.ammo_type_name || loadedMag.ammo_type?.name || "")}` : "-"}</div>
+        ${isInternal ? `
+        <div class="ra-row">
+          <label class="ra-field"><span>Ammo stock to load</span><select data-inv="ammoStock">${internalAmmoOpts}</select></label>
+          <button data-inv-action="internal-load-one" type="button" class="secondary" style="align-self:flex-end">Load 1</button>
+          <button data-inv-action="internal-load-full" type="button" style="align-self:flex-end">Load full</button>
+          <button data-inv-action="internal-unload-one" type="button" class="secondary" style="align-self:flex-end">Unload 1</button>
+          <button data-inv-action="internal-unload-all" type="button" class="secondary" style="align-self:flex-end">Unload all</button>
+        </div>` : `
         <div class="ra-row">
           <label class="ra-field"><span>Magazine to insert</span><select data-inv="reloadMag">${reloadOpts}</select></label>
           <button data-inv-action="reload" type="button" style="align-self:flex-end">Reload weapon</button>
-        </div>
+          <button data-inv-action="unload-magazine" type="button" class="secondary" style="align-self:flex-end">Unload magazine</button>
+        </div>`}
       </div>
       <div class="ra-section-title">Magazine rounds - load / unload</div>
       <div class="ra-block" style="flex-direction:column;align-items:stretch;gap:8px">
@@ -36738,14 +36965,66 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       row?.ammo_type?.code || row?.ammo_type_code || row?.ammo_code || ""
     ).trim().toLowerCase();
   }
+  function getWeaponFeedMode(weapon) {
+    return String(
+      weapon?.feed_mode || weapon?.active_profile?.feed_mode || "detachable_magazine"
+    ).trim().toLowerCase() === "internal_magazine" ? "internal_magazine" : "detachable_magazine";
+  }
+  function getWeaponCaliberCode(weapon) {
+    return String(
+      weapon?.active_profile?.caliber || weapon?.model?.caliber || weapon?.caliber || ""
+    ).trim().toLowerCase();
+  }
+  function getWeaponAmmoState(weapon) {
+    const feedMode = getWeaponFeedMode(weapon);
+    if (feedMode === "internal_magazine") {
+      const ammo = weapon?.ammo || weapon?.active_profile?.ammo || null;
+      return {
+        current: Number(
+          weapon?.internal_current_rounds ?? weapon?.active_profile?.internal_current_rounds ?? ammo?.current_rounds ?? ammo?.current ?? 0
+        ),
+        max: Number(
+          weapon?.internal_max_rounds ?? weapon?.active_profile?.internal_max_rounds ?? weapon?.internal_capacity ?? weapon?.active_profile?.internal_capacity ?? ammo?.max_rounds ?? ammo?.max ?? 0
+        ),
+        ammoTypeCode: String(
+          weapon?.internal_ammo_type?.code ?? weapon?.active_profile?.internal_ammo_type?.code ?? ammo?.ammo_type ?? ammo?.ammo_type_code ?? ""
+        ).trim().toLowerCase(),
+        ammoTypeName: String(
+          weapon?.internal_ammo_type?.name ?? weapon?.active_profile?.internal_ammo_type?.name ?? ammo?.ammo_type_name ?? ""
+        ).trim()
+      };
+    }
+    const mag = weapon?.loaded_magazine || weapon?.active_profile?.loaded_magazine || null;
+    return {
+      current: Number(mag?.current_rounds ?? 0),
+      max: Number(mag?.capacity ?? mag?.magazine_def?.capacity ?? 0),
+      ammoTypeCode: String(mag?.ammo_type?.code || mag?.ammo_type_code || "").trim().toLowerCase(),
+      ammoTypeName: String(mag?.ammo_type?.name || mag?.ammo_type_name || "").trim()
+    };
+  }
+  function compatibleAmmoForWeaponInternal(weapon) {
+    const caliberCode = getWeaponCaliberCode(weapon);
+    const ammoState = getWeaponAmmoState(weapon);
+    return arr2(state.inv.ammoStock).filter((row) => {
+      const ammoCaliberCode = getAmmoStockCaliberCode(row);
+      const ammoTypeCode = getAmmoStockTypeCode(row);
+      if (caliberCode && ammoCaliberCode !== caliberCode) return false;
+      if (ammoState.current > 0 && ammoState.ammoTypeCode && ammoTypeCode !== ammoState.ammoTypeCode) return false;
+      return true;
+    });
+  }
   function weaponCard(w) {
     const isMelee = !w.model?.caliber;
+    const feedMode = getWeaponFeedMode(w);
+    const isInternal = !isMelee && feedMode === "internal_magazine";
     const mag = w.loaded_magazine || w.active_profile?.loaded_magazine || null;
     const fm = w.selected_fire_mode || w.active_profile?.selected_fire_mode || null;
     const profiles = arr2(w.profiles);
     const fireModes = arr2(w.available_fire_modes?.length ? w.available_fire_modes : w.active_profile?.available_fire_modes);
-    const compatMags = arr2(state.armory?.magazines).filter((m) => !w.model?.caliber || (m.magazine_def?.caliber || m.caliber) === w.model.caliber);
-    const ammoChips = isMelee ? `<span class="cp-chip">melee</span>` : mag ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash2(mag.current_rounds)}/${dash2(mag.capacity || mag.magazine_def?.capacity)} - ${esc2(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>` : `<span class="cp-chip bad">no magazine</span>`;
+    const compatMags = isInternal ? [] : arr2(state.armory?.magazines).filter((m) => !getWeaponCaliberCode(w) || getMagazineCaliberCode(m) === getWeaponCaliberCode(w));
+    const compatAmmo = isInternal ? compatibleAmmoForWeaponInternal(w) : [];
+    const ammoState = getWeaponAmmoState(w);
+    const ammoChips = isMelee ? `<span class="cp-chip">melee</span>` : isInternal ? `<span class="cp-chip ${ammoState.current <= 0 ? "bad" : ""}">${dash2(ammoState.current)}/${dash2(ammoState.max)} - ${esc2(ammoState.ammoTypeName || "empty internal load")}</span>` : mag ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash2(mag.current_rounds)}/${dash2(mag.capacity || mag.magazine_def?.capacity)} - ${esc2(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>` : `<span class="cp-chip bad">no magazine</span>`;
     const weaponAbilities = getWeaponAbilities(w);
     return `<div class="cp-card" data-weapon="${esc2(w.id)}">
       <div class="cp-rowitem"><span><b>${esc2(w.name)}</b> <span class="cp-pill">${esc2(w.model?.weapon_class_name || w.model?.weapon_class || "")}</span></span>
@@ -36753,7 +37032,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       <div class="cp-row" style="gap:8px;margin-top:8px">
         ${profiles.length > 1 ? `<label class="cp-field" style="min-width:130px"><span>Profile</span><select data-wact="profile" data-weapon="${esc2(w.id)}">${profiles.map((p) => `<option value="${esc2(p.id)}" ${p.id === w.active_profile_id ? "selected" : ""}>${esc2(p.name || p.code)}</option>`).join("")}</select></label>` : ""}
         ${fireModes.length && !isMelee ? `<label class="cp-field" style="min-width:130px"><span>Fire mode</span><select data-wact="firemode" data-weapon="${esc2(w.id)}">${fireModes.map((f) => `<option value="${esc2(f.id)}" ${f.id === fm?.id ? "selected" : ""}>${esc2(f.name || f.code)}</option>`).join("")}</select></label>` : ""}
-        ${!isMelee ? `<label class="cp-field" style="min-width:150px"><span>Insert magazine</span><select data-wact="reloadmag" data-weapon="${esc2(w.id)}">${compatMags.length ? compatMags.map((m) => `<option value="${esc2(m.id)}">${esc2(m.name)} - ${dash2(m.current_rounds)}/${dash2(m.magazine_def?.capacity ?? m.capacity)}</option>`).join("") : `<option value="">-- none --</option>`}</select></label>` : ""}
+        ${!isMelee && !isInternal ? `<label class="cp-field" style="min-width:150px"><span>Insert magazine</span><select data-wact="reloadmag" data-weapon="${esc2(w.id)}">${compatMags.length ? compatMags.map((m) => `<option value="${esc2(m.id)}">${esc2(m.name)} - ${dash2(m.current_rounds)}/${dash2(m.magazine_def?.capacity ?? m.capacity)}</option>`).join("") : `<option value="">-- none --</option>`}</select></label>` : ""}
+        ${!isMelee && isInternal ? `<label class="cp-field" style="min-width:170px"><span>Ammo stock</span><select data-wact="reloadammo" data-weapon="${esc2(w.id)}">${compatAmmo.length ? compatAmmo.map((a) => `<option value="${esc2(a.id)}">${esc2(a.display_name)} - ${esc2(getAmmoStockTypeName(a))} - x${dash2(a.quantity)}</option>`).join("") : `<option value="">-- no compatible ammo --</option>`}</select></label>` : ""}
       </div>
       ${weaponAbilities.length ? `<div class="cp-list" style="margin-top:8px">${weaponAbilities.map((ability) => {
       const passive = ability.activation_type === "passive" || ability.ability_kind === "passive";
@@ -36772,7 +37052,9 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
           ${canUse ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" type="button" data-ability-use="${esc2(ability.id)}">Use ability</button></div>` : ""}
         </div>`;
     }).join("")}</div>` : ""}
-      ${!isMelee ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="reload" data-weapon="${esc2(w.id)}" type="button" ${compatMags.length ? "" : "disabled"}>Reload (insert magazine)</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button>` : ""}</div>${compatMags.length ? "" : `<div class="cp-muted">No compatible magazine to insert.</div>`}` : `${isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button></div>` : ""}`}
+      ${!isMelee && !isInternal ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="reload" data-weapon="${esc2(w.id)}" type="button" ${compatMags.length ? "" : "disabled"}>Reload (insert magazine)</button><button class="cp-btn-sm secondary" data-wbtn="unloadmag" data-weapon="${esc2(w.id)}" type="button" ${mag ? "" : "disabled"}>Unload magazine</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button>` : ""}</div>${compatMags.length ? "" : `<div class="cp-muted">No compatible magazine to insert.</div>`}` : ""}
+      ${!isMelee && isInternal ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="loadinternalone" data-weapon="${esc2(w.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load 1</button><button class="cp-btn-sm" data-wbtn="loadinternalfull" data-weapon="${esc2(w.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load full</button><button class="cp-btn-sm secondary" data-wbtn="unloadinternalone" data-weapon="${esc2(w.id)}" type="button" ${ammoState.current > 0 ? "" : "disabled"}>Unload 1</button><button class="cp-btn-sm secondary" data-wbtn="unloadinternalall" data-weapon="${esc2(w.id)}" type="button" ${ammoState.current > 0 ? "" : "disabled"}>Unload all</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button>` : ""}</div>${compatAmmo.length ? "" : `<div class="cp-muted">No compatible ammo in stock for this internal magazine.</div>`}` : ""}
+      ${isMelee ? `${isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button></div>` : ""}` : ""}
     </div>`;
   }
   function magCard(m) {
@@ -37177,7 +37459,12 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     }
     const wbtn = t.closest("[data-wbtn]");
     if (wbtn) {
-      onReloadWeapon(wbtn.dataset.weapon);
+      if (wbtn.dataset.wbtn === "reload") onReloadWeapon(wbtn.dataset.weapon);
+      if (wbtn.dataset.wbtn === "unloadmag") onUnloadWeaponMagazine(wbtn.dataset.weapon);
+      if (wbtn.dataset.wbtn === "loadinternalone") onLoadWeaponInternalRounds(wbtn.dataset.weapon, 1);
+      if (wbtn.dataset.wbtn === "loadinternalfull") onLoadWeaponInternalRounds(wbtn.dataset.weapon, 0);
+      if (wbtn.dataset.wbtn === "unloadinternalone") onUnloadWeaponInternalRounds(wbtn.dataset.weapon, 1);
+      if (wbtn.dataset.wbtn === "unloadinternalall") onUnloadWeaponInternalRounds(wbtn.dataset.weapon, 0);
       return;
     }
     const mbtn = t.closest("[data-mbtn]");
@@ -37360,6 +37647,55 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       return;
     }
     runMutation("Reload", () => api.weapon.loadWeaponProfileMagazine({ character_weapon_id: weaponId, profile_id: profileId, character_magazine_id: magId }, settings()), () => refresh({ equipment: false }));
+  }
+  function onUnloadWeaponMagazine(weaponId) {
+    const w = arr2(state.armory?.weapons).find((x) => x.id === weaponId);
+    const profileId = w?.active_profile?.id || w?.active_profile_id;
+    if (!profileId) {
+      setNotice("err", "Weapon has no active profile.");
+      render();
+      return;
+    }
+    runMutation("Unload magazine", () => api.weapon.unloadWeaponMagazine({ character_weapon_id: weaponId, profile_id: profileId }, settings()), () => refresh({ equipment: false }));
+  }
+  function onLoadWeaponInternalRounds(weaponId, quantity) {
+    const w = arr2(state.armory?.weapons).find((x) => x.id === weaponId);
+    const profileId = w?.active_profile?.id || w?.active_profile_id;
+    const ammoId = root2.querySelector(`select[data-wact="reloadammo"][data-weapon="${CSS.escape(weaponId)}"]`)?.value;
+    if (!profileId || !ammoId) {
+      setNotice("err", "Select ammo to load.");
+      render();
+      return;
+    }
+    runMutation(
+      quantity === 1 ? "Load 1 round" : "Load internal magazine",
+      () => api.weapon.loadWeaponInternalRounds({
+        character_weapon_id: weaponId,
+        profile_id: profileId,
+        ammo_stock_id: ammoId,
+        quantity,
+        allow_partial: quantity !== 1
+      }, settings()),
+      () => refresh({ equipment: false })
+    );
+  }
+  function onUnloadWeaponInternalRounds(weaponId, quantity) {
+    const w = arr2(state.armory?.weapons).find((x) => x.id === weaponId);
+    const profileId = w?.active_profile?.id || w?.active_profile_id;
+    if (!profileId) {
+      setNotice("err", "Weapon has no active profile.");
+      render();
+      return;
+    }
+    runMutation(
+      quantity === 1 ? "Unload 1 round" : "Unload internal magazine",
+      () => api.weapon.unloadWeaponInternalRounds({
+        character_weapon_id: weaponId,
+        profile_id: profileId,
+        quantity
+      }, settings()),
+      () => refresh({ equipment: false })
+    );
   }
   function onLoadRounds(magId) {
     const ammoId = root2.querySelector(`select[data-mact="ammo"][data-mag="${CSS.escape(magId)}"]`)?.value;

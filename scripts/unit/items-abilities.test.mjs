@@ -34,23 +34,26 @@ test("spent or removed item hides ability", () => {
   assert.equal(findByCode(second.abilities, "first_aid").data.source_removed_reason, "missing_item");
 });
 
-test("equipment ability works only when equipped", () => {
-  const hidden = reconcileCharacterAbilities({
+test("equipment-granted ability stays visible while owned", () => {
+  const visibleButDisabled = reconcileCharacterAbilities({
     character: fx.characters.testAttacker,
-    items: [{ ...fx.items.shieldEmitter, is_equipped: false }],
+    items: [fx.items.prototypeEyeLoose],
     abilityDefs: Object.values(fx.abilities),
-    abilityGrants: [fx.abilityGrants.shieldPulseEquipment],
+    abilityGrants: [fx.abilityGrants.neuralOverloadImplant],
   });
-  assert.equal(hidden.abilities.length, 0);
+  const looseAbility = findByCode(visibleButDisabled.abilities, "neural_overload");
+  assert.ok(looseAbility);
+  assert.equal(looseAbility.source_equipment_item_id, fx.items.prototypeEyeLoose.id);
+  assert.equal(looseAbility.data.generated_from, "implant");
+  assert.equal(looseAbility.data.requires_installed, true);
 
-  const visible = reconcileCharacterAbilities({
+  const installed = reconcileCharacterAbilities({
     character: fx.characters.testAttacker,
-    items: [{ ...fx.items.shieldEmitter, is_equipped: true }],
+    items: [fx.items.prototypeEyeInstalled],
     abilityDefs: Object.values(fx.abilities),
-    abilityGrants: [fx.abilityGrants.shieldPulseEquipment],
+    abilityGrants: [fx.abilityGrants.neuralOverloadImplant],
   });
-  assert.ok(findByCode(visible.abilities, "shield_pulse"));
+  assert.ok(findByCode(installed.abilities, "neural_overload"));
 });
 
 await run();
-

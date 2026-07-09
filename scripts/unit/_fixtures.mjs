@@ -72,8 +72,30 @@ export const abilities = {
     linked_skill_id: null,
     activation_type: "manual",
     target_type: "self",
-    effect_mode: "buff",
-    ability_kind: "attack_technique",
+    effect_mode: "activate_weapon_feature",
+    ability_kind: "support",
+  },
+  laserShot: {
+    id: "ability-laser-shot",
+    code: "laser_shot",
+    name: "Laser Shot",
+    source_type: "weapon",
+    linked_skill_id: null,
+    activation_type: "manual",
+    target_type: "body_part",
+    effect_mode: "attack",
+    ability_kind: "attack",
+  },
+  neuralOverload: {
+    id: "ability-neural-overload",
+    code: "neural_overload",
+    name: "Neural Overload",
+    source_type: "implant",
+    linked_skill_id: null,
+    activation_type: "manual",
+    target_type: "character",
+    effect_mode: "apply_effect",
+    ability_kind: "support",
   },
   firstAid: {
     id: "ability-first-aid",
@@ -210,6 +232,28 @@ export const items = {
     is_equipped: true,
     type: "equipment",
   },
+  prototypeEyeInstalled: {
+    id: "equip-eye-installed",
+    item_def_id: "equip-model-eye",
+    equipment_model_id: "equip-model-eye",
+    name: "Prototype Eye Implant",
+    custom_name: "Prototype Eye Implant",
+    is_equipped: true,
+    equipped_body_part_id: "bp-head",
+    item_type: "implant",
+    type: "equipment",
+  },
+  prototypeEyeLoose: {
+    id: "equip-eye-loose",
+    item_def_id: "equip-model-eye",
+    equipment_model_id: "equip-model-eye",
+    name: "Prototype Eye Implant",
+    custom_name: "Prototype Eye Implant",
+    is_equipped: false,
+    equipped_body_part_id: null,
+    item_type: "implant",
+    type: "equipment",
+  },
 };
 
 export const abilityGrants = {
@@ -227,7 +271,19 @@ export const abilityGrants = {
     source_type: "weapon",
     source_def_id: "weapon-model-katana",
     ability_def_id: "ability-plasma-edge",
-    require_equipped: true,
+    requires_selected_source: true,
+    grant_mode: "activated",
+  },
+  laserShotWeapon: {
+    source_type: "weapon",
+    source_def_id: "weapon-model-pistol",
+    ability_def_id: "ability-laser-shot",
+    requires_selected_source: true,
+    default_current_charges: 1,
+    default_max_charges: 1,
+    reload_item_code: "small_energy_cell",
+    reload_item_cost: 1,
+    grant_mode: "activated",
   },
   firstAidItem: {
     source_type: "item",
@@ -238,13 +294,14 @@ export const abilityGrants = {
     source_type: "equipment",
     source_def_id: "item-def-shield-emitter",
     ability_def_id: "ability-shield-pulse",
-    require_equipped: true,
+    requires_equipped: true,
   },
-  aimedShotWeapon: {
-    source_type: "weapon",
-    source_def_id: "weapon-model-pistol",
-    ability_def_id: "ability-aimed-shot",
-    require_equipped: true,
+  neuralOverloadImplant: {
+    source_type: "implant",
+    source_def_id: "equip-model-eye",
+    ability_def_id: "ability-neural-overload",
+    requires_installed: true,
+    grant_mode: "activated",
   },
 };
 
@@ -326,4 +383,3 @@ export function fixtureSet() {
     magazines,
   });
 }
-

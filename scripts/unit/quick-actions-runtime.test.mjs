@@ -19,6 +19,40 @@ test("visible manual abilities appear in quick actions", () => {
   assert.ok(runtime.quickActions.some((entry) => entry.code === "plasma_edge"));
 });
 
+test("weapon-granted ability stays visible but disabled when another weapon is selected", () => {
+  const result = reconcileCharacterAbilities({
+    character: fx.characters.testAttacker,
+    weapons: [fx.characterWeapons.katanaEquipped, fx.characterWeapons.pistolLoaded],
+    abilityDefs: Object.values(fx.abilities),
+    abilityGrants: [fx.abilityGrants.laserShotWeapon],
+  });
+  const runtime = buildQuickActionsRuntime({
+    abilities: result.abilities,
+    encounter: fx.encounters.activeEncounter,
+    selectedWeaponId: fx.characterWeapons.katanaEquipped.id,
+  });
+  const action = runtime.quickActions.find((entry) => entry.code === "laser_shot");
+  assert.ok(action);
+  assert.equal(action.sourceType, "weapon");
+  assert.equal(action.state.available, false);
+  assert.match(action.state.disabledReason, /Select/i);
+});
+
+test("implant-granted ability stays visible but disabled while not installed", () => {
+  const result = reconcileCharacterAbilities({
+    character: fx.characters.testAttacker,
+    items: [fx.items.prototypeEyeLoose],
+    abilityDefs: Object.values(fx.abilities),
+    abilityGrants: [fx.abilityGrants.neuralOverloadImplant],
+  });
+  const runtime = buildQuickActionsRuntime({ abilities: result.abilities });
+  const action = runtime.quickActions.find((entry) => entry.code === "neural_overload");
+  assert.ok(action);
+  assert.equal(action.sourceType, "implant");
+  assert.equal(action.state.available, false);
+  assert.match(action.state.disabledReason, /Install/i);
+});
+
 test("hidden and disabled abilities are excluded", () => {
   const runtime = buildQuickActionsRuntime({
     abilities: [
@@ -40,4 +74,3 @@ test("passive abilities are excluded from quick actions", () => {
 });
 
 await run();
-

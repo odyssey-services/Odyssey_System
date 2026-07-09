@@ -6,6 +6,23 @@ function indexById(list = []) {
   return new Map(list.map((entry) => [entry.id, entry]));
 }
 
+function coerceSourceType(grant = {}, sourceRecord = null) {
+  const explicit = String(grant?.source_type ?? "").trim().toLowerCase();
+  if (["weapon", "item", "skill", "perk", "armor", "implant", "prosthetic", "equipment"].includes(explicit)) {
+    return explicit;
+  }
+  const itemType = String(sourceRecord?.item_type ?? "").trim().toLowerCase();
+  if (["armor", "shield", "special_protection"].includes(itemType)) return "armor";
+  if (itemType === "implant") return "implant";
+  if (itemType === "prosthetic") return "prosthetic";
+  if (sourceRecord?.type === "equipment") return "equipment";
+  return explicit || "custom";
+}
+
+function isEquipmentLikeSource(sourceType) {
+  return ["equipment", "armor", "implant", "prosthetic"].includes(String(sourceType ?? "").trim().toLowerCase());
+}
+
 function sourceKeyForDesired(sourceType, abilityDefId, sourceId) {
   return `${sourceType}:${abilityDefId}:${sourceId}`;
 }
@@ -61,11 +78,20 @@ function normalizeGeneratedAbility({
   next.character_skill_id = sourceType === "skill" ? sourceRecord?.id ?? null : null;
   next.source_character_weapon_id = sourceType === "weapon" ? sourceRecord?.id ?? null : null;
   next.source_character_item_id = sourceType === "item" ? sourceRecord?.id ?? null : null;
-  next.source_equipment_item_id = sourceType === "equipment" ? sourceRecord?.id ?? null : null;
+  next.source_equipment_item_id = isEquipmentLikeSource(sourceType) ? sourceRecord?.id ?? null : null;
+  next.sourceRecord = sourceRecord ? clone(sourceRecord) : null;
+  if (existing?.current_charges !== undefined) {
+    next.current_charges = existing.current_charges;
+  }
+  if (existing?.max_charges !== undefined) {
+    next.max_charges = existing.max_charges;
+  }
   next.data = {
-    ...(existing?.data ?? {}),
     ...data,
     generated_from: generatedFrom,
+    source_removed: false,
+    source_is_equipped: sourceRecord?.is_equipped ?? null,
+    source_body_part_id: sourceRecord?.equipped_body_part_id ?? null,
   };
   return next;
 }
@@ -140,7 +166,6 @@ export function reconcileCharacterAbilities({
 
     if (grant.source_type === "weapon") {
       for (const weapon of weapons.filter((entry) => entry.weapon_model_id === grant.source_def_id)) {
-        if (grant.require_equipped && !weapon.is_equipped) continue;
         const key = sourceKeyForDesired("weapon", abilityDef.id, weapon.id);
         desired.set(key, {
           key,
@@ -149,8 +174,16 @@ export function reconcileCharacterAbilities({
           sourceId: weapon.id,
           sourceRecord: weapon,
           learnedLevel: 1,
-          data: {},
-          generatedFrom: "weapon_model",
+          data: {
+            grant_mode: grant.grant_mode ?? "available",
+            requires_selected_source: grant.requires_selected_source ?? true,
+            default_current_charges: grant.default_current_charges ?? null,
+            default_max_charges: grant.default_max_charges ?? null,
+            reload_item_code: grant.reload_item_code ?? null,
+            reload_item_cost: grant.reload_item_cost ?? 1,
+            source_label: weapon.name ?? abilityDef.name,
+          },
+          generatedFrom: "weapon",
         });
       }
     }
@@ -165,25 +198,41 @@ export function reconcileCharacterAbilities({
           sourceId: item.id,
           sourceRecord: item,
           learnedLevel: 1,
-          data: {},
+          data: {
+            grant_mode: grant.grant_mode ?? "activated",
+            default_current_charges: grant.default_current_charges ?? null,
+            default_max_charges: grant.default_max_charges ?? null,
+            reload_item_code: grant.reload_item_code ?? null,
+            reload_item_cost: grant.reload_item_cost ?? 1,
+            source_label: item.name ?? abilityDef.name,
+          },
           generatedFrom: "item",
         });
       }
     }
 
-    if (grant.source_type === "equipment") {
-      for (const item of items.filter((entry) => entry.item_def_id === grant.source_def_id && entry.type === "equipment")) {
-        if (grant.require_equipped && !item.is_equipped) continue;
-        const key = sourceKeyForDesired("equipment", abilityDef.id, item.id);
+    if (["equipment", "armor", "implant", "prosthetic"].includes(grant.source_type)) {
+      for (const item of items.filter((entry) => (entry.equipment_model_id ?? entry.item_def_id) === grant.source_def_id && entry.type === "equipment")) {
+        const sourceType = coerceSourceType(grant, item);
+        const key = sourceKeyForDesired(sourceType, abilityDef.id, item.id);
         desired.set(key, {
           key,
           abilityDef,
-          sourceType: "equipment",
+          sourceType,
           sourceId: item.id,
           sourceRecord: item,
           learnedLevel: 1,
-          data: {},
-          generatedFrom: "equipment",
+          data: {
+            grant_mode: grant.grant_mode ?? "available",
+            requires_equipped: grant.requires_equipped ?? (sourceType === "armor"),
+            requires_installed: grant.requires_installed ?? ["equipment", "implant", "prosthetic"].includes(sourceType),
+            default_current_charges: grant.default_current_charges ?? null,
+            default_max_charges: grant.default_max_charges ?? null,
+            reload_item_code: grant.reload_item_code ?? null,
+            reload_item_cost: grant.reload_item_cost ?? 1,
+            source_label: item.custom_name ?? item.name ?? abilityDef.name,
+          },
+          generatedFrom: sourceType,
         });
       }
     }
@@ -221,6 +270,12 @@ export function reconcileCharacterAbilities({
       data: desiredEntry.data,
       generatedFrom: desiredEntry.generatedFrom,
     });
+    if (existing?.current_charges === undefined && desiredEntry.data?.default_current_charges !== undefined) {
+      next.current_charges = desiredEntry.data.default_current_charges;
+    }
+    if (existing?.max_charges === undefined && desiredEntry.data?.default_max_charges !== undefined) {
+      next.max_charges = desiredEntry.data.default_max_charges;
+    }
     resultAbilities.push(next);
     if (!existing) {
       inserted.push(next);
@@ -242,9 +297,9 @@ export function reconcileCharacterAbilities({
       if (ability.source_type === "skill") reason = "missing_skill";
       if (ability.source_type === "perk") reason = "missing_perk";
       if (ability.source_type === "item") reason = "missing_item";
-      if (ability.source_type === "equipment") reason = "missing_equipment";
-      if (ability.source_type === "weapon") reason = "missing_weapon";
-      const hiddenAbility = hideGeneratedAbility(ability, reason);
+        if (["equipment", "armor", "implant", "prosthetic"].includes(ability.source_type)) reason = "missing_equipment";
+        if (ability.source_type === "weapon") reason = "missing_weapon";
+        const hiddenAbility = hideGeneratedAbility(ability, reason);
       resultAbilities.push(hiddenAbility);
       hidden.push(hiddenAbility);
     }
@@ -265,24 +320,81 @@ export function reconcileCharacterAbilities({
   };
 }
 
-export function buildQuickActionsRuntime({ abilities = [], encounter = null, characterState = {} }) {
+export function buildQuickActionsRuntime({ abilities = [], encounter = null, characterState = {}, selectedWeaponId = null }) {
   const quickActions = abilities
     .filter((ability) => ability.is_hidden !== true)
     .filter((ability) => ability.is_enabled !== false)
     .filter((ability) => !["passive", "automatic"].includes(ability.activation_type))
     .filter((ability) => ability.ability_kind !== "passive")
-    .map((ability) => ({
-      characterActionId: ability.id,
-      code: ability.code,
-      name: ability.name,
-      sourceType: ability.source_type,
-      type: ability.effect_mode === "attack" ? "attack_technique" : (ability.target_type === "self" ? "instant" : "directed"),
-      state: {
-        available: true,
-        executionAvailable: ability.executionAvailable ?? true,
-        resourceSufficient: ability.resourceSufficient ?? true,
-      },
-    }));
+    .map((ability) => {
+      const sourceType = String(ability.source_type ?? ability.data?.generated_from ?? "").trim().toLowerCase();
+      const requiresSelectedSource = ability.data?.requires_selected_source === true;
+      const requiresEquipped = ability.data?.requires_equipped === true;
+      const requiresInstalled = ability.data?.requires_installed === true;
+      const wrongWeaponSelected = Boolean(
+        requiresSelectedSource
+        && ability.source_character_weapon_id
+        && selectedWeaponId
+        && ability.source_character_weapon_id !== selectedWeaponId
+      );
+      const missingEquipmentState = Boolean(
+        ability.source_equipment_item_id
+        && (
+          (requiresEquipped && !ability.sourceRecord?.is_equipped && ability.data?.source_is_equipped !== true)
+          || (requiresInstalled
+            && !ability.sourceRecord?.is_equipped
+            && !ability.sourceRecord?.equipped_body_part_id
+            && !ability.data?.source_is_equipped
+            && !ability.data?.source_body_part_id)
+        )
+      );
+      const noCharges = ability.max_charges !== null
+        && ability.max_charges !== undefined
+        && Number(ability.current_charges ?? 0) <= 0;
+      let disabledReason = null;
+      if (wrongWeaponSelected) {
+        disabledReason = `Select ${ability.data?.source_label ?? ability.name}`;
+      } else if (missingEquipmentState) {
+        disabledReason = `${requiresEquipped ? "Equip" : "Install"} ${ability.data?.source_label ?? ability.name}`;
+      } else if (noCharges) {
+        disabledReason = ability.data?.reload_item_code
+          ? `Reload with ${ability.data.reload_item_code}`
+          : "No charges left";
+      }
+      const available = !wrongWeaponSelected && !missingEquipmentState && !noCharges;
+      return {
+        characterActionId: ability.id,
+        code: ability.code,
+        name: ability.name,
+        sourceType: sourceType || "custom",
+        sourceCharacterWeaponId: ability.source_character_weapon_id ?? null,
+        sourceEquipmentItemId: ability.source_equipment_item_id ?? null,
+        sourceCharacterItemId: ability.source_character_item_id ?? null,
+        sourceLabel: ability.data?.source_label ?? ability.name,
+        type: ability.effect_mode === "attack" ? "attack_technique" : (ability.target_type === "self" ? "instant" : "directed"),
+        state: {
+          available,
+          selectable: available,
+          disabledReason,
+          executionAvailable: ability.executionAvailable ?? true,
+          resourceSufficient: ability.resourceSufficient ?? !noCharges,
+        },
+        requirements: {
+          weaponId: ability.source_character_weapon_id ?? null,
+          equipmentItemId: ability.source_equipment_item_id ?? null,
+          itemId: ability.source_character_item_id ?? null,
+          requiresSelectedSource,
+          requiresEquipped,
+          requiresInstalled,
+          conditionSummary: disabledReason,
+        },
+        reload: {
+          required: noCharges,
+          itemCode: ability.data?.reload_item_code ?? null,
+          itemCost: ability.data?.reload_item_cost ?? 1,
+        },
+      };
+    });
 
   return {
     ok: true,
