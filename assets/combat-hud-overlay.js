@@ -7204,33 +7204,6 @@ function actionById(runtime, id) {
   if (!id) return null;
   return (runtime.quickActions ?? []).find((a) => a.characterActionId === id) ?? null;
 }
-function gmDeleteMenu(action, gmAdmin) {
-  if (!gmAdmin?.enabled || !action?.characterActionId) return "";
-  const open = gmAdmin.openActionId === action.characterActionId;
-  const abilityDeletePending = gmAdmin.pendingDeleteId === `ability:${action.characterActionId}`;
-  const currentDeletePending = Boolean(abilityDeletePending);
-  return `
-    <button
-      type="button"
-      class="${cls("ohud-qb-gm-trigger", open ? "is-open" : "", currentDeletePending ? "is-busy" : "")}"
-      data-action="toggle-gm-skill-menu"
-      data-action-id="${esc(action.characterActionId)}"
-      aria-label="GM skill actions"
-      aria-expanded="${open ? "true" : "false"}"
-      ${tipAttr("GM actions", ["Delete this ability or its source skill."])}
-    >GM</button>
-    ${open ? `<div class="ohud-qb-gm-menu" data-gm-menu="skills" data-action-id="${esc(action.characterActionId)}">
-      <button
-        type="button"
-        class="ohud-qb-gm-menu-btn is-danger"
-        data-action="gm-delete-ability"
-        data-action-id="${esc(action.characterActionId)}"
-        data-character-skill-id="${action.characterSkillId ? esc(action.characterSkillId) : ""}"
-        ${abilityDeletePending ? "disabled" : ""}
-      >${abilityDeletePending ? "Deleting ability..." : "Delete ability"}</button>
-    </div>` : ""}
-  `;
-}
 function stateMarkerHtml(availability, action, pending) {
   if (pending) return `<span class="ohud-qb-state ohud-qb-state--pending">\u2026</span>`;
   switch (availability) {
@@ -7250,7 +7223,7 @@ function stateMarkerHtml(availability, action, pending) {
       return "";
   }
 }
-function occupiedTile(slot, action, armedActionId, pendingActionId, gmAdmin) {
+function occupiedTile(slot, action, armedActionId, pendingActionId) {
   if (!action) {
     return `<button type="button" class="${cls("ohud-qb-slot", "is-missing")}" data-action="show-ability-detail" data-slot-index="${slot.slotIndex}" ${tipAttr("Missing action", ["This action is no longer available.", "Open EDIT to remove it."])}>
       <span class="ohud-qb-missing">?</span>
@@ -7275,14 +7248,12 @@ function occupiedTile(slot, action, armedActionId, pendingActionId, gmAdmin) {
   const stateMarker = stateMarkerHtml(availability, action, pending);
   const activeMarker = active ? `<span class="ohud-qb-active">ON</span>` : "";
   const badges = stateMarker || activeMarker ? `<span class="ohud-qb-badges">${stateMarker}${activeMarker}</span>` : "";
-  const tile = `<button type="button" class="${cls("ohud-qb-slot", `ohud-accent--${accent}`, disabled ? "is-disabled" : "", active ? "is-active" : "", armed ? "is-armed" : "", pending ? "is-pending" : "")}" data-action="${dataAction}" data-action-id="${esc(action.characterActionId)}" data-slot-index="${slot.slotIndex}" data-slot-state="${availability}"${tip}>
+  return `<button type="button" class="${cls("ohud-qb-slot", `ohud-accent--${accent}`, disabled ? "is-disabled" : "", active ? "is-active" : "", armed ? "is-armed" : "", pending ? "is-pending" : "")}" data-action="${dataAction}" data-action-id="${esc(action.characterActionId)}" data-slot-index="${slot.slotIndex}" data-slot-state="${availability}"${tip}>
     <span class="ohud-qb-icon">${skillIconSvg(action.iconKey)}</span>
     <span class="ohud-qb-name">${esc(action.name)}</span>
     ${mark ? `<span class="ohud-qb-type">${esc(mark)}</span>` : ""}
     ${badges}
   </button>`;
-  if (!gmAdmin?.enabled) return tile;
-  return `<div class="ohud-qb-card" data-qb-card="${esc(action.characterActionId)}">${tile}${gmDeleteMenu(action, gmAdmin)}</div>`;
 }
 function emptyTile(slotIndex, canEdit) {
   if (!canEdit) {
@@ -7296,11 +7267,6 @@ function renderQuickbarStrip(runtime, opts = {}) {
   const canEdit = opts.canEdit !== false;
   const armedActionId = opts.armedActionId ?? null;
   const pendingActionId = opts.pendingActionId ?? null;
-  const gmAdmin = opts.gmAdmin && opts.gmAdmin.enabled ? {
-    enabled: true,
-    openActionId: opts.gmAdmin.openActionId ?? null,
-    pendingDeleteId: opts.gmAdmin.pendingDeleteId ?? null
-  } : null;
   const rows = /* @__PURE__ */ new Map();
   for (const slot of slots) {
     const r = rowOfSlot(slot.slotIndex);
@@ -7311,7 +7277,7 @@ function renderQuickbarStrip(runtime, opts = {}) {
   const rowsHtml = rowKeys.map((r) => {
     const tiles = rows.get(r).sort((a, b) => a.slotIndex - b.slotIndex).map((slot) => {
       if (slot.empty || slot.characterActionId == null) return emptyTile(slot.slotIndex, canEdit);
-      return occupiedTile(slot, actionById(rt, slot.characterActionId), armedActionId, pendingActionId, gmAdmin);
+      return occupiedTile(slot, actionById(rt, slot.characterActionId), armedActionId, pendingActionId);
     }).join("");
     return `<div class="ohud-qb-row" data-row="${r}">${tiles}</div>`;
   }).join("");
@@ -7351,17 +7317,14 @@ function skillTile(skill2, selectedId) {
     ${skill2.isToggled ? `<span class="ohud-slot-toggle" aria-hidden="true"></span>` : ""}
   </button>`;
 }
-function renderSkillBlock(state, opts = {}) {
+function renderSkillBlock(state) {
   const quickbar = state?.snapshot?.quickbar ?? null;
   if (quickbar && quickbar.ok !== false) {
     const role = String(state?.viewer?.role ?? "").toLowerCase();
     const canEdit = role === "gm" || role === "player";
     const armedActionId = state?.snapshot?.armedActionId ?? null;
     const pendingActionId = state?.snapshot?.pendingDirectAbilityActionId ?? state?.snapshot?.pendingInstantAbilityActionId ?? state?.snapshot?.pendingDirectedAbilityActionId ?? null;
-    const openActionId = opts?.openSkillsMenu?.kind === "action" ? String(opts.openSkillsMenu.id ?? "").trim() || null : null;
-    const pendingDeleteId = String(opts?.pendingGmDeleteId ?? "").trim() || null;
-    const gmAdmin = role === "gm" && opts?.allowGmDelete === true ? { enabled: true, openActionId, pendingDeleteId } : null;
-    return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId, gmAdmin }) });
+    return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId }) });
   }
   const slots = selectQuickSlots(state);
   const selectedId = selectSelectedSkill(state)?.id ?? null;
@@ -8238,9 +8201,6 @@ function mountCombatHudModule(options) {
   const store = createCombatHudStore({ adapter });
   store.initialize();
   let liveSelection = null;
-  let lastSkillsRenderSignature = null;
-  let openSkillsMenu = null;
-  let pendingGmDeleteId = null;
   const el = document.createElement("div");
   el.className = cls("odyssey-hud", "ohud-module");
   el.setAttribute("data-module", moduleId);
@@ -8272,58 +8232,6 @@ function mountCombatHudModule(options) {
     }
     return Array.isArray(list) ? list.find((a) => a.characterActionId === actionId) ?? null : null;
   }
-  function logSkillsModuleEvent(action, details2 = {}) {
-    if (moduleId !== "skills" || !DEV) return;
-    try {
-      console.info(`[combatHud/skills:${action}]`, details2);
-    } catch (_e) {
-    }
-  }
-  function buildSkillsRenderSignature(payload) {
-    if (!payload) return "null";
-    const quickbar = payload?.hudSnapshot?.quickbar ?? null;
-    return JSON.stringify({
-      characterId: payload?.characterId ?? null,
-      status: payload?.status ?? null,
-      quickbarVersion: quickbar?.quickbar?.version ?? null,
-      quickActionIds: Array.isArray(quickbar?.quickActions) ? quickbar.quickActions.map((a) => [
-        a?.characterActionId ?? null,
-        a?.state?.available ?? null,
-        a?.cooldown?.current ?? null,
-        a?.state?.active ?? null,
-        a?.characterSkillId ?? null
-      ]) : [],
-      slots: Array.isArray(quickbar?.quickbar?.slots) ? quickbar.quickbar.slots.map((s) => [
-        s?.slotIndex ?? null,
-        s?.characterActionId ?? null,
-        s?.empty ?? null,
-        s?.missing ?? null
-      ]) : [],
-      armedActionId: payload?.hudSnapshot?.armedActionId ?? null,
-      pendingDirectAbilityActionId: payload?.hudSnapshot?.pendingDirectAbilityActionId ?? null,
-      pendingInstantAbilityActionId: payload?.hudSnapshot?.pendingInstantAbilityActionId ?? null,
-      pendingDirectedAbilityActionId: payload?.hudSnapshot?.pendingDirectedAbilityActionId ?? null,
-      viewerRole: payload?.viewer?.role ?? null
-    });
-  }
-  function quickActionExists(payload, actionId) {
-    const id = String(actionId ?? "").trim();
-    if (!id) return false;
-    const list = payload?.hudSnapshot?.quickbar?.quickActions;
-    return Array.isArray(list) ? list.some((entry) => String(entry?.characterActionId ?? "") === id) : false;
-  }
-  function clearSkillsMenu(reason) {
-    if (moduleId !== "skills" || !openSkillsMenu) return false;
-    openSkillsMenu = null;
-    logSkillsModuleEvent("menu-closed", { reason });
-    return true;
-  }
-  function skillsUiState() {
-    return {
-      openSkillsMenu,
-      pendingGmDeleteId
-    };
-  }
   function controlsHtml() {
     if (moduleId !== "player") return "";
     return `<div class="ohud-module-controls">
@@ -8338,16 +8246,10 @@ function mountCombatHudModule(options) {
   }
   function bodyHtml(state) {
     try {
-      if (liveSelection) {
-        return renderSelectionModule(moduleId, liveSelection, {
-          dev: DEV,
-          skillsUiState: moduleId === "skills" ? skillsUiState() : void 0
-        });
-      }
+      if (liveSelection) return renderSelectionModule(moduleId, liveSelection, { dev: DEV });
       if (!state) throw new Error("no snapshot");
       const mode = resolveBodyMode(state);
       if (mode === "ready") {
-        if (moduleId === "skills") return renderSkillBlock(state, skillsUiState());
         const fn = BLOCK_RENDERERS[moduleId];
         if (!fn) throw new Error(`unknown module "${moduleId}"`);
         return fn(state);
@@ -8394,7 +8296,7 @@ function mountCombatHudModule(options) {
     } catch (_e) {
     }
   }
-  function render(reason = "render") {
+  function render() {
     let state = null;
     try {
       state = store.getState();
@@ -8410,18 +8312,9 @@ function mountCombatHudModule(options) {
     el.setAttribute("data-body", liveSelection ? liveSelection.status : bodyMode);
     el.setAttribute("data-weapon-selector", liveSelection?.ui?.weaponSelectorOpen ? "open" : "closed");
     el.innerHTML = `${bodyHtml(state)}${controlsHtml()}${debugBadge(state)}<div class="ohud-toast" hidden></div>`;
-    if (moduleId === "skills") {
-      logSkillsModuleEvent("render", {
-        reason,
-        characterId: liveSelection?.characterId ?? state?.selectedCharacterId ?? null,
-        openMenu: openSkillsMenu?.id ?? null,
-        pendingDelete: pendingGmDeleteId
-      });
-    }
   }
   let lastCommandStatusKey = null;
   function maybeShowCommandStatusToast() {
-    if (moduleId !== "player") return;
     const status2 = liveSelection?.ui?.commandStatus ?? null;
     const key = status2 ? `${status2.type}:${status2.message}` : null;
     if (key === lastCommandStatusKey) return;
@@ -8429,37 +8322,9 @@ function mountCombatHudModule(options) {
     if (status2?.message) showToast(status2.message);
   }
   function applySelection(payload) {
-    const nextSelection = payload ? normalizeSelectionPayload(payload) : null;
-    const previousCharacterId = liveSelection?.characterId ?? null;
-    const nextCharacterId = nextSelection?.characterId ?? null;
-    const gmDeleteStatus = nextSelection?.ui?.commandStatus?.source === "gm-skill-admin" ? nextSelection.ui.commandStatus : null;
-    if (moduleId === "skills") {
-      if (previousCharacterId !== nextCharacterId) {
-        clearSkillsMenu("character-changed");
-        pendingGmDeleteId = null;
-      } else if (openSkillsMenu && !quickActionExists(nextSelection, openSkillsMenu.id)) {
-        clearSkillsMenu("action-removed");
-      }
-      if (pendingGmDeleteId && gmDeleteStatus && gmDeleteStatus.deleteKey === pendingGmDeleteId) {
-        pendingGmDeleteId = null;
-        if (gmDeleteStatus.type === "ok") clearSkillsMenu("delete-success");
-      }
-      const nextSig = buildSkillsRenderSignature(nextSelection);
-      if (nextSig === lastSkillsRenderSignature && !gmDeleteStatus) {
-        liveSelection = nextSelection;
-        logLiveDebug(liveSelection);
-        logSkillsModuleEvent("render-skipped", {
-          reason: "same-signature",
-          characterId: nextCharacterId
-        });
-        maybeShowCommandStatusToast();
-        return;
-      }
-      lastSkillsRenderSignature = nextSig;
-    }
-    liveSelection = nextSelection;
+    liveSelection = payload ? normalizeSelectionPayload(payload) : null;
     logLiveDebug(liveSelection);
-    render(moduleId === "skills" ? "skills-selection-changed" : "selection-changed");
+    render();
     maybeShowCommandStatusToast();
   }
   function showToast(text) {
@@ -8473,50 +8338,9 @@ function mountCombatHudModule(options) {
     }, 1800);
   }
   function onClick(e) {
-    const deleteTarget = e.target.closest('[data-action="gm-delete-skill"], [data-action="gm-delete-ability"]');
-    if (deleteTarget) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (pendingGmDeleteId) return;
-      const actionType = deleteTarget.getAttribute("data-action") === "gm-delete-skill" ? "delete-skill" : "delete-ability";
-      const deleteId = actionType === "delete-skill" ? String(deleteTarget.getAttribute("data-character-skill-id") || deleteTarget.getAttribute("data-skill-id") || "").trim() : String(deleteTarget.getAttribute("data-action-id") || "").trim();
-      if (!deleteId) return;
-      pendingGmDeleteId = `${actionType === "delete-skill" ? "skill" : "ability"}:${deleteId}`;
-      logSkillsModuleEvent("gm-delete-click", {
-        actionType,
-        deleteId,
-        characterSkillId: deleteTarget.getAttribute("data-character-skill-id") || null,
-        characterActionId: deleteTarget.getAttribute("data-action-id") || null
-      });
-      integration.onCommand && integration.onCommand({
-        scope: "combat-hud",
-        feature: "gm-skill-admin",
-        type: actionType,
-        skillId: deleteTarget.getAttribute("data-skill-id"),
-        characterSkillId: deleteTarget.getAttribute("data-character-skill-id"),
-        characterActionId: deleteTarget.getAttribute("data-action-id")
-      });
-      render("gm-delete-pending");
-      return;
-    }
     const t = e.target.closest("[data-action]");
-    if (moduleId === "skills" && openSkillsMenu && (!t || !t.closest(".ohud-qb-gm-menu") && t.getAttribute("data-action") !== "toggle-gm-skill-menu")) {
-      clearSkillsMenu("outside-click");
-      if (!t) {
-        render("gm-menu-outside-click");
-        return;
-      }
-    }
     if (!t) return;
     switch (t.getAttribute("data-action")) {
-      case "toggle-gm-skill-menu": {
-        e.preventDefault();
-        e.stopPropagation();
-        const actionId = String(t.getAttribute("data-action-id") ?? "").trim() || null;
-        openSkillsMenu = openSkillsMenu?.id === actionId ? null : { kind: "action", id: actionId };
-        render("gm-menu-toggle");
-        break;
-      }
       case "arrange":
         integration.onArrange && integration.onArrange();
         break;
@@ -8649,10 +8473,6 @@ function mountCombatHudModule(options) {
   }
   el.addEventListener("click", onClick);
   function onKeyDown(e) {
-    if (e.key === "Escape" && moduleId === "skills" && clearSkillsMenu("escape")) {
-      render("gm-menu-escape");
-      return;
-    }
     if (e.key === "Escape" && moduleId === "gun") {
       integration.onCommand && integration.onCommand({ type: "close-weapon-selector" });
       integration.onCommand && integration.onCommand({ scope: "combat-hud", feature: "fire-mode", type: "close-selector" });

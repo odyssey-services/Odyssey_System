@@ -12,12 +12,6 @@ import OBR from "@owlbear-rodeo/sdk";
 import debugConsoleStyles from "./debugConsole.css";
 import { renderDebugConsolePanel, renderDebugLauncher, entryKey, buildEntryCopyText, buildVisibleCopyText } from "./DebugConsolePanel.js";
 import { BC_DEBUG_CONSOLE_ENTRIES, BC_DEBUG_CONSOLE_REQUEST, BC_DEBUG_CONSOLE_COMMAND } from "./debugConsoleConstants.js";
-import {
-  DEBUG_CONSOLE_POPOVER_ID,
-  DEBUG_LAUNCHER_POPOVER_ID,
-  consoleRect,
-  launcherRect,
-} from "./debugConsoleLayout.js";
 
 const COPY_STATUS_MS = 1500;
 
@@ -60,50 +54,6 @@ function send(channel, data) {
   try { OBR.broadcast.sendMessage(channel, data, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
 }
 
-function pageUrl(variant) {
-  try {
-    const url = new URL("debug-console.html", globalThis.location?.href ?? "");
-    url.searchParams.set("variant", variant);
-    return url.toString();
-  } catch {
-    return `debug-console.html?variant=${variant}`;
-  }
-}
-
-function popoverParams(rect) {
-  return {
-    width: Math.max(1, rect.width),
-    height: Math.max(1, rect.height),
-    anchorReference: "POSITION",
-    anchorPosition: { left: rect.left, top: rect.top },
-    anchorOrigin: { horizontal: "LEFT", vertical: "TOP" },
-    transformOrigin: { horizontal: "LEFT", vertical: "TOP" },
-    hidePaper: true,
-    disableClickAway: true,
-    marginThreshold: 0,
-  };
-}
-
-async function swapDebugPopover(variant) {
-  if (!OBR || OBR.isAvailable === false) return;
-  const width = await OBR.viewport.getWidth();
-  if (variant === "console") {
-    try { await OBR.popover.close(DEBUG_LAUNCHER_POPOVER_ID); } catch (_e) { /* ignore */ }
-    await OBR.popover.open({
-      id: DEBUG_CONSOLE_POPOVER_ID,
-      url: pageUrl("console"),
-      ...popoverParams(consoleRect(width)),
-    });
-    return;
-  }
-  try { await OBR.popover.close(DEBUG_CONSOLE_POPOVER_ID); } catch (_e) { /* ignore */ }
-  await OBR.popover.open({
-    id: DEBUG_LAUNCHER_POPOVER_ID,
-    url: pageUrl("launcher"),
-    ...popoverParams(launcherRect(width)),
-  });
-}
-
 function getVariant() {
   try { return new URLSearchParams(window.location.search).get("variant") || "console"; } catch { return "console"; }
 }
@@ -122,10 +72,7 @@ function start() {
     root.innerHTML = renderDebugLauncher();
     root.addEventListener("click", (e) => {
       if (e.target.closest('[data-odc-action="reopen"]') && available) {
-        e.preventDefault();
-        e.stopPropagation();
         send(BC_DEBUG_CONSOLE_COMMAND, { type: "reopen" });
-        void swapDebugPopover("console").catch(() => {});
       }
     });
     return;
@@ -168,10 +115,7 @@ function start() {
         selectedKey = null;
         if (available) send(BC_DEBUG_CONSOLE_COMMAND, { type: "clear" });
       } else if (action === "close") {
-        e.preventDefault();
-        e.stopPropagation();
         if (available) send(BC_DEBUG_CONSOLE_COMMAND, { type: "close" });
-        void swapDebugPopover("launcher").catch(() => {});
       } else if (action === "toggle-collapse") {
         collapsed = !collapsed;
         render();

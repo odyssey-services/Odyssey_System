@@ -3701,30 +3701,6 @@ var BC_DEBUG_CONSOLE_ENTRIES = "com.odyssey.debug-console/entries";
 var BC_DEBUG_CONSOLE_REQUEST = "com.odyssey.debug-console/request";
 var BC_DEBUG_CONSOLE_COMMAND = "com.odyssey.debug-console/command";
 
-// hud/debug/debugConsoleLayout.js
-var DEBUG_CONSOLE_POPOVER_ID = "odyssey-hud-debug-console";
-var DEBUG_LAUNCHER_POPOVER_ID = "odyssey-hud-debug-launcher";
-var MARGIN = 12;
-var CONSOLE_WIDTH = 400;
-var CONSOLE_HEIGHT = 460;
-var LAUNCHER_WIDTH = 118;
-var LAUNCHER_HEIGHT = 36;
-function topRightRect(vw, width, height, margin = MARGIN) {
-  const w = Math.max(0, Number(vw) || 0);
-  return {
-    left: Math.max(0, w - width - margin),
-    top: margin,
-    width,
-    height
-  };
-}
-function consoleRect(vw) {
-  return topRightRect(vw, CONSOLE_WIDTH, CONSOLE_HEIGHT);
-}
-function launcherRect(vw) {
-  return topRightRect(vw, LAUNCHER_WIDTH, LAUNCHER_HEIGHT);
-}
-
 // hud/debug/debugConsolePage.js
 var COPY_STATUS_MS = 1500;
 async function copyToClipboard(text) {
@@ -3763,53 +3739,6 @@ function send(channel, data) {
   } catch (_e) {
   }
 }
-function pageUrl(variant) {
-  try {
-    const url = new URL("debug-console.html", globalThis.location?.href ?? "");
-    url.searchParams.set("variant", variant);
-    return url.toString();
-  } catch {
-    return `debug-console.html?variant=${variant}`;
-  }
-}
-function popoverParams(rect) {
-  return {
-    width: Math.max(1, rect.width),
-    height: Math.max(1, rect.height),
-    anchorReference: "POSITION",
-    anchorPosition: { left: rect.left, top: rect.top },
-    anchorOrigin: { horizontal: "LEFT", vertical: "TOP" },
-    transformOrigin: { horizontal: "LEFT", vertical: "TOP" },
-    hidePaper: true,
-    disableClickAway: true,
-    marginThreshold: 0
-  };
-}
-async function swapDebugPopover(variant) {
-  if (!lib_default || lib_default.isAvailable === false) return;
-  const width = await lib_default.viewport.getWidth();
-  if (variant === "console") {
-    try {
-      await lib_default.popover.close(DEBUG_LAUNCHER_POPOVER_ID);
-    } catch (_e) {
-    }
-    await lib_default.popover.open({
-      id: DEBUG_CONSOLE_POPOVER_ID,
-      url: pageUrl("console"),
-      ...popoverParams(consoleRect(width))
-    });
-    return;
-  }
-  try {
-    await lib_default.popover.close(DEBUG_CONSOLE_POPOVER_ID);
-  } catch (_e) {
-  }
-  await lib_default.popover.open({
-    id: DEBUG_LAUNCHER_POPOVER_ID,
-    url: pageUrl("launcher"),
-    ...popoverParams(launcherRect(width))
-  });
-}
 function getVariant() {
   try {
     return new URLSearchParams(window.location.search).get("variant") || "console";
@@ -3829,11 +3758,7 @@ function start() {
     root.innerHTML = renderDebugLauncher();
     root.addEventListener("click", (e) => {
       if (e.target.closest('[data-odc-action="reopen"]') && available) {
-        e.preventDefault();
-        e.stopPropagation();
         send(BC_DEBUG_CONSOLE_COMMAND, { type: "reopen" });
-        void swapDebugPopover("console").catch(() => {
-        });
       }
     });
     return;
@@ -3873,11 +3798,7 @@ function start() {
         selectedKey = null;
         if (available) send(BC_DEBUG_CONSOLE_COMMAND, { type: "clear" });
       } else if (action === "close") {
-        e.preventDefault();
-        e.stopPropagation();
         if (available) send(BC_DEBUG_CONSOLE_COMMAND, { type: "close" });
-        void swapDebugPopover("launcher").catch(() => {
-        });
       } else if (action === "toggle-collapse") {
         collapsed = !collapsed;
         render();
