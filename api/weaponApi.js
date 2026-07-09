@@ -9,6 +9,14 @@ export function getCharacterArmory(characterId, settings) {
   );
 }
 
+export function switchActiveWeapon(payload, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.switchActiveWeapon,
+    { p_payload: payload },
+    settings,
+  );
+}
+
 export function switchWeaponProfile(characterWeaponId, profileId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.switchWeaponProfile,

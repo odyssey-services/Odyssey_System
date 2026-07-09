@@ -36,6 +36,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const readText = (...segments) =>
   fs.readFileSync(path.join(repoRoot, ...segments), "utf8").replace(/\r\n/g, "\n");
 const sql90 = readText("supabase", "90_combat_session_foundation.sql");
+const sql108 = readText("supabase", "108_weapon_switch_and_full_move_reload.sql");
 const sql64 = readText("supabase", "64_combat_hud_turn_engine_and_action_executor.sql");
 const sceneControllerSrc = readText("hud", "scene", "sceneSelectionController.js");
 const sessionControllerSrc = readText("hud", "session", "combatSessionController.js");
@@ -208,26 +209,30 @@ test("16. an invalid/rejected attack spends nothing: every gate/deny returns BEF
 
 /* ── 17-19. Reload economy ────────────────────────────────────────────── */
 
-test("17. reload without MOVE is rejected (MOVE_NOT_AVAILABLE) and pre-blocked client-side", () => {
-  assert.ok(sql90.includes("'MOVE_NOT_AVAILABLE'"));
+test("17. reload without FULL MOVE is rejected and pre-blocked client-side", () => {
+  assert.ok(sql108.includes("'FULL_MOVE_NOT_AVAILABLE'"));
   const gate = sessionReloadGate(sessionFor({ aMove: 0 }));
-  assert.deepEqual(gate, { blocked: true, reason: SESSION_BLOCK_REASONS.moveSpent });
+  assert.deepEqual(gate, { blocked: true, reason: SESSION_BLOCK_REASONS.fullMoveSpent });
 });
 
-test("18. only a SUCCESSFUL reload spends MOVE (spend sits after the magazine swap, before the ok result)", () => {
-  const reloadFn = sql90.slice(sql90.indexOf("create or replace function public.load_weapon_profile_magazine"));
-  const swapIdx = reloadFn.indexOf("set loaded_magazine_id = v_character_magazine_id");
-  const spendIdx = reloadFn.indexOf("perform public.odyssey_apply_turn_costs(");
-  assert.ok(swapIdx > -1 && spendIdx > swapIdx, "MOVE is spent only after the swap succeeded");
+test("18. reload applies session cost only after compatibility validation passes", () => {
+  const reloadFn = sql108.slice(sql108.indexOf("create or replace function public.load_weapon_profile_magazine"));
+  const ownershipCheckIdx = reloadFn.indexOf("'MAGAZINE_CHARACTER_MISMATCH'");
+  const caliberCheckIdx = reloadFn.indexOf("'MAGAZINE_INCOMPATIBLE'");
+  const costIdx = reloadFn.indexOf("v_cost_result := public.odyssey_apply_weapon_operation_session_cost(");
+  assert.ok(ownershipCheckIdx > -1 && ownershipCheckIdx < costIdx, "ownership validation happens before session cost");
+  assert.ok(caliberCheckIdx > -1 && caliberCheckIdx < costIdx, "compatibility validation happens before session cost");
 });
 
-test("19. a failed reload spends nothing: every reload denial returns before the spend", () => {
-  const reloadFn = sql90.slice(sql90.indexOf("create or replace function public.load_weapon_profile_magazine"));
-  const spendIdx = reloadFn.indexOf("perform public.odyssey_apply_turn_costs(");
-  for (const marker of ["'MAGAZINE_INCOMPATIBLE'", "'MAGAZINE_NOT_FOUND'", "'NOT_CURRENT_TURN'", "'MOVE_NOT_AVAILABLE'"]) {
+test("19. a failed reload spends nothing: local validation returns before the session-cost helper", () => {
+  const reloadFn = sql108.slice(sql108.indexOf("create or replace function public.load_weapon_profile_magazine"));
+  const costIdx = reloadFn.indexOf("v_cost_result := public.odyssey_apply_weapon_operation_session_cost(");
+  for (const marker of ["'MAGAZINE_INCOMPATIBLE'", "'MAGAZINE_NOT_FOUND'", "'MAGAZINE_CHARACTER_MISMATCH'"]) {
     const idx = reloadFn.indexOf(marker);
-    assert.ok(idx > -1 && idx < spendIdx, `${marker} returns before the MOVE spend`);
+    assert.ok(idx > -1 && idx < costIdx, `${marker} returns before the session-cost helper`);
   }
+  assert.ok(sql108.includes("'NOT_CURRENT_TURN'"), "turn denial now lives in the shared session-cost helper");
+  assert.ok(sql108.includes("'FULL_MOVE_NOT_AVAILABLE'"), "full-move denial now lives in the shared session-cost helper");
 });
 
 /* ── 20-22. Legacy paths + concurrency ────────────────────────────────── */

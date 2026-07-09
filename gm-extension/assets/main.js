@@ -9884,6 +9884,7 @@ var FEATURE_RPC_NAMES = Object.freeze({
 });
 var WEAPON_RPC_NAMES = Object.freeze({
   getCharacterArmory: "get_character_armory",
+  switchActiveWeapon: "switch_active_weapon",
   switchWeaponProfile: "switch_weapon_profile",
   switchWeaponFireMode: "switch_weapon_fire_mode",
   loadWeaponProfileMagazine: "load_weapon_profile_magazine",
@@ -10699,6 +10700,7 @@ __export(weaponApi_exports, {
   getCharacterWeaponFeatures: () => getCharacterWeaponFeatures,
   loadWeaponInternalRounds: () => loadWeaponInternalRounds,
   loadWeaponProfileMagazine: () => loadWeaponProfileMagazine,
+  switchActiveWeapon: () => switchActiveWeapon,
   switchWeaponFireMode: () => switchWeaponFireMode,
   switchWeaponProfile: () => switchWeaponProfile,
   unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
@@ -10708,6 +10710,13 @@ function getCharacterArmory(characterId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
     { p_character_id: characterId },
+    settings
+  );
+}
+function switchActiveWeapon(payload, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.switchActiveWeapon,
+    { p_payload: payload },
     settings
   );
 }

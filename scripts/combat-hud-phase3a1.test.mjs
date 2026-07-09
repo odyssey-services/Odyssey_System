@@ -518,12 +518,13 @@ test("19. Pick target is visible for ready source without target", () => {
   assert.ok(html.includes('data-action="pick-target"'));
 });
 
-test("20. selectedWeaponId picks a non-first weapon and weapon selector is closed by default", () => {
+test("20. active_weapon_id picks a non-first weapon and weapon selector is closed by default", () => {
   const first = canonicalWeapon({ id: "w-first", name: "First Rifle" });
   const second = canonicalWeapon({ id: "w-second", name: "Sidearm", cls: "Pistol" });
   const bundle = bundleWithWeapons([first, second], [
     { id: "mag-2", current_rounds: 8, ammo_type_name: "FMJ", magazine_def: { capacity: 12, caliber: "5.56", caliber_name: "5.56" } },
   ]);
+  bundle.armory.active_weapon_id = "w-second";
   const snap = mapBundleToHudSnapshot(bundle, { selectedWeaponId: "w-second" });
   assert.equal(snap.weapon.primary.name, "Sidearm");
   assert.equal(snap.weapon.available.length, 2);
@@ -542,6 +543,7 @@ test("20b. weapon selector companion popover does not appear in Gun block HTML",
   const bundle = bundleWithWeapons([first, second], [
     { id: "mag-2", current_rounds: 8, ammo_type_name: "FMJ", magazine_def: { capacity: 12, caliber: "5.56", caliber_name: "5.56" } },
   ]);
+  bundle.armory.active_weapon_id = "w-second";
   const state = deriveSelectionState({ viewer: PLAYER, selectionIds: ["tok-1"], link: { characterId: "char-1" }, bundle });
   const payload = buildBroadcastPayload(state, { selectedWeaponId: "w-second", weaponSelectorOpen: true });
   const html = renderSelectionModule("gun", payload);

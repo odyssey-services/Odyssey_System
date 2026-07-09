@@ -22,7 +22,7 @@ import {
 } from "../../bridge/obrBridge.js";
 import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/settingsBridge.js";
 import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/characterPlacementApi.js";
-import { loadWeaponProfileMagazine, getCharacterArmory, switchWeaponFireMode } from "../../api/weaponApi.js";
+import { loadWeaponProfileMagazine, getCharacterArmory, switchWeaponFireMode, switchActiveWeapon } from "../../api/weaponApi.js";
 import { performAttack, executeAction } from "../../api/combatApi.js";
 import { getCharacterInventory } from "../../api/inventoryApi.js";
 import { resolveReloadMagazineId, normalizeReloadRpcResult } from "./reloadPolicy.js";
@@ -69,7 +69,7 @@ const ARMED_TECHNIQUE_ERROR_CODES = new Set([
 ]);
 import { BC_HUD_COMMAND, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_TARGETING_COMMAND } from "../overlay/overlayConstants.js";
 import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
-import { buildCanonicalArmory } from "../runtime/runtimeBundleMapper.js";
+import { buildCanonicalArmory, pickActiveWeapon } from "../runtime/runtimeBundleMapper.js";
 import { buildBroadcastPayload, normalizeViewer } from "./selectionState.js";
 import { mutateSupabaseRows } from "../../bridge/supabaseBridge.js";
 
@@ -98,11 +98,12 @@ export function setupSceneSelection(hooks = {}) {
   let refetchCurrentQueued = false;
   let lastRefetchAt = 0;
   // Phase 3D.1: controller-local, session-scoped "last weapon per character"
-  // memory — see selectedWeaponMemory.js for why this exists (Token A → B → A
-  // must restore A's own weapon, not fall back to armory's first weapon).
+  // memory — see selectedWeaponMemory.js for why this exists. We still keep it
+  // for quick-action / companion continuity, but the active weapon itself now
+  // always comes from the server-authoritative armory snapshot.
   const selectedWeaponMemory = createSelectedWeaponMemory();
   // Phase 4.1A: per-character "armed attack technique" memory — same lifecycle
-  // as selectedWeaponMemory (ephemeral, session-scoped, never persisted). See
+  // as the rest of the HUD selection state (ephemeral, session-scoped, never persisted). See
   // armedTechniqueMemory.js for the max-1-until-stackGroup rule.
   const armedTechniqueMemory = createArmedTechniqueMemory();
   // Phase 3D.1: the real (server-result-only) local Combat Log — newest first,
@@ -1352,13 +1353,36 @@ export function setupSceneSelection(hooks = {}) {
       const type = String(command.type ?? "");
       ephemeral.commandStatus = null;
       if (type === "select-weapon") {
-        // Weapon selection is PURE LOCAL ephemeral state — no server mutation. The
-        // mapper re-derives weapon.primary from selectedWeaponId on every publish,
-        // so a local publishState immediately swaps the active weapon. (The overlay
-        // controller closes/relays the gun popover off the same BC_HUD_COMMAND.)
-        logDebugEvent("weapon", "selected", { weaponId: String(command.weaponId ?? "").trim() || null });
-        ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
-        selectedWeaponMemory.set(ephemeral.characterId, ephemeral.selectedWeaponId);
+        // Weapon selection is server-authoritative. The HUD asks the backend to
+        // switch the active weapon, then refetches the authoritative armory/runtime.
+        const weaponId = String(command.weaponId ?? "").trim() || null;
+        const session = currentMappedSession();
+        const activeWeaponId = String(lastPayload?.hudSnapshot?.weapon?.primary?.id ?? "").trim() || null;
+        const availableWeapons = Array.isArray(lastPayload?.hudSnapshot?.weapon?.available)
+          ? lastPayload.hudSnapshot.weapon.available
+          : [];
+        const selectedOption = availableWeapons.find((option) => String(option?.id ?? "").trim() === weaponId) ?? null;
+        logDebugEvent("weapon", "selected", { weaponId, activeWeaponId });
+        if (!weaponId || !ephemeral.characterId) {
+          ephemeral.commandStatus = { type: "error", message: "Weapon switch unavailable." };
+          if (lastState) publishState(lastState);
+          return;
+        }
+        if (weaponId === activeWeaponId) {
+          if (lastState) publishState(lastState);
+          return;
+        }
+        const switchGate = sessionReloadGate(session, selectedOption?.switchCost ?? "full_move");
+        if (switchGate.blocked) {
+          ephemeral.commandStatus = { type: "error", message: switchGate.reason };
+          if (lastState) publishState(lastState);
+          return;
+        }
+        if (selectedOption?.switchAllowed === false) {
+          ephemeral.commandStatus = { type: "error", message: selectedOption.switchBlockedReason || "Weapon switch unavailable." };
+          if (lastState) publishState(lastState);
+          return;
+        }
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.reloadRpcResult = null;
         ephemeral.weaponSelectorOpen = false;
@@ -1366,8 +1390,31 @@ export function setupSceneSelection(hooks = {}) {
         // the previous weapon's selector state or last RPC result forward.
         ephemeral.fireModeSelectorOpen = false;
         ephemeral.fireModeRpcResult = null;
-        if (lastState) publishState(lastState);
-        return;
+        try {
+          const expectedVersion = expectedVersionOf(session);
+          const result = await switchActiveWeapon(
+            {
+              character_id: ephemeral.characterId,
+              character_weapon_id: weaponId,
+              ...(expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}),
+            },
+            settings,
+          );
+          if (result?.ok === false) {
+            ephemeral.commandStatus = { type: "error", message: result.message || result.error || "Weapon switch failed." };
+            if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) void sessionController.refresh();
+            if (lastState) publishState(lastState);
+            return;
+          }
+          ephemeral.commandStatus = { type: "ok", message: "Weapon switched." };
+          if (result?.combat_session && sessionController) void sessionController.refresh();
+          await refetchCurrent("weapon-switch");
+          return;
+        } catch (error) {
+          ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Weapon switch failed.") };
+          if (lastState) publishState(lastState);
+          return;
+        }
       }
       if (type === "toggle-weapon-selector") {
         ephemeral.weaponSelectorOpen = !ephemeral.weaponSelectorOpen;
@@ -1408,7 +1455,7 @@ export function setupSceneSelection(hooks = {}) {
         // Phase 3E.0: client-side MOVE pre-gate (UX mirror — the server
         // re-checks turn/MOVE inside load_weapon_profile_magazine anyway).
         const reloadSession = currentMappedSession();
-        const reloadGate = sessionReloadGate(reloadSession);
+        const reloadGate = sessionReloadGate(reloadSession, weapon?.reloadCost ?? "full_move");
         if (reloadGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: reloadGate.reason };
           ephemeral.reloadRpcResult = { ok: false, error: "SESSION_GATE", message: reloadGate.reason };
@@ -1498,6 +1545,13 @@ export function setupSceneSelection(hooks = {}) {
       } else {
         const changed = resetEphemeralForCharacter(state.characterId ?? null);
         if (changed) restoreSelectedWeapon(state.characterId ?? null, state.runtimeBundle);
+        const activeWeapon = pickActiveWeapon(state.runtimeBundle?.armory ?? state.runtimeBundle?.sections?.armory ?? null);
+        const activeWeaponId = String(activeWeapon?.id ?? "").trim() || null;
+        ephemeral.selectedWeaponId = activeWeaponId;
+        if (state.characterId) {
+          if (activeWeaponId) selectedWeaponMemory.set(state.characterId, activeWeaponId);
+          else selectedWeaponMemory.forget(state.characterId);
+        }
       }
       lastState = state;
       const payload = publishState(state);

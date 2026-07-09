@@ -251,22 +251,28 @@ test("mapBundleToHudSnapshot default primary is weapons[0]", () => {
   assert.equal(snap.weapon.primary.id, "w1");
 });
 
-test("mapBundleToHudSnapshot respects selectedWeaponId", () => {
-  const snap = mapBundleToHudSnapshot({ sections: { armory: canonicalArmory() } }, { selectedWeaponId: "w2" });
+test("mapBundleToHudSnapshot respects active_weapon_id", () => {
+  const armory = canonicalArmory();
+  armory.active_weapon_id = "w2";
+  const snap = mapBundleToHudSnapshot({ sections: { armory } }, { selectedWeaponId: "w2" });
   assert.equal(snap.weapon.primary.id, "w2");
   assert.equal(snap.weapon.primary.name, "Sidearm");
 });
 
-test("selected weapon stays stable across refreshes", () => {
-  const bundle = { sections: { armory: canonicalArmory() } };
+test("active weapon stays stable across refreshes", () => {
+  const armory = canonicalArmory();
+  armory.active_weapon_id = "w2";
+  const bundle = { sections: { armory } };
   const first = mapBundleToHudSnapshot(bundle, { selectedWeaponId: "w2" });
   const second = mapBundleToHudSnapshot(bundle, { selectedWeaponId: "w2" });
   assert.equal(first.weapon.primary.id, "w2");
   assert.equal(second.weapon.primary.id, "w2");
 });
 
-test("available weapon inventory marks the selected weapon", () => {
-  const snap = mapBundleToHudSnapshot({ sections: { armory: canonicalArmory() } }, { selectedWeaponId: "w2" });
+test("available weapon inventory marks the active weapon", () => {
+  const armory = canonicalArmory();
+  armory.active_weapon_id = "w2";
+  const snap = mapBundleToHudSnapshot({ sections: { armory } }, { selectedWeaponId: "w2" });
   const selected = snap.weapon.available.find((option) => option.selected);
   assert.equal(selected?.id, "w2");
 });

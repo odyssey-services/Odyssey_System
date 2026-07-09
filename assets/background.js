@@ -4292,6 +4292,7 @@ var FEATURE_RPC_NAMES = Object.freeze({
 });
 var WEAPON_RPC_NAMES = Object.freeze({
   getCharacterArmory: "get_character_armory",
+  switchActiveWeapon: "switch_active_weapon",
   switchWeaponProfile: "switch_weapon_profile",
   switchWeaponFireMode: "switch_weapon_fire_mode",
   loadWeaponProfileMagazine: "load_weapon_profile_magazine",
@@ -4752,6 +4753,7 @@ __export(weaponApi_exports, {
   getCharacterWeaponFeatures: () => getCharacterWeaponFeatures,
   loadWeaponInternalRounds: () => loadWeaponInternalRounds,
   loadWeaponProfileMagazine: () => loadWeaponProfileMagazine,
+  switchActiveWeapon: () => switchActiveWeapon,
   switchWeaponFireMode: () => switchWeaponFireMode,
   switchWeaponProfile: () => switchWeaponProfile,
   unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
@@ -4761,6 +4763,13 @@ function getCharacterArmory(characterId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
     { p_character_id: characterId },
+    settings
+  );
+}
+function switchActiveWeapon(payload, settings) {
+  return callSupabaseRpc(
+    WEAPON_RPC_NAMES.switchActiveWeapon,
+    { p_payload: payload },
     settings
   );
 }
@@ -6362,7 +6371,8 @@ function mapCombatRuntimeToSession(runtime, viewCtx = {}) {
 var SESSION_BLOCK_REASONS = Object.freeze({
   waitingForTurn: "Waiting for your turn",
   mainSpent: "MAIN already spent",
-  moveSpent: "MOVE already spent"
+  moveSpent: "MOVE already spent",
+  fullMoveSpent: "FULL MOVE already spent"
 });
 function isActiveSession(session) {
   return !!session && session.exists === true && session.status === "active";
@@ -6376,10 +6386,15 @@ function sessionAttackGate(session) {
   if (!session.mainAvailable) return { blocked: true, reason: SESSION_BLOCK_REASONS.mainSpent };
   return { blocked: false, reason: null };
 }
-function sessionReloadGate(session) {
+function sessionReloadGate(session, costMode = "full_move") {
   if (!selectedIsParticipant(session)) return { blocked: false, reason: null };
   if (!session.isSelectedCharacterTurn) return { blocked: true, reason: SESSION_BLOCK_REASONS.waitingForTurn };
-  if (!session.moveAvailable) return { blocked: true, reason: SESSION_BLOCK_REASONS.moveSpent };
+  if (String(costMode ?? "").toLowerCase() === "free") return { blocked: false, reason: null };
+  const moveCurrent = Number(session.selectedMoveCurrent ?? session.currentMoveCurrent ?? session.moveCurrent);
+  const moveMax = Number(session.selectedMoveMax ?? session.currentMoveMax ?? session.moveMax);
+  if (!Number.isFinite(moveCurrent) || !Number.isFinite(moveMax) || moveMax <= 0 || moveCurrent < moveMax) {
+    return { blocked: true, reason: SESSION_BLOCK_REASONS.fullMoveSpent };
+  }
   return { blocked: false, reason: null };
 }
 var MOVE_TILE_STATE = Object.freeze({
@@ -7721,11 +7736,18 @@ var EQUIPPED_FLAGS = ["is_equipped", "is_active", "is_primary", "equipped", "act
 function hasEquippedFlag(w) {
   return !!w && EQUIPPED_FLAGS.some((k) => w[k] === true);
 }
-function pickActiveWeapon(armory, selectedWeaponId = null) {
+function pickActiveWeapon(armory, preferredWeaponId = null) {
   if (!armory || typeof armory !== "object") return null;
   const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
-  const selected = selectedWeaponId ? weapons.find((w) => str3(w?.id) === selectedWeaponId) : null;
-  if (selected) return selected;
+  const activeWeaponId = str3(armory.active_weapon_id);
+  if (activeWeaponId) {
+    const active = weapons.find((w) => str3(w?.id) === activeWeaponId);
+    if (active) return active;
+  }
+  if (preferredWeaponId) {
+    const preferred = weapons.find((w) => str3(w?.id) === str3(preferredWeaponId));
+    if (preferred) return preferred;
+  }
   if (armory.equipped_weapon && typeof armory.equipped_weapon === "object") {
     return armory.equipped_weapon;
   }
@@ -7810,8 +7832,8 @@ function readReserveMagazines(armory, w, loadedMag) {
   if (!profileMags.length) return [];
   return profileMags.filter((m) => m && (str3(m.id) ?? null) !== loadedId).map(readMagazine).filter(Boolean);
 }
-function mapWeapon(armory, selectedWeaponId = null) {
-  const w = pickActiveWeapon(armory, selectedWeaponId);
+function mapWeapon(armory, preferredWeaponId = null) {
+  const w = pickActiveWeapon(armory, preferredWeaponId);
   if (!w) return null;
   const isMelee = !str3(w.model?.caliber) && !str3(w.caliber);
   const feedMode = String(
@@ -7846,6 +7868,7 @@ function mapWeapon(armory, selectedWeaponId = null) {
   return {
     id: str3(w.id) ?? "wpn-unknown",
     name: str3(w.name) ?? str3(w.weapon_name) ?? "Unknown Weapon",
+    isActive: bool2(w.is_active, str3(w.id) === str3(armory?.active_weapon_id)),
     activeProfileId: str3(w.active_profile?.id) ?? str3(w.active_profile_id),
     svgRef: weaponSvgRef(w),
     fireModes,
@@ -7865,6 +7888,11 @@ function mapWeapon(armory, selectedWeaponId = null) {
     },
     reloadCandidateId: reserve[0]?.id ?? null,
     canReload,
+    reloadCost: str3(w.reload_cost) ?? (isInternal ? "full_move" : "full_move"),
+    reloadBlockedReason: str3(w.reload_block_reason),
+    switchCost: str3(w.switch_cost) ?? "full_move",
+    switchAllowed: w.can_switch_to != null ? bool2(w.can_switch_to, false) : !bool2(w.is_active, str3(w.id) === str3(armory?.active_weapon_id)),
+    switchBlockedReason: str3(w.switch_block_reason),
     disabledReason: str3(w.disabled_reason)
   };
 }
@@ -7898,8 +7926,8 @@ function mapSkillSource(v) {
   if (source.includes("item")) return SKILL_SOURCES.item;
   return SKILL_SOURCES.perk;
 }
-function mapWeaponOption(armory, weapon, selectedWeaponId) {
-  const vm = mapWeapon({ ...armory, weapons: [weapon] }, str3(weapon?.id));
+function mapWeaponOption(armory, weapon, activeWeaponId) {
+  const vm = mapWeapon({ ...armory, weapons: [weapon], active_weapon_id: str3(weapon?.id) });
   const cls = str3(weapon?.model?.weapon_class_name) ?? str3(weapon?.model?.weapon_class);
   const mag = vm?.loadedMagazine ?? null;
   const ammoLabel = mag ? `${mag.current}/${mag.max}` : vm?.requiresAmmo ? `${num5(vm?.ammo?.current, 0)}/${num5(vm?.ammo?.max, 0)}` : "-";
@@ -7907,13 +7935,16 @@ function mapWeaponOption(armory, weapon, selectedWeaponId) {
     id: str3(weapon?.id) ?? "wpn-unknown",
     name: str3(weapon?.name) ?? str3(weapon?.weapon_name) ?? "Unknown Weapon",
     type: cls,
-    selected: vm?.id === selectedWeaponId,
+    selected: vm?.id === activeWeaponId,
+    switchAllowed: vm?.switchAllowed ?? vm?.id !== activeWeaponId,
+    switchCost: vm?.switchCost ?? "full_move",
+    switchBlockedReason: vm?.switchBlockedReason ?? null,
     ammoLabel
   };
 }
-function mapWeaponInventory(armory, selectedWeaponId) {
+function mapWeaponInventory(armory, activeWeaponId) {
   const weapons = arr(armory?.weapons);
-  return weapons.map((weapon) => mapWeaponOption(armory, weapon, selectedWeaponId));
+  return weapons.map((weapon) => mapWeaponOption(armory, weapon, activeWeaponId));
 }
 function mapSkillColor(v) {
   const source = String(v ?? "").toLowerCase();
@@ -8052,9 +8083,8 @@ function mapBundleToHudSnapshot(bundle, options = {}) {
   }
   let weaponPrimary = null;
   const armory = section2(bundle, "armory");
-  const selectedWeaponId = str3(options.selectedWeaponId) ?? null;
   try {
-    weaponPrimary = armory ? mapWeapon(armory, selectedWeaponId) : null;
+    weaponPrimary = armory ? mapWeapon(armory) : null;
   } catch (_e) {
     weaponPrimary = null;
   }
@@ -8076,7 +8106,7 @@ function mapBundleToHudSnapshot(bundle, options = {}) {
     weapon: {
       primary: weaponPrimary,
       secondary: null,
-      available: armory ? mapWeaponInventory(armory, weaponPrimary?.id ?? selectedWeaponId) : []
+      available: armory ? mapWeaponInventory(armory, weaponPrimary?.id ?? str3(armory?.active_weapon_id)) : []
     },
     skills,
     combatSession: mapCombatSession(),
@@ -9606,16 +9636,62 @@ function setupSceneSelection(hooks = {}) {
       const type = String(command.type ?? "");
       ephemeral.commandStatus = null;
       if (type === "select-weapon") {
-        logDebugEvent("weapon", "selected", { weaponId: String(command.weaponId ?? "").trim() || null });
-        ephemeral.selectedWeaponId = String(command.weaponId ?? "").trim() || null;
-        selectedWeaponMemory.set(ephemeral.characterId, ephemeral.selectedWeaponId);
+        const weaponId = String(command.weaponId ?? "").trim() || null;
+        const session = currentMappedSession();
+        const activeWeaponId = String(lastPayload?.hudSnapshot?.weapon?.primary?.id ?? "").trim() || null;
+        const availableWeapons = Array.isArray(lastPayload?.hudSnapshot?.weapon?.available) ? lastPayload.hudSnapshot.weapon.available : [];
+        const selectedOption = availableWeapons.find((option) => String(option?.id ?? "").trim() === weaponId) ?? null;
+        logDebugEvent("weapon", "selected", { weaponId, activeWeaponId });
+        if (!weaponId || !ephemeral.characterId) {
+          ephemeral.commandStatus = { type: "error", message: "Weapon switch unavailable." };
+          if (lastState) publishState(lastState);
+          return;
+        }
+        if (weaponId === activeWeaponId) {
+          if (lastState) publishState(lastState);
+          return;
+        }
+        const switchGate = sessionReloadGate(session, selectedOption?.switchCost ?? "full_move");
+        if (switchGate.blocked) {
+          ephemeral.commandStatus = { type: "error", message: switchGate.reason };
+          if (lastState) publishState(lastState);
+          return;
+        }
+        if (selectedOption?.switchAllowed === false) {
+          ephemeral.commandStatus = { type: "error", message: selectedOption.switchBlockedReason || "Weapon switch unavailable." };
+          if (lastState) publishState(lastState);
+          return;
+        }
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.reloadRpcResult = null;
         ephemeral.weaponSelectorOpen = false;
         ephemeral.fireModeSelectorOpen = false;
         ephemeral.fireModeRpcResult = null;
-        if (lastState) publishState(lastState);
-        return;
+        try {
+          const expectedVersion = expectedVersionOf(session);
+          const result = await switchActiveWeapon(
+            {
+              character_id: ephemeral.characterId,
+              character_weapon_id: weaponId,
+              ...expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}
+            },
+            settings
+          );
+          if (result?.ok === false) {
+            ephemeral.commandStatus = { type: "error", message: result.message || result.error || "Weapon switch failed." };
+            if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) void sessionController.refresh();
+            if (lastState) publishState(lastState);
+            return;
+          }
+          ephemeral.commandStatus = { type: "ok", message: "Weapon switched." };
+          if (result?.combat_session && sessionController) void sessionController.refresh();
+          await refetchCurrent("weapon-switch");
+          return;
+        } catch (error) {
+          ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Weapon switch failed.") };
+          if (lastState) publishState(lastState);
+          return;
+        }
       }
       if (type === "toggle-weapon-selector") {
         ephemeral.weaponSelectorOpen = !ephemeral.weaponSelectorOpen;
@@ -9650,7 +9726,7 @@ function setupSceneSelection(hooks = {}) {
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
         logDebugEvent("magazine", "reload-requested", { weaponId, magazineId });
         const reloadSession = currentMappedSession();
-        const reloadGate = sessionReloadGate(reloadSession);
+        const reloadGate = sessionReloadGate(reloadSession, weapon?.reloadCost ?? "full_move");
         if (reloadGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: reloadGate.reason };
           ephemeral.reloadRpcResult = { ok: false, error: "SESSION_GATE", message: reloadGate.reason };
@@ -9732,6 +9808,13 @@ function setupSceneSelection(hooks = {}) {
       } else {
         const changed = resetEphemeralForCharacter(state.characterId ?? null);
         if (changed) restoreSelectedWeapon(state.characterId ?? null, state.runtimeBundle);
+        const activeWeapon = pickActiveWeapon(state.runtimeBundle?.armory ?? state.runtimeBundle?.sections?.armory ?? null);
+        const activeWeaponId = String(activeWeapon?.id ?? "").trim() || null;
+        ephemeral.selectedWeaponId = activeWeaponId;
+        if (state.characterId) {
+          if (activeWeaponId) selectedWeaponMemory.set(state.characterId, activeWeaponId);
+          else selectedWeaponMemory.forget(state.characterId);
+        }
       }
       lastState = state;
       const payload = publishState(state);
@@ -12677,7 +12760,7 @@ function resolveCombatMovementPermission({
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.69";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.70";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;

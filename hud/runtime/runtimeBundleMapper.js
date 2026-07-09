@@ -273,11 +273,18 @@ function hasEquippedFlag(w) {
  * screens/resolveAttack/resolveAttackScreen.js `weapons[0]`). A single-object
  * `armory.equipped_weapon` projection is tolerated as a fallback.
  */
-export function pickActiveWeapon(armory, selectedWeaponId = null) {
+export function pickActiveWeapon(armory, preferredWeaponId = null) {
   if (!armory || typeof armory !== "object") return null;
   const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
-  const selected = selectedWeaponId ? weapons.find((w) => str(w?.id) === selectedWeaponId) : null;
-  if (selected) return selected;
+  const activeWeaponId = str(armory.active_weapon_id);
+  if (activeWeaponId) {
+    const active = weapons.find((w) => str(w?.id) === activeWeaponId);
+    if (active) return active;
+  }
+  if (preferredWeaponId) {
+    const preferred = weapons.find((w) => str(w?.id) === str(preferredWeaponId));
+    if (preferred) return preferred;
+  }
   if (armory.equipped_weapon && typeof armory.equipped_weapon === "object") {
     return armory.equipped_weapon;
   }
@@ -447,8 +454,8 @@ function readReserveMagazines(armory, w, loadedMag) {
  * never disappears just because one field (magazine / fire mode / caliber) is
  * missing. PURE.
  */
-export function mapWeapon(armory, selectedWeaponId = null) {
-  const w = pickActiveWeapon(armory, selectedWeaponId);
+export function mapWeapon(armory, preferredWeaponId = null) {
+  const w = pickActiveWeapon(armory, preferredWeaponId);
   if (!w) return null;
 
   const isMelee = !str(w.model?.caliber) && !str(w.caliber);
@@ -507,6 +514,7 @@ export function mapWeapon(armory, selectedWeaponId = null) {
   return {
     id:             str(w.id) ?? "wpn-unknown",
     name:           str(w.name) ?? str(w.weapon_name) ?? "Unknown Weapon",
+    isActive:       bool(w.is_active, str(w.id) === str(armory?.active_weapon_id)),
     activeProfileId: str(w.active_profile?.id) ?? str(w.active_profile_id),
     svgRef:         weaponSvgRef(w),
     fireModes,
@@ -526,6 +534,11 @@ export function mapWeapon(armory, selectedWeaponId = null) {
     },
     reloadCandidateId: reserve[0]?.id ?? null,
     canReload,
+    reloadCost:     str(w.reload_cost) ?? (isInternal ? "full_move" : "full_move"),
+    reloadBlockedReason: str(w.reload_block_reason),
+    switchCost:     str(w.switch_cost) ?? "full_move",
+    switchAllowed:  w.can_switch_to != null ? bool(w.can_switch_to, false) : !(bool(w.is_active, str(w.id) === str(armory?.active_weapon_id))),
+    switchBlockedReason: str(w.switch_block_reason),
     disabledReason: str(w.disabled_reason),
   };
 }
@@ -582,8 +595,8 @@ function mapSkillSource(v) {
   return SKILL_SOURCES.perk;
 }
 
-function mapWeaponOption(armory, weapon, selectedWeaponId) {
-  const vm = mapWeapon({ ...armory, weapons: [weapon] }, str(weapon?.id));
+function mapWeaponOption(armory, weapon, activeWeaponId) {
+  const vm = mapWeapon({ ...armory, weapons: [weapon], active_weapon_id: str(weapon?.id) });
   const cls = str(weapon?.model?.weapon_class_name) ?? str(weapon?.model?.weapon_class);
   const mag = vm?.loadedMagazine ?? null;
   const ammoLabel = mag
@@ -593,14 +606,17 @@ function mapWeaponOption(armory, weapon, selectedWeaponId) {
     id: str(weapon?.id) ?? "wpn-unknown",
     name: str(weapon?.name) ?? str(weapon?.weapon_name) ?? "Unknown Weapon",
     type: cls,
-    selected: vm?.id === selectedWeaponId,
+    selected: vm?.id === activeWeaponId,
+    switchAllowed: vm?.switchAllowed ?? (vm?.id !== activeWeaponId),
+    switchCost: vm?.switchCost ?? "full_move",
+    switchBlockedReason: vm?.switchBlockedReason ?? null,
     ammoLabel,
   };
 }
 
-function mapWeaponInventory(armory, selectedWeaponId) {
+function mapWeaponInventory(armory, activeWeaponId) {
   const weapons = arr(armory?.weapons);
-  return weapons.map((weapon) => mapWeaponOption(armory, weapon, selectedWeaponId));
+  return weapons.map((weapon) => mapWeaponOption(armory, weapon, activeWeaponId));
 }
 
 function mapSkillColor(v) {
@@ -794,8 +810,7 @@ export function mapBundleToHudSnapshot(bundle, options = {}) {
 
   let weaponPrimary = null;
   const armory = section(bundle, "armory");
-  const selectedWeaponId = str(options.selectedWeaponId) ?? null;
-  try { weaponPrimary = armory ? mapWeapon(armory, selectedWeaponId) : null; } catch (_e) { weaponPrimary = null; }
+  try { weaponPrimary = armory ? mapWeapon(armory) : null; } catch (_e) { weaponPrimary = null; }
 
   let skills = { library: [], quickSlots: [] };
   try { skills = mapSkills(section(bundle, "abilities")); } catch (_e) { skills = { library: [], quickSlots: [] }; }
@@ -810,7 +825,7 @@ export function mapBundleToHudSnapshot(bundle, options = {}) {
     weapon:       {
       primary: weaponPrimary,
       secondary: null,
-      available: armory ? mapWeaponInventory(armory, weaponPrimary?.id ?? selectedWeaponId) : [],
+      available: armory ? mapWeaponInventory(armory, weaponPrimary?.id ?? str(armory?.active_weapon_id)) : [],
     },
     skills,
     combatSession: mapCombatSession(),

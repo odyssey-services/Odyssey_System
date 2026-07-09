@@ -31,6 +31,7 @@ export const FEATURE_RPC_NAMES = Object.freeze({
 
 export const WEAPON_RPC_NAMES = Object.freeze({
   getCharacterArmory: "get_character_armory",
+  switchActiveWeapon: "switch_active_weapon",
   switchWeaponProfile: "switch_weapon_profile",
   switchWeaponFireMode: "switch_weapon_fire_mode",
   loadWeaponProfileMagazine: "load_weapon_profile_magazine",

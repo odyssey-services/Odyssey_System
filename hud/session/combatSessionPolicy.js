@@ -11,6 +11,7 @@ export const SESSION_BLOCK_REASONS = Object.freeze({
   waitingForTurn: "Waiting for your turn",
   mainSpent: "MAIN already spent",
   moveSpent: "MOVE already spent",
+  fullMoveSpent: "FULL MOVE already spent",
 });
 
 function isActiveSession(session) {
@@ -34,10 +35,15 @@ export function sessionAttackGate(session) {
 }
 
 /** Reload gate — MOVE economy, same participation rules as the attack gate. */
-export function sessionReloadGate(session) {
+export function sessionReloadGate(session, costMode = "full_move") {
   if (!selectedIsParticipant(session)) return { blocked: false, reason: null };
   if (!session.isSelectedCharacterTurn) return { blocked: true, reason: SESSION_BLOCK_REASONS.waitingForTurn };
-  if (!session.moveAvailable) return { blocked: true, reason: SESSION_BLOCK_REASONS.moveSpent };
+  if (String(costMode ?? "").toLowerCase() === "free") return { blocked: false, reason: null };
+  const moveCurrent = Number(session.selectedMoveCurrent ?? session.currentMoveCurrent ?? session.moveCurrent);
+  const moveMax = Number(session.selectedMoveMax ?? session.currentMoveMax ?? session.moveMax);
+  if (!Number.isFinite(moveCurrent) || !Number.isFinite(moveMax) || moveMax <= 0 || moveCurrent < moveMax) {
+    return { blocked: true, reason: SESSION_BLOCK_REASONS.fullMoveSpent };
+  }
   return { blocked: false, reason: null };
 }
 

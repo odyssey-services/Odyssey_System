@@ -6856,39 +6856,6 @@ function renderPlayerBlock(state) {
   });
 }
 
-// hud/session/combatSessionPolicy.js
-var SESSION_BLOCK_REASONS = Object.freeze({
-  waitingForTurn: "Waiting for your turn",
-  mainSpent: "MAIN already spent",
-  moveSpent: "MOVE already spent"
-});
-function isActiveSession(session) {
-  return !!session && session.exists === true && session.status === "active";
-}
-function selectedIsParticipant(session) {
-  return isActiveSession(session) && session.selectedCharacterParticipantId != null;
-}
-function sessionReloadGate(session) {
-  if (!selectedIsParticipant(session)) return { blocked: false, reason: null };
-  if (!session.isSelectedCharacterTurn) return { blocked: true, reason: SESSION_BLOCK_REASONS.waitingForTurn };
-  if (!session.moveAvailable) return { blocked: true, reason: SESSION_BLOCK_REASONS.moveSpent };
-  return { blocked: false, reason: null };
-}
-var MOVE_TILE_STATE = Object.freeze({
-  full: "full",
-  partial: "partial",
-  empty: "empty"
-});
-function canEndTurn(session, viewerRole) {
-  if (!isActiveSession(session) || session.currentParticipantId == null) return false;
-  const isGm = String(viewerRole ?? "").toLowerCase() === "gm";
-  if (isGm && session.isSelectedCharacterTurn) return true;
-  return session.isCurrentPlayerTurn === true;
-}
-function canSeeGmTracker(viewerRole) {
-  return String(viewerRole ?? "").toLowerCase() === "gm";
-}
-
 // hud/components/GunBlock.js
 function renderFireModeControl(weapon) {
   const fm = weapon.fireMode;
@@ -6920,9 +6887,9 @@ function renderGunBlock(state) {
   const reserve = selectVisibleReserveMagazines(state);
   const selectedReload = selectSelectedReloadMagazine(state);
   const reloadMag = selectedReload ?? reserve[0] ?? null;
-  const reloadGate = sessionReloadGate(state?.snapshot?.combatSession ?? null);
-  const canReload = Boolean(weapon.canReload) && reserve.length > 0 && !reloadGate.blocked;
-  const reloadBlockReason = reloadGate.blocked ? reloadGate.reason : Boolean(weapon.canReload) && reserve.length > 0 ? null : "No compatible magazine";
+  const hasReserve = reserve.length > 0;
+  const canReload = Boolean(weapon.canReload) && hasReserve && !weapon.reloadBlockedReason;
+  const reloadBlockReason = weapon.reloadBlockedReason ?? (Boolean(weapon.canReload) && hasReserve ? null : "No compatible magazine");
   const isEmpty = weapon.requiresAmmo && ammoCur <= 0;
   const disabled = Boolean(weapon.disabledReason) || isEmpty && !canReload;
   const mainCard = `
@@ -7241,8 +7208,7 @@ function gmDeleteMenu(action, gmAdmin) {
   if (!gmAdmin?.enabled || !action?.characterActionId) return "";
   const open = gmAdmin.openActionId === action.characterActionId;
   const abilityDeletePending = gmAdmin.pendingDeleteId === `ability:${action.characterActionId}`;
-  const skillDeletePending = action.characterSkillId && gmAdmin.pendingDeleteId === `skill:${action.characterSkillId}`;
-  const currentDeletePending = Boolean(abilityDeletePending || skillDeletePending);
+  const currentDeletePending = Boolean(abilityDeletePending);
   return `
     <button
       type="button"
@@ -7254,15 +7220,6 @@ function gmDeleteMenu(action, gmAdmin) {
       ${tipAttr("GM actions", ["Delete this ability or its source skill."])}
     >GM</button>
     ${open ? `<div class="ohud-qb-gm-menu" data-gm-menu="skills" data-action-id="${esc(action.characterActionId)}">
-      ${action.characterSkillId ? `<button
-        type="button"
-        class="ohud-qb-gm-menu-btn"
-        data-action="gm-delete-skill"
-        data-skill-id="${esc(action.characterSkillId)}"
-        data-character-skill-id="${esc(action.characterSkillId)}"
-        data-action-id="${esc(action.characterActionId)}"
-        ${skillDeletePending ? "disabled" : ""}
-      >${skillDeletePending ? "Deleting skill..." : "Delete skill"}</button>` : ""}
       <button
         type="button"
         class="ohud-qb-gm-menu-btn is-danger"
@@ -7490,6 +7447,31 @@ function renderTargetBlock(state) {
   return panel({ key: "target", label: "Target", bodyHtml: body });
 }
 
+// hud/session/combatSessionPolicy.js
+var SESSION_BLOCK_REASONS = Object.freeze({
+  waitingForTurn: "Waiting for your turn",
+  mainSpent: "MAIN already spent",
+  moveSpent: "MOVE already spent",
+  fullMoveSpent: "FULL MOVE already spent"
+});
+function isActiveSession(session) {
+  return !!session && session.exists === true && session.status === "active";
+}
+var MOVE_TILE_STATE = Object.freeze({
+  full: "full",
+  partial: "partial",
+  empty: "empty"
+});
+function canEndTurn(session, viewerRole) {
+  if (!isActiveSession(session) || session.currentParticipantId == null) return false;
+  const isGm = String(viewerRole ?? "").toLowerCase() === "gm";
+  if (isGm && session.isSelectedCharacterTurn) return true;
+  return session.isCurrentPlayerTurn === true;
+}
+function canSeeGmTracker(viewerRole) {
+  return String(viewerRole ?? "").toLowerCase() === "gm";
+}
+
 // hud/components/ModifierBlock.js
 function chipAccent(mod) {
   if (mod.source === "intervention") return "intervention";
@@ -7653,12 +7635,17 @@ function renderBattleLogPanel(state) {
 
 // hud/components/WeaponSelectorPanel.js
 function weaponOption(option) {
-  const ammoLabel = option.ammoLabel || "\u2014";
-  return `<button type="button" class="${cls("ohud-weapon-option", option.selected ? "is-selected" : "")}"
-    data-action="select-weapon" data-weapon-id="${esc(option.id)}" title="${esc(option.name)}">
+  const ammoLabel = option.ammoLabel || "-";
+  const selected = option.selected === true;
+  const disabled = option.switchAllowed === false;
+  const costLabel = selected ? "Active" : option.switchCost === "free" ? "Free swap" : "Full MOVE";
+  const title = disabled && option.switchBlockedReason ? `${option.name} - ${option.switchBlockedReason}` : option.name;
+  return `<button type="button" class="${cls("ohud-weapon-option", selected ? "is-selected" : "", disabled ? "is-disabled" : "")}"
+    data-action="select-weapon" data-weapon-id="${esc(option.id)}" title="${esc(title)}" ${disabled ? "disabled" : ""}>
     <span class="ohud-weapon-option-name">${esc(option.name)}</span>
     ${option.type ? `<span class="ohud-weapon-option-type">${esc(option.type)}</span>` : ""}
     <span class="ohud-weapon-option-ammo">${esc(ammoLabel)}</span>
+    <span class="ohud-weapon-option-ammo">${esc(costLabel)}</span>
   </button>`;
 }
 function renderWeaponSelectorPanel(state) {
@@ -7666,7 +7653,7 @@ function renderWeaponSelectorPanel(state) {
     return panel({
       key: "gun-weapon-selector",
       label: "Weapons",
-      bodyHtml: `<div class="ohud-weapon-list is-loading">Loading weapons\u2026</div>`
+      bodyHtml: `<div class="ohud-weapon-list is-loading">Loading weapons...</div>`
     });
   }
   const availableWeapons = Array.isArray(state.snapshot.weapon.available) ? state.snapshot.weapon.available : [];

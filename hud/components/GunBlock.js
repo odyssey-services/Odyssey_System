@@ -5,7 +5,6 @@
 // popovers, not part of this block.
 
 import { selectVisibleReserveMagazines, selectSelectedReloadMagazine } from "../core/combatHudSelectors.js";
-import { sessionReloadGate } from "../session/combatSessionPolicy.js";
 import { weaponSvg, ICON_MAGAZINE, ICON_CARET_DOWN, ICON_RELOAD } from "./hudIcons.js";
 import { panel } from "./HudPanel.js";
 import { esc, tipAttr, cls } from "./hudDom.js";
@@ -54,11 +53,10 @@ export function renderGunBlock(state) {
   // Phase 3E.0: during an active combat session the reload button also obeys
   // the server MOVE economy — the SAME reason wording the server gate uses,
   // never a fabricated UI reason.
-  const reloadGate = sessionReloadGate(state?.snapshot?.combatSession ?? null);
-  const canReload = Boolean(weapon.canReload) && reserve.length > 0 && !reloadGate.blocked;
-  const reloadBlockReason = reloadGate.blocked
-    ? reloadGate.reason
-    : (Boolean(weapon.canReload) && reserve.length > 0 ? null : "No compatible magazine");
+  const hasReserve = reserve.length > 0;
+  const canReload = Boolean(weapon.canReload) && hasReserve && !weapon.reloadBlockedReason;
+  const reloadBlockReason = weapon.reloadBlockedReason
+    ?? (Boolean(weapon.canReload) && hasReserve ? null : "No compatible magazine");
   const isEmpty = weapon.requiresAmmo && ammoCur <= 0;
   const disabled = Boolean(weapon.disabledReason) || (isEmpty && !canReload);
 

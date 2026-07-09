@@ -46,8 +46,7 @@ function gmDeleteMenu(action, gmAdmin) {
   if (!gmAdmin?.enabled || !action?.characterActionId) return "";
   const open = gmAdmin.openActionId === action.characterActionId;
   const abilityDeletePending = gmAdmin.pendingDeleteId === `ability:${action.characterActionId}`;
-  const skillDeletePending = action.characterSkillId && gmAdmin.pendingDeleteId === `skill:${action.characterSkillId}`;
-  const currentDeletePending = Boolean(abilityDeletePending || skillDeletePending);
+  const currentDeletePending = Boolean(abilityDeletePending);
 
   return `
     <button
@@ -60,15 +59,6 @@ function gmDeleteMenu(action, gmAdmin) {
       ${tipAttr("GM actions", ["Delete this ability or its source skill."])}
     >GM</button>
     ${open ? `<div class="ohud-qb-gm-menu" data-gm-menu="skills" data-action-id="${esc(action.characterActionId)}">
-      ${action.characterSkillId ? `<button
-        type="button"
-        class="ohud-qb-gm-menu-btn"
-        data-action="gm-delete-skill"
-        data-skill-id="${esc(action.characterSkillId)}"
-        data-character-skill-id="${esc(action.characterSkillId)}"
-        data-action-id="${esc(action.characterActionId)}"
-        ${skillDeletePending ? "disabled" : ""}
-      >${skillDeletePending ? "Deleting skill..." : "Delete skill"}</button>` : ""}
       <button
         type="button"
         class="ohud-qb-gm-menu-btn is-danger"
