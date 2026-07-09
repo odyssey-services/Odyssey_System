@@ -286,6 +286,32 @@ test("16. every action exposes server reason, cost, cooldown, targeting for the 
   assert.equal(mapQuickAction(actionFixture({ state: { available: false, disabledReason: null } })).state.disabledReason, "Not available");
 });
 
+/* ── migration 109: combat action-economy fields (combatCost/combatResourceState) ── */
+
+test("combatCost/combatResourceState are copied verbatim from the server — never recomputed on the client", () => {
+  const inCombat = mapQuickAction(actionFixture({
+    raw: {
+      combatCost: { actionCost: 1, moveCost: 0 },
+      combatResourceState: { actionCurrent: 0, moveCurrent: 2 },
+      state: { available: false, disabledReason: "No ACTION available", active: false, selectable: false },
+    },
+  }));
+  assert.deepEqual(inCombat.combatCost, { actionCost: 1, moveCost: 0 });
+  assert.deepEqual(inCombat.combatResourceState, { actionCurrent: 0, moveCurrent: 2 });
+  // The server's own disabledReason/available are what the UI trusts — the
+  // mapper never re-derives "insufficient action" itself from these numbers.
+  assert.equal(inCombat.state.available, false);
+  assert.equal(inCombat.state.disabledReason, "No ACTION available");
+});
+
+test("combatResourceState is honestly null (not a fabricated 0) when the server omits it (out of combat / ambiguous encounter)", () => {
+  const outOfCombat = mapQuickAction(actionFixture());
+  assert.deepEqual(outOfCombat.combatResourceState, { actionCurrent: null, moveCurrent: null });
+  // combatCost still defaults to a real 0/0 shape — it's an intrinsic action
+  // cost, not a runtime-only combat fact — so it's always a number, never null.
+  assert.deepEqual(outOfCombat.combatCost, { actionCost: 0, moveCost: 0 });
+});
+
 /* ── 17. Row layout: 1-10 first row, 11+ upward ───────────────────────── */
 
 test("17. slots 0-9 are row 0; slot 10+ start row 1 (display order is the view layer's job, not this pure math)", () => {

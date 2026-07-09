@@ -79,14 +79,10 @@ export function renderSkillBlock(state, opts = {}) {
       ?? state?.snapshot?.pendingInstantAbilityActionId
       ?? state?.snapshot?.pendingDirectedAbilityActionId
       ?? null;
-    const openActionId = opts?.openSkillsMenu?.kind === "action"
-      ? String(opts.openSkillsMenu.id ?? "").trim() || null
-      : null;
-    const pendingDeleteId = String(opts?.pendingGmDeleteId ?? "").trim() || null;
-    const gmAdmin = role === "gm"
-      ? { enabled: true, openActionId, pendingDeleteId }
-      : null;
-    return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId, gmAdmin }) });
+    // GM-delete is intentionally NOT available from the Skills overlay (it
+    // remains a Character-overlay-only action, in screens/character/
+    // characterScreen.js) — no gmAdmin object is built or passed here.
+    return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId }) });
   }
 
   const slots = selectQuickSlots(state);

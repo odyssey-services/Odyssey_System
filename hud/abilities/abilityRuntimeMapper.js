@@ -129,6 +129,28 @@ function mapCosts(raw) {
   };
 }
 
+// Combat action-economy block (migration 109): actionCost/moveCost are the
+// server's own cost figures (mirrors costs.main/costs.move under camelCase
+// names the HUD's combat-economy UI expects); actionCurrent/moveCurrent are
+// null outside combat (or when the character's combat context is ambiguous —
+// see get_character_armory/odyssey_get_active_participation's is_ambiguous
+// rule) — never a fabricated 0. Server-computed only, never re-derived.
+function mapCombatCost(raw) {
+  const c = raw?.combatCost && typeof raw.combatCost === "object" ? raw.combatCost : {};
+  return {
+    actionCost: num(c.actionCost, 0),
+    moveCost: num(c.moveCost, 0),
+  };
+}
+
+function mapCombatResourceState(raw) {
+  const r = raw?.combatResourceState && typeof raw.combatResourceState === "object" ? raw.combatResourceState : {};
+  return {
+    actionCurrent: num(r.actionCurrent, null),
+    moveCurrent: num(r.moveCurrent, null),
+  };
+}
+
 // Cooldown block: current/max are server truth. Never decremented on client.
 function mapCooldown(raw) {
   const cd = raw?.cooldown && typeof raw.cooldown === "object" ? raw.cooldown : {};
@@ -213,6 +235,8 @@ export function mapQuickAction(raw) {
     semanticKind: normalizeSemantic(q),
     targeting: mapTargeting(q),
     costs: mapCosts(q),
+    combatCost: mapCombatCost(q),
+    combatResourceState: mapCombatResourceState(q),
     cooldown: mapCooldown(q),
     state: mapState(q),
     requirements: mapRequirements(q),

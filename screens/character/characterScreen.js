@@ -20,6 +20,7 @@ import {
   sendMoveToolCommand,
   subscribeMoveToolMessages,
 } from "../../movement/moveToolBridge.js";
+import { reportUiError } from "../../hud/debug/debugLogClient.js";
 
 /* canonical attribute codes in display order (psionics and perception swapped vs alphabetical) */
 const ATTR_RU = {
@@ -1151,6 +1152,7 @@ export function mountCharacterScreen({ root, runtime }) {
       try { result = await fn(); }
       catch (e) {
         state.notice = ""; setNotice("err", `${esc(describeError(e.code, e.message))}`);
+        reportUiError({ source: "character_overlay", operation: label, code: e?.code ?? null, message: String(e?.message ?? e ?? "") });
         state.busy = false; render(); return null;
       }
       if (result && result.ok === false) {
@@ -1165,6 +1167,7 @@ export function mountCharacterScreen({ root, runtime }) {
           state.busy = false; render(); return null;
         }
         setNotice("err", `${esc(describeError(result.error, result.message))}${result.error ? ` <span class="cp-mono">[${esc(result.error)}]</span>` : ""}`);
+        reportUiError({ source: "character_overlay", operation: label, code: result.error ?? null, message: String(result.message ?? ""), result });
         state.busy = false; render(); return null;
       }
       if (after) await after(result);

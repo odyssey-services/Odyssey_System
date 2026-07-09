@@ -4759,10 +4759,10 @@ __export(weaponApi_exports, {
   unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
   unloadWeaponMagazine: () => unloadWeaponMagazine
 });
-function getCharacterArmory(characterId, settings) {
+function getCharacterArmory(characterId, settings, encounterId = null) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
-    { p_character_id: characterId },
+    encounterId ? { p_character_id: characterId, p_encounter_id: encounterId } : { p_character_id: characterId },
     settings
   );
 }
@@ -7187,6 +7187,20 @@ function mapCosts(raw) {
     charges: num2(c.charges, 0)
   };
 }
+function mapCombatCost(raw) {
+  const c = raw?.combatCost && typeof raw.combatCost === "object" ? raw.combatCost : {};
+  return {
+    actionCost: num2(c.actionCost, 0),
+    moveCost: num2(c.moveCost, 0)
+  };
+}
+function mapCombatResourceState(raw) {
+  const r = raw?.combatResourceState && typeof raw.combatResourceState === "object" ? raw.combatResourceState : {};
+  return {
+    actionCurrent: num2(r.actionCurrent, null),
+    moveCurrent: num2(r.moveCurrent, null)
+  };
+}
 function mapCooldown(raw) {
   const cd = raw?.cooldown && typeof raw.cooldown === "object" ? raw.cooldown : {};
   const current2 = num2(cd.current, 0);
@@ -7256,6 +7270,8 @@ function mapQuickAction(raw) {
     semanticKind: normalizeSemantic(q),
     targeting: mapTargeting(q),
     costs: mapCosts(q),
+    combatCost: mapCombatCost(q),
+    combatResourceState: mapCombatResourceState(q),
     cooldown: mapCooldown(q),
     state: mapState(q),
     requirements: mapRequirements(q),
@@ -7517,6 +7533,19 @@ function setupQuickbarController({ settings, getViewer, getSelectedCharacterId, 
       }
     }
   };
+}
+
+// hud/combat/actionBusyRetry.js
+var ACTION_BUSY_RETRY_CODE = "ACTION_BUSY_RETRY";
+async function callWithBusyRetry(callFn, opts = {}) {
+  const retryDelayMs = Number.isFinite(opts.retryDelayMs) ? opts.retryDelayMs : 250;
+  const first = await callFn();
+  if (first?.error !== ACTION_BUSY_RETRY_CODE) {
+    return { result: first, retried: false, firstError: null };
+  }
+  await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+  const second = await callFn();
+  return { result: second, retried: true, firstError: ACTION_BUSY_RETRY_CODE };
 }
 
 // hud/targeting/bodyConditionPolicy.js
@@ -8533,6 +8562,7 @@ function buildBroadcastPayload(state, ephemeral = {}) {
       selectedWeaponId: ephemeral.selectedWeaponId ?? null,
       selectedReloadMagazineId: ephemeral.selectedReloadMagazineId ?? null,
       weaponSelectorOpen: !!ephemeral.weaponSelectorOpen,
+      weaponSwitchInFlight: !!ephemeral.weaponSwitchInFlight,
       fireModeSelectorOpen: !!ephemeral.fireModeSelectorOpen,
       preparedAction: ephemeral.preparedAction ?? null,
       targeting: ephemeral.targeting ?? null,
@@ -8647,6 +8677,19 @@ function createSceneSelectionAdapter(deps) {
 }
 
 // hud/scene/sceneSelectionController.js
+function withBusyRetry(rpcName, callFn) {
+  return callWithBusyRetry(callFn).then(({ result, retried }) => {
+    if (retried) {
+      logDebugEvent(
+        "action",
+        "busy-retry",
+        { rpc: rpcName, secondOk: result?.ok !== false, secondError: result?.error ?? null },
+        result?.ok !== false
+      );
+    }
+    return result;
+  });
+}
 var ARMED_TECHNIQUE_ERROR_CODES = /* @__PURE__ */ new Set([
   "ARMED_ACTION_INVALID",
   "ARMED_ACTION_ON_COOLDOWN",
@@ -8669,7 +8712,6 @@ function setupSceneSelection(hooks = {}) {
   let lastState = null;
   let sceneTimer = null;
   let currentSelectionIds = [];
-  let skillAdminDeleteInFlight = null;
   let refetchCurrentPromise = null;
   let refetchCurrentQueued = false;
   let lastRefetchAt = 0;
@@ -8684,6 +8726,11 @@ function setupSceneSelection(hooks = {}) {
     selectedWeaponId: null,
     selectedReloadMagazineId: null,
     weaponSelectorOpen: false,
+    // True only for the duration of an in-flight switch_active_weapon call —
+    // blocks a second concurrent switch (see handleCommand's "select-weapon"
+    // branch) and lets the weapon row show a "switching…" state instead of
+    // relying solely on the RPC round-trip finishing.
+    weaponSwitchInFlight: false,
     preparedAction: null,
     targeting: { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" },
     commandStatus: null,
@@ -8800,12 +8847,14 @@ function setupSceneSelection(hooks = {}) {
         settings
       ),
       fetchCharacterBundle: async (characterId) => {
+        const session = currentMappedSession();
+        const encounterId = session?.exists && session.id ? session.id : null;
         const [bundle, armory, inventory] = await Promise.all([
           getCharacterRuntimeBundle(
             { character_id: characterId, sections: HUD_RUNTIME_SECTIONS },
             settings
           ),
-          getCharacterArmory(characterId, settings).catch(() => null),
+          getCharacterArmory(characterId, settings, encounterId).catch(() => null),
           getCharacterInventory(characterId, settings).catch(() => null)
         ]);
         if (!bundle || typeof bundle !== "object") return bundle;
@@ -8826,6 +8875,7 @@ function setupSceneSelection(hooks = {}) {
       ephemeral.selectedWeaponId = null;
       ephemeral.selectedReloadMagazineId = null;
       ephemeral.weaponSelectorOpen = false;
+      ephemeral.weaponSwitchInFlight = false;
       ephemeral.preparedAction = null;
       ephemeral.targeting = { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" };
       ephemeral.commandStatus = null;
@@ -8855,6 +8905,7 @@ function setupSceneSelection(hooks = {}) {
         selectedWeaponId: ephemeral.selectedWeaponId,
         selectedReloadMagazineId: ephemeral.selectedReloadMagazineId,
         weaponSelectorOpen: ephemeral.weaponSelectorOpen,
+        weaponSwitchInFlight: ephemeral.weaponSwitchInFlight,
         preparedAction: ephemeral.preparedAction,
         targeting: ephemeral.targeting,
         commandStatus: ephemeral.commandStatus,
@@ -8910,6 +8961,12 @@ function setupSceneSelection(hooks = {}) {
         }
       }
     }
+    async function invalidateCharacterRuntime(reason = "generic") {
+      const tasks = [refetchCurrent(reason)];
+      if (quickbarController) tasks.push(quickbarController.refresh());
+      if (sessionController) tasks.push(sessionController.refresh());
+      await Promise.allSettled(tasks);
+    }
     function applyTargetingPayload(payload) {
       const target = payload?.target && typeof payload.target === "object" ? payload.target : null;
       ephemeral.targeting = {
@@ -8934,95 +8991,6 @@ function setupSceneSelection(hooks = {}) {
     async function handleCommand(command) {
       if (!command || typeof command !== "object") return;
       if (!lastPayload || lastPayload.status !== "ready") return;
-      if (command?.scope === "combat-hud" && command?.feature === "gm-skill-admin") {
-        const viewerIsGm = String(viewer?.role ?? "").toUpperCase() === "GM";
-        const deleteType = String(command.type ?? "");
-        const characterSkillId = String(command.characterSkillId ?? command.skillId ?? "").trim() || null;
-        const characterActionId = String(command.characterActionId ?? "").trim() || null;
-        const deleteKey = deleteType === "delete-skill" ? `skill:${characterSkillId ?? ""}` : `ability:${characterActionId ?? ""}`;
-        logDebugEvent("skills", "gm-delete-click", {
-          type: deleteType,
-          characterSkillId,
-          characterActionId
-        });
-        if (!viewerIsGm) {
-          ephemeral.commandStatus = {
-            type: "error",
-            message: "GM delete is available only for the GM.",
-            source: "gm-skill-admin",
-            deleteKey
-          };
-          if (lastState) publishState(lastState);
-          return;
-        }
-        if (skillAdminDeleteInFlight) return;
-        if (deleteType !== "delete-skill" && deleteType !== "delete-ability") return;
-        if (deleteType === "delete-skill" && !characterSkillId) {
-          ephemeral.commandStatus = {
-            type: "error",
-            message: "Missing character skill id.",
-            source: "gm-skill-admin",
-            deleteKey
-          };
-          if (lastState) publishState(lastState);
-          return;
-        }
-        if (deleteType === "delete-ability" && !characterActionId) {
-          ephemeral.commandStatus = {
-            type: "error",
-            message: "Missing character ability id.",
-            source: "gm-skill-admin",
-            deleteKey
-          };
-          if (lastState) publishState(lastState);
-          return;
-        }
-        skillAdminDeleteInFlight = deleteKey;
-        try {
-          if (deleteType === "delete-skill") {
-            await mutateSupabaseRows(
-              `odyssey_character_skills?id=eq.${encodeURIComponent(characterSkillId)}&character_id=eq.${encodeURIComponent(ephemeral.characterId)}`,
-              null,
-              settings,
-              { method: "DELETE", prefer: "return=minimal", fallbackMessage: "Unable to delete character skill." }
-            );
-          } else {
-            await mutateSupabaseRows(
-              `odyssey_character_abilities?id=eq.${encodeURIComponent(characterActionId)}&character_id=eq.${encodeURIComponent(ephemeral.characterId)}`,
-              null,
-              settings,
-              { method: "DELETE", prefer: "return=minimal", fallbackMessage: "Unable to delete character ability." }
-            );
-            if (armedTechniqueMemory.get(ephemeral.characterId) === characterActionId) {
-              armedTechniqueMemory.forget(ephemeral.characterId);
-            }
-          }
-          ephemeral.commandStatus = {
-            type: "ok",
-            message: deleteType === "delete-skill" ? "Skill deleted." : "Ability deleted.",
-            source: "gm-skill-admin",
-            deleteKey
-          };
-          logDebugEvent("skills", "gm-delete-result", { ok: true, type: deleteType, deleteKey }, true);
-          await Promise.allSettled([
-            quickbarController?.refresh?.(),
-            refetchCurrent()
-          ]);
-        } catch (error) {
-          const message = String(error?.message ?? error ?? "Delete failed.");
-          ephemeral.commandStatus = {
-            type: "error",
-            message,
-            source: "gm-skill-admin",
-            deleteKey
-          };
-          logDebugEvent("skills", "gm-delete-result", { ok: false, type: deleteType, deleteKey, error: message }, false);
-          if (lastState) publishState(lastState);
-        } finally {
-          skillAdminDeleteInFlight = null;
-        }
-        return;
-      }
       if (command?.scope === "combat-hud" && command?.feature === "fire-mode") {
         const fmType = String(command.type ?? "");
         if (fmType === "toggle-selector") {
@@ -9058,7 +9026,7 @@ function setupSceneSelection(hooks = {}) {
             ephemeral.commandStatus = { type: "ok", message: "Fire mode changed." };
             pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Fire mode changed." }));
             logDebugEvent("fire-mode", "result", { weaponId, fireModeId }, true);
-            await refetchCurrent();
+            await invalidateCharacterRuntime("fire-mode-switch");
           } catch (error) {
             const normalized = normalizeFireModeRpcResult(error);
             ephemeral.fireModeRpcResult = normalized;
@@ -9151,7 +9119,7 @@ function setupSceneSelection(hooks = {}) {
         if (lastState) publishState(lastState);
         let outcome;
         try {
-          outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings) });
+          outcome = await resolveAttack(ctx, { performAttack: (payload) => withBusyRetry("perform_attack", () => performAttack(payload, settings)) });
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability attack failed.") };
         }
@@ -9207,11 +9175,11 @@ function setupSceneSelection(hooks = {}) {
             lib_default.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "refreshBodyZones" }, { destination: "LOCAL" });
           } catch (_e) {
           }
-          await refetchCurrent();
+          await invalidateCharacterRuntime("direct-ability-attack-success");
           logDebugEvent("refresh", "source-refresh-result", { reason: "direct-ability-attack-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability attack failed." };
-          await refetchCurrent();
+          await invalidateCharacterRuntime("direct-ability-attack-failure");
           logDebugEvent("refresh", "source-refresh-result", { reason: "direct-ability-attack-failure" }, true);
         }
         return;
@@ -9282,7 +9250,7 @@ function setupSceneSelection(hooks = {}) {
         if (lastState) publishState(lastState);
         let outcome;
         try {
-          outcome = await resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) });
+          outcome = await resolveInstantAbilityExecution(ctx, { executeAction: (payload) => withBusyRetry("combat_execute_action", () => executeAction(payload, settings)) });
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
         }
@@ -9329,11 +9297,11 @@ function setupSceneSelection(hooks = {}) {
         }
         if (outcome.ok) {
           ephemeral.commandStatus = { type: "ok", message: "Ability used." };
-          await refetchCurrent();
+          await invalidateCharacterRuntime("instant-ability-success");
           logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
-          await refetchCurrent();
+          await invalidateCharacterRuntime("instant-ability-failure");
           logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-failure" }, true);
         }
         return;
@@ -9411,7 +9379,7 @@ function setupSceneSelection(hooks = {}) {
         if (lastState) publishState(lastState);
         let outcome;
         try {
-          outcome = await resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) });
+          outcome = await resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => withBusyRetry("combat_execute_action", () => executeAction(payload, settings)) });
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
         }
@@ -9472,11 +9440,11 @@ function setupSceneSelection(hooks = {}) {
             logDebugEvent("refresh", "target-refresh-result", { reason: "directed-ability-success", targetCharacterId: requestCtx.targetCharacterId }, true);
           } catch (_e) {
           }
-          await refetchCurrent();
+          await invalidateCharacterRuntime("directed-ability-success");
           logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
-          await refetchCurrent();
+          await invalidateCharacterRuntime("directed-ability-failure");
           logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-failure" }, true);
         }
         return;
@@ -9539,7 +9507,7 @@ function setupSceneSelection(hooks = {}) {
         if (lastState) publishState(lastState);
         let outcome;
         try {
-          outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings) });
+          outcome = await resolveAttack(ctx, { performAttack: (payload) => withBusyRetry("perform_attack", () => performAttack(payload, settings)) });
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Attack failed.") };
         }
@@ -9624,11 +9592,11 @@ function setupSceneSelection(hooks = {}) {
             lib_default.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "refreshBodyZones" }, { destination: "LOCAL" });
           } catch (_e) {
           }
-          await refetchCurrent();
+          await invalidateCharacterRuntime("attack-success");
           logDebugEvent("refresh", "source-refresh-result", { reason: "attack-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Attack failed." };
-          await refetchCurrent();
+          await invalidateCharacterRuntime("attack-failure");
           logDebugEvent("refresh", "source-refresh-result", { reason: "attack-failure" }, true);
         }
         return;
@@ -9651,6 +9619,7 @@ function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
+        if (ephemeral.weaponSwitchInFlight) return;
         const switchGate = sessionReloadGate(session, selectedOption?.switchCost ?? "full_move");
         if (switchGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: switchGate.reason };
@@ -9667,16 +9636,25 @@ function setupSceneSelection(hooks = {}) {
         ephemeral.weaponSelectorOpen = false;
         ephemeral.fireModeSelectorOpen = false;
         ephemeral.fireModeRpcResult = null;
+        ephemeral.weaponSwitchInFlight = true;
+        if (lastState) publishState(lastState);
         try {
           const expectedVersion = expectedVersionOf(session);
           const result = await switchActiveWeapon(
             {
               character_id: ephemeral.characterId,
               character_weapon_id: weaponId,
-              ...expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}
+              ...expectedVersion != null ? { expected_encounter_version: expectedVersion } : {},
+              // Explicit combat context (ticket: a character with more than
+              // one active encounter must never have the switch silently
+              // gated by whichever encounter the server would otherwise guess
+              // is "current"). session.id is the room's single active
+              // encounter this HUD is tracking for the selected character.
+              ...session?.exists && session.id ? { encounter_id: session.id } : {}
             },
             settings
           );
+          ephemeral.weaponSwitchInFlight = false;
           if (result?.ok === false) {
             ephemeral.commandStatus = { type: "error", message: result.message || result.error || "Weapon switch failed." };
             if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) void sessionController.refresh();
@@ -9684,10 +9662,10 @@ function setupSceneSelection(hooks = {}) {
             return;
           }
           ephemeral.commandStatus = { type: "ok", message: "Weapon switched." };
-          if (result?.combat_session && sessionController) void sessionController.refresh();
-          await refetchCurrent("weapon-switch");
+          await invalidateCharacterRuntime("weapon-switch");
           return;
         } catch (error) {
+          ephemeral.weaponSwitchInFlight = false;
           ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Weapon switch failed.") };
           if (lastState) publishState(lastState);
           return;
@@ -9773,7 +9751,7 @@ function setupSceneSelection(hooks = {}) {
               });
               if (sessionController) void sessionController.refresh();
             }
-            await refetchCurrent();
+            await invalidateCharacterRuntime("reload-success");
           } else {
             ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
@@ -14512,6 +14490,7 @@ function setupTacticalMoveTool({ runtime }) {
 var BC_DEBUG_CONSOLE_ENTRIES = "com.odyssey.debug-console/entries";
 var BC_DEBUG_CONSOLE_REQUEST = "com.odyssey.debug-console/request";
 var BC_DEBUG_CONSOLE_COMMAND = "com.odyssey.debug-console/command";
+var BC_DEBUG_CONSOLE_LOG_EVENT = "com.odyssey.debug-console/log-event";
 
 // hud/debug/debugConsoleLayout.js
 var DEBUG_CONSOLE_POPOVER_ID = "odyssey-hud-debug-console";
@@ -14603,7 +14582,7 @@ async function closeLauncherPopover() {
   } catch (_e) {
   }
 }
-async function applyConsoleState() {
+async function applyConsoleStateNow() {
   if (consoleOpen) {
     await closeLauncherPopover();
     await openConsolePopover();
@@ -14611,6 +14590,11 @@ async function applyConsoleState() {
     await closeConsolePopover();
     await openLauncherPopover();
   }
+}
+var consoleStateQueue = Promise.resolve();
+function applyConsoleState() {
+  consoleStateQueue = consoleStateQueue.then(applyConsoleStateNow, applyConsoleStateNow);
+  return consoleStateQueue;
 }
 function broadcastEntries() {
   try {
@@ -14654,17 +14638,39 @@ function startDebugConsole() {
       cleanups2.push(lib_default.broadcast.onMessage(BC_DEBUG_CONSOLE_REQUEST, () => broadcastEntries()));
       cleanups2.push(lib_default.broadcast.onMessage(BC_DEBUG_CONSOLE_COMMAND, async (event) => {
         const type = String(event?.data?.type ?? "");
-        if (type === "close") {
+        if (type === "close" || type === "hide") {
           consoleOpen = false;
-          logDebugEvent("hud", "popover-closed", { popover: "debug-console" });
+          logDebugEvent("hud", "popover-closed", { popover: "debug-console", via: type });
           await applyConsoleState();
         } else if (type === "reopen") {
           consoleOpen = true;
           logDebugEvent("hud", "popover-opened", { popover: "debug-console" });
           await applyConsoleState();
+        } else if (type === "toggle") {
+          consoleOpen = !consoleOpen;
+          logDebugEvent("hud", consoleOpen ? "popover-opened" : "popover-closed", { popover: "debug-console", via: "toggle" });
+          await applyConsoleState();
         } else if (type === "clear") {
           clearDebugLog();
         }
+      }));
+      let lastLogEventKey = null;
+      cleanups2.push(lib_default.broadcast.onMessage(BC_DEBUG_CONSOLE_LOG_EVENT, (event) => {
+        const data = event?.data ?? {};
+        const source = String(data.source ?? "unknown");
+        const operation = String(data.operation ?? "unknown");
+        const code = data.code ?? null;
+        const message = String(data.message ?? "");
+        const bucket = Math.floor((Number(data.createdAt) || Date.now()) / 1e3);
+        const key = `${source}:${operation}:${code}:${message}:${bucket}`;
+        if (key === lastLogEventKey) return;
+        lastLogEventKey = key;
+        logDebugEvent(
+          source,
+          operation,
+          { code, message, details: data.details ?? {}, payload: data.payload ?? null, result: data.result ?? null },
+          false
+        );
       }));
     } catch (error) {
       console.error("[debugConsole] setup failed", error);

@@ -136,6 +136,7 @@ function buildSyntheticState(payload) {
       selectedReloadMagazineId: payload.ui?.selectedReloadMagazineId ?? null,
       selectedModifierIds:     [],
       weaponSelectorOpen:      !!payload.ui?.weaponSelectorOpen,
+      weaponSwitchInFlight:    !!payload.ui?.weaponSwitchInFlight,
       fireModeSelectorOpen:    !!payload.ui?.fireModeSelectorOpen,
       activeIntent:            payload.ui?.activeIntent ?? { kind: "weapon-attack", weaponId: null },
       basicAttack: payload.ui?.basicAttack ?? { inFlight: false, uiAllowed: false, uiBlockReason: "No character loaded." },
@@ -201,9 +202,6 @@ export function renderSelectionModule(moduleId, payload, opts = {}) {
       const fn = LIVE_RENDERERS[moduleId];
       if (fn) {
         const syntheticState = buildSyntheticState(payload);
-        if (moduleId === "skills") {
-          return fn(syntheticState, opts?.skillsUiState ?? {});
-        }
         return fn(syntheticState);
       }
     }

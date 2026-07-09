@@ -8,12 +8,16 @@
 import { esc, cls } from "./hudDom.js";
 import { panel } from "./HudPanel.js";
 
-function weaponOption(option) {
+function weaponOption(option, switching) {
   const ammoLabel = option.ammoLabel || "-";
   const selected = option.selected === true;
-  const disabled = option.switchAllowed === false;
+  // While a switch is in flight, every option (including the currently
+  // active one) is disabled — this is what lets the panel show a real
+  // "switching…" state instead of looking clickable during the RPC
+  // round-trip, and prevents a second click racing the first.
+  const disabled = option.switchAllowed === false || switching;
   const costLabel = selected
-    ? "Active"
+    ? (switching ? "Switching…" : "Active")
     : (option.switchCost === "free" ? "Free swap" : "Full MOVE");
   const title = disabled && option.switchBlockedReason
     ? `${option.name} - ${option.switchBlockedReason}`
@@ -49,6 +53,7 @@ export function renderWeaponSelectorPanel(state) {
     });
   }
 
-  const body = `<div class="ohud-weapon-list">${availableWeapons.map(weaponOption).join("")}</div>`;
+  const switching = !!state.ui?.weaponSwitchInFlight;
+  const body = `<div class="ohud-weapon-list">${availableWeapons.map((option) => weaponOption(option, switching)).join("")}</div>`;
   return panel({ key: "gun-weapon-selector", label: "Weapons", bodyHtml: body });
 }

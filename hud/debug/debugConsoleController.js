@@ -18,7 +18,7 @@
 
 import OBR from "@owlbear-rodeo/sdk";
 import { initDebugLog, getDebugLogEntries, clearDebugLog, subscribeDebugLog, logDebugEvent } from "./debugLogStore.js";
-import { BC_DEBUG_CONSOLE_ENTRIES, BC_DEBUG_CONSOLE_REQUEST, BC_DEBUG_CONSOLE_COMMAND } from "./debugConsoleConstants.js";
+import { BC_DEBUG_CONSOLE_ENTRIES, BC_DEBUG_CONSOLE_REQUEST, BC_DEBUG_CONSOLE_COMMAND, BC_DEBUG_CONSOLE_LOG_EVENT } from "./debugConsoleConstants.js";
 import { DEBUG_CONSOLE_POPOVER_ID, DEBUG_LAUNCHER_POPOVER_ID, consoleRect, launcherRect } from "./debugConsoleLayout.js";
 
 const DEBUG_CONSOLE_HTML = "debug-console.html";
@@ -92,7 +92,7 @@ async function closeLauncherPopover() {
 
 /** Reflect `consoleOpen` by (re)opening exactly the right one of the two
  *  Debug Console popovers. Never touches any other popover id. */
-async function applyConsoleState() {
+async function applyConsoleStateNow() {
   if (consoleOpen) {
     await closeLauncherPopover();
     await openConsolePopover();
@@ -100,6 +100,16 @@ async function applyConsoleState() {
     await closeConsolePopover();
     await openLauncherPopover();
   }
+}
+
+// Serialized so a close/toggle/reopen command can never interleave with the
+// viewport-resize poll's own re-anchor call (both read/act on `consoleOpen`
+// asynchronously) — every caller awaits the SAME chain, so at most one
+// open/close transition is ever in flight at a time.
+let consoleStateQueue = Promise.resolve();
+function applyConsoleState() {
+  consoleStateQueue = consoleStateQueue.then(applyConsoleStateNow, applyConsoleStateNow);
+  return consoleStateQueue;
 }
 
 function broadcastEntries() {
@@ -144,17 +154,55 @@ export function startDebugConsole() {
 
       cleanups.push(OBR.broadcast.onMessage(BC_DEBUG_CONSOLE_COMMAND, async (event) => {
         const type = String(event?.data?.type ?? "");
-        if (type === "close") {
+        // "close" and "hide" are the same transition (Console popover closed,
+        // small reopenable launcher chip shown) — "hide" is kept as its own
+        // command/log action name so a caller can be explicit about intent,
+        // but there is deliberately only ONE way to fully dismiss the Console
+        // that still leaves a way back (see the file header comment): a
+        // "close forever, no launcher" mode would have no UI path to reopen.
+        if (type === "close" || type === "hide") {
           consoleOpen = false;
-          logDebugEvent("hud", "popover-closed", { popover: "debug-console" });
+          logDebugEvent("hud", "popover-closed", { popover: "debug-console", via: type });
           await applyConsoleState();
         } else if (type === "reopen") {
           consoleOpen = true;
           logDebugEvent("hud", "popover-opened", { popover: "debug-console" });
           await applyConsoleState();
+        } else if (type === "toggle") {
+          consoleOpen = !consoleOpen;
+          logDebugEvent("hud", consoleOpen ? "popover-opened" : "popover-closed", { popover: "debug-console", via: "toggle" });
+          await applyConsoleState();
         } else if (type === "clear") {
           clearDebugLog();
         }
+      }));
+
+      // Cross-bundle error reporting (hud/debug/debugLogClient.js): any
+      // iframe that can't import debugLogStore.js directly (a different
+      // bundle/JS realm than this one) sends its error here instead. Folded
+      // into the SAME store every other Debug Console event uses — one
+      // place all overlay/RPC/action errors land, regardless of source
+      // bundle. De-duplicated by source+operation+code+message within the
+      // same second, so a mutation whose failure gets reported from more
+      // than one call site (e.g. a catch block AND a shared error banner)
+      // only produces one Debug Console entry.
+      let lastLogEventKey = null;
+      cleanups.push(OBR.broadcast.onMessage(BC_DEBUG_CONSOLE_LOG_EVENT, (event) => {
+        const data = event?.data ?? {};
+        const source = String(data.source ?? "unknown");
+        const operation = String(data.operation ?? "unknown");
+        const code = data.code ?? null;
+        const message = String(data.message ?? "");
+        const bucket = Math.floor((Number(data.createdAt) || Date.now()) / 1000);
+        const key = `${source}:${operation}:${code}:${message}:${bucket}`;
+        if (key === lastLogEventKey) return;
+        lastLogEventKey = key;
+        logDebugEvent(
+          source,
+          operation,
+          { code, message, details: data.details ?? {}, payload: data.payload ?? null, result: data.result ?? null },
+          false,
+        );
       }));
     } catch (error) {
       // eslint-disable-next-line no-console

@@ -132,6 +132,59 @@ test("7. background.js integration is minimal: import + a single startDebugConso
   assert.ok(/\bstartDebugConsole\(\)/.test(src));
 });
 
+// ── 7b. toggle/hide commands + serialized open/close state (close/toggle/
+//        reopen must never leave both or neither popover conceptually open,
+//        even if a viewport-resize re-anchor fires mid-transition) ─────────
+
+test("7b. debugConsoleController.js handles close/hide/reopen/toggle as distinct BC_DEBUG_CONSOLE_COMMAND types", () => {
+  const src = readSource("hud/debug/debugConsoleController.js");
+  assert.ok(/type === "close" \|\| type === "hide"/.test(src), "close and hide both close the Console popover");
+  assert.ok(/type === "reopen"/.test(src));
+  assert.ok(/type === "toggle"/.test(src));
+  assert.ok(/consoleOpen = !consoleOpen/.test(src), "toggle flips the single source-of-truth boolean");
+});
+
+test("7c. applyConsoleState is serialized through one queue — the viewport poll and a command handler can never interleave an open/close transition", () => {
+  const src = readSource("hud/debug/debugConsoleController.js");
+  assert.ok(/let consoleStateQueue/.test(src));
+  assert.ok(/consoleStateQueue = consoleStateQueue\.then/.test(src));
+  // Every call site awaits the wrapper, never the raw (unserialized) transition.
+  assert.ok(!/await applyConsoleStateNow\(\)/.test(src), "callers must go through the serialized wrapper, not the raw transition");
+});
+
+// ── 7d. Cross-bundle error reporting (hud/debug/debugLogClient.js) ─────────
+
+test("7d. debugLogClient.js exists, broadcasts LOCAL-only, and never persists (same isolation rule as the rest of hud/debug/)", () => {
+  const src = readSource("hud/debug/debugLogClient.js");
+  assert.ok(/export function reportUiError/.test(src));
+  assert.ok(/destination: "LOCAL"/.test(src), "must never leave the player's own client, let alone the room");
+  assert.ok(!/localStorage\s*\./.test(src));
+  const importLines = src.split("\n").filter((l) => /^\s*import /.test(l));
+  assert.ok(!importLines.some((l) => /supabase/i.test(l)), "must not import Supabase");
+});
+
+test("7e. debugConsoleController.js listens for BC_DEBUG_CONSOLE_LOG_EVENT and folds it into the SAME debugLogStore every other event uses, with de-duplication", () => {
+  const src = readSource("hud/debug/debugConsoleController.js");
+  assert.ok(src.includes("BC_DEBUG_CONSOLE_LOG_EVENT"));
+  assert.ok(/lastLogEventKey/.test(src), "de-dupes repeated identical reports instead of logging every one");
+  assert.ok(/logDebugEvent\(\s*source,\s*operation,/.test(src), "folds into the shared store via the SAME logDebugEvent every in-realm caller uses");
+});
+
+test("7f. BC_DEBUG_CONSOLE_LOG_EVENT is declared alongside the other Debug Console channels and stays distinct from them", () => {
+  const src = readSource("hud/debug/debugConsoleConstants.js");
+  assert.ok(/BC_DEBUG_CONSOLE_LOG_EVENT\s*=\s*"com\.odyssey\.debug-console\/log-event"/.test(src));
+});
+
+test("7g. characterScreen.js (Character overlay) and CombatHudModule.js (Skills overlay's render boundary) both route failures through reportUiError, not a silent console.error alone", () => {
+  const charSrc = readSource("screens/character/characterScreen.js");
+  assert.ok(charSrc.includes('from "../../hud/debug/debugLogClient.js"'));
+  assert.ok(/reportUiError\(\{ source: "character_overlay"/.test(charSrc));
+
+  const moduleSrc = readSource("hud/components/CombatHudModule.js");
+  assert.ok(moduleSrc.includes('from "../debug/debugLogClient.js"'));
+  assert.ok(/reportUiError\(\{/.test(moduleSrc));
+});
+
 // ── 8. Never persists anywhere ──────────────────────────────────────────────
 
 test("8. no file under hud/debug/ imports Supabase, uses localStorage, or writes OBR scene/room metadata", () => {
