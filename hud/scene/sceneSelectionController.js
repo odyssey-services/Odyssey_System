@@ -189,8 +189,13 @@ export function setupSceneSelection(hooks = {}) {
           settings,
           getViewer: () => viewer,
           onSessionRuntime: (runtime) => {
+            const previousWasActive = sessionRuntime?.encounter?.status === "active";
+            const nextIsActive = runtime?.encounter?.status === "active";
             sessionRuntime = runtime;
             if (lastState) publishState(lastState);
+            if (previousWasActive && !nextIsActive && ephemeral.characterId) {
+              void refreshSelectedCharacterRuntime("combat-ended", { refreshQuickbar: true });
+            }
           },
         })
       : null;

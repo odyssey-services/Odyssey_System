@@ -28,6 +28,10 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .odc-count {
@@ -48,7 +52,11 @@
   white-space: nowrap;
 }
 .odc-btn:hover { background: rgba(255, 255, 255, 0.16); }
-.odc-close { padding: 2px 8px; font-weight: 700; }
+.odc-close {
+  padding: 2px 8px;
+  font-weight: 700;
+  margin-left: auto;
+}
 
 .odc-copy-status {
   font-size: 13px;

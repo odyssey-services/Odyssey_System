@@ -8773,8 +8773,13 @@ function setupSceneSelection(hooks = {}) {
       settings,
       getViewer: () => viewer,
       onSessionRuntime: (runtime) => {
+        const previousWasActive = sessionRuntime?.encounter?.status === "active";
+        const nextIsActive = runtime?.encounter?.status === "active";
         sessionRuntime = runtime;
         if (lastState) publishState(lastState);
+        if (previousWasActive && !nextIsActive && ephemeral.characterId) {
+          void refreshSelectedCharacterRuntime("combat-ended", { refreshQuickbar: true });
+        }
       }
     }) : null;
     if (sessionController) cleanups3.push(() => sessionController.cleanup());
@@ -12877,7 +12882,7 @@ function resolveCombatMovementPermission({
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.72";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.73";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;

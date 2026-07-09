@@ -36521,7 +36521,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       state.tacticalSnapshot = null;
       state.moveToolStatus = null;
       setNotice("ok", "Combat ended.");
-      await refresh({ sheet: true, armory: false, equipment: false, inventory: false, abilities: false, perkAvailability: false });
+      await refresh({ sheet: true, armory: true, equipment: false, inventory: false, abilities: true, perkAvailability: false });
       await refreshSelectedTokenContext();
       scheduleSelectionSync(true);
     } catch (error) {

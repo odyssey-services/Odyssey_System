@@ -7317,11 +7317,21 @@ function skillTile(skill2, selectedId) {
     ${skill2.isToggled ? `<span class="ohud-slot-toggle" aria-hidden="true"></span>` : ""}
   </button>`;
 }
+function addAbilityTile(categoryKey) {
+  return `<button
+    type="button"
+    class="${cls("ohud-qb-slot", "is-empty", "is-editable", "ohud-skill-add")}"
+    data-action="open-quickbar-editor"
+    data-category="${esc(categoryKey)}"
+    aria-label="Add ability"
+    ${tipAttr("Add ability", ["Open the ability layout editor."])}
+  ></button>`;
+}
 function renderSkillBlock(state) {
+  const role = String(state?.viewer?.role ?? "").toLowerCase();
+  const canEdit = role === "gm" || role === "player";
   const quickbar = state?.snapshot?.quickbar ?? null;
   if (quickbar && quickbar.ok !== false) {
-    const role = String(state?.viewer?.role ?? "").toLowerCase();
-    const canEdit = role === "gm" || role === "player";
     const armedActionId = state?.snapshot?.armedActionId ?? null;
     const pendingActionId = state?.snapshot?.pendingDirectAbilityActionId ?? state?.snapshot?.pendingInstantAbilityActionId ?? state?.snapshot?.pendingDirectedAbilityActionId ?? null;
     return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId }) });
@@ -7337,7 +7347,7 @@ function renderSkillBlock(state) {
   }
   const groupsHtml = CATEGORY_ORDER.filter((c) => buckets.has(c.key)).map((c) => `<div class="ohud-skill-group">
       <span class="ohud-group-cap ohud-accent--${c.key}">${esc(c.caption)}</span>
-      <div class="ohud-group-tiles">${buckets.get(c.key).map((sk) => skillTile(sk, selectedId)).join("")}</div>
+      <div class="ohud-group-tiles">${buckets.get(c.key).map((sk) => skillTile(sk, selectedId)).join("")}${canEdit ? addAbilityTile(c.key) : ""}</div>
     </div>`).join("");
   const body = groupsHtml ? `<div class="ohud-skill-groups">${groupsHtml}</div>` : `<div class="ohud-muted-fill">No actions</div>`;
   return panel({ key: "skills", bodyHtml: body });

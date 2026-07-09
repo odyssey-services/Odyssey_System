@@ -53,17 +53,28 @@ function skillTile(skill, selectedId) {
   </button>`;
 }
 
+function addAbilityTile(categoryKey) {
+  return `<button
+    type="button"
+    class="${cls("ohud-qb-slot", "is-empty", "is-editable", "ohud-skill-add")}"
+    data-action="open-quickbar-editor"
+    data-category="${esc(categoryKey)}"
+    aria-label="Add ability"
+    ${tipAttr("Add ability", ["Open the ability layout editor."])}
+  ></button>`;
+}
+
 export function renderSkillBlock(state) {
+  const role = String(state?.viewer?.role ?? "").toLowerCase();
+  const canEdit = role === "gm" || role === "player";
   // Phase 4.0b: when the live snapshot carries the persisted quickbar runtime
   // (folded in by selectionState.buildBroadcastPayload), render the real
   // server-backed quickbar. Absent (mock/legacy) → the category view below.
   const quickbar = state?.snapshot?.quickbar ?? null;
   if (quickbar && quickbar.ok !== false) {
-    const role = String(state?.viewer?.role ?? "").toLowerCase();
     // UX-only edit gate (full ownership enforcement is Phase B0): the module is
     // only shown for a character the viewer may view, so allow opening the
     // quickbar editor (via an empty slot, Phase 4.0i) here.
-    const canEdit = role === "gm" || role === "player";
     // Phase 4.1A: which attack_technique (if any) is armed for this character
     // — ephemeral UI state folded in by selectionState.js, never server data
     // by itself (the server re-validates everything at Attack time).
@@ -100,7 +111,7 @@ export function renderSkillBlock(state) {
     .filter((c) => buckets.has(c.key))
     .map((c) => `<div class="ohud-skill-group">
       <span class="ohud-group-cap ohud-accent--${c.key}">${esc(c.caption)}</span>
-      <div class="ohud-group-tiles">${buckets.get(c.key).map((sk) => skillTile(sk, selectedId)).join("")}</div>
+      <div class="ohud-group-tiles">${buckets.get(c.key).map((sk) => skillTile(sk, selectedId)).join("")}${canEdit ? addAbilityTile(c.key) : ""}</div>
     </div>`)
     .join("");
 
