@@ -282,7 +282,24 @@ test("SkillBlock renders the quickbar when snapshot.quickbar is present", () => 
   assert.match(html, /data-action="open-quickbar-editor"/, "the empty slot carries the open-editor trigger");
 });
 
-test("GM quickbar admin renders sibling controls, not nested buttons, and can expose both delete-skill + delete-ability actions", () => {
+test("Skills HUD does not expose GM delete controls by default", () => {
+  const state = {
+    viewer: { role: "gm" },
+    snapshot: {
+      quickbar: runtime([
+        { slotIndex: 0, characterActionId: "act-1", empty: false },
+      ], [
+        { ...action({ id: "act-1", type: "toggle" }), characterSkillId: "char-skill-1" },
+      ]),
+    },
+  };
+  const html = renderSkillBlock(state);
+  assert.ok(!html.includes('data-action="toggle-gm-skill-menu"'));
+  assert.ok(!html.includes('data-action="gm-delete-ability"'));
+  assert.ok(!html.includes("GM</button>"));
+});
+
+test("Quickbar GM admin render path stays sibling-only and exposes ability delete without nested buttons", () => {
   const html = renderQuickbarStrip(
     runtime([{ slotIndex: 0, characterActionId: "act-1", empty: false }], [
       {
@@ -300,9 +317,13 @@ test("GM quickbar admin renders sibling controls, not nested buttons, and can ex
   );
   assert.match(html, /class="ohud-qb-card"/);
   assert.match(html, /data-action="toggle-gm-skill-menu"/);
-  assert.match(html, /data-action="gm-delete-skill"/);
   assert.match(html, /data-action="gm-delete-ability"/);
   assert.ok(!/<button[^>]*>\s*<button/i.test(html), "no nested button markup");
+});
+
+test("sceneSelectionController refreshes runtime + quickbar after weapon switch", () => {
+  assert.ok(sceneControllerSrc.includes('refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true })'));
+  assert.ok(sceneControllerSrc.includes('getCharacterArmory(characterId, settings, armoryEncounterId)'));
 });
 
 test("15/backcompat. SkillBlock falls back to the legacy category view when no quickbar (mock path unaffected)", () => {

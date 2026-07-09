@@ -7360,7 +7360,7 @@ function renderSkillBlock(state, opts = {}) {
     const pendingActionId = state?.snapshot?.pendingDirectAbilityActionId ?? state?.snapshot?.pendingInstantAbilityActionId ?? state?.snapshot?.pendingDirectedAbilityActionId ?? null;
     const openActionId = opts?.openSkillsMenu?.kind === "action" ? String(opts.openSkillsMenu.id ?? "").trim() || null : null;
     const pendingDeleteId = String(opts?.pendingGmDeleteId ?? "").trim() || null;
-    const gmAdmin = role === "gm" ? { enabled: true, openActionId, pendingDeleteId } : null;
+    const gmAdmin = role === "gm" && opts?.allowGmDelete === true ? { enabled: true, openActionId, pendingDeleteId } : null;
     return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId, gmAdmin }) });
   }
   const slots = selectQuickSlots(state);
@@ -8421,6 +8421,7 @@ function mountCombatHudModule(options) {
   }
   let lastCommandStatusKey = null;
   function maybeShowCommandStatusToast() {
+    if (moduleId !== "player") return;
     const status2 = liveSelection?.ui?.commandStatus ?? null;
     const key = status2 ? `${status2.type}:${status2.message}` : null;
     if (key === lastCommandStatusKey) return;

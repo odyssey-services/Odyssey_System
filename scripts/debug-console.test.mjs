@@ -132,6 +132,12 @@ test("7. background.js integration is minimal: import + a single startDebugConso
   assert.ok(/\bstartDebugConsole\(\)/.test(src));
 });
 
+test("7b. debugConsolePage close/reopen actions have direct popover-swap fallbacks", () => {
+  const src = readSource("hud/debug/debugConsolePage.js");
+  assert.ok(src.includes('swapDebugPopover("launcher")'));
+  assert.ok(src.includes('swapDebugPopover("console")'));
+});
+
 // ── 8. Never persists anywhere ──────────────────────────────────────────────
 
 test("8. no file under hud/debug/ imports Supabase, uses localStorage, or writes OBR scene/room metadata", () => {

@@ -130,9 +130,9 @@ var require_events = __commonJS({
         ReflectApply(handler, this, args);
       } else {
         var len = handler.length;
-        var listeners2 = arrayClone(handler, len);
+        var listeners3 = arrayClone(handler, len);
         for (var i = 0; i < len; ++i)
-          ReflectApply(listeners2[i], this, args);
+          ReflectApply(listeners3[i], this, args);
       }
       return true;
     };
@@ -255,7 +255,7 @@ var require_events = __commonJS({
     };
     EventEmitter2.prototype.off = EventEmitter2.prototype.removeListener;
     EventEmitter2.prototype.removeAllListeners = function removeAllListeners(type) {
-      var listeners2, events, i;
+      var listeners3, events, i;
       events = this._events;
       if (events === void 0)
         return this;
@@ -284,12 +284,12 @@ var require_events = __commonJS({
         this._eventsCount = 0;
         return this;
       }
-      listeners2 = events[type];
-      if (typeof listeners2 === "function") {
-        this.removeListener(type, listeners2);
-      } else if (listeners2 !== void 0) {
-        for (i = listeners2.length - 1; i >= 0; i--) {
-          this.removeListener(type, listeners2[i]);
+      listeners3 = events[type];
+      if (typeof listeners3 === "function") {
+        this.removeListener(type, listeners3);
+      } else if (listeners3 !== void 0) {
+        for (i = listeners3.length - 1; i >= 0; i--) {
+          this.removeListener(type, listeners3[i]);
         }
       }
       return this;
@@ -305,7 +305,7 @@ var require_events = __commonJS({
         return unwrap ? [evlistener.listener || evlistener] : [evlistener];
       return unwrap ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
     }
-    EventEmitter2.prototype.listeners = function listeners2(type) {
+    EventEmitter2.prototype.listeners = function listeners3(type) {
       return _listeners(this, type, true);
     };
     EventEmitter2.prototype.rawListeners = function rawListeners(type) {
@@ -9884,6 +9884,7 @@ var FEATURE_RPC_NAMES = Object.freeze({
 });
 var WEAPON_RPC_NAMES = Object.freeze({
   getCharacterArmory: "get_character_armory",
+  getCharacterArmoryContext: "get_character_armory_context",
   switchActiveWeapon: "switch_active_weapon",
   switchWeaponProfile: "switch_weapon_profile",
   switchWeaponFireMode: "switch_weapon_fire_mode",
@@ -10010,6 +10011,29 @@ var CREATOR_RPC_NAMES = Object.freeze({
   deleteEquipmentModel: "creator_delete_equipment_model"
 });
 
+// hud/debug/debugLogStore.js
+var MAX_ENTRIES = 200;
+var enabled = false;
+var entries2 = [];
+var listeners2 = /* @__PURE__ */ new Set();
+function notify2() {
+  for (const fn of listeners2) {
+    try {
+      fn(entries2);
+    } catch (_e) {
+    }
+  }
+}
+function logDebugEvent(category, action, details2 = {}, success = true) {
+  if (!enabled) return;
+  entries2 = [
+    { timestamp: Date.now(), category: String(category ?? ""), action: String(action ?? ""), details: details2 ?? {}, success: !!success },
+    ...entries2
+  ];
+  if (entries2.length > MAX_ENTRIES) entries2 = entries2.slice(0, MAX_ENTRIES);
+  notify2();
+}
+
 // bridge/supabaseBridge.js
 function getSupabaseSettingsOrThrow(settings) {
   const normalized = normalizeSupabaseSettings(settings);
@@ -10100,6 +10124,16 @@ async function requestSupabase(path, options = {}) {
     const response = await fetchPromise;
     return await parseSupabaseResponse(response, fallbackMessage, requestId);
   } catch (error) {
+    logDebugEvent(
+      "rpc",
+      "request-failed",
+      {
+        method,
+        path,
+        message: toErrorMessage(error)
+      },
+      false
+    );
     addDiagnosticEntry(
       "error",
       "Supabase request failed",
@@ -10327,11 +10361,11 @@ function buildModuleRows(runtime2) {
       </div>
     `).join("");
 }
-function buildDiagnosticsRows(entries2) {
-  if (!entries2.length) {
+function buildDiagnosticsRows(entries3) {
+  if (!entries3.length) {
     return '<div class="list-item"><div class="muted">No diagnostics yet.</div></div>';
   }
-  return entries2.map((entry) => `
+  return entries3.map((entry) => `
       <div class="list-item">
         <div class="list-item-title">${escapeHtml(entry.title)}</div>
         <div class="muted">${escapeHtml(entry.level.toUpperCase())} | ${escapeHtml(formatTimestamp(entry.createdAt))}</div>
@@ -10421,8 +10455,8 @@ async function mountBridgeShell({
     refs.supabaseUrl.disabled = !canManageRoomSettings;
     refs.supabaseKey.disabled = !canManageRoomSettings;
   }
-  const unsubscribeDiagnostics = subscribeDiagnostics((entries2) => {
-    refs.diagnostics.innerHTML = buildDiagnosticsRows(entries2);
+  const unsubscribeDiagnostics = subscribeDiagnostics((entries3) => {
+    refs.diagnostics.innerHTML = buildDiagnosticsRows(entries3);
   });
   syncSettingsInputs();
   render();
@@ -10706,7 +10740,18 @@ __export(weaponApi_exports, {
   unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
   unloadWeaponMagazine: () => unloadWeaponMagazine
 });
-function getCharacterArmory(characterId, settings) {
+function getCharacterArmory(characterId, settings, encounterId = null) {
+  const normalizedEncounterId = String(encounterId ?? "").trim();
+  if (normalizedEncounterId) {
+    return callSupabaseRpc(
+      WEAPON_RPC_NAMES.getCharacterArmoryContext,
+      {
+        p_character_id: characterId,
+        p_encounter_id: normalizedEncounterId
+      },
+      settings
+    );
+  }
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
     { p_character_id: characterId },
@@ -12581,8 +12626,8 @@ var PostgrestBuilder = class {
   *   .retry(false)
   * ```
   */
-  retry(enabled) {
-    this.retryEnabled = enabled;
+  retry(enabled2) {
+    this.retryEnabled = enabled2;
     return this;
   }
   then(onfulfilled, onrejected) {
@@ -34763,7 +34808,7 @@ function queryRefs(root2) {
 }
 
 // screens/character/characterStyles.css
-var characterStyles_default = '/* Character Panel \u2014 scoped styles (prefix .cp-). Reuses shell design tokens. */\r\n.cp-screen { display: flex; flex-direction: column; gap: 14px; }\r\n.cp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\r\n.cp-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }\r\n.cp-field > span { font-size: 11px; color: var(--muted); }\r\n.cp-mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }\r\n.cp-muted { color: var(--muted); font-size: 12px; }\r\n.cp-hidden { display: none !important; }\r\n.cp-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 2px; }\r\nselect, .cp-screen input { font: inherit; }\r\n.cp-screen select { width: 100%; border-radius: 10px; border: 1px solid rgba(61,92,129,.9); background: rgba(8,17,28,.9); color: var(--text); padding: 9px 11px; }\r\n\r\n/* banners */\r\n.cp-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\r\n.cp-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\r\n.cp-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\r\n.cp-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\r\n.cp-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\r\n\r\n/* header */\r\n.cp-head { display: flex; gap: 12px; align-items: center; }\n.cp-head-actions { display: flex; gap: 6px; align-items: center; }\n.cp-head-btn { cursor: pointer; }\n.cp-head-btn:hover { border-color: var(--accent); color: #d8eeff; }\n.cp-avatar { width: 46px; height: 46px; border-radius: 10px; background: var(--panel-soft); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; flex: none; overflow: hidden; }\n.cp-avatar img { width: 100%; height: 100%; object-fit: cover; }\r\n.cp-name { font-size: 15px; font-weight: 700; }\r\n\r\n/* sub-nav */\r\n.cp-nav { display: flex; gap: 6px; flex-wrap: wrap; }\r\n.cp-tab { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--text); cursor: pointer; font-size: 12px; }\r\n.cp-tab.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; font-weight: 700; }\r\n.cp-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* overview layout: doll left, characteristics right (same level) */\r\n.cp-overview { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }\r\n.cp-doll-col { flex: none; }\r\n.cp-attrs-col { flex: 1; min-width: 150px; }\r\n\r\n/* clickable cards (skills, additional body parts) \u2014 clear button affordance */\r\n.cp-card[role="button"] { cursor: pointer; transition: border-color .12s, background .12s; }\r\n.cp-card[role="button"]:hover { border-color: var(--accent); background: rgba(62,166,255,.10); }\r\n.cp-card[role="button"]:active { background: rgba(62,166,255,.16); }\r\n.cp-card[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\r\n\r\n/* 3x3 characteristics \u2014 fluid squares that fill the available column */\r\n.cp-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }\r\n.cp-attr { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 6px; padding: 2px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; }\n.cp-attr:hover { border-color: var(--accent); }\n.cp-attr:active { background: rgba(62,166,255,.1); }\n.cp-attr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.cp-attr[aria-disabled="true"] { opacity: .6; cursor: progress; }\n.cp-attr .cp-attr-val { font-size: 26px; font-weight: 700; font-family: "JetBrains Mono", ui-monospace, monospace; line-height: 1; margin: 0 0 1px; }\n.cp-attr .cp-attr-code { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n.cp-attr .cp-attr-mod { position: absolute; right: 3px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; font-weight: 700; line-height: 1; padding: 1px 4px; border-radius: 999px; border: 1px solid transparent; }\n.cp-attr .cp-attr-mod-pos { top: 3px; color: #d9ffe4; background: rgba(74, 180, 104, .18); border-color: rgba(74, 180, 104, .45); }\n.cp-attr .cp-attr-mod-neg { bottom: 15px; color: #ffd9de; background: rgba(201,75,88,.18); border-color: rgba(201,75,88,.45); }\n.cp-attr .cp-attr-edit { position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; padding: 0; }\n.cp-attr .cp-attr-edit:hover { color: #d8eeff; border-color: var(--accent); }\n.cp-attr .cp-attr-pending { position: absolute; bottom: 1px; left: 0; right: 0; font-size: 7px; color: var(--accent); }\n.cp-skill-edit { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; flex: none; }\n.cp-skill-edit:hover { color: #d8eeff; border-color: var(--accent); }\n\r\n/* doll */\r\n.cp-doll-wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }\r\n.cp-doll { position: relative; flex: none; }\r\n.cp-doll .cp-part { position: absolute; cursor: pointer; border: 1px solid rgba(0,0,0,.4); }\r\n.cp-doll .cp-part:hover, .cp-doll .cp-part:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }\r\n.cp-doll .cp-part.pinned { outline: 2px solid #d8eeff; outline-offset: 2px; }\r\n.cp-doll .cp-base { position: absolute; border-radius: 50%; background: rgba(21,34,53,.9); border: 1px solid var(--line); }\r\n/* state colors */\r\n.cp-c-intact { background: #33425e; }\r\n.cp-c-warn { background: #b07e2a; }\r\n.cp-c-danger { background: #7a2a32; }\r\n\r\n/* tooltip */\r\n.cp-tip { position: absolute; z-index: 30; min-width: 180px; max-width: 240px; background: rgba(7,14,24,.98); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 11px; line-height: 1.5; pointer-events: none; box-shadow: 0 8px 30px rgba(0,0,0,.5); }\r\n.cp-tip b { font-size: 12px; }\r\n.cp-tip .cp-kv { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }\r\n.cp-tip .cp-kv span:last-child { color: var(--text); font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-statebadge { display: inline-block; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; }\r\n.cp-sb-intact { background: rgba(62,166,255,.16); color: #cfe6ff; }\r\n.cp-sb-warn { background: rgba(255,194,75,.18); color: #ffe6b3; }\r\n.cp-sb-danger { background: rgba(201,75,88,.2); color: #ffd2d8; }\r\n\r\n/* inspector */\r\n.cp-inspector { flex: 1; min-width: 200px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-inspector .cp-ins-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }\r\n.cp-inspector .cp-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(39,65,95,.4); }\r\n.cp-inspector .cp-kv span:last-child { font-family: "JetBrains Mono", ui-monospace, monospace; }\r\n.cp-close { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; cursor: pointer; padding: 3px 8px; font-size: 12px; }\r\n\r\n/* cards / lists */\r\n.cp-card { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\r\n.cp-list { display: flex; flex-direction: column; gap: 8px; }\r\n.cp-rowitem { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 12px; }\r\n.cp-pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\r\n.cp-pill.good { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\n.cp-pill.bad { border-color: rgba(201,75,88,.4); color: #ffd2d8; background: rgba(201,75,88,.12); }\n.cp-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(8,17,28,.7); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 11px; }\n.cp-chip.bad { border-color: rgba(201,75,88,.5); color: #ffd9de; }\n.cp-skill-mod { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; font-size: 10px; font-family: "JetBrains Mono", ui-monospace, monospace; border: 1px solid transparent; }\n.cp-skill-mod-pos { color: #d9ffe4; background: rgba(74, 180, 104, .16); border-color: rgba(74, 180, 104, .4); }\n.cp-skill-mod-neg { color: #ffd9de; background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.4); }\n\r\n/* pips for skills */\r\n.cp-pips { display: inline-flex; gap: 3px; }\r\n.cp-pip { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }\r\n.cp-pip.on { background: var(--accent); }\r\n\r\n/* buttons reuse shell .button; small variant */\r\n.cp-btn-sm { padding: 6px 10px; font-size: 12px; }\r\n\r\n/* skeleton */\r\n.cp-skel { border-radius: 10px; background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 37%, rgba(255,255,255,.04) 63%); background-size: 400% 100%; animation: cp-shimmer 1.3s ease infinite; }\r\n@keyframes cp-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }\r\n.cp-skel-line { height: 12px; margin: 6px 0; }\r\n.cp-skel-card { height: 64px; margin: 6px 0; }\r\n@media (prefers-reduced-motion: reduce) { .cp-skel { animation: none; } }\r\n\r\n/* dialog/popover */\r\n.cp-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.6); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\r\n.cp-dialog { width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }\r\n.cp-dialog h3 { margin: 0 0 10px; font-size: 14px; }\r\n\r\n.cp-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\r\n.cp-additional { margin-top: 8px; }\r\n\r\n/* pool chip with GM +/- buttons */\r\n.cp-chip.cp-pool-gm { padding: 2px 4px; gap: 3px; }\r\n.cp-pool-adj { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; cursor: pointer; width: 20px; height: 20px; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; }\r\n.cp-pool-adj:hover:not(:disabled) { color: #d8eeff; border-color: var(--accent); }\r\n.cp-pool-adj:disabled { opacity: .4; cursor: default; }\r\n\r\n/* edit dialog stepper */\r\n.cp-dlg-stepper { display: flex; gap: 6px; align-items: center; justify-content: center; margin-bottom: 2px; }\r\n.cp-dlg-input { width: 64px; flex: none; text-align: center; border: 1px solid var(--line); background: rgba(8,17,28,.9); color: var(--text); border-radius: 8px; padding: 7px 6px; font-size: 15px; }\r\n.cp-dlg-step { width: 36px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; border-radius: 8px; }\r\n';
+var characterStyles_default = '/* Character Panel \u2014 scoped styles (prefix .cp-). Reuses shell design tokens. */\n.cp-screen { display: flex; flex-direction: column; gap: 14px; }\n.cp-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }\n.cp-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; }\n.cp-field > span { font-size: 11px; color: var(--muted); }\n.cp-mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }\n.cp-muted { color: var(--muted); font-size: 12px; }\n.cp-hidden { display: none !important; }\n.cp-section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 6px 0 2px; }\nselect, .cp-screen input { font: inherit; }\n.cp-screen select { width: 100%; border-radius: 10px; border: 1px solid rgba(61,92,129,.9); background: rgba(8,17,28,.9); color: var(--text); padding: 9px 11px; }\n\n/* banners */\n.cp-banner { border-radius: 10px; padding: 9px 11px; font-size: 12px; line-height: 1.45; }\n.cp-banner.err { background: rgba(201,75,88,.16); border: 1px solid rgba(201,75,88,.4); color: #ffd9de; }\n.cp-banner.ok { background: rgba(62,166,255,.14); border: 1px solid rgba(62,166,255,.4); color: #d8eeff; }\n.cp-banner.warn { background: rgba(255,194,75,.14); border: 1px solid rgba(255,194,75,.45); color: #ffe6b3; }\n.cp-banner.info { background: var(--panel-soft); border: 1px solid var(--line); color: var(--muted); }\n\n/* header */\n.cp-head { display: flex; gap: 12px; align-items: center; }\n.cp-head-actions { display: flex; gap: 6px; align-items: center; }\n.cp-head-btn { cursor: pointer; }\n.cp-head-btn:hover { border-color: var(--accent); color: #d8eeff; }\n.cp-avatar { width: 46px; height: 46px; border-radius: 10px; background: var(--panel-soft); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-weight: 700; flex: none; overflow: hidden; }\n.cp-avatar img { width: 100%; height: 100%; object-fit: cover; }\n.cp-name { font-size: 15px; font-weight: 700; }\n\n/* sub-nav */\n.cp-nav { display: flex; gap: 6px; flex-wrap: wrap; }\n.cp-tab { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; color: var(--text); cursor: pointer; font-size: 12px; }\n.cp-tab.active { background: var(--accent-soft); border-color: var(--accent); color: #d8eeff; font-weight: 700; }\n.cp-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n\n/* overview layout: doll left, characteristics right (same level) */\n.cp-overview { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }\n.cp-doll-col { flex: none; }\n.cp-attrs-col { flex: 1; min-width: 150px; }\n\n/* clickable cards (skills, additional body parts) \u2014 clear button affordance */\n.cp-card[role="button"] { cursor: pointer; transition: border-color .12s, background .12s; }\n.cp-card[role="button"]:hover { border-color: var(--accent); background: rgba(62,166,255,.10); }\n.cp-card[role="button"]:active { background: rgba(62,166,255,.16); }\n.cp-card[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n\n/* 3x3 characteristics \u2014 fluid squares that fill the available column */\n.cp-attrs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }\n.cp-attr { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21,34,53,.88); border: 1px solid var(--line); border-radius: 6px; padding: 2px; text-align: center; cursor: pointer; transition: border-color .12s, background .12s; }\n.cp-attr:hover { border-color: var(--accent); }\n.cp-attr:active { background: rgba(62,166,255,.1); }\n.cp-attr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }\n.cp-attr[aria-disabled="true"] { opacity: .6; cursor: progress; }\n.cp-attr .cp-attr-val { font-size: 26px; font-weight: 700; font-family: "JetBrains Mono", ui-monospace, monospace; line-height: 1; margin: 0 0 1px; }\n.cp-attr .cp-attr-code { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }\n.cp-attr .cp-attr-mod { position: absolute; right: 3px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; font-weight: 700; line-height: 1; padding: 1px 4px; border-radius: 999px; border: 1px solid transparent; }\n.cp-attr .cp-attr-mod-pos { top: 3px; color: #d9ffe4; background: rgba(74, 180, 104, .18); border-color: rgba(74, 180, 104, .45); }\n.cp-attr .cp-attr-mod-neg { bottom: 15px; color: #ffd9de; background: rgba(201,75,88,.18); border-color: rgba(201,75,88,.45); }\n.cp-attr .cp-attr-edit { position: absolute; top: 1px; left: 1px; width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; padding: 0; }\n.cp-attr .cp-attr-edit:hover { color: #d8eeff; border-color: var(--accent); }\n.cp-attr .cp-attr-pending { position: absolute; bottom: 1px; left: 0; right: 0; font-size: 7px; color: var(--accent); }\n.cp-skill-edit { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; font-size: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0; flex: none; }\n.cp-skill-edit:hover { color: #d8eeff; border-color: var(--accent); }\n\n/* doll */\n.cp-doll-wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }\n.cp-doll { position: relative; flex: none; }\n.cp-doll .cp-part { position: absolute; cursor: pointer; border: 1px solid rgba(0,0,0,.4); }\n.cp-doll .cp-part:hover, .cp-doll .cp-part:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }\n.cp-doll .cp-part.pinned { outline: 2px solid #d8eeff; outline-offset: 2px; }\n.cp-doll .cp-base { position: absolute; border-radius: 50%; background: rgba(21,34,53,.9); border: 1px solid var(--line); }\n/* state colors */\n.cp-c-intact { background: #33425e; }\n.cp-c-warn { background: #b07e2a; }\n.cp-c-danger { background: #7a2a32; }\n\n/* tooltip */\n.cp-tip { position: absolute; z-index: 30; min-width: 180px; max-width: 240px; background: rgba(7,14,24,.98); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 11px; line-height: 1.5; pointer-events: none; box-shadow: 0 8px 30px rgba(0,0,0,.5); }\n.cp-tip b { font-size: 12px; }\n.cp-tip .cp-kv { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); }\n.cp-tip .cp-kv span:last-child { color: var(--text); font-family: "JetBrains Mono", ui-monospace, monospace; }\n.cp-statebadge { display: inline-block; border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 700; }\n.cp-sb-intact { background: rgba(62,166,255,.16); color: #cfe6ff; }\n.cp-sb-warn { background: rgba(255,194,75,.18); color: #ffe6b3; }\n.cp-sb-danger { background: rgba(201,75,88,.2); color: #ffd2d8; }\n\n/* inspector */\n.cp-inspector { flex: 1; min-width: 200px; background: var(--panel-soft); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\n.cp-inspector .cp-ins-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }\n.cp-inspector .cp-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 3px 0; border-bottom: 1px solid rgba(39,65,95,.4); }\n.cp-inspector .cp-kv span:last-child { font-family: "JetBrains Mono", ui-monospace, monospace; }\n.cp-close { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; cursor: pointer; padding: 3px 8px; font-size: 12px; }\n\n/* cards / lists */\n.cp-card { background: rgba(21,34,53,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }\n.cp-list { display: flex; flex-direction: column; gap: 8px; }\n.cp-rowitem { display: flex; justify-content: space-between; gap: 8px; align-items: center; font-size: 12px; }\n.cp-pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 10px; border: 1px solid var(--line); background: var(--panel-soft); color: var(--muted); }\n.cp-pill.good { border-color: rgba(62,166,255,.4); color: #cfe6ff; background: rgba(62,166,255,.12); }\n.cp-pill.bad { border-color: rgba(201,75,88,.4); color: #ffd2d8; background: rgba(201,75,88,.12); }\n.cp-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(8,17,28,.7); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font-size: 11px; }\n.cp-chip.bad { border-color: rgba(201,75,88,.5); color: #ffd9de; }\n.cp-skill-mod { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; font-size: 10px; font-family: "JetBrains Mono", ui-monospace, monospace; border: 1px solid transparent; }\n.cp-skill-mod-pos { color: #d9ffe4; background: rgba(74, 180, 104, .16); border-color: rgba(74, 180, 104, .4); }\n.cp-skill-mod-neg { color: #ffd9de; background: rgba(201,75,88,.16); border-color: rgba(201,75,88,.4); }\n\n/* pips for skills */\n.cp-pips { display: inline-flex; gap: 3px; }\n.cp-pip { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }\n.cp-pip.on { background: var(--accent); }\n\n/* buttons reuse shell .button; small variant */\n.cp-btn-sm { padding: 6px 10px; font-size: 12px; }\n\n/* skeleton */\n.cp-skel { border-radius: 10px; background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 37%, rgba(255,255,255,.04) 63%); background-size: 400% 100%; animation: cp-shimmer 1.3s ease infinite; }\n@keyframes cp-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }\n.cp-skel-line { height: 12px; margin: 6px 0; }\n.cp-skel-card { height: 64px; margin: 6px 0; }\n@media (prefers-reduced-motion: reduce) { .cp-skel { animation: none; } }\n\n/* dialog/popover */\n.cp-overlay { position: fixed; inset: 0; background: rgba(4,8,14,.6); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }\n.cp-dialog { width: 100%; max-width: 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }\n.cp-dialog h3 { margin: 0 0 10px; font-size: 14px; }\n\n.cp-empty { color: var(--muted); font-size: 12px; padding: 8px 0; }\n.cp-additional { margin-top: 8px; }\n\n/* pool chip with GM +/- buttons */\n.cp-chip.cp-pool-gm { padding: 2px 4px; gap: 3px; }\n.cp-pool-adj { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; cursor: pointer; width: 20px; height: 20px; font-size: 14px; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; }\n.cp-pool-adj:hover:not(:disabled) { color: #d8eeff; border-color: var(--accent); }\n.cp-pool-adj:disabled { opacity: .4; cursor: default; }\n\n/* edit dialog stepper */\n.cp-dlg-stepper { display: flex; gap: 6px; align-items: center; justify-content: center; margin-bottom: 2px; }\n.cp-dlg-input { width: 64px; flex: none; text-align: center; border: 1px solid var(--line); background: rgba(8,17,28,.9); color: var(--text); border-radius: 8px; padding: 7px 6px; font-size: 15px; }\n.cp-dlg-step { width: 36px; height: 36px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 18px; padding: 0; border-radius: 8px; }\n';
 
 // movement/gridMath.js
 var SQRT3 = Math.sqrt(3);

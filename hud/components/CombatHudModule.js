@@ -333,6 +333,7 @@ export function mountCombatHudModule(options) {
    *  incompatible/not-found magazine) produced ZERO visible feedback — the UI
    *  looked like "Reload did nothing" instead of showing the real reason. */
   function maybeShowCommandStatusToast() {
+    if (moduleId !== "player") return;
     const status = liveSelection?.ui?.commandStatus ?? null;
     const key = status ? `${status.type}:${status.message}` : null;
     if (key === lastCommandStatusKey) return;

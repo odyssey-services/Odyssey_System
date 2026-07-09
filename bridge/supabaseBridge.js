@@ -3,6 +3,7 @@ import { toErrorMessage } from "../utils/errors.js";
 import { safeJsonParse } from "../utils/json.js";
 import { CHARACTER_PLACEMENT_RPC_NAMES } from "../constants/rpcNames.js";
 import { normalizeSupabaseSettings } from "./settingsBridge.js";
+import { logDebugEvent } from "../hud/debug/debugLogStore.js";
 
 function getSupabaseSettingsOrThrow(settings) {
   const normalized = normalizeSupabaseSettings(settings);
@@ -101,6 +102,16 @@ async function requestSupabase(path, options = {}) {
     const response = await fetchPromise;
     return await parseSupabaseResponse(response, fallbackMessage, requestId);
   } catch (error) {
+    logDebugEvent(
+      "rpc",
+      "request-failed",
+      {
+        method,
+        path,
+        message: toErrorMessage(error),
+      },
+      false,
+    );
     addDiagnosticEntry(
       "error",
       "Supabase request failed",

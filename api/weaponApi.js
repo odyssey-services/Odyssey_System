@@ -1,7 +1,18 @@
 import { WEAPON_RPC_NAMES } from "../constants/rpcNames.js";
 import { callSupabaseRpc } from "../bridge/supabaseBridge.js";
 
-export function getCharacterArmory(characterId, settings) {
+export function getCharacterArmory(characterId, settings, encounterId = null) {
+  const normalizedEncounterId = String(encounterId ?? "").trim();
+  if (normalizedEncounterId) {
+    return callSupabaseRpc(
+      WEAPON_RPC_NAMES.getCharacterArmoryContext,
+      {
+        p_character_id: characterId,
+        p_encounter_id: normalizedEncounterId,
+      },
+      settings,
+    );
+  }
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
     { p_character_id: characterId },

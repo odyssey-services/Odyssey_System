@@ -273,12 +273,18 @@ export function setupSceneSelection(hooks = {}) {
         // the bundle's own armory section can omit. Inventory is optional: when it
         // errors (known backend 25006) buildCanonicalArmory falls back to
         // armory.magazines, exactly like Resolve-Attack's storeInventory().
+        const selectedSession = characterId && characterId === ephemeral.characterId
+          ? currentMappedSession()
+          : null;
+        const armoryEncounterId = selectedSession?.exists
+          ? String(selectedSession.id ?? "").trim() || null
+          : null;
         const [bundle, armory, inventory] = await Promise.all([
           getCharacterRuntimeBundle(
             { character_id: characterId, sections: HUD_RUNTIME_SECTIONS },
             settings,
           ),
-          getCharacterArmory(characterId, settings).catch(() => null),
+          getCharacterArmory(characterId, settings, armoryEncounterId).catch(() => null),
           getCharacterInventory(characterId, settings).catch(() => null),
         ]);
         if (!bundle || typeof bundle !== "object") return bundle;
@@ -407,6 +413,30 @@ export function setupSceneSelection(hooks = {}) {
           void refetchCurrent(`${reason}:queued`);
         }
       }
+    }
+
+    async function refreshSelectedCharacterRuntime(
+      reason = "generic",
+      { refreshQuickbar = false } = {},
+    ) {
+      logDebugEvent(
+        "runtime",
+        reason === "weapon-switched" ? "refresh_after_weapon_switch" : "refresh-requested",
+        {
+          characterId: ephemeral.characterId,
+          reason,
+          refreshQuickbar,
+          sections: refreshQuickbar
+            ? ["armory", "abilities", "skills", "quickbar", "combat"]
+            : ["armory", "abilities", "combat"],
+        },
+        true,
+      );
+      const tasks = [refetchCurrent(reason)];
+      if (refreshQuickbar && quickbarController && ephemeral.characterId) {
+        tasks.push(quickbarController.refresh());
+      }
+      await Promise.allSettled(tasks);
     }
 
     function applyTargetingPayload(payload) {
@@ -1362,9 +1392,21 @@ export function setupSceneSelection(hooks = {}) {
           ? lastPayload.hudSnapshot.weapon.available
           : [];
         const selectedOption = availableWeapons.find((option) => String(option?.id ?? "").trim() === weaponId) ?? null;
-        logDebugEvent("weapon", "selected", { weaponId, activeWeaponId });
+        logDebugEvent("weapon", "switch_active_weapon:start", {
+          characterId: ephemeral.characterId,
+          targetWeaponId: weaponId,
+          previousActiveWeaponId: activeWeaponId,
+          encounterId: session?.id ?? null,
+        });
         if (!weaponId || !ephemeral.characterId) {
-          ephemeral.commandStatus = { type: "error", message: "Weapon switch unavailable." };
+          const message = "Weapon switch unavailable.";
+          ephemeral.commandStatus = { type: "error", message, source: "weapon_overlay", operation: "switch_active_weapon", code: "WEAPON_SWITCH_UNAVAILABLE" };
+          logDebugEvent("weapon", "switch_active_weapon:error", {
+            characterId: ephemeral.characterId,
+            targetWeaponId: weaponId,
+            code: "WEAPON_SWITCH_UNAVAILABLE",
+            message,
+          }, false);
           if (lastState) publishState(lastState);
           return;
         }
@@ -1374,12 +1416,37 @@ export function setupSceneSelection(hooks = {}) {
         }
         const switchGate = sessionReloadGate(session, selectedOption?.switchCost ?? "full_move");
         if (switchGate.blocked) {
-          ephemeral.commandStatus = { type: "error", message: switchGate.reason };
+          ephemeral.commandStatus = {
+            type: "error",
+            message: switchGate.reason,
+            source: "weapon_overlay",
+            operation: "switch_active_weapon",
+            code: "SESSION_GATE",
+          };
+          logDebugEvent("weapon", "switch_active_weapon:error", {
+            characterId: ephemeral.characterId,
+            targetWeaponId: weaponId,
+            code: "SESSION_GATE",
+            message: switchGate.reason,
+          }, false);
           if (lastState) publishState(lastState);
           return;
         }
         if (selectedOption?.switchAllowed === false) {
-          ephemeral.commandStatus = { type: "error", message: selectedOption.switchBlockedReason || "Weapon switch unavailable." };
+          const message = selectedOption.switchBlockedReason || "Weapon switch unavailable.";
+          ephemeral.commandStatus = {
+            type: "error",
+            message,
+            source: "weapon_overlay",
+            operation: "switch_active_weapon",
+            code: "SWITCH_BLOCKED",
+          };
+          logDebugEvent("weapon", "switch_active_weapon:error", {
+            characterId: ephemeral.characterId,
+            targetWeaponId: weaponId,
+            code: "SWITCH_BLOCKED",
+            message,
+          }, false);
           if (lastState) publishState(lastState);
           return;
         }
@@ -1401,17 +1468,55 @@ export function setupSceneSelection(hooks = {}) {
             settings,
           );
           if (result?.ok === false) {
-            ephemeral.commandStatus = { type: "error", message: result.message || result.error || "Weapon switch failed." };
+            const message = result.message || result.error || "Weapon switch failed.";
+            ephemeral.commandStatus = {
+              type: "error",
+              message,
+              source: "weapon_overlay",
+              operation: "switch_active_weapon",
+              code: result.error ?? "WEAPON_SWITCH_FAILED",
+            };
+            logDebugEvent("weapon", "switch_active_weapon:error", {
+              characterId: ephemeral.characterId,
+              targetWeaponId: weaponId,
+              code: result.error ?? "WEAPON_SWITCH_FAILED",
+              message,
+              details: result,
+            }, false);
             if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) void sessionController.refresh();
             if (lastState) publishState(lastState);
             return;
           }
-          ephemeral.commandStatus = { type: "ok", message: "Weapon switched." };
+          ephemeral.commandStatus = {
+            type: "ok",
+            message: "Weapon switched.",
+            source: "weapon_overlay",
+            operation: "switch_active_weapon",
+          };
+          logDebugEvent("weapon", "switch_active_weapon:success", {
+            characterId: ephemeral.characterId,
+            targetWeaponId: weaponId,
+            resultActiveWeaponId: String(result?.active_weapon_id ?? "").trim() || null,
+            activeWeaponIdFromArmory: String(result?.armory?.active_weapon_id ?? "").trim() || null,
+          }, true);
           if (result?.combat_session && sessionController) void sessionController.refresh();
-          await refetchCurrent("weapon-switch");
+          await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });
           return;
         } catch (error) {
-          ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Weapon switch failed.") };
+          const message = String(error?.message ?? error ?? "Weapon switch failed.");
+          ephemeral.commandStatus = {
+            type: "error",
+            message,
+            source: "weapon_overlay",
+            operation: "switch_active_weapon",
+            code: "RPC_EXCEPTION",
+          };
+          logDebugEvent("weapon", "switch_active_weapon:error", {
+            characterId: ephemeral.characterId,
+            targetWeaponId: weaponId,
+            code: "RPC_EXCEPTION",
+            message,
+          }, false);
           if (lastState) publishState(lastState);
           return;
         }

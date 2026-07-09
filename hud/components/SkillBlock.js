@@ -83,7 +83,7 @@ export function renderSkillBlock(state, opts = {}) {
       ? String(opts.openSkillsMenu.id ?? "").trim() || null
       : null;
     const pendingDeleteId = String(opts?.pendingGmDeleteId ?? "").trim() || null;
-    const gmAdmin = role === "gm"
+    const gmAdmin = role === "gm" && opts?.allowGmDelete === true
       ? { enabled: true, openActionId, pendingDeleteId }
       : null;
     return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId, gmAdmin }) });

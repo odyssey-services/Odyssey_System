@@ -130,9 +130,9 @@ var require_events = __commonJS({
         ReflectApply(handler, this, args);
       } else {
         var len = handler.length;
-        var listeners2 = arrayClone(handler, len);
+        var listeners3 = arrayClone(handler, len);
         for (var i = 0; i < len; ++i)
-          ReflectApply(listeners2[i], this, args);
+          ReflectApply(listeners3[i], this, args);
       }
       return true;
     };
@@ -255,7 +255,7 @@ var require_events = __commonJS({
     };
     EventEmitter2.prototype.off = EventEmitter2.prototype.removeListener;
     EventEmitter2.prototype.removeAllListeners = function removeAllListeners(type) {
-      var listeners2, events, i;
+      var listeners3, events, i;
       events = this._events;
       if (events === void 0)
         return this;
@@ -284,12 +284,12 @@ var require_events = __commonJS({
         this._eventsCount = 0;
         return this;
       }
-      listeners2 = events[type];
-      if (typeof listeners2 === "function") {
-        this.removeListener(type, listeners2);
-      } else if (listeners2 !== void 0) {
-        for (i = listeners2.length - 1; i >= 0; i--) {
-          this.removeListener(type, listeners2[i]);
+      listeners3 = events[type];
+      if (typeof listeners3 === "function") {
+        this.removeListener(type, listeners3);
+      } else if (listeners3 !== void 0) {
+        for (i = listeners3.length - 1; i >= 0; i--) {
+          this.removeListener(type, listeners3[i]);
         }
       }
       return this;
@@ -305,7 +305,7 @@ var require_events = __commonJS({
         return unwrap ? [evlistener.listener || evlistener] : [evlistener];
       return unwrap ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
     }
-    EventEmitter2.prototype.listeners = function listeners2(type) {
+    EventEmitter2.prototype.listeners = function listeners3(type) {
       return _listeners(this, type, true);
     };
     EventEmitter2.prototype.rawListeners = function rawListeners(type) {
@@ -9884,6 +9884,7 @@ var FEATURE_RPC_NAMES = Object.freeze({
 });
 var WEAPON_RPC_NAMES = Object.freeze({
   getCharacterArmory: "get_character_armory",
+  getCharacterArmoryContext: "get_character_armory_context",
   switchActiveWeapon: "switch_active_weapon",
   switchWeaponProfile: "switch_weapon_profile",
   switchWeaponFireMode: "switch_weapon_fire_mode",
@@ -10010,6 +10011,29 @@ var CREATOR_RPC_NAMES = Object.freeze({
   deleteEquipmentModel: "creator_delete_equipment_model"
 });
 
+// hud/debug/debugLogStore.js
+var MAX_ENTRIES = 200;
+var enabled = false;
+var entries2 = [];
+var listeners2 = /* @__PURE__ */ new Set();
+function notify2() {
+  for (const fn of listeners2) {
+    try {
+      fn(entries2);
+    } catch (_e) {
+    }
+  }
+}
+function logDebugEvent(category, action, details2 = {}, success = true) {
+  if (!enabled) return;
+  entries2 = [
+    { timestamp: Date.now(), category: String(category ?? ""), action: String(action ?? ""), details: details2 ?? {}, success: !!success },
+    ...entries2
+  ];
+  if (entries2.length > MAX_ENTRIES) entries2 = entries2.slice(0, MAX_ENTRIES);
+  notify2();
+}
+
 // bridge/supabaseBridge.js
 function getSupabaseSettingsOrThrow(settings) {
   const normalized = normalizeSupabaseSettings(settings);
@@ -10100,6 +10124,16 @@ async function requestSupabase(path, options = {}) {
     const response = await fetchPromise;
     return await parseSupabaseResponse(response, fallbackMessage, requestId);
   } catch (error) {
+    logDebugEvent(
+      "rpc",
+      "request-failed",
+      {
+        method,
+        path,
+        message: toErrorMessage(error)
+      },
+      false
+    );
     addDiagnosticEntry(
       "error",
       "Supabase request failed",
@@ -10327,11 +10361,11 @@ function buildModuleRows(runtime2) {
       </div>
     `).join("");
 }
-function buildDiagnosticsRows(entries2) {
-  if (!entries2.length) {
+function buildDiagnosticsRows(entries3) {
+  if (!entries3.length) {
     return '<div class="list-item"><div class="muted">No diagnostics yet.</div></div>';
   }
-  return entries2.map((entry) => `
+  return entries3.map((entry) => `
       <div class="list-item">
         <div class="list-item-title">${escapeHtml(entry.title)}</div>
         <div class="muted">${escapeHtml(entry.level.toUpperCase())} | ${escapeHtml(formatTimestamp(entry.createdAt))}</div>
@@ -10421,8 +10455,8 @@ async function mountBridgeShell({
     refs.supabaseUrl.disabled = !canManageRoomSettings;
     refs.supabaseKey.disabled = !canManageRoomSettings;
   }
-  const unsubscribeDiagnostics = subscribeDiagnostics((entries2) => {
-    refs.diagnostics.innerHTML = buildDiagnosticsRows(entries2);
+  const unsubscribeDiagnostics = subscribeDiagnostics((entries3) => {
+    refs.diagnostics.innerHTML = buildDiagnosticsRows(entries3);
   });
   syncSettingsInputs();
   render();
@@ -10706,7 +10740,18 @@ __export(weaponApi_exports, {
   unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
   unloadWeaponMagazine: () => unloadWeaponMagazine
 });
-function getCharacterArmory(characterId, settings) {
+function getCharacterArmory(characterId, settings, encounterId = null) {
+  const normalizedEncounterId = String(encounterId ?? "").trim();
+  if (normalizedEncounterId) {
+    return callSupabaseRpc(
+      WEAPON_RPC_NAMES.getCharacterArmoryContext,
+      {
+        p_character_id: characterId,
+        p_encounter_id: normalizedEncounterId
+      },
+      settings
+    );
+  }
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
     { p_character_id: characterId },
