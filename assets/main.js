@@ -10706,10 +10706,10 @@ __export(weaponApi_exports, {
   unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
   unloadWeaponMagazine: () => unloadWeaponMagazine
 });
-function getCharacterArmory(characterId, settings, encounterId = null) {
+function getCharacterArmory(characterId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
-    encounterId ? { p_character_id: characterId, p_encounter_id: encounterId } : { p_character_id: characterId },
+    { p_character_id: characterId },
     settings
   );
 }
@@ -35040,33 +35040,6 @@ async function subscribeMoveToolMessages(listener) {
   };
 }
 
-// hud/debug/debugConsoleConstants.js
-var BC_DEBUG_CONSOLE_LOG_EVENT = "com.odyssey.debug-console/log-event";
-
-// hud/debug/debugLogClient.js
-function reportUiError(event) {
-  try {
-    if (typeof lib_default === "undefined" || lib_default.isAvailable === false) return;
-    const source = String(event?.source ?? "unknown");
-    const operation = String(event?.operation ?? "unknown");
-    lib_default.broadcast.sendMessage(
-      BC_DEBUG_CONSOLE_LOG_EVENT,
-      {
-        source,
-        operation,
-        code: event?.code ?? null,
-        message: String(event?.message ?? ""),
-        details: event?.details && typeof event.details === "object" ? event.details : {},
-        payload: event?.payload && typeof event.payload === "object" ? event.payload : null,
-        result: event?.result && typeof event.result === "object" ? event.result : null,
-        createdAt: Date.now()
-      },
-      { destination: "LOCAL" }
-    );
-  } catch (_e) {
-  }
-}
-
 // screens/character/characterScreen.js
 var ATTR_RU = {
   strength: "\u0421\u0438\u043B\u0430",
@@ -36095,7 +36068,6 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       } catch (e) {
         state.notice = "";
         setNotice("err", `${esc2(describeError(e.code, e.message))}`);
-        reportUiError({ source: "character_overlay", operation: label, code: e?.code ?? null, message: String(e?.message ?? e ?? "") });
         state.busy = false;
         render();
         return null;
@@ -36114,7 +36086,6 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
           return null;
         }
         setNotice("err", `${esc2(describeError(result.error, result.message))}${result.error ? ` <span class="cp-mono">[${esc2(result.error)}]</span>` : ""}`);
-        reportUiError({ source: "character_overlay", operation: label, code: result.error ?? null, message: String(result.message ?? ""), result });
         state.busy = false;
         render();
         return null;

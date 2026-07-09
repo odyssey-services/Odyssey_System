@@ -1,10 +1,10 @@
 import { WEAPON_RPC_NAMES } from "../constants/rpcNames.js";
 import { callSupabaseRpc } from "../bridge/supabaseBridge.js";
 
-export function getCharacterArmory(characterId, settings, encounterId = null) {
+export function getCharacterArmory(characterId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
-    encounterId ? { p_character_id: characterId, p_encounter_id: encounterId } : { p_character_id: characterId },
+    { p_character_id: characterId },
     settings,
   );
 }

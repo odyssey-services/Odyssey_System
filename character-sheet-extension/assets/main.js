@@ -10706,10 +10706,10 @@ __export(weaponApi_exports, {
   unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
   unloadWeaponMagazine: () => unloadWeaponMagazine
 });
-function getCharacterArmory(characterId, settings, encounterId = null) {
+function getCharacterArmory(characterId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
-    encounterId ? { p_character_id: characterId, p_encounter_id: encounterId } : { p_character_id: characterId },
+    { p_character_id: characterId },
     settings
   );
 }

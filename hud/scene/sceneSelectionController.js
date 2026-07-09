@@ -53,26 +53,6 @@ import { subscribeMoveToolMessages, MOVE_TOOL_EVENTS } from "../../movement/move
 import { setupQuickbarController } from "../abilities/quickbarController.js";
 import { mapCombatRuntimeToSession } from "../session/combatSessionMapper.js";
 import { sessionAttackGate, sessionReloadGate, expectedVersionOf } from "../session/combatSessionPolicy.js";
-import { callWithBusyRetry } from "../combat/actionBusyRetry.js";
-
-/** Wraps a single combat_execute_action/perform_attack RPC call with a
- *  one-time retry on ACTION_BUSY_RETRY (lock/statement-timeout contention —
- *  see supabase/104_ability_timeout_hotfix.sql). Both attempts are logged to
- *  the Debug Console when a retry actually happened; a normal first-try
- *  result is passed through untouched with no extra logging. */
-function withBusyRetry(rpcName, callFn) {
-  return callWithBusyRetry(callFn).then(({ result, retried }) => {
-    if (retried) {
-      logDebugEvent(
-        "action",
-        "busy-retry",
-        { rpc: rpcName, secondOk: result?.ok !== false, secondError: result?.error ?? null },
-        result?.ok !== false,
-      );
-    }
-    return result;
-  });
-}
 
 // Phase 4.1A: perform_attack error codes specific to an armed attack
 // technique (migration 100) — used only to classify a Debug Console event,
@@ -91,6 +71,7 @@ import { BC_HUD_COMMAND, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_TARG
 import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
 import { buildCanonicalArmory, pickActiveWeapon } from "../runtime/runtimeBundleMapper.js";
 import { buildBroadcastPayload, normalizeViewer } from "./selectionState.js";
+import { mutateSupabaseRows } from "../../bridge/supabaseBridge.js";
 
 const SCENE_RERESOLVE_DEBOUNCE_MS = 600;
 const HUD_RUNTIME_SECTIONS = Object.freeze(["summary", "combat", "armory", "abilities", "effects"]);
@@ -112,6 +93,7 @@ export function setupSceneSelection(hooks = {}) {
   let lastState = null;
   let sceneTimer = null;
   let currentSelectionIds = [];
+  let skillAdminDeleteInFlight = null;
   let refetchCurrentPromise = null;
   let refetchCurrentQueued = false;
   let lastRefetchAt = 0;
@@ -134,11 +116,6 @@ export function setupSceneSelection(hooks = {}) {
     selectedWeaponId: null,
     selectedReloadMagazineId: null,
     weaponSelectorOpen: false,
-    // True only for the duration of an in-flight switch_active_weapon call —
-    // blocks a second concurrent switch (see handleCommand's "select-weapon"
-    // branch) and lets the weapon row show a "switching…" state instead of
-    // relying solely on the RPC round-trip finishing.
-    weaponSwitchInFlight: false,
     preparedAction: null,
     targeting: { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" },
     commandStatus: null,
@@ -296,18 +273,12 @@ export function setupSceneSelection(hooks = {}) {
         // the bundle's own armory section can omit. Inventory is optional: when it
         // errors (known backend 25006) buildCanonicalArmory falls back to
         // armory.magazines, exactly like Resolve-Attack's storeInventory().
-        // Explicit combat context, same rule as switch_active_weapon: never
-        // let get_character_armory silently guess "newest active encounter"
-        // when this character has more than one — pass the room's own
-        // tracked session id when it exists.
-        const session = currentMappedSession();
-        const encounterId = session?.exists && session.id ? session.id : null;
         const [bundle, armory, inventory] = await Promise.all([
           getCharacterRuntimeBundle(
             { character_id: characterId, sections: HUD_RUNTIME_SECTIONS },
             settings,
           ),
-          getCharacterArmory(characterId, settings, encounterId).catch(() => null),
+          getCharacterArmory(characterId, settings).catch(() => null),
           getCharacterInventory(characterId, settings).catch(() => null),
         ]);
         if (!bundle || typeof bundle !== "object") return bundle;
@@ -334,7 +305,6 @@ export function setupSceneSelection(hooks = {}) {
       ephemeral.selectedWeaponId = null;
       ephemeral.selectedReloadMagazineId = null;
       ephemeral.weaponSelectorOpen = false;
-      ephemeral.weaponSwitchInFlight = false;
       ephemeral.preparedAction = null;
       ephemeral.targeting = { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" };
       ephemeral.commandStatus = null;
@@ -377,7 +347,6 @@ export function setupSceneSelection(hooks = {}) {
         selectedWeaponId: ephemeral.selectedWeaponId,
         selectedReloadMagazineId: ephemeral.selectedReloadMagazineId,
         weaponSelectorOpen: ephemeral.weaponSelectorOpen,
-        weaponSwitchInFlight: ephemeral.weaponSwitchInFlight,
         preparedAction: ephemeral.preparedAction,
         targeting: ephemeral.targeting,
         commandStatus: ephemeral.commandStatus,
@@ -440,22 +409,6 @@ export function setupSceneSelection(hooks = {}) {
       }
     }
 
-    /** Single "this character's runtime changed" entry point. Every mutation
-     *  that can affect more than the armory/bundle (a weapon switch changes
-     *  which weapon-granted abilities are enabled; an ability execution
-     *  changes cooldown/PSI) MUST invalidate through here instead of calling
-     *  refetchCurrent()/quickbarController.refresh()/sessionController.refresh()
-     *  piecemeal — that piecemeal pattern is exactly what left the Skills/
-     *  Quickbar block showing stale availability after a weapon switch (the
-     *  quickbar runtime is a separate fetch pipeline from the armory/bundle
-     *  one; only refetchCurrent() was ever called on weapon-switch success). */
-    async function invalidateCharacterRuntime(reason = "generic") {
-      const tasks = [refetchCurrent(reason)];
-      if (quickbarController) tasks.push(quickbarController.refresh());
-      if (sessionController) tasks.push(sessionController.refresh());
-      await Promise.allSettled(tasks);
-    }
-
     function applyTargetingPayload(payload) {
       const target = payload?.target && typeof payload.target === "object" ? payload.target : null;
       ephemeral.targeting = {
@@ -482,13 +435,104 @@ export function setupSceneSelection(hooks = {}) {
       if (!command || typeof command !== "object") return;
       if (!lastPayload || lastPayload.status !== "ready") return;
 
-      // NOTE: GM-delete is intentionally NOT reachable from the Skills
-      // overlay (Combat HUD) — it remains a Character-overlay-only action
-      // (screens/character/characterScreen.js's own onGmDelete, a separate
-      // bundle/code path that this controller never touches). There used to
-      // be a "gm-skill-admin" command branch here; nothing in the Skills
-      // overlay dispatches it anymore (see QuickbarView.js/SkillBlock.js/
-      // CombatHudModule.js), so it was removed rather than left unreachable.
+      if (command?.scope === "combat-hud" && command?.feature === "gm-skill-admin") {
+        const viewerIsGm = String(viewer?.role ?? "").toUpperCase() === "GM";
+        const deleteType = String(command.type ?? "");
+        const characterSkillId = String(command.characterSkillId ?? command.skillId ?? "").trim() || null;
+        const characterActionId = String(command.characterActionId ?? "").trim() || null;
+        const deleteKey = deleteType === "delete-skill"
+          ? `skill:${characterSkillId ?? ""}`
+          : `ability:${characterActionId ?? ""}`;
+
+        logDebugEvent("skills", "gm-delete-click", {
+          type: deleteType,
+          characterSkillId,
+          characterActionId,
+        });
+
+        if (!viewerIsGm) {
+          ephemeral.commandStatus = {
+            type: "error",
+            message: "GM delete is available only for the GM.",
+            source: "gm-skill-admin",
+            deleteKey,
+          };
+          if (lastState) publishState(lastState);
+          return;
+        }
+
+        if (skillAdminDeleteInFlight) return;
+
+        if (deleteType !== "delete-skill" && deleteType !== "delete-ability") return;
+        if (deleteType === "delete-skill" && !characterSkillId) {
+          ephemeral.commandStatus = {
+            type: "error",
+            message: "Missing character skill id.",
+            source: "gm-skill-admin",
+            deleteKey,
+          };
+          if (lastState) publishState(lastState);
+          return;
+        }
+        if (deleteType === "delete-ability" && !characterActionId) {
+          ephemeral.commandStatus = {
+            type: "error",
+            message: "Missing character ability id.",
+            source: "gm-skill-admin",
+            deleteKey,
+          };
+          if (lastState) publishState(lastState);
+          return;
+        }
+
+        skillAdminDeleteInFlight = deleteKey;
+        try {
+          if (deleteType === "delete-skill") {
+            await mutateSupabaseRows(
+              `odyssey_character_skills?id=eq.${encodeURIComponent(characterSkillId)}&character_id=eq.${encodeURIComponent(ephemeral.characterId)}`,
+              null,
+              settings,
+              { method: "DELETE", prefer: "return=minimal", fallbackMessage: "Unable to delete character skill." },
+            );
+          } else {
+            await mutateSupabaseRows(
+              `odyssey_character_abilities?id=eq.${encodeURIComponent(characterActionId)}&character_id=eq.${encodeURIComponent(ephemeral.characterId)}`,
+              null,
+              settings,
+              { method: "DELETE", prefer: "return=minimal", fallbackMessage: "Unable to delete character ability." },
+            );
+            if (armedTechniqueMemory.get(ephemeral.characterId) === characterActionId) {
+              armedTechniqueMemory.forget(ephemeral.characterId);
+            }
+          }
+
+          ephemeral.commandStatus = {
+            type: "ok",
+            message: deleteType === "delete-skill" ? "Skill deleted." : "Ability deleted.",
+            source: "gm-skill-admin",
+            deleteKey,
+          };
+          logDebugEvent("skills", "gm-delete-result", { ok: true, type: deleteType, deleteKey }, true);
+
+          await Promise.allSettled([
+            quickbarController?.refresh?.(),
+            refetchCurrent(),
+          ]);
+        } catch (error) {
+          const message = String(error?.message ?? error ?? "Delete failed.");
+          ephemeral.commandStatus = {
+            type: "error",
+            message,
+            source: "gm-skill-admin",
+            deleteKey,
+          };
+          logDebugEvent("skills", "gm-delete-result", { ok: false, type: deleteType, deleteKey, error: message }, false);
+          if (lastState) publishState(lastState);
+        } finally {
+          skillAdminDeleteInFlight = null;
+        }
+        return;
+      }
 
       // Fire Mode v1: namespaced commands ({scope:"combat-hud", feature:"fire-mode"})
       // are routed BEFORE the flat-`type` switch below, on scope+feature (not just
@@ -535,7 +579,7 @@ export function setupSceneSelection(hooks = {}) {
             ephemeral.commandStatus = { type: "ok", message: "Fire mode changed." };
             pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Fire mode changed." }));
             logDebugEvent("fire-mode", "result", { weaponId, fireModeId }, true);
-            await invalidateCharacterRuntime("fire-mode-switch");
+            await refetchCurrent();
           } catch (error) {
             // switch_weapon_fire_mode RAISEs an exception (not {ok:false}) on
             // an invalid weapon or a mode not allowed for the active profile —
@@ -678,7 +722,7 @@ export function setupSceneSelection(hooks = {}) {
 
         let outcome;
         try {
-          outcome = await resolveAttack(ctx, { performAttack: (payload) => withBusyRetry("perform_attack", () => performAttack(payload, settings)) });
+          outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings) });
         } catch (error) {
           // resolveAttack() already catches RPC/network errors internally —
           // this catch only guards a thrown ValidationError (a locally-
@@ -754,13 +798,12 @@ export function setupSceneSelection(hooks = {}) {
           // refresh of the target's own body-zone condition is requested.
           try { OBR.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "refreshBodyZones" }, { destination: "LOCAL" }); } catch (_e) { /* best-effort */ }
           // Authoritative refresh of THIS source's own runtime (cooldown/PSI
-          // now server-updated) — never the target's private bundle. Also
-          // refreshes the quickbar/abilities runtime (cooldown just changed).
-          await invalidateCharacterRuntime("direct-ability-attack-success");
+          // now server-updated) — never the target's private bundle.
+          await refetchCurrent();
           logDebugEvent("refresh", "source-refresh-result", { reason: "direct-ability-attack-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability attack failed." };
-          await invalidateCharacterRuntime("direct-ability-attack-failure");
+          await refetchCurrent();
           logDebugEvent("refresh", "source-refresh-result", { reason: "direct-ability-attack-failure" }, true);
         }
         return;
@@ -859,7 +902,7 @@ export function setupSceneSelection(hooks = {}) {
 
         let outcome;
         try {
-          outcome = await resolveInstantAbilityExecution(ctx, { executeAction: (payload) => withBusyRetry("combat_execute_action", () => executeAction(payload, settings)) });
+          outcome = await resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) });
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
         }
@@ -913,11 +956,11 @@ export function setupSceneSelection(hooks = {}) {
           // No target/body-zone concept exists for this ability class —
           // nothing to preserve/clear; the existing target/ring state is
           // simply never referenced by this handler.
-          await invalidateCharacterRuntime("instant-ability-success");
+          await refetchCurrent();
           logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
-          await invalidateCharacterRuntime("instant-ability-failure");
+          await refetchCurrent();
           logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-failure" }, true);
         }
         return;
@@ -1015,7 +1058,7 @@ export function setupSceneSelection(hooks = {}) {
 
         let outcome;
         try {
-          outcome = await resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => withBusyRetry("combat_execute_action", () => executeAction(payload, settings)) });
+          outcome = await resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) });
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
         }
@@ -1083,11 +1126,11 @@ export function setupSceneSelection(hooks = {}) {
             OBR.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "refreshBodyZones" }, { destination: "LOCAL" });
             logDebugEvent("refresh", "target-refresh-result", { reason: "directed-ability-success", targetCharacterId: requestCtx.targetCharacterId }, true);
           } catch (_e) { /* best-effort */ }
-          await invalidateCharacterRuntime("directed-ability-success");
+          await refetchCurrent();
           logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
-          await invalidateCharacterRuntime("directed-ability-failure");
+          await refetchCurrent();
           logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-failure" }, true);
         }
         return;
@@ -1175,7 +1218,7 @@ export function setupSceneSelection(hooks = {}) {
 
         let outcome;
         try {
-          outcome = await resolveAttack(ctx, { performAttack: (payload) => withBusyRetry("perform_attack", () => performAttack(payload, settings)) });
+          outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings) });
         } catch (error) {
           // resolveAttack() already catches RPC/network errors internally and
           // returns { ok:false, ... } — this catch only guards a thrown
@@ -1292,9 +1335,8 @@ export function setupSceneSelection(hooks = {}) {
           // so its silhouette colors reflect the damage this attack just did.
           try { OBR.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "refreshBodyZones" }, { destination: "LOCAL" }); } catch (_e) { /* best-effort */ }
           // Authoritative refresh of THIS source's armory/inventory/runtime —
-          // never the target's private bundle. Also refreshes the quickbar
-          // runtime (an armed technique's cooldown may have just changed).
-          await invalidateCharacterRuntime("attack-success");
+          // never the target's private bundle.
+          await refetchCurrent();
           logDebugEvent("refresh", "source-refresh-result", { reason: "attack-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Attack failed." };
@@ -1302,7 +1344,7 @@ export function setupSceneSelection(hooks = {}) {
           // denial can stem from stale local state (e.g. a weapon lock that
           // changed elsewhere), so refresh the SOURCE's own state — this never
           // touches target/zone selection either.
-          await invalidateCharacterRuntime("attack-failure");
+          await refetchCurrent();
           logDebugEvent("refresh", "source-refresh-result", { reason: "attack-failure" }, true);
         }
         return;
@@ -1330,11 +1372,6 @@ export function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
-        // Double-submit guard: a second select-weapon while one is still in
-        // flight is a no-op (matches basicAttackInFlight/pendingXActionId
-        // elsewhere in this file) — this is what lets the weapon row show a
-        // "switching…" state instead of silently racing two RPC calls.
-        if (ephemeral.weaponSwitchInFlight) return;
         const switchGate = sessionReloadGate(session, selectedOption?.switchCost ?? "full_move");
         if (switchGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: switchGate.reason };
@@ -1353,8 +1390,6 @@ export function setupSceneSelection(hooks = {}) {
         // the previous weapon's selector state or last RPC result forward.
         ephemeral.fireModeSelectorOpen = false;
         ephemeral.fireModeRpcResult = null;
-        ephemeral.weaponSwitchInFlight = true;
-        if (lastState) publishState(lastState); // weapon row shows "switching…" immediately
         try {
           const expectedVersion = expectedVersionOf(session);
           const result = await switchActiveWeapon(
@@ -1362,16 +1397,9 @@ export function setupSceneSelection(hooks = {}) {
               character_id: ephemeral.characterId,
               character_weapon_id: weaponId,
               ...(expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}),
-              // Explicit combat context (ticket: a character with more than
-              // one active encounter must never have the switch silently
-              // gated by whichever encounter the server would otherwise guess
-              // is "current"). session.id is the room's single active
-              // encounter this HUD is tracking for the selected character.
-              ...(session?.exists && session.id ? { encounter_id: session.id } : {}),
             },
             settings,
           );
-          ephemeral.weaponSwitchInFlight = false;
           if (result?.ok === false) {
             ephemeral.commandStatus = { type: "error", message: result.message || result.error || "Weapon switch failed." };
             if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) void sessionController.refresh();
@@ -1379,14 +1407,10 @@ export function setupSceneSelection(hooks = {}) {
             return;
           }
           ephemeral.commandStatus = { type: "ok", message: "Weapon switched." };
-          // Refreshes armory/bundle AND the quickbar/abilities runtime AND the
-          // combat session — a weapon switch can enable/disable weapon-granted
-          // abilities (e.g. Plasma Edge), so the Skills/Quickbar block must
-          // never be left showing the PREVIOUS weapon's availability.
-          await invalidateCharacterRuntime("weapon-switch");
+          if (result?.combat_session && sessionController) void sessionController.refresh();
+          await refetchCurrent("weapon-switch");
           return;
         } catch (error) {
-          ephemeral.weaponSwitchInFlight = false;
           ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Weapon switch failed.") };
           if (lastState) publishState(lastState);
           return;
@@ -1485,7 +1509,7 @@ export function setupSceneSelection(hooks = {}) {
               });
               if (sessionController) void sessionController.refresh();
             }
-            await invalidateCharacterRuntime("reload-success");
+            await refetchCurrent();
           } else {
             ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
