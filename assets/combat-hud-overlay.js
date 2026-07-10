@@ -9135,6 +9135,28 @@ function start() {
     return;
   }
   if (HUD_MODULE_IDS.includes(moduleParam)) {
+    let lastHydrationSelectionKey = "";
+    async function maybeHydrateSelectionFromLocal(payload) {
+      if (!available) return;
+      const status2 = String(payload?.status ?? "").trim();
+      if (status2 !== "no-selection" && status2 !== "loading") {
+        lastHydrationSelectionKey = "";
+        return;
+      }
+      try {
+        const selectionIds = await lib_default.player.getSelection().catch(() => []);
+        const normalizedSelectionIds = Array.isArray(selectionIds) ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+        if (normalizedSelectionIds.length !== 1) return;
+        const hydrationKey = `${status2}:${normalizedSelectionIds.join("|")}`;
+        if (lastHydrationSelectionKey === hydrationKey) return;
+        lastHydrationSelectionKey = hydrationKey;
+        send(BC_HUD_SELECTION_REQUEST, {
+          selectionIds: normalizedSelectionIds,
+          hydrateIfStale: true
+        });
+      } catch (_e) {
+      }
+    }
     const mod = mountCombatHudModule({
       root,
       moduleId: moduleParam,
@@ -9159,6 +9181,7 @@ function start() {
             mod.applySelection(event?.data ?? null);
           } catch (_e) {
           }
+          void maybeHydrateSelectionFromLocal(event?.data ?? null);
         });
         send(BC_HUD_SELECTION_REQUEST, {});
       } catch (_e) {

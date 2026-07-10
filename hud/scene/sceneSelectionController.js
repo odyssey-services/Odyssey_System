@@ -2312,7 +2312,20 @@ export function setupSceneSelection(hooks = {}) {
     }));
 
     // Replay the latest state to a module iframe that just mounted.
-    cleanups.push(OBR.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
+    cleanups.push(OBR.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, (event) => {
+      const requestedSelectionIds = Array.isArray(event?.data?.selectionIds)
+        ? event.data.selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [];
+      const requestedSignature = requestedSelectionIds.join("|");
+      const currentSignature = currentSelectionIds.join("|");
+      const shouldHydrateFromRequest = event?.data?.hydrateIfStale === true
+        && requestedSelectionIds.length === 1
+        && requestedSignature !== currentSignature
+        && (!lastPayload || lastPayload.status === "no-selection" || lastPayload.status === "loading");
+      if (shouldHydrateFromRequest) {
+        scheduleSelectedSelectionRefresh(requestedSelectionIds, "selection-request-hydrate");
+        return;
+      }
       if (lastPayload) {
         broadcast(lastPayload);
         logDebugEvent("selection", "selection-replayed", {

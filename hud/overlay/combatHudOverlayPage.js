@@ -148,6 +148,30 @@ function start() {
 
   // --- Single HUD module ---
   if (HUD_MODULE_IDS.includes(moduleParam)) {
+    let lastHydrationSelectionKey = "";
+
+    async function maybeHydrateSelectionFromLocal(payload) {
+      if (!available) return;
+      const status = String(payload?.status ?? "").trim();
+      if (status !== "no-selection" && status !== "loading") {
+        lastHydrationSelectionKey = "";
+        return;
+      }
+      try {
+        const selectionIds = await OBR.player.getSelection().catch(() => []);
+        const normalizedSelectionIds = Array.isArray(selectionIds)
+          ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+          : [];
+        if (normalizedSelectionIds.length !== 1) return;
+        const hydrationKey = `${status}:${normalizedSelectionIds.join("|")}`;
+        if (lastHydrationSelectionKey === hydrationKey) return;
+        lastHydrationSelectionKey = hydrationKey;
+        send(BC_HUD_SELECTION_REQUEST, {
+          selectionIds: normalizedSelectionIds,
+          hydrateIfStale: true,
+        });
+      } catch (_e) { /* best effort */ }
+    }
     const mod = mountCombatHudModule({
       root,
       moduleId: moduleParam,
@@ -167,6 +191,7 @@ function start() {
       try {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           try { mod.applySelection(event?.data ?? null); } catch (_e) { /* ignore */ }
+          void maybeHydrateSelectionFromLocal(event?.data ?? null);
         });
         send(BC_HUD_SELECTION_REQUEST, {});
       } catch (_e) { /* standalone or broadcast unavailable → mock render stays */ }
