@@ -162,8 +162,11 @@ export function setupSceneSelection(hooks = {}) {
   try { debugEnabled = new URLSearchParams(window.location.search).get("debug") === "1"; } catch (_e) { debugEnabled = false; }
   /** @type {Array<() => void>} */
   const cleanups = [];
-  const inFlightCombatActionKeys = new Set();
-  const inFlightCombatActionCharacters = new Set();
+  const queuedCombatActionKeys = new Set();
+  const queuedCombatActionCharacters = new Set();
+  const activeCombatActionKeys = new Set();
+  const activeCombatActionCharacters = new Set();
+  const characterActionQueues = new Map();
 
   function waitMs(ms) {
     return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
@@ -184,57 +187,143 @@ export function setupSceneSelection(hooks = {}) {
     const normalizedCharacterId = String(characterId ?? "").trim();
     if (!normalizedCharacterId) return false;
     const key = buildCombatActionKey(normalizedCharacterId, actionId, fallbackType);
-    return inFlightCombatActionCharacters.has(normalizedCharacterId) || (key ? inFlightCombatActionKeys.has(key) : false);
+    return queuedCombatActionCharacters.has(normalizedCharacterId) || (key ? queuedCombatActionKeys.has(key) : false);
   }
 
   function markCombatActionStarted(characterId, actionId, fallbackType = "ability") {
     const normalizedCharacterId = String(characterId ?? "").trim();
     if (!normalizedCharacterId) return null;
     const key = buildCombatActionKey(normalizedCharacterId, actionId, fallbackType);
-    inFlightCombatActionCharacters.add(normalizedCharacterId);
-    if (key) inFlightCombatActionKeys.add(key);
+    queuedCombatActionCharacters.add(normalizedCharacterId);
+    if (key) queuedCombatActionKeys.add(key);
     return key;
+  }
+
+  function markCombatActionActive(characterId, actionKey = null) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return;
+    activeCombatActionCharacters.add(normalizedCharacterId);
+    if (actionKey) activeCombatActionKeys.add(actionKey);
   }
 
   function markCombatActionFinished(characterId, actionKey = null) {
     const normalizedCharacterId = String(characterId ?? "").trim();
     if (!normalizedCharacterId) return;
-    if (actionKey) inFlightCombatActionKeys.delete(actionKey);
+    if (actionKey) {
+      queuedCombatActionKeys.delete(actionKey);
+      activeCombatActionKeys.delete(actionKey);
+    }
     const prefix = `${normalizedCharacterId}:`;
-    for (const key of inFlightCombatActionKeys) {
+    for (const key of queuedCombatActionKeys) {
       if (key.startsWith(prefix)) {
-        return;
+        break;
       }
     }
-    inFlightCombatActionCharacters.delete(normalizedCharacterId);
+    let hasQueued = false;
+    for (const key of queuedCombatActionKeys) {
+      if (key.startsWith(prefix)) {
+        hasQueued = true;
+        break;
+      }
+    }
+    if (!hasQueued) queuedCombatActionCharacters.delete(normalizedCharacterId);
+
+    let hasActive = false;
+    for (const key of activeCombatActionKeys) {
+      if (key.startsWith(prefix)) {
+        hasActive = true;
+        break;
+      }
+    }
+    if (!hasActive) activeCombatActionCharacters.delete(normalizedCharacterId);
+  }
+
+  function buildCharacterQueueKey(characterId, operation = "generic", encounterId = null) {
+    const normalizedCharacterId = String(characterId ?? "").trim() || "no-character";
+    const normalizedOperation = String(operation ?? "").trim() || "generic";
+    const normalizedEncounterId = String(encounterId ?? "").trim() || "no-encounter";
+    return `${normalizedEncounterId}:${normalizedCharacterId}:${normalizedOperation}`;
+  }
+
+  async function runCharacterActionQueue(characterId, work, {
+    queueKey = null,
+  } = {}) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId || typeof work !== "function") {
+      return typeof work === "function" ? work() : undefined;
+    }
+
+    const normalizedQueueKey = String(queueKey ?? "").trim() || buildCharacterQueueKey(normalizedCharacterId, "generic");
+    const previous = characterActionQueues.get(normalizedCharacterId) ?? null;
+    if (previous) {
+      logDebugEvent(
+        "runtime",
+        "character-action-queue-wait",
+        {
+          characterId: normalizedCharacterId,
+          queueKey: normalizedQueueKey,
+          reason: "another action/refresh is running",
+        },
+        true,
+        "pending",
+      );
+    }
+
+    const runPromise = (previous ?? Promise.resolve())
+      .catch(() => {})
+      .then(async () => work());
+    const settledPromise = runPromise.catch(() => {});
+    characterActionQueues.set(normalizedCharacterId, settledPromise);
+
+    try {
+      return await runPromise;
+    } finally {
+      if (characterActionQueues.get(normalizedCharacterId) === settledPromise) {
+        characterActionQueues.delete(normalizedCharacterId);
+      }
+      logDebugEvent(
+        "runtime",
+        "character-action-queue-release",
+        {
+          characterId: normalizedCharacterId,
+          queueKey: normalizedQueueKey,
+        },
+        true,
+      );
+    }
   }
 
   async function executeCombatAbilityWithRetry(executor, {
     characterId,
     actionId,
     debugAction,
-    retryDelayMs = 250,
+    retryDelaysMs = [750, 1500],
   } = {}) {
     let outcome = await executor();
-    if (normalizeOutcomeCode(outcome) !== "ACTION_BUSY_RETRY") {
-      return outcome;
+
+    for (let index = 0; index < retryDelaysMs.length; index += 1) {
+      if (normalizeOutcomeCode(outcome) !== "ACTION_BUSY_RETRY") {
+        break;
+      }
+      const retryDelayMs = Math.max(0, Number(retryDelaysMs[index]) || 0);
+      logDebugEvent(
+        "abilities",
+        debugAction || "ability-execute-retry",
+        {
+          characterId: String(characterId ?? "").trim() || null,
+          characterActionId: String(actionId ?? "").trim() || null,
+          reason: "ACTION_BUSY_RETRY",
+          retryAttempt: index + 1,
+          retryDelayMs,
+          stage: outcome?.raw?.stage ?? outcome?.stage ?? null,
+        },
+        true,
+        "pending",
+      );
+      await waitMs(retryDelayMs);
+      outcome = await executor();
     }
 
-    logDebugEvent(
-      "abilities",
-      debugAction || "ability-execute-retry",
-      {
-        characterId: String(characterId ?? "").trim() || null,
-        characterActionId: String(actionId ?? "").trim() || null,
-        reason: "ACTION_BUSY_RETRY",
-        retryDelayMs,
-      },
-      true,
-      "pending",
-    );
-
-    await waitMs(retryDelayMs);
-    outcome = await executor();
     return outcome;
   }
 
@@ -254,7 +343,7 @@ export function setupSceneSelection(hooks = {}) {
     const normalizedCharacterId = String(characterId ?? "").trim();
     if (!normalizedCharacterId) return;
     const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
-    while (inFlightCombatActionCharacters.has(normalizedCharacterId) && Date.now() < deadline) {
+    while (activeCombatActionCharacters.has(normalizedCharacterId) && Date.now() < deadline) {
       await waitMs(50);
     }
   }
@@ -534,27 +623,39 @@ export function setupSceneSelection(hooks = {}) {
 
     async function refreshSelectedCharacterRuntime(
       reason = "generic",
-      { refreshQuickbar = false } = {},
+      { refreshQuickbar = false, insideCharacterQueue = false } = {},
     ) {
-      logDebugEvent(
-        "runtime",
-        reason === "weapon-switched" ? "refresh_after_weapon_switch" : "refresh-requested",
-        {
-          characterId: ephemeral.characterId,
-          reason,
-          refreshQuickbar,
-          sections: refreshQuickbar
-            ? ["armory", "abilities", "skills", "quickbar", "combat"]
-            : ["armory", "abilities", "combat"],
-        },
-        true,
-      );
-      await waitForCombatActionIdle(ephemeral.characterId);
-      const tasks = [refetchCurrent(reason)];
-      if (refreshQuickbar && quickbarController && ephemeral.characterId) {
-        tasks.push(quickbarController.refresh());
+      const characterId = String(ephemeral.characterId ?? "").trim() || null;
+      const encounterId = currentMappedSession()?.id ?? null;
+      const queueKey = buildCharacterQueueKey(characterId, `refresh:${reason}`, encounterId);
+      const performRefresh = async () => {
+        logDebugEvent(
+          "runtime",
+          reason === "weapon-switched" ? "refresh_after_weapon_switch" : "refresh-requested",
+          {
+            characterId,
+            reason,
+            refreshQuickbar,
+            queueKey,
+            sections: refreshQuickbar
+              ? ["armory", "abilities", "skills", "quickbar", "combat"]
+              : ["armory", "abilities", "combat"],
+          },
+          true,
+        );
+        await waitForCombatActionIdle(characterId);
+        const tasks = [refetchCurrent(reason)];
+        if (refreshQuickbar && quickbarController && characterId) {
+          tasks.push(quickbarController.refresh());
+        }
+        await Promise.allSettled(tasks);
+      };
+
+      if (insideCharacterQueue || !characterId) {
+        await performRefresh();
+        return;
       }
-      await Promise.allSettled(tasks);
+      await runCharacterActionQueue(characterId, performRefresh, { queueKey });
     }
 
     function applyTargetingPayload(payload) {
@@ -1056,88 +1157,111 @@ export function setupSceneSelection(hooks = {}) {
           actorIsGm: String(viewer?.role ?? "").toUpperCase() === "GM",
           expectedEncounterVersion: expectedVersionOf(sessionAtRequest),
         };
+        const queueKey = buildCharacterQueueKey(ctx.sourceCharacterId, `instant-ability:${actionId}`, ctx.encounterId);
 
         const inFlightInstantAbilityActionKey = markCombatActionStarted(ephemeral.characterId, actionId, "instant-ability");
         ephemeral.pendingInstantAbilityActionId = actionId;
+        logDebugEvent("abilities", "ability-execute-request", {
+          encounterId: ctx.encounterId || null,
+          characterId: ctx.sourceCharacterId,
+          characterActionId: actionId,
+          selectedCharacterWeaponId: ctx.selectedWeaponId ?? null,
+          includeRuntime: false,
+          expectedEncounterVersion: ctx.expectedEncounterVersion ?? null,
+          expectedCharacterStateVersion: null,
+          queueKey,
+        }, true, "pending");
         logDebugEvent("abilities", "ability-execute-payload-prepared", {
           characterActionId: actionId,
           actionType: action.type,
           semanticKind: action.semanticKind,
+          queueKey,
         });
         if (lastState) publishState(lastState); // slot shows pending immediately
 
-        let outcome;
         try {
-          outcome = await executeCombatAbilityWithRetry(
-            () => resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
-            {
-              characterId: ctx.sourceCharacterId,
-              actionId,
-              debugAction: "ability-execute-retry",
+          await runCharacterActionQueue(
+            ctx.sourceCharacterId,
+            async () => {
+              markCombatActionActive(requestCtx.sourceCharacterId, inFlightInstantAbilityActionKey);
+              let outcome;
+              try {
+                outcome = await executeCombatAbilityWithRetry(
+                  () => resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
+                  {
+                    characterId: ctx.sourceCharacterId,
+                    actionId,
+                    debugAction: "ability-execute-retry",
+                  },
+                );
+              } catch (error) {
+                outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
+              }
+
+              ephemeral.pendingInstantAbilityActionId = null;
+              markCombatActionFinished(requestCtx.sourceCharacterId, inFlightInstantAbilityActionKey);
+              const currentCtx = { sourceCharacterId: ephemeral.characterId, abilityId: actionId };
+              const stale = isInstantAbilityResultStale(requestCtx, currentCtx);
+
+              const outcomeCode = normalizeOutcomeCode(outcome);
+              ephemeral.instantAbilityExecutionResult = { ok: outcome.ok, error: outcomeCode, message: outcome.error ?? null };
+              pushLog(buildAbilityExecutionLogEntry({
+                sourceCharacterId: requestCtx.sourceCharacterId,
+                abilityName: action.name,
+                outcome,
+              }));
+              logDebugEvent("abilities", "ability-execute-result", {
+                characterActionId: actionId,
+                actionType: action.type,
+                semanticKind: action.semanticKind,
+                executionReason: action.state?.executionReason ?? null,
+                available: action.state?.available ?? null,
+                resourceSufficient: action.state?.resourceSufficient ?? null,
+                cooldown: action.cooldown ?? null,
+                ok: outcome.ok,
+                code: outcomeCode,
+                message: outcome.error ?? null,
+                stage: outcome?.raw?.stage ?? null,
+                stale,
+                queueKey,
+              }, outcome.ok);
+              if (outcome.ok && outcome.normalized) {
+                logDebugEvent("abilities", "ability-execute-cost-consumed", {
+                  characterActionId: actionId,
+                  actionCost: outcome.normalized.actionCost,
+                  moveCost: outcome.normalized.moveCost,
+                  usedReaction: outcome.normalized.usedReaction,
+                  resourceSpent: outcome.normalized.resourceSpent,
+                  encounterStateVersionBefore: sessionAtRequest.version ?? null,
+                  encounterStateVersionAfter: outcome.normalized.encounterStateVersion,
+                }, true);
+              }
+              if (outcomeCode === "STATE_VERSION_CONFLICT") {
+                logDebugEvent("session", "stale-version", { command: "instant-ability" }, true);
+              }
+
+              if (stale) {
+                if (lastState) publishState(lastState);
+                return;
+              }
+
+              await refreshCombatSessionSafe(sessionController, "instant-ability");
+
+              if (outcome.ok) {
+                ephemeral.commandStatus = { type: "ok", message: "Ability used." };
+                await refreshSelectedCharacterRuntime("instant-ability-success", { refreshQuickbar: true, insideCharacterQueue: true });
+                logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-success", queueKey }, true);
+              } else {
+                ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
+                await refreshSelectedCharacterRuntime("instant-ability-failure", { refreshQuickbar: true, insideCharacterQueue: true });
+                logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-failure", queueKey }, true);
+              }
             },
+            { queueKey },
           );
-        } catch (error) {
-          outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
-        }
-
-        ephemeral.pendingInstantAbilityActionId = null;
-        markCombatActionFinished(requestCtx.sourceCharacterId, inFlightInstantAbilityActionKey);
-        const currentCtx = { sourceCharacterId: ephemeral.characterId, abilityId: actionId };
-        const stale = isInstantAbilityResultStale(requestCtx, currentCtx);
-
-        const outcomeCode = normalizeOutcomeCode(outcome);
-        ephemeral.instantAbilityExecutionResult = { ok: outcome.ok, error: outcomeCode, message: outcome.error ?? null };
-        pushLog(buildAbilityExecutionLogEntry({
-          sourceCharacterId: requestCtx.sourceCharacterId,
-          abilityName: action.name,
-          outcome,
-        }));
-        logDebugEvent("abilities", "ability-execute-result", {
-          characterActionId: actionId,
-          actionType: action.type,
-          semanticKind: action.semanticKind,
-          executionReason: action.state?.executionReason ?? null,
-          available: action.state?.available ?? null,
-          resourceSufficient: action.state?.resourceSufficient ?? null,
-          cooldown: action.cooldown ?? null,
-          ok: outcome.ok,
-          code: outcomeCode,
-          message: outcome.error ?? null,
-          stale,
-        }, outcome.ok);
-        if (outcome.ok && outcome.normalized) {
-          logDebugEvent("abilities", "ability-execute-cost-consumed", {
-            characterActionId: actionId,
-            actionCost: outcome.normalized.actionCost,
-            moveCost: outcome.normalized.moveCost,
-            usedReaction: outcome.normalized.usedReaction,
-            resourceSpent: outcome.normalized.resourceSpent,
-            encounterStateVersionBefore: sessionAtRequest.version ?? null,
-            encounterStateVersionAfter: outcome.normalized.encounterStateVersion,
-          }, true);
-        }
-        if (outcomeCode === "STATE_VERSION_CONFLICT") {
-          logDebugEvent("session", "stale-version", { command: "instant-ability" }, true);
-        }
-
-        if (stale) {
-          if (lastState) publishState(lastState);
-          return;
-        }
-
-        await refreshCombatSessionSafe(sessionController, "instant-ability");
-
-        if (outcome.ok) {
-          ephemeral.commandStatus = { type: "ok", message: "Ability used." };
-          // No target/body-zone concept exists for this ability class -
-          // nothing to preserve/clear; the existing target/ring state is
-          // simply never referenced by this handler.
-          await refetchCurrent();
-          logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-success" }, true);
-        } else {
-          ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
-          await refetchCurrent();
-          logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-failure" }, true);
+        } finally {
+          ephemeral.pendingInstantAbilityActionId = null;
+          markCombatActionFinished(requestCtx.sourceCharacterId, inFlightInstantAbilityActionKey);
         }
         return;
       }
@@ -1227,9 +1351,21 @@ export function setupSceneSelection(hooks = {}) {
           actorIsGm: String(viewer?.role ?? "").toUpperCase() === "GM",
           expectedEncounterVersion: expectedVersionOf(sessionAtRequest),
         };
+        const queueKey = buildCharacterQueueKey(ctx.sourceCharacterId, `directed-ability:${actionId}`, ctx.encounterId);
 
         const inFlightDirectedAbilityActionKey = markCombatActionStarted(ephemeral.characterId, actionId, "directed-ability");
         ephemeral.pendingDirectedAbilityActionId = actionId;
+        logDebugEvent("abilities", "directed-ability-request", {
+          encounterId: ctx.encounterId || null,
+          characterId: ctx.sourceCharacterId,
+          characterActionId: actionId,
+          selectedCharacterWeaponId: ctx.selectedWeaponId ?? null,
+          includeRuntime: false,
+          expectedEncounterVersion: ctx.expectedEncounterVersion ?? null,
+          expectedCharacterStateVersion: null,
+          targetCharacterId: ctx.targetCharacterId ?? null,
+          queueKey,
+        }, true, "pending");
         logDebugEvent("abilities", "directed-ability-payload-prepared", {
           characterActionId: actionId,
           actionType: action.type,
@@ -1237,22 +1373,26 @@ export function setupSceneSelection(hooks = {}) {
           sourceCharacterId: ctx.sourceCharacterId,
           targetCharacterId: ctx.targetCharacterId,
           targetTokenId: evalCtx.targetTokenId,
+          queueKey,
         });
         if (lastState) publishState(lastState); // slot shows pending immediately
 
-        let outcome;
         try {
-          outcome = await executeCombatAbilityWithRetry(
-            () => resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
-            {
-              characterId: ctx.sourceCharacterId,
-              actionId,
-              debugAction: "directed-ability-retry",
-            },
-          );
-        } catch (error) {
-          outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
-        }
+          await runCharacterActionQueue(ctx.sourceCharacterId, async () => {
+            markCombatActionActive(requestCtx.sourceCharacterId, inFlightDirectedAbilityActionKey);
+            let outcome;
+            try {
+              outcome = await executeCombatAbilityWithRetry(
+                () => resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
+                {
+                  characterId: ctx.sourceCharacterId,
+                  actionId,
+                  debugAction: "directed-ability-retry",
+                },
+              );
+            } catch (error) {
+              outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
+            }
 
         ephemeral.pendingDirectedAbilityActionId = null;
         markCombatActionFinished(requestCtx.sourceCharacterId, inFlightDirectedAbilityActionKey);
@@ -1286,7 +1426,9 @@ export function setupSceneSelection(hooks = {}) {
           ok: outcome.ok,
           code: outcomeCode,
           message: outcome.error ?? null,
+          stage: outcome?.raw?.stage ?? null,
           stale,
+          queueKey,
         }, outcome.ok);
         if (outcome.ok && outcome.normalized) {
           logDebugEvent("abilities", "directed-ability-cost-consumed", {
@@ -1320,12 +1462,17 @@ export function setupSceneSelection(hooks = {}) {
             OBR.broadcast.sendMessage(BC_HUD_TARGETING_COMMAND, { type: "refreshBodyZones" }, { destination: "LOCAL" });
             logDebugEvent("refresh", "target-refresh-result", { reason: "directed-ability-success", targetCharacterId: requestCtx.targetCharacterId }, true);
           } catch (_e) { /* best-effort */ }
-          await refetchCurrent();
-          logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-success" }, true);
+          await refreshSelectedCharacterRuntime("directed-ability-success", { refreshQuickbar: true, insideCharacterQueue: true });
+          logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-success", queueKey }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
-          await refetchCurrent();
-          logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-failure" }, true);
+          await refreshSelectedCharacterRuntime("directed-ability-failure", { refreshQuickbar: true, insideCharacterQueue: true });
+          logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-failure", queueKey }, true);
+        }
+          }, { queueKey });
+        } finally {
+          ephemeral.pendingDirectedAbilityActionId = null;
+          markCombatActionFinished(requestCtx.sourceCharacterId, inFlightDirectedAbilityActionKey);
         }
         return;
       }

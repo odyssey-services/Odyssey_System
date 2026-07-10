@@ -53149,6 +53149,7 @@ declare
   v_post_refresh jsonb := '{}'::jsonb;
   v_result_target_character_id uuid := null;
   v_result_combat_state jsonb := '{}'::jsonb;
+  v_lock_stage text := 'start';
 begin
   perform set_config('lock_timeout', '1500ms', true);
 
@@ -53156,6 +53157,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'INVALID_ACTION_KIND', 'message', 'Unsupported action kind.');
   end if;
 
+  v_lock_stage := 'lock_encounter';
   select *
   into v_encounter
   from public.odyssey_combat_encounters
@@ -53168,6 +53170,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'ENCOUNTER_NOT_ACTIVE', 'message', 'Encounter is not active.');
   end if;
 
+  v_lock_stage := 'lock_initiative_entry';
   select *
   into v_entry
   from public.odyssey_initiative_entries
@@ -53193,6 +53196,7 @@ begin
     end if;
   end if;
 
+  v_lock_stage := 'validate_versions';
   v_versions := public.odyssey_validate_combat_versions(
     v_encounter_id,
     nullif(trim(coalesce(v_payload->>'expected_encounter_version', '')), '')::integer,
@@ -53227,6 +53231,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'REACTION_NOT_AVAILABLE', 'message', 'No reaction action is available.');
   end if;
 
+  v_lock_stage := 'execute_action';
   case v_kind
     when 'attack' then
       v_result := public.perform_attack(
@@ -53271,6 +53276,7 @@ begin
     else '{}'::jsonb
   end;
 
+  v_lock_stage := 'refresh_character_combat_state';
   if v_kind = 'ability'
      and v_result_target_character_id = v_character_id
      and v_result_combat_state <> '{}'::jsonb then
@@ -53290,6 +53296,7 @@ begin
     perform public.odyssey_start_next_eligible_turn(v_encounter_id);
   end if;
 
+  v_lock_stage := 'build_runtime';
   return jsonb_build_object(
     'ok', true,
     'encounter_state_version', (select state_version from public.odyssey_combat_encounters where id = v_encounter_id),
@@ -53312,14 +53319,16 @@ exception
     return jsonb_build_object(
       'ok', false,
       'error', 'ACTION_BUSY_RETRY',
-      'message', 'Character state is busy. Please retry.'
+      'message', 'Character state is busy. Please retry.',
+      'stage', v_lock_stage
     );
   when query_canceled then
     if SQLERRM ilike '%statement timeout%' or SQLERRM ilike '%lock timeout%' then
       return jsonb_build_object(
         'ok', false,
         'error', 'ACTION_BUSY_RETRY',
-        'message', 'Character state is busy. Please retry.'
+        'message', 'Character state is busy. Please retry.',
+        'stage', v_lock_stage
       );
     end if;
     raise;
