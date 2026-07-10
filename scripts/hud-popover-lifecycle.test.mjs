@@ -51,9 +51,8 @@ test("open map covers exactly the known module ids", () => {
 
 test("loading selection keeps only player open", () => {
   const map = primaryModuleOpenMap("modules", SELECTION_STATUS.loading);
-  assert.equal(map.player, true);
-  for (const id of ["gun", "skills", "combatControl", "log"]) {
-    assert.equal(map[id], false, `${id} hidden while loading`);
+  for (const id of PRIMARY) {
+    assert.equal(map[id], true, `${id} stays open while loading`);
   }
 });
 
@@ -64,8 +63,9 @@ test("invalid selection keeps only player open until ready returns", () => {
     SELECTION_STATUS.unlinkedToken,
   ]) {
     const map = primaryModuleOpenMap("modules", bad);
-    assert.equal(map.player, true, `player stays for ${bad}`);
-    assert.equal(map.gun, false, `gun hidden for ${bad}`);
+    for (const id of PRIMARY) {
+      assert.equal(map[id], true, `${id} stays open for ${bad}`);
+    }
   }
   const ready = primaryModuleOpenMap("modules", SELECTION_STATUS.ready);
   for (const id of PRIMARY) {
@@ -97,7 +97,7 @@ test("collapsed then reopened restores all primary modules", () => {
 test("loading to ready reconciles secondaries as open", () => {
   assert.equal(
     secondaryReconcileAction(SELECTION_STATUS.loading, SELECTION_STATUS.ready),
-    "open",
+    "none",
   );
 });
 
@@ -111,7 +111,7 @@ test("ready to ready does not reconcile secondaries", () => {
 test("ready to not-owned reconciles secondaries as close", () => {
   assert.equal(
     secondaryReconcileAction(SELECTION_STATUS.ready, SELECTION_STATUS.notOwned),
-    "close",
+    "none",
   );
 });
 

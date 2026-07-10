@@ -128,11 +128,6 @@ function occupiedTile(slot, action, armedActionId, pendingActionId, syncPending 
   // not as a permanent disabled state, so a READY ability with no target
   // selected yet still LOOKS clickable and the "Select a target first."
   // error surfaces from the click itself).
-  const disabled = syncPending || (
-    directAttack
-      ? (availability !== SLOT_AVAILABILITY.ready || pending)
-      : (action.state?.available === false || ((instantSelf || directedTarget) && pending))
-  );
   const dataAction = directAttack
     ? "execute-direct-ability"
     : instantSelf
@@ -140,6 +135,12 @@ function occupiedTile(slot, action, armedActionId, pendingActionId, syncPending 
       : directedTarget
         ? "execute-directed-ability"
         : (isTechnique ? "toggle-armed-technique" : "show-ability-detail");
+  const syncBlockedAction = syncPending && dataAction !== "show-ability-detail";
+  const disabled = syncBlockedAction || (
+    directAttack
+      ? (availability !== SLOT_AVAILABILITY.ready || pending)
+      : (action.state?.available === false || ((instantSelf || directedTarget) && pending))
+  );
   const tip = tipAttr(action.name, [
     ...abilityTooltipLines(action),
     directAttack

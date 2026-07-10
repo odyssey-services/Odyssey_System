@@ -5,18 +5,11 @@
 // without OBR, DOM, or Supabase.
 
 import { HUD_MODULE_IDS } from "./hudLayout.js";
-import {
-  PRIMARY_MODULE_ID,
-  SECONDARY_MODULE_IDS,
-  isReadyStatus,
-} from "../scene/selectionState.js";
-
-const SECONDARY_SET = new Set(SECONDARY_MODULE_IDS);
 
 export function moduleShouldBeOpen(mode, status, id) {
+  void status;
+  void id;
   if (mode !== "modules") return false;
-  if (id === PRIMARY_MODULE_ID) return true;
-  if (SECONDARY_SET.has(id)) return isReadyStatus(status);
   return true;
 }
 
@@ -29,10 +22,9 @@ export function primaryModuleOpenMap(mode, status) {
 }
 
 export function secondaryReconcileAction(prevStatus, nextStatus) {
-  const wasReady = isReadyStatus(prevStatus);
-  const nowReady = isReadyStatus(nextStatus);
-  if (wasReady === nowReady) return "none";
-  return nowReady ? "open" : "close";
+  void prevStatus;
+  void nextStatus;
+  return "none";
 }
 
 export function characterChangeClosesCompanions(prevCharId, nextCharId) {

@@ -1,47 +1,49 @@
-// Combat HUD — Phase 3A / 3A.1 selection render (PURE, DOM-free string builder).
+// Combat HUD selection render (PURE, DOM-free string builder).
 //
 // Given a broadcast selection payload + a module id, returns the HTML for that
 // module iframe.
 //
-// Phase 3A.1 routing logic:
-//   ready + hudSnapshot present  → real block renderer with synthetic state
-//   ready + hudSnapshot absent   → minimal identity card (fallback)
-//   non-ready (player module)    → status prompt card
-//   non-ready (secondary)        → muted placeholder (controller also closes them)
+// Routing:
+//   ready + hudSnapshot present  -> real block renderer with synthetic state
+//   ready + hudSnapshot absent   -> minimal identity / fallback card
+//   non-ready player             -> status prompt card
+//   non-ready secondary          -> persistent module card with honest status
 
 import { ICON_MARK } from "../components/hudIcons.js";
 import { esc } from "../components/hudDom.js";
+import { panel } from "../components/HudPanel.js";
 import { SELECTION_STATUS, PRIMARY_MODULE_ID, normalizeSelectionPayload } from "./selectionState.js";
 import { createInactiveCombatSession } from "../models/combatHudContracts.js";
 
-// Phase 3A.1: block renderers for live-ready mode.
-import { renderPlayerBlock }      from "../components/PlayerBlock.js";
-import { renderGunBlock }         from "../components/GunBlock.js";
-import { renderSkillBlock }       from "../components/SkillBlock.js";
+import { renderPlayerBlock } from "../components/PlayerBlock.js";
+import { renderGunBlock } from "../components/GunBlock.js";
+import { renderSkillBlock } from "../components/SkillBlock.js";
 import { renderCombatControlBlock } from "../components/CombatControlBlock.js";
-import { renderBattleLogPanel }   from "../components/BattleLogBlock.js";
+import { renderBattleLogPanel } from "../components/BattleLogBlock.js";
 
-/** Block renderers keyed by module id. */
 const LIVE_RENDERERS = {
-  player:        renderPlayerBlock,
-  gun:           renderGunBlock,
-  skills:        renderSkillBlock,
+  player: renderPlayerBlock,
+  gun: renderGunBlock,
+  skills: renderSkillBlock,
   combatControl: renderCombatControlBlock,
-  log:           renderBattleLogPanel,
+  log: renderBattleLogPanel,
 };
 
-// ─── Canonical Player prompts (spec verbatim) ───────────────────────────────
-
-const PLAYER_PROMPTS = Object.freeze({
-  [SELECTION_STATUS.noSelection]:       { t: "SELECT YOUR CHARACTER",        h: "Choose a controlled token on the map" },
-  [SELECTION_STATUS.multipleSelection]: { t: "SELECT ONE CHARACTER",         h: "Multiple tokens selected" },
-  [SELECTION_STATUS.unlinkedToken]:     { t: "NO CHARACTER LINK",            h: "This token is not linked to an Odyssey character" },
-  [SELECTION_STATUS.notOwned]:          { t: "CHARACTER NOT AVAILABLE",      h: "Select one of your controlled characters" },
-  [SELECTION_STATUS.unavailable]:       { t: "CHARACTER DATA UNAVAILABLE",   h: "Try selecting the token again" },
-  [SELECTION_STATUS.error]:             { t: "CHARACTER DATA UNAVAILABLE",   h: "Try selecting the token again" },
+const MODULE_LABELS = Object.freeze({
+  gun: "Weapon",
+  skills: "Skills",
+  combatControl: "Combat",
+  log: "Combat Log",
 });
 
-// ─── Small card builders ────────────────────────────────────────────────────
+const PLAYER_PROMPTS = Object.freeze({
+  [SELECTION_STATUS.noSelection]: { t: "SELECT YOUR CHARACTER", h: "Choose a controlled token on the map" },
+  [SELECTION_STATUS.multipleSelection]: { t: "SELECT ONE CHARACTER", h: "Multiple tokens selected" },
+  [SELECTION_STATUS.unlinkedToken]: { t: "NO CHARACTER LINK", h: "This token is not linked to an Odyssey character" },
+  [SELECTION_STATUS.notOwned]: { t: "CHARACTER NOT AVAILABLE", h: "Select one of your controlled characters" },
+  [SELECTION_STATUS.unavailable]: { t: "CHARACTER DATA UNAVAILABLE", h: "Try selecting the token again" },
+  [SELECTION_STATUS.error]: { t: "CHARACTER DATA UNAVAILABLE", h: "Try selecting the token again" },
+});
 
 function promptCard(title, hint, devDetail) {
   return `<div class="ohud-state-wrap"><div class="ohud-empty">
@@ -57,8 +59,38 @@ function loadingCard() {
   </div></div>`;
 }
 
-// Minimal identity card used when ready but no hudSnapshot (e.g. wire downgrade,
-// old bridge version). Shows GM/CONTROLLED badge + name + alive/conscious state.
+function secondaryPrompt(moduleId, payload) {
+  const status = payload?.status ?? SELECTION_STATUS.loading;
+  const syncPending = payload?.ui?.combatRuntimePending === true;
+  const label = MODULE_LABELS[moduleId] ?? moduleId;
+  const titleByStatus = {
+    [SELECTION_STATUS.loading]: "Loading…",
+    [SELECTION_STATUS.noSelection]: "Select a character",
+    [SELECTION_STATUS.multipleSelection]: "Select one token",
+    [SELECTION_STATUS.unlinkedToken]: "No character link",
+    [SELECTION_STATUS.notOwned]: "Character not available",
+    [SELECTION_STATUS.unavailable]: "Character data unavailable",
+    [SELECTION_STATUS.error]: "Character data unavailable",
+  };
+  const hintByStatus = {
+    [SELECTION_STATUS.loading]: syncPending ? "Synchronizing combat data…" : "Waiting for character data.",
+    [SELECTION_STATUS.noSelection]: "Choose a controlled token on the map.",
+    [SELECTION_STATUS.multipleSelection]: "Reduce the selection to one token.",
+    [SELECTION_STATUS.unlinkedToken]: "Link this token to an Odyssey character first.",
+    [SELECTION_STATUS.notOwned]: "Select a character you can control.",
+    [SELECTION_STATUS.unavailable]: "Try selecting the token again.",
+    [SELECTION_STATUS.error]: payload?.error?.message || "Try selecting the token again.",
+  };
+  return panel({
+    key: moduleId,
+    label,
+    bodyHtml: `<div class="ohud-state-wrap"><div class="ohud-empty${status === SELECTION_STATUS.loading ? " ohud-empty--loading" : ""}">
+      <div class="ohud-empty-title">${esc(titleByStatus[status] ?? "Waiting for character")}</div>
+      <div class="ohud-empty-hint">${esc(hintByStatus[status] ?? "Waiting for character data.")}</div>
+    </div></div>`,
+  });
+}
+
 function readyPlayerCard(view) {
   const v = view || {};
   const badge = v.gmView
@@ -75,11 +107,8 @@ function readyPlayerCard(view) {
   </div>`;
 }
 
-// Fallback for secondary modules when hudSnapshot is absent (should not occur
-// in normal operation; kept as a safety net for unexpected wire formats).
 function readyFallbackCard(moduleId) {
-  const LABEL = { gun: "Gun", skills: "Skills", combatControl: "Combat Control", log: "Log" };
-  const label = LABEL[moduleId] || moduleId;
+  const label = MODULE_LABELS[moduleId] ?? moduleId;
   return `<section class="ohud-panel" data-block="${esc(moduleId)}">
     <div class="ohud-bind-fallback">
       <div class="ohud-bind-fallback-label">${esc(label)}</div>
@@ -93,14 +122,6 @@ function debugReason(payload, opts) {
   return `<div class="ohud-bind-dev">HUD DEBUG: ${esc(payload.debug.reason)}</div>`;
 }
 
-function mutedCard(moduleId) {
-  return `<section class="ohud-panel ohud-panel--muted" data-block="${esc(moduleId)}"><div class="ohud-muted-fill">—</div></section>`;
-}
-
-// ─── Synthetic state builder ─────────────────────────────────────────────────
-// Builds the minimal CombatHudState that block renderers expect from a live
-// broadcast payload + its hudSnapshot. No mock data is included.
-
 function buildSyntheticState(payload) {
   const snap = payload.hudSnapshot;
   const role = String(payload.viewer?.role ?? "UNKNOWN").toLowerCase();
@@ -109,46 +130,45 @@ function buildSyntheticState(payload) {
   const targeting = payload.ui?.targeting ?? {};
 
   return {
-    status:              "ready",
-    source:              "supabase",
+    status: "ready",
+    source: "supabase",
     viewer: {
-      playerId:   payload.viewer?.playerId ?? null,
+      playerId: payload.viewer?.playerId ?? null,
       playerName: null,
-      role:       role === "gm" ? "gm" : "player",
+      role: role === "gm" ? "gm" : "player",
     },
-    selectedTokenId:    payload.selectedItemId ?? null,
+    selectedTokenId: payload.selectedItemId ?? null,
     selectedCharacterId: payload.characterId ?? null,
-    access:             { canViewSelectedCharacter: true, reason: null },
-    // Phase 3E.0: when hudSnapshot is present it already carries the live
-    // server-mapped combatSession (see selectionState.buildBroadcastPayload).
+    access: { canViewSelectedCharacter: true, reason: null },
     snapshot: snap ?? {
-      entity:        null,
-      weapon:        { primary: null, secondary: null },
-      skills:        { library: [], quickSlots: [] },
+      entity: null,
+      weapon: { primary: null, secondary: null },
+      skills: { library: [], quickSlots: [] },
       combatSession: createInactiveCombatSession(),
-      modifiers:     { passive: [], active: [], narrative: [] },
-      battleLog:     { entries: [] },
+      modifiers: { passive: [], active: [], narrative: [] },
+      battleLog: { entries: [] },
     },
     ui: {
-      isHudCollapsed:          false,
-      selectedTechniqueId:     null,
+      isHudCollapsed: false,
+      selectedTechniqueId: null,
       selectedAbilityId,
       selectedReloadMagazineId: payload.ui?.selectedReloadMagazineId ?? null,
-      selectedModifierIds:     [],
-      weaponSelectorOpen:      !!payload.ui?.weaponSelectorOpen,
-      fireModeSelectorOpen:    !!payload.ui?.fireModeSelectorOpen,
-      activeIntent:            payload.ui?.activeIntent ?? { kind: "weapon-attack", weaponId: null },
+      selectedModifierIds: [],
+      weaponSelectorOpen: !!payload.ui?.weaponSelectorOpen,
+      fireModeSelectorOpen: !!payload.ui?.fireModeSelectorOpen,
+      combatRuntimePending: !!payload.ui?.combatRuntimePending,
+      activeIntent: payload.ui?.activeIntent ?? { kind: "weapon-attack", weaponId: null },
       basicAttack: payload.ui?.basicAttack ?? { inFlight: false, uiAllowed: false, uiBlockReason: "No character loaded." },
       targeting: {
-        mode:                targeting.mode ?? "none",
-        selectedTargetIds:   Array.isArray(targeting.selectedTargetIds) ? targeting.selectedTargetIds : [],
-        selectedTargetName:  targeting.selectedTargetName ?? null,
-        selectedBodyPartId:  targeting.selectedBodyPartId ?? "torso",
-        distance:            Number.isFinite(Number(targeting.distance)) ? Number(targeting.distance) : null,
-        zonesMap:            targeting.zonesMap && typeof targeting.zonesMap === "object" ? targeting.zonesMap : {},
-        error:               targeting.error ?? null,
-        selectedPoint:       null,
-        radius:              null,
+        mode: targeting.mode ?? "none",
+        selectedTargetIds: Array.isArray(targeting.selectedTargetIds) ? targeting.selectedTargetIds : [],
+        selectedTargetName: targeting.selectedTargetName ?? null,
+        selectedBodyPartId: targeting.selectedBodyPartId ?? "torso",
+        distance: Number.isFinite(Number(targeting.distance)) ? Number(targeting.distance) : null,
+        zonesMap: targeting.zonesMap && typeof targeting.zonesMap === "object" ? targeting.zonesMap : {},
+        error: targeting.error ?? null,
+        selectedPoint: null,
+        radius: null,
       },
       isBattleLogExpanded: false,
     },
@@ -156,34 +176,16 @@ function buildSyntheticState(payload) {
   };
 }
 
-// ─── Public ──────────────────────────────────────────────────────────────────
-
-/**
- * Render one module iframe's content from a live broadcast selection payload.
- *
- * Phase 3A.1: when status === ready and payload.hudSnapshot is present, the
- * existing block renderers are called with a synthetic state so real character
- * data is shown (gun, skills, target/modifiers/action, log). Mock data is never
- * mixed with live state.
- *
- * @param {string} moduleId
- * @param {object} payload   Normalized broadcast selection payload.
- * @param {{ dev?: boolean }} [opts]
- * @returns {string} HTML
- */
 export function renderSelectionModule(moduleId, payload, opts = {}) {
   const status = payload?.status;
   const isReady = status === SELECTION_STATUS.ready && payload?.access?.canView;
 
-  // ── Player module ───────────────────────────────────────────────────────
   if (moduleId === PRIMARY_MODULE_ID) {
     if (isReady) {
       if (payload.hudSnapshot) {
-        // Phase 3A.1: full player block with real resource bars / zones / statuses.
         const syntheticState = buildSyntheticState(payload);
         return `${renderPlayerBlock(syntheticState)}${debugReason(payload, opts)}`;
       }
-      // Fallback: minimal identity card (no hudSnapshot → old wire or bundle error).
       if (payload.view) return `${readyPlayerCard(payload.view)}${debugReason(payload, opts)}`;
     }
     if (status === SELECTION_STATUS.loading || !status) return loadingCard();
@@ -194,10 +196,8 @@ export function renderSelectionModule(moduleId, payload, opts = {}) {
     return promptCard(p.t, p.h, devDetail);
   }
 
-  // ── Secondary modules ───────────────────────────────────────────────────
   if (isReady) {
     if (payload.hudSnapshot) {
-      // Phase 3A.1: real block renderer with live character data.
       const fn = LIVE_RENDERERS[moduleId];
       if (fn) {
         const syntheticState = buildSyntheticState(payload);
@@ -207,32 +207,16 @@ export function renderSelectionModule(moduleId, payload, opts = {}) {
         return fn(syntheticState);
       }
     }
-    // Fallback: labeled waiting card (hudSnapshot absent or unknown moduleId).
     return readyFallbackCard(moduleId);
   }
-  return mutedCard(moduleId);
+
+  return secondaryPrompt(moduleId, payload);
 }
 
-/**
- * Build the synthetic block-renderer state a companion selector popover (weapon
- * / magazine) needs, from a RAW broadcast selection payload.
- *
- * Returns `null` when the live snapshot has not arrived yet (no payload, not a
- * viewable ready character, or `hudSnapshot` still absent) so the caller can
- * render a controlled "Loading…" state instead of a FALSE "empty" list. This is
- * the exact same normalize → synthetic-state path the Gun module uses, so the
- * companion sees an IDENTICAL `snapshot.weapon` view model (`available`,
- * `primary`, `reserveMagazines`, …) — no duplicated armory mapping, no extra
- * Supabase call. A non-null return guarantees `state.snapshot.weapon` exists,
- * so an empty `available` then legitimately means "no weapons available".
- *
- * @param {object|null} rawPayload  The BC_HUD_SELECTION event data.
- * @returns {object|null} synthetic CombatHudState, or null while loading.
- */
 export function buildCompanionSelectorState(rawPayload) {
   const payload = normalizeSelectionPayload(rawPayload);
   if (!payload) return null;
   const isReady = payload.status === SELECTION_STATUS.ready && payload.access?.canView;
-  if (!isReady || !payload.hudSnapshot) return null; // snapshot not ready → loading
+  if (!isReady || !payload.hudSnapshot) return null;
   return buildSyntheticState(payload);
 }

@@ -160,11 +160,13 @@ test("9b. generation gate isolates concurrent epochs", () => {
   assert.equal(gate.isCurrent(t2), true);
 });
 
-test("10. invalid selection hides Gun / Skills / Combat Control / Log", () => {
+test("10. invalid selection keeps Gun / Skills / Combat Control / Log mounted with status cards", () => {
   for (const status of [SELECTION_STATUS.noSelection, SELECTION_STATUS.notOwned, SELECTION_STATUS.unlinkedToken, SELECTION_STATUS.unavailable]) {
     const payload = buildBroadcastPayload(deriveSelectionState({ viewer: PLAYER, selectionIds: status === SELECTION_STATUS.noSelection ? [] : ["t"], link: status === SELECTION_STATUS.unlinkedToken ? null : { characterId: "c1" }, bundle: status === SELECTION_STATUS.notOwned ? bundle({ owner: "p2" }) : (status === SELECTION_STATUS.unavailable ? { ok: false } : undefined) }));
     for (const id of SECONDARY_MODULE_IDS) {
-      assert.ok(renderSelectionModule(id, payload).includes("ohud-panel--muted"), `${id} muted for ${status}`);
+      const html = renderSelectionModule(id, payload);
+      assert.ok(!html.includes("ohud-panel--muted"), `${id} no longer muted for ${status}`);
+      assert.ok(html.includes("ohud-empty-title"), `${id} shows an honest status card for ${status}`);
     }
   }
   // Player always renders a prompt (never blank) for non-ready states.

@@ -8406,11 +8406,7 @@ var ACCESS_REASON = Object.freeze({
   backendUnconfigured: "BACKEND_UNCONFIGURED",
   runtimeUnavailable: "RUNTIME_UNAVAILABLE"
 });
-var PRIMARY_MODULE_ID = "player";
 var SECONDARY_MODULE_IDS = Object.freeze(["gun", "skills", "combatControl", "log"]);
-function isReadyStatus(status) {
-  return status === SELECTION_STATUS.ready;
-}
 function normalizeSelectionIds(raw) {
   if (!Array.isArray(raw)) return [];
   const seen = /* @__PURE__ */ new Set();
@@ -9586,8 +9582,8 @@ function setupSceneSelection(hooks = {}) {
       if (feature === "quickbar" && (type === "execute-direct-ability" || type === "execute-instant-ability" || type === "execute-directed-ability" || type === "toggle-armed")) {
         return true;
       }
-      if (feature === "fire-mode" && (type === "toggle-selector" || type === "select")) return true;
-      return type === "select-weapon" || type === "toggle-weapon-selector" || type === "toggle-magazine-selector" || type === "reload";
+      if (feature === "fire-mode" && type === "select") return true;
+      return type === "select-weapon" || type === "reload";
     }
     async function handleCommand(command) {
       if (!command || typeof command !== "object") return;
@@ -11870,18 +11866,16 @@ function normalizeLayoutState(state) {
 }
 
 // hud/overlay/hudPopoverLifecycle.js
-var SECONDARY_SET = new Set(SECONDARY_MODULE_IDS);
 function moduleShouldBeOpen(mode2, status, id) {
+  void status;
+  void id;
   if (mode2 !== "modules") return false;
-  if (id === PRIMARY_MODULE_ID) return true;
-  if (SECONDARY_SET.has(id)) return isReadyStatus(status);
   return true;
 }
 function secondaryReconcileAction(prevStatus, nextStatus) {
-  const wasReady = isReadyStatus(prevStatus);
-  const nowReady = isReadyStatus(nextStatus);
-  if (wasReady === nowReady) return "none";
-  return nowReady ? "open" : "close";
+  void prevStatus;
+  void nextStatus;
+  return "none";
 }
 function characterChangeClosesCompanions(prevCharId, nextCharId) {
   return (prevCharId ?? null) !== (nextCharId ?? null);
@@ -12072,7 +12066,6 @@ var ABILITY_DETAIL_CLOSE_GRACE_MS = 180;
 var lastActiveCharacterId = null;
 var lastSelectionPayload = null;
 var cleanups = [];
-var SECONDARY_SET2 = new Set(SECONDARY_MODULE_IDS);
 function moduleShouldBeOpen2(id) {
   return moduleShouldBeOpen(mode, lastSelectionStatus, id);
 }
@@ -12139,6 +12132,7 @@ async function openModule(moduleId) {
     url: pageUrl(moduleId),
     ...paramsForRect(rect)
   });
+  logDebugEvent("popover", "module-opened", { moduleId });
 }
 function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W, height = 200) {
   if (!lastLayout.modules?.gun) return null;
@@ -12399,23 +12393,23 @@ async function openVisibleModules() {
   }
 }
 async function reconcileSecondaryModules(prevStatus, nextStatus) {
+  void prevStatus;
+  void nextStatus;
   if (mode !== "modules") return;
   const action = secondaryReconcileAction(prevStatus, nextStatus);
-  if (action === "none") return;
-  for (const id of OPEN_ORDER) {
-    if (!SECONDARY_SET2.has(id)) continue;
-    try {
-      if (action === "open") await openModule(id);
-      else await lib_default.popover.close(HUD_MODULE_POPOVER_IDS[id]);
-      logDebugEvent("popover", action === "open" ? "module-opened" : "module-closed", { moduleId: id });
-    } catch (_e) {
-    }
+  if (action !== "none") {
+    logDebugEvent("popover", "secondary-reconcile-skipped", {
+      previousStatus: prevStatus,
+      nextStatus,
+      requestedAction: action
+    });
   }
 }
 async function closeAllModules() {
   for (const id of HUD_MODULE_IDS) {
     try {
       await lib_default.popover.close(HUD_MODULE_POPOVER_IDS[id]);
+      logDebugEvent("popover", "module-closed", { moduleId: id });
     } catch (_e) {
     }
   }

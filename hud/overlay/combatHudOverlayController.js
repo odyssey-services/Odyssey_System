@@ -32,10 +32,7 @@ import { logDebugEvent } from "../debug/debugLogStore.js";
 import { setupSceneSelection } from "../scene/sceneSelectionController.js";
 import { setupTargetSelection } from "../targeting/targetSelectionController.js";
 import { setupTargetingVisuals } from "../targeting/visuals/targetingVisualController.js";
-import {
-  SELECTION_STATUS,
-  SECONDARY_MODULE_IDS,
-} from "../scene/selectionState.js";
+import { SELECTION_STATUS } from "../scene/selectionState.js";
 import { selectVisibleReserveMagazines } from "../core/combatHudSelectors.js";
 import {
   moduleShouldBeOpen as computeModuleShouldBeOpen,
@@ -83,8 +80,8 @@ let lastUiState = { ...DEFAULT_HUD_UI_STATE };
 let lastLayout = defaultLayoutState();
 let mode = "modules"; // "modules" | "editor" | "collapsed"
 let pollTimer = null;
-/** Phase 3A: latest scene-selection status. The Player module is always open;
- *  the four ready-only modules open/close as this crosses the `ready` boundary. */
+/** Latest scene-selection status. Module visibility no longer depends on this;
+ *  it remains only as render context for the open-state helpers. */
 let lastSelectionStatus = SELECTION_STATUS.loading;
 let sceneCleanup = null;
 let targetSelection = null;
@@ -113,8 +110,6 @@ let lastActiveCharacterId = null;
 let lastSelectionPayload = null;
 /** @type {Array<() => void>} */
 const cleanups = [];
-
-const SECONDARY_SET = new Set(SECONDARY_MODULE_IDS);
 
 /** Whether a module popover should currently be open (modules mode only). */
 function moduleShouldBeOpen(id) {
@@ -193,6 +188,7 @@ async function openModule(moduleId) {
     url: pageUrl(moduleId),
     ...paramsForRect(rect),
   });
+  logDebugEvent("popover", "module-opened", { moduleId });
 }
 
 function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W, height = 200) {
@@ -465,22 +461,25 @@ async function openVisibleModules() {
  *  owned character) does NOT reopen anything — iframes just re-render on the
  *  broadcast. This is the only popover lifecycle tied to selection. */
 async function reconcileSecondaryModules(prevStatus, nextStatus) {
+  void prevStatus;
+  void nextStatus;
   if (mode !== "modules") return;
   const action = secondaryReconcileAction(prevStatus, nextStatus);
-  if (action === "none") return;
-  for (const id of OPEN_ORDER) {
-    if (!SECONDARY_SET.has(id)) continue;
-    try {
-      if (action === "open") await openModule(id);
-      else await OBR.popover.close(HUD_MODULE_POPOVER_IDS[id]);
-      logDebugEvent("popover", action === "open" ? "module-opened" : "module-closed", { moduleId: id });
-    } catch (_e) { /* skip one, keep the rest */ }
+  if (action !== "none") {
+    logDebugEvent("popover", "secondary-reconcile-skipped", {
+      previousStatus: prevStatus,
+      nextStatus,
+      requestedAction: action,
+    });
   }
 }
 
 async function closeAllModules() {
   for (const id of HUD_MODULE_IDS) {
-    try { await OBR.popover.close(HUD_MODULE_POPOVER_IDS[id]); } catch (_e) { /* ignore */ }
+    try {
+      await OBR.popover.close(HUD_MODULE_POPOVER_IDS[id]);
+      logDebugEvent("popover", "module-closed", { moduleId: id });
+    } catch (_e) { /* ignore */ }
   }
 }
 

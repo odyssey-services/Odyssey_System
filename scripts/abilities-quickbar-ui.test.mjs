@@ -120,6 +120,28 @@ test("8. an unavailable action tile is disabled in the normal HUD", () => {
   assert.match(html, /is-disabled/);
 });
 
+test("8b. sync pending still allows opening ability detail for non-mutating tiles", () => {
+  const html = renderQuickbarStrip(
+    runtime([{ slotIndex: 0, characterActionId: "act-2", empty: false }], [
+      action({ id: "act-2", type: "toggle", state: { available: true, active: false, disabledReason: null } }),
+    ]),
+    { syncPending: true },
+  );
+  assert.match(html, /data-action="show-ability-detail"/);
+  assert.ok(!html.includes("disabled"), "detail-only tile stays clickable during sync");
+});
+
+test("8c. sync pending blocks mutating quickbar actions", () => {
+  const armedHtml = renderQuickbarStrip(
+    runtime([{ slotIndex: 0, characterActionId: "act-1", empty: false }], [
+      action({ id: "act-1", type: "attack_technique", semanticKind: "attack", state: { available: true, active: false, disabledReason: null, selectable: true } }),
+    ]),
+    { syncPending: true },
+  );
+  assert.match(armedHtml, /data-action="toggle-armed-technique"/);
+  assert.match(armedHtml, /disabled/, "arming is blocked while sync is pending");
+});
+
 test("12. a missing-reference slot renders visibly as missing", () => {
   const html = renderQuickbarStrip(runtime([{ slotIndex: 0, characterActionId: "gone", empty: false, missing: true }], [action({ id: "act-1" })]));
   assert.match(html, /is-missing/);
@@ -534,6 +556,21 @@ test("scene controller wires the quickbar controller (setup + selection change +
   assert.ok(sceneControllerSrc.includes("setupQuickbarController"));
   assert.ok(sceneControllerSrc.includes("quickbarController.onSelectionChanged"));
   assert.ok(sceneControllerSrc.includes("abilitiesRuntime,"), "passed into the broadcast ephemeral");
+});
+
+test("combat sync gate blocks only mutating quickbar / weapon commands", () => {
+  const idx = sceneControllerSrc.indexOf("function isCombatSyncBlockedCommand(command)");
+  assert.ok(idx > -1, "sync gate helper exists");
+  const block = sceneControllerSrc.slice(idx, sceneControllerSrc.indexOf("async function handleCommand", idx));
+  assert.ok(block.includes('type === "execute-direct-ability"'));
+  assert.ok(block.includes('type === "execute-instant-ability"'));
+  assert.ok(block.includes('type === "execute-directed-ability"'));
+  assert.ok(block.includes('type === "toggle-armed"'));
+  assert.ok(block.includes('feature === "fire-mode" && type === "select"'));
+  assert.ok(block.includes('type === "select-weapon" || type === "reload"'));
+  assert.ok(!block.includes('type === "toggle-weapon-selector"'));
+  assert.ok(!block.includes('type === "toggle-magazine-selector"'));
+  assert.ok(!block.includes('type === "toggle-selector"'));
 });
 
 test("4.0c: the editor popover is sized for a real two-column layout, and stays clamped on-screen", () => {

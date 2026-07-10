@@ -27,7 +27,7 @@ function renderFireModeControl(weapon, syncPending = false) {
     </span>`;
   }
 
-  return `<button type="button" class="ohud-firemode is-selectable" data-action="toggle-fire-mode-selector" aria-label="Choose fire mode"${syncPending ? " disabled" : ""}${tip}>
+  return `<button type="button" class="ohud-firemode is-selectable" data-action="toggle-fire-mode-selector" aria-label="Choose fire mode"${tip}>
     <span class="ohud-firemode-knob"></span><span class="ohud-firemode-letter">${esc(label)}</span><span class="ohud-firemode-caret" aria-hidden="true">${ICON_CARET_DOWN}</span>
   </button>`;
 }
@@ -64,7 +64,7 @@ export function renderGunBlock(state) {
   const mainCard = `
     <div class="ohud-gun-main"${tipAttr(weapon.name, [weapon.currentFireMode ? `Mode: ${weapon.currentFireMode}` : ""])}>
       <span class="ohud-gun-name">${esc(weapon.name)}</span>
-      <button type="button" class="ohud-gun-caret" data-action="toggle-weapon-selector" aria-label="Choose weapon" title="${esc(syncPending ? "Synchronizing combat..." : "Select a different weapon")}"${syncPending ? " disabled" : ""}>${ICON_CARET_DOWN}</button>
+      <button type="button" class="ohud-gun-caret" data-action="toggle-weapon-selector" aria-label="Choose weapon" title="${esc(syncPending ? "Synchronizing combat..." : "Select a different weapon")}">${ICON_CARET_DOWN}</button>
       <span class="ohud-gun-silhouette">${weaponSvg(weapon.svgRef)}</span>
       ${renderFireModeControl(weapon, syncPending)}
       ${secondary ? `<span class="ohud-gun-secondary"${tipAttr("Secondary weapon", [esc(secondary.name || "")])}>2nd</span>` : ""}
@@ -87,7 +87,7 @@ function renderMagazineCard(weapon, reserve, reloadMag, syncPending = false) {
 
   return `<div class="ohud-mag-card${usesMag ? "" : " is-consumable"}">
     <span class="ohud-mag-icon" aria-hidden="true">${usesMag ? ICON_MAGAZINE : ""}</span>
-    ${usesMag && reserve.length > 0 ? `<button type="button" class="ohud-mag-selector-btn" data-action="toggle-magazine-selector" aria-label="Choose magazine" title="${esc(syncPending ? "Synchronizing combat..." : "Select spare magazine")}"${syncPending ? " disabled" : ""}>${ICON_CARET_DOWN}</button>` : ""}
+    ${usesMag && reserve.length > 0 ? `<button type="button" class="ohud-mag-selector-btn" data-action="toggle-magazine-selector" aria-label="Choose magazine" title="${esc(syncPending ? "Synchronizing combat..." : "Select spare magazine")}">${ICON_CARET_DOWN}</button>` : ""}
     <span class="ohud-mag-type"${tipAttr("Selected spare magazine", [esc(spareLabel)])}>${esc(spareLabel)}</span>
   </div>`;
 }

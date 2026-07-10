@@ -74,6 +74,16 @@ test("GunBlock renders magazine selector button", () => {
   assert.ok(html.includes('data-action="toggle-magazine-selector"'));
 });
 
+test("GunBlock keeps selectors interactive during combat sync but still disables reload", () => {
+  const state = gunState();
+  state.ui.combatRuntimePending = true;
+  const html = renderGunBlock(state);
+  assert.ok(html.includes('data-action="toggle-weapon-selector"'));
+  assert.ok(!html.includes('data-action="toggle-weapon-selector" aria-label="Choose weapon" title="Synchronizing combat..." disabled'));
+  assert.ok(!html.includes('data-action="toggle-magazine-selector" aria-label="Choose magazine" title="Synchronizing combat..." disabled'));
+  assert.match(html, /data-action="reload"[^>]*disabled/, "reload remains blocked while sync is pending");
+});
+
 test("GunBlock ammo shows current/max for inserted magazine", () => {
   const html = renderGunBlock(gunState());
   assert.ok(html.includes("20/30"));

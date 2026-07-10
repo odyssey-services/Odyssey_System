@@ -6867,7 +6867,7 @@ function renderFireModeControl(weapon, syncPending = false) {
       <span class="ohud-firemode-knob"></span><span class="ohud-firemode-letter">${esc(label)}</span>
     </span>`;
   }
-  return `<button type="button" class="ohud-firemode is-selectable" data-action="toggle-fire-mode-selector" aria-label="Choose fire mode"${syncPending ? " disabled" : ""}${tip}>
+  return `<button type="button" class="ohud-firemode is-selectable" data-action="toggle-fire-mode-selector" aria-label="Choose fire mode"${tip}>
     <span class="ohud-firemode-knob"></span><span class="ohud-firemode-letter">${esc(label)}</span><span class="ohud-firemode-caret" aria-hidden="true">${ICON_CARET_DOWN}</span>
   </button>`;
 }
@@ -6896,7 +6896,7 @@ function renderGunBlock(state) {
   const mainCard = `
     <div class="ohud-gun-main"${tipAttr(weapon.name, [weapon.currentFireMode ? `Mode: ${weapon.currentFireMode}` : ""])}>
       <span class="ohud-gun-name">${esc(weapon.name)}</span>
-      <button type="button" class="ohud-gun-caret" data-action="toggle-weapon-selector" aria-label="Choose weapon" title="${esc(syncPending ? "Synchronizing combat..." : "Select a different weapon")}"${syncPending ? " disabled" : ""}>${ICON_CARET_DOWN}</button>
+      <button type="button" class="ohud-gun-caret" data-action="toggle-weapon-selector" aria-label="Choose weapon" title="${esc(syncPending ? "Synchronizing combat..." : "Select a different weapon")}">${ICON_CARET_DOWN}</button>
       <span class="ohud-gun-silhouette">${weaponSvg(weapon.svgRef)}</span>
       ${renderFireModeControl(weapon, syncPending)}
       ${secondary ? `<span class="ohud-gun-secondary"${tipAttr("Secondary weapon", [esc(secondary.name || "")])}>2nd</span>` : ""}
@@ -6912,7 +6912,7 @@ function renderMagazineCard(weapon, reserve, reloadMag, syncPending = false) {
   const spareLabel = reloadMag ? reloadMag.ammoType ?? reloadMag.caliberLabel ?? "\u2014" : "\u2014";
   return `<div class="ohud-mag-card${usesMag ? "" : " is-consumable"}">
     <span class="ohud-mag-icon" aria-hidden="true">${usesMag ? ICON_MAGAZINE : ""}</span>
-    ${usesMag && reserve.length > 0 ? `<button type="button" class="ohud-mag-selector-btn" data-action="toggle-magazine-selector" aria-label="Choose magazine" title="${esc(syncPending ? "Synchronizing combat..." : "Select spare magazine")}"${syncPending ? " disabled" : ""}>${ICON_CARET_DOWN}</button>` : ""}
+    ${usesMag && reserve.length > 0 ? `<button type="button" class="ohud-mag-selector-btn" data-action="toggle-magazine-selector" aria-label="Choose magazine" title="${esc(syncPending ? "Synchronizing combat..." : "Select spare magazine")}">${ICON_CARET_DOWN}</button>` : ""}
     <span class="ohud-mag-type"${tipAttr("Selected spare magazine", [esc(spareLabel)])}>${esc(spareLabel)}</span>
   </div>`;
 }
@@ -7242,8 +7242,9 @@ function occupiedTile(slot, action, armedActionId, pendingActionId, syncPending 
   const armed = isTechnique && !directAttack && armedActionId != null && armedActionId === action.characterActionId;
   const pending = (directAttack || instantSelf || directedTarget) && pendingActionId != null && pendingActionId === action.characterActionId;
   const availability = directAttack ? deriveDirectAttackAvailability(action) : deriveSlotAvailability(action, armed);
-  const disabled = syncPending || (directAttack ? availability !== SLOT_AVAILABILITY.ready || pending : action.state?.available === false || (instantSelf || directedTarget) && pending);
   const dataAction = directAttack ? "execute-direct-ability" : instantSelf ? "execute-instant-ability" : directedTarget ? "execute-directed-ability" : isTechnique ? "toggle-armed-technique" : "show-ability-detail";
+  const syncBlockedAction = syncPending && dataAction !== "show-ability-detail";
+  const disabled = syncBlockedAction || (directAttack ? availability !== SLOT_AVAILABILITY.ready || pending : action.state?.available === false || (instantSelf || directedTarget) && pending);
   const tip = tipAttr(action.name, [
     ...abilityTooltipLines(action),
     directAttack ? pending ? "Executing\u2026" : "Direct ability attack \u2014 uses selected target and body zone" : instantSelf ? pending ? "Executing\u2026" : "Instant ability \u2014 no target required" : directedTarget ? pending ? "Executing\u2026" : "Directed ability \u2014 uses selected target, no body zone required" : isTechnique ? armed ? "Prepared for next attack" : "Click to arm for your next attack" : ""
@@ -7920,6 +7921,12 @@ var LIVE_RENDERERS = {
   combatControl: renderCombatControlBlock,
   log: renderBattleLogPanel
 };
+var MODULE_LABELS = Object.freeze({
+  gun: "Weapon",
+  skills: "Skills",
+  combatControl: "Combat",
+  log: "Combat Log"
+});
 var PLAYER_PROMPTS = Object.freeze({
   [SELECTION_STATUS.noSelection]: { t: "SELECT YOUR CHARACTER", h: "Choose a controlled token on the map" },
   [SELECTION_STATUS.multipleSelection]: { t: "SELECT ONE CHARACTER", h: "Multiple tokens selected" },
@@ -7940,6 +7947,37 @@ function loadingCard() {
     <div class="ohud-empty-title">LOADING\u2026</div>
   </div></div>`;
 }
+function secondaryPrompt(moduleId, payload) {
+  const status2 = payload?.status ?? SELECTION_STATUS.loading;
+  const syncPending = payload?.ui?.combatRuntimePending === true;
+  const label = MODULE_LABELS[moduleId] ?? moduleId;
+  const titleByStatus = {
+    [SELECTION_STATUS.loading]: "Loading\u2026",
+    [SELECTION_STATUS.noSelection]: "Select a character",
+    [SELECTION_STATUS.multipleSelection]: "Select one token",
+    [SELECTION_STATUS.unlinkedToken]: "No character link",
+    [SELECTION_STATUS.notOwned]: "Character not available",
+    [SELECTION_STATUS.unavailable]: "Character data unavailable",
+    [SELECTION_STATUS.error]: "Character data unavailable"
+  };
+  const hintByStatus = {
+    [SELECTION_STATUS.loading]: syncPending ? "Synchronizing combat data\u2026" : "Waiting for character data.",
+    [SELECTION_STATUS.noSelection]: "Choose a controlled token on the map.",
+    [SELECTION_STATUS.multipleSelection]: "Reduce the selection to one token.",
+    [SELECTION_STATUS.unlinkedToken]: "Link this token to an Odyssey character first.",
+    [SELECTION_STATUS.notOwned]: "Select a character you can control.",
+    [SELECTION_STATUS.unavailable]: "Try selecting the token again.",
+    [SELECTION_STATUS.error]: payload?.error?.message || "Try selecting the token again."
+  };
+  return panel({
+    key: moduleId,
+    label,
+    bodyHtml: `<div class="ohud-state-wrap"><div class="ohud-empty${status2 === SELECTION_STATUS.loading ? " ohud-empty--loading" : ""}">
+      <div class="ohud-empty-title">${esc(titleByStatus[status2] ?? "Waiting for character")}</div>
+      <div class="ohud-empty-hint">${esc(hintByStatus[status2] ?? "Waiting for character data.")}</div>
+    </div></div>`
+  });
+}
 function readyPlayerCard(view) {
   const v = view || {};
   const badge = v.gmView ? `<span class="ohud-bind-badge ohud-bind-badge--gm">GM VIEW</span>` : `<span class="ohud-bind-badge ohud-bind-badge--owned">CONTROLLED</span>`;
@@ -7954,8 +7992,7 @@ function readyPlayerCard(view) {
   </div>`;
 }
 function readyFallbackCard(moduleId) {
-  const LABEL2 = { gun: "Gun", skills: "Skills", combatControl: "Combat Control", log: "Log" };
-  const label = LABEL2[moduleId] || moduleId;
+  const label = MODULE_LABELS[moduleId] ?? moduleId;
   return `<section class="ohud-panel" data-block="${esc(moduleId)}">
     <div class="ohud-bind-fallback">
       <div class="ohud-bind-fallback-label">${esc(label)}</div>
@@ -7966,9 +8003,6 @@ function readyFallbackCard(moduleId) {
 function debugReason(payload, opts) {
   if (!opts?.dev || !payload?.debug?.reason) return "";
   return `<div class="ohud-bind-dev">HUD DEBUG: ${esc(payload.debug.reason)}</div>`;
-}
-function mutedCard(moduleId) {
-  return `<section class="ohud-panel ohud-panel--muted" data-block="${esc(moduleId)}"><div class="ohud-muted-fill">\u2014</div></section>`;
 }
 function buildSyntheticState(payload) {
   const snap = payload.hudSnapshot;
@@ -7987,8 +8021,6 @@ function buildSyntheticState(payload) {
     selectedTokenId: payload.selectedItemId ?? null,
     selectedCharacterId: payload.characterId ?? null,
     access: { canViewSelectedCharacter: true, reason: null },
-    // Phase 3E.0: when hudSnapshot is present it already carries the live
-    // server-mapped combatSession (see selectionState.buildBroadcastPayload).
     snapshot: snap ?? {
       entity: null,
       weapon: { primary: null, secondary: null },
@@ -8005,6 +8037,7 @@ function buildSyntheticState(payload) {
       selectedModifierIds: [],
       weaponSelectorOpen: !!payload.ui?.weaponSelectorOpen,
       fireModeSelectorOpen: !!payload.ui?.fireModeSelectorOpen,
+      combatRuntimePending: !!payload.ui?.combatRuntimePending,
       activeIntent: payload.ui?.activeIntent ?? { kind: "weapon-attack", weaponId: null },
       basicAttack: payload.ui?.basicAttack ?? { inFlight: false, uiAllowed: false, uiBlockReason: "No character loaded." },
       targeting: {
@@ -8052,7 +8085,7 @@ function renderSelectionModule(moduleId, payload, opts = {}) {
     }
     return readyFallbackCard(moduleId);
   }
-  return mutedCard(moduleId);
+  return secondaryPrompt(moduleId, payload);
 }
 function buildCompanionSelectorState(rawPayload) {
   const payload = normalizeSelectionPayload(rawPayload);

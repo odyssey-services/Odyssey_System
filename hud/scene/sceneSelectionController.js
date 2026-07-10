@@ -905,8 +905,8 @@ export function setupSceneSelection(hooks = {}) {
       if (feature === "quickbar" && (type === "execute-direct-ability" || type === "execute-instant-ability" || type === "execute-directed-ability" || type === "toggle-armed")) {
         return true;
       }
-      if (feature === "fire-mode" && (type === "toggle-selector" || type === "select")) return true;
-      return type === "select-weapon" || type === "toggle-weapon-selector" || type === "toggle-magazine-selector" || type === "reload";
+      if (feature === "fire-mode" && type === "select") return true;
+      return type === "select-weapon" || type === "reload";
     }
 
     async function handleCommand(command) {
