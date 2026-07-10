@@ -321,6 +321,54 @@ export function reconcileCharacterAbilities({
 }
 
 export function buildQuickActionsRuntime({ abilities = [], encounter = null, characterState = {}, selectedWeaponId = null }) {
+  const isCombatActive = !!encounter && encounter.status !== "ended";
+  const isCurrentTurn = characterState?.is_current_turn === true;
+  const actionCurrent = Number(characterState?.action_current ?? 0);
+  const moveCurrent = Number(characterState?.move_current ?? 0);
+  const moveMax = Number(characterState?.move_max ?? 0);
+
+  function resolveCombatExecutionState(ability) {
+    if (!isCombatActive) {
+      return { executionAvailable: true, executionReason: null };
+    }
+    if (!isCurrentTurn) {
+      return { executionAvailable: false, executionReason: "Waiting for your turn" };
+    }
+
+    const rawActionCost = String(
+      ability?.actionCost
+      ?? ability?.action_cost
+      ?? ability?.data?.combat_cost
+      ?? ability?.cost_mode
+      ?? ""
+    ).trim().toLowerCase();
+    const mainCost = Number(ability?.costs?.main ?? 0);
+    const moveCost = Number(ability?.costs?.move ?? 0);
+
+    if (rawActionCost === "free" || rawActionCost === "0") {
+      return { executionAvailable: true, executionReason: null };
+    }
+    if (rawActionCost === "full_move") {
+      if (!Number.isFinite(moveCurrent) || !Number.isFinite(moveMax) || moveMax <= 0 || moveCurrent < moveMax) {
+        return { executionAvailable: false, executionReason: "FULL MOVE already spent" };
+      }
+      return { executionAvailable: true, executionReason: null };
+    }
+    if (rawActionCost === "move" || moveCost > 0) {
+      if (!Number.isFinite(moveCurrent) || moveCurrent <= 0) {
+        return { executionAvailable: false, executionReason: "MOVE already spent" };
+      }
+      return { executionAvailable: true, executionReason: null };
+    }
+    if (mainCost > 0 || rawActionCost === "main" || rawActionCost === "turn" || rawActionCost === "") {
+      if (!Number.isFinite(actionCurrent) || actionCurrent <= 0) {
+        return { executionAvailable: false, executionReason: "ACTION economy unavailable" };
+      }
+      return { executionAvailable: true, executionReason: null };
+    }
+    return { executionAvailable: true, executionReason: null };
+  }
+
   const quickActions = abilities
     .filter((ability) => ability.is_hidden !== true)
     .filter((ability) => ability.is_enabled !== false)
@@ -351,6 +399,7 @@ export function buildQuickActionsRuntime({ abilities = [], encounter = null, cha
       const noCharges = ability.max_charges !== null
         && ability.max_charges !== undefined
         && Number(ability.current_charges ?? 0) <= 0;
+      const combatExecution = resolveCombatExecutionState(ability);
       let disabledReason = null;
       if (wrongWeaponSelected) {
         disabledReason = `Select ${ability.data?.source_label ?? ability.name}`;
@@ -376,7 +425,8 @@ export function buildQuickActionsRuntime({ abilities = [], encounter = null, cha
           available,
           selectable: available,
           disabledReason,
-          executionAvailable: ability.executionAvailable ?? true,
+          executionAvailable: ability.executionAvailable ?? combatExecution.executionAvailable,
+          executionReason: ability.executionReason ?? combatExecution.executionReason,
           resourceSufficient: ability.resourceSufficient ?? !noCharges,
         },
         requirements: {
@@ -534,6 +584,350 @@ export function reloadWeaponMock({ weapon, reserveMagazines = [] }) {
       active_magazine_id: nextMagazine.id,
     },
     magazine: clone(nextMagazine),
+  };
+}
+
+export function switchActiveWeaponMock({
+  weapons = [],
+  targetWeaponId,
+  costResult = { ok: true, spent: true },
+}) {
+  const nextWeapons = clone(weapons);
+  const targetWeapon = nextWeapons.find((weapon) => weapon.id === targetWeaponId);
+  if (!targetWeapon) {
+    return { ok: false, error: "WEAPON_NOT_FOUND", weapons: nextWeapons, spent: false };
+  }
+
+  const currentPrimary = nextWeapons.find((weapon) => weapon.equipped_slot === "primary") ?? null;
+  if (currentPrimary?.id === targetWeaponId) {
+    return {
+      ok: true,
+      spent: false,
+      active_weapon_id: targetWeaponId,
+      weapons: nextWeapons,
+    };
+  }
+
+  if (costResult?.ok === false) {
+    return {
+      ...clone(costResult),
+      weapons: nextWeapons,
+      spent: Boolean(costResult?.spent),
+    };
+  }
+
+  for (const weapon of nextWeapons) {
+    if (weapon.equipped_slot === "primary" || weapon.equipped_slot === "secondary") {
+      weapon.equipped_slot = null;
+    }
+  }
+
+  const updatedTarget = nextWeapons.find((weapon) => weapon.id === targetWeaponId);
+  if (updatedTarget) updatedTarget.equipped_slot = "primary";
+
+  if (currentPrimary && currentPrimary.id !== targetWeaponId) {
+    const previousPrimary = nextWeapons.find((weapon) => weapon.id === currentPrimary.id);
+    if (previousPrimary) previousPrimary.equipped_slot = "secondary";
+  }
+
+  return {
+    ok: true,
+    spent: costResult?.spent !== false,
+    active_weapon_id: targetWeaponId,
+    weapons: nextWeapons,
+  };
+}
+
+export function applyWeaponOperationCostMock({
+  participation,
+  operation = "switch_weapon",
+  expectedSessionVersion = null,
+}) {
+  const rows = Array.isArray(participation)
+    ? clone(participation)
+    : (participation ? [clone(participation)] : []);
+
+  if (rows.length === 0) {
+    return {
+      ok: true,
+      spent: false,
+      operation,
+      combat_session: null,
+      participation: null,
+    };
+  }
+
+  if (rows.length > 1 || rows.some((entry) => entry?.ambiguous === true)) {
+    return {
+      ok: false,
+      error: "COMBAT_CONTEXT_AMBIGUOUS",
+      spent: false,
+      operation,
+      combat_session: null,
+      participation: null,
+    };
+  }
+
+  const active = rows[0];
+  const actualVersion = Number(
+    active.expected_session_version
+    ?? active.encounter_state_version
+    ?? active.state_version
+    ?? active.version
+    ?? 0
+  );
+  if (expectedSessionVersion != null && actualVersion !== Number(expectedSessionVersion)) {
+    return {
+      ok: false,
+      error: "STATE_VERSION_CONFLICT",
+      spent: false,
+      operation,
+      combat_session: {
+        encounter_id: active.encounter_id ?? null,
+        state_version: actualVersion,
+      },
+      participation: active,
+    };
+  }
+
+  if (active.is_current_turn !== true) {
+    return {
+      ok: false,
+      error: "NOT_CURRENT_TURN",
+      spent: false,
+      operation,
+      combat_session: {
+        encounter_id: active.encounter_id ?? null,
+        state_version: actualVersion,
+      },
+      participation: active,
+    };
+  }
+
+  const moveCurrent = Number(active.move_current ?? 0);
+  const moveMax = Number(active.move_max ?? 0);
+  if (!Number.isFinite(moveCurrent) || !Number.isFinite(moveMax) || moveMax <= 0 || moveCurrent < moveMax) {
+    return {
+      ok: false,
+      error: "FULL_MOVE_NOT_AVAILABLE",
+      spent: false,
+      operation,
+      combat_session: {
+        encounter_id: active.encounter_id ?? null,
+        state_version: actualVersion,
+      },
+      participation: active,
+    };
+  }
+
+  const nextParticipation = {
+    ...active,
+    move_current: 0,
+  };
+
+  return {
+    ok: true,
+    spent: true,
+    operation,
+    combat_session: {
+      encounter_id: active.encounter_id ?? null,
+      state_version: actualVersion,
+    },
+    participation: nextParticipation,
+  };
+}
+
+export function buildArmoryCombatContextMock({
+  characterId,
+  activeEncounters = [],
+  explicitEncounterId = null,
+  weapons = [],
+}) {
+  const matches = clone(activeEncounters).filter((entry) => {
+    const participant = entry?.participant ?? {};
+    return entry?.status === "active" && participant?.character_id === characterId;
+  });
+  const explicitId = String(explicitEncounterId ?? "").trim() || null;
+  const explicitMatch = explicitId
+    ? matches.find((entry) => String(entry.id ?? "") === explicitId) ?? null
+    : null;
+
+  let mode = "out_of_combat";
+  let selectedEncounter = null;
+  let warning = null;
+
+  if (explicitId) {
+    if (explicitMatch) {
+      mode = "explicit";
+      selectedEncounter = explicitMatch;
+    } else {
+      mode = "explicit_missing";
+      warning = "Explicit encounter is not active for this character.";
+    }
+  } else if (matches.length === 1) {
+    mode = "single_active";
+    selectedEncounter = matches[0];
+  } else if (matches.length > 1) {
+    mode = "ambiguous";
+    warning = "Multiple active encounters found for this character. Pass encounter_id explicitly.";
+  }
+
+  const participant = selectedEncounter?.participant ?? null;
+  const moveCurrent = participant ? Number(participant.move_current ?? 0) : null;
+  const moveMax = participant ? Number(participant.move_max ?? 0) : null;
+  const isCurrentTurn = participant?.is_current_turn === true;
+
+  const mappedWeapons = clone(weapons).map((weapon) => {
+    const isPrimary = weapon.equipped_slot === "primary";
+    let canSwitchTo = !isPrimary;
+    let switchBlockedReason = null;
+    if (!isPrimary) {
+      if (mode === "ambiguous") {
+        canSwitchTo = false;
+        switchBlockedReason = warning;
+      } else if (participant) {
+        if (!isCurrentTurn) {
+          canSwitchTo = false;
+          switchBlockedReason = "Waiting for your turn";
+        } else if (!Number.isFinite(moveCurrent) || !Number.isFinite(moveMax) || moveMax <= 0 || moveCurrent < moveMax) {
+          canSwitchTo = false;
+          switchBlockedReason = "FULL MOVE already spent";
+        }
+      }
+    }
+    return {
+      ...weapon,
+      can_switch_to: canSwitchTo,
+      switch_block_reason: switchBlockedReason,
+    };
+  });
+
+  return {
+    ok: true,
+    combat_context: {
+      mode,
+      encounter_id: selectedEncounter?.id ?? null,
+      move_current: participant ? moveCurrent : null,
+      move_max: participant ? moveMax : null,
+      active_encounter_count: matches.length,
+      warning,
+    },
+    weapons: mappedWeapons,
+  };
+}
+
+export function enforceSingleActiveParticipationMock({
+  encounters = [],
+  initiativeEntries = [],
+  characterIds = [],
+  newEncounterId,
+}) {
+  const nextEncounters = clone(encounters);
+  const nextEntries = clone(initiativeEntries);
+  const characterSet = new Set((Array.isArray(characterIds) ? characterIds : []).filter(Boolean));
+  const endedAt = "2026-07-10T00:00:00.000Z";
+
+  for (const entry of nextEntries) {
+    if (entry.is_active !== true) continue;
+    if (!characterSet.has(entry.character_id)) continue;
+    if (String(entry.encounter_id ?? "") === String(newEncounterId ?? "")) continue;
+    entry.is_active = false;
+  }
+
+  for (const encounter of nextEncounters) {
+    if (String(encounter.id ?? "") === String(newEncounterId ?? "")) continue;
+    if (encounter.status !== "active") continue;
+    const activeEntries = nextEntries.filter((entry) => entry.encounter_id === encounter.id && entry.is_active === true);
+    const removedCurrent = !activeEntries.some((entry) => entry.id === encounter.active_entry_id);
+    if (removedCurrent) {
+      encounter.active_entry_id = null;
+      encounter.active_character_id = null;
+    }
+    if (activeEntries.length === 0) {
+      encounter.status = "finished";
+      encounter.ended_at = encounter.ended_at ?? endedAt;
+      encounter.active_entry_id = null;
+      encounter.active_character_id = null;
+    }
+  }
+
+  return {
+    encounters: nextEncounters,
+    initiativeEntries: nextEntries,
+  };
+}
+
+export function endCombatScopeMock({
+  encounters = [],
+  initiativeEntries = [],
+  targetEncounterId,
+  scope = "encounter",
+  actorIsGm = true,
+}) {
+  if (actorIsGm !== true) {
+    return {
+      ok: false,
+      error: "CONTROL_DENIED",
+      encounters: clone(encounters),
+      initiativeEntries: clone(initiativeEntries),
+    };
+  }
+
+  const nextEncounters = clone(encounters);
+  const nextEntries = clone(initiativeEntries);
+  const targetEncounter = nextEncounters.find((encounter) => encounter.id === targetEncounterId) ?? null;
+  if (!targetEncounter) {
+    return {
+      ok: true,
+      ended_encounter_ids: [],
+      ended_count: 0,
+      deactivated_entries_count: 0,
+      encounters: nextEncounters,
+      initiativeEntries: nextEntries,
+    };
+  }
+
+  const normalizedScope = String(scope ?? "encounter").trim().toLowerCase();
+  const endedAt = "2026-07-10T00:00:00.000Z";
+  const shouldEnd = (encounter) => {
+    if (encounter.status !== "active") return false;
+    if (normalizedScope === "encounter") return encounter.id === targetEncounter.id;
+    if (normalizedScope === "scene") {
+      return encounter.campaign_id === targetEncounter.campaign_id
+        && encounter.room_id === targetEncounter.room_id
+        && encounter.scene_id === targetEncounter.scene_id;
+    }
+    if (normalizedScope === "room") {
+      return encounter.campaign_id === targetEncounter.campaign_id
+        && encounter.room_id === targetEncounter.room_id;
+    }
+    return encounter.id === targetEncounter.id;
+  };
+
+  const endedEncounterIds = [];
+  for (const encounter of nextEncounters) {
+    if (!shouldEnd(encounter)) continue;
+    encounter.status = "finished";
+    encounter.ended_at = encounter.ended_at ?? endedAt;
+    encounter.active_entry_id = null;
+    encounter.active_character_id = null;
+    endedEncounterIds.push(encounter.id);
+  }
+
+  let deactivatedEntriesCount = 0;
+  for (const entry of nextEntries) {
+    if (!endedEncounterIds.includes(entry.encounter_id)) continue;
+    if (entry.is_active === true) deactivatedEntriesCount += 1;
+    entry.is_active = false;
+  }
+
+  return {
+    ok: true,
+    ended_encounter_ids: endedEncounterIds,
+    ended_count: endedEncounterIds.length,
+    deactivated_entries_count: deactivatedEntriesCount,
+    encounters: nextEncounters,
+    initiativeEntries: nextEntries,
   };
 }
 

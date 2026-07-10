@@ -53,6 +53,7 @@ import { subscribeMoveToolMessages, MOVE_TOOL_EVENTS } from "../../movement/move
 import { setupQuickbarController } from "../abilities/quickbarController.js";
 import { mapCombatRuntimeToSession } from "../session/combatSessionMapper.js";
 import { sessionAttackGate, sessionReloadGate, expectedVersionOf } from "../session/combatSessionPolicy.js";
+import { buildSwitchActiveWeaponPayload, resolveWeaponSwitchErrorMessage } from "../session/weaponSwitchPayload.js";
 
 // Phase 4.1A: perform_attack error codes specific to an armed attack
 // technique (migration 100) — used only to classify a Debug Console event,
@@ -1759,25 +1760,22 @@ export function setupSceneSelection(hooks = {}) {
         ephemeral.fireModeRpcResult = null;
         try {
           const expectedVersion = expectedVersionOf(session);
+          const payload = buildSwitchActiveWeaponPayload({
+            characterId: ephemeral.characterId,
+            weaponId,
+            session: session?.exists
+              ? { exists: true, id: session.id, version: expectedVersion }
+              : null,
+          });
           logDebugEvent("weapon", "switch_active_weapon:payload", {
             characterId: ephemeral.characterId,
             targetWeaponId: weaponId,
-            encounterId: session?.exists && session?.id ? session.id : null,
-            expectedEncounterVersion: expectedVersion ?? null,
+            encounterId: payload.encounter_id ?? null,
+            expectedEncounterVersion: payload.expected_encounter_version ?? null,
           });
-          const result = await switchActiveWeapon(
-            {
-              character_id: ephemeral.characterId,
-              character_weapon_id: weaponId,
-              ...(session?.exists && session?.id ? { encounter_id: session.id } : {}),
-              ...(expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}),
-            },
-            settings,
-          );
+          const result = await switchActiveWeapon(payload, settings);
           if (result?.ok === false) {
-            const message = result?.error === "COMBAT_CONTEXT_AMBIGUOUS"
-              ? "This character is in multiple active encounters. End old combats or reselect the token."
-              : (result.message || result.error || "Weapon switch failed.");
+            const message = resolveWeaponSwitchErrorMessage(result);
             ephemeral.commandStatus = {
               type: "error",
               message,

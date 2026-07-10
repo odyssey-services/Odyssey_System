@@ -7560,6 +7560,36 @@ function setupQuickbarController({ settings, getViewer, getSelectedCharacterId, 
   };
 }
 
+// hud/session/weaponSwitchPayload.js
+function normalizeVersion(value) {
+  const version = Number(value);
+  return Number.isFinite(version) ? version : null;
+}
+function buildSwitchActiveWeaponPayload({
+  characterId,
+  weaponId,
+  session
+}) {
+  const payload = {
+    character_id: String(characterId ?? "").trim(),
+    character_weapon_id: String(weaponId ?? "").trim()
+  };
+  if (session?.exists && session?.id) {
+    payload.encounter_id = String(session.id).trim();
+  }
+  const version = normalizeVersion(session?.version ?? session?.stateVersion);
+  if (version != null) {
+    payload.expected_encounter_version = version;
+  }
+  return payload;
+}
+function resolveWeaponSwitchErrorMessage(result) {
+  if (result?.error === "COMBAT_CONTEXT_AMBIGUOUS") {
+    return "This character is in multiple active encounters. End old combats or reselect the token.";
+  }
+  return result?.message || result?.error || "Weapon switch failed.";
+}
+
 // hud/targeting/bodyConditionPolicy.js
 var BODY_CONDITION_STATE = Object.freeze({
   healthy: "healthy",
@@ -10050,23 +10080,20 @@ function setupSceneSelection(hooks = {}) {
         ephemeral.fireModeRpcResult = null;
         try {
           const expectedVersion = expectedVersionOf(session);
+          const payload = buildSwitchActiveWeaponPayload({
+            characterId: ephemeral.characterId,
+            weaponId,
+            session: session?.exists ? { exists: true, id: session.id, version: expectedVersion } : null
+          });
           logDebugEvent("weapon", "switch_active_weapon:payload", {
             characterId: ephemeral.characterId,
             targetWeaponId: weaponId,
-            encounterId: session?.exists && session?.id ? session.id : null,
-            expectedEncounterVersion: expectedVersion ?? null
+            encounterId: payload.encounter_id ?? null,
+            expectedEncounterVersion: payload.expected_encounter_version ?? null
           });
-          const result = await switchActiveWeapon(
-            {
-              character_id: ephemeral.characterId,
-              character_weapon_id: weaponId,
-              ...session?.exists && session?.id ? { encounter_id: session.id } : {},
-              ...expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}
-            },
-            settings
-          );
+          const result = await switchActiveWeapon(payload, settings);
           if (result?.ok === false) {
-            const message = result?.error === "COMBAT_CONTEXT_AMBIGUOUS" ? "This character is in multiple active encounters. End old combats or reselect the token." : result.message || result.error || "Weapon switch failed.";
+            const message = resolveWeaponSwitchErrorMessage(result);
             ephemeral.commandStatus = {
               type: "error",
               message,
