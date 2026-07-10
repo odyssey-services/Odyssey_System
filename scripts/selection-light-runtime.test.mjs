@@ -108,6 +108,11 @@ test("selection replay self-heals a stale no-selection payload via live selectio
   assert.ok(sceneControllerSrc.includes("await resolveAndPublish(selectionIds, \"selection-request\");"));
 });
 
+test("selection replay accepts explicit popover selection ids as a background fallback", () => {
+  assert.ok(sceneControllerSrc.includes("requestedSelectionIds.length > 0"));
+  assert.ok(sceneControllerSrc.includes("selection-request:popover"));
+});
+
 await asyncTest("after repeated light runtime failure selection shows runtime fetch failed", async () => {
   const adapter = createAdapter(async () => {
     throw new Error("canceling statement due to statement timeout");

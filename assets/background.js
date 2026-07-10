@@ -10719,7 +10719,12 @@ function setupSceneSelection(hooks = {}) {
         });
       }, SCENE_RERESOLVE_DEBOUNCE_MS);
     }));
-    cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
+    cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, (event) => {
+      const requestedSelectionIds = Array.isArray(event?.data?.selectionIds) ? event.data.selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+      if (requestedSelectionIds.length > 0) {
+        void resolveAndPublish2(requestedSelectionIds, "selection-request:popover");
+        return;
+      }
       if (lastPayload?.status === "ready") {
         broadcast(lastPayload);
         return;

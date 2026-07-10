@@ -69,6 +69,19 @@ function send(channel, data) {
   try { OBR.broadcast.sendMessage(channel, data, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
 }
 
+async function requestSelectionReplayWithLiveIds() {
+  try {
+    const selectionIds = await OBR.player.getSelection().catch(() => []);
+    send(BC_HUD_SELECTION_REQUEST, {
+      selectionIds: Array.isArray(selectionIds)
+        ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [],
+    });
+  } catch (_e) {
+    send(BC_HUD_SELECTION_REQUEST, {});
+  }
+}
+
 function getModuleParam() {
   try { return new URLSearchParams(window.location.search).get("module") || ""; } catch { return ""; }
 }
@@ -168,7 +181,10 @@ function start() {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           try { mod.applySelection(event?.data ?? null); } catch (_e) { /* ignore */ }
         });
-        send(BC_HUD_SELECTION_REQUEST, {});
+        void requestSelectionReplayWithLiveIds();
+        OBR.player.onChange(() => {
+          void requestSelectionReplayWithLiveIds();
+        });
       } catch (_e) { /* standalone or broadcast unavailable → mock render stays */ }
     }
     // The Player module is always present: seed the controller with the

@@ -2290,7 +2290,14 @@ export function setupSceneSelection(hooks = {}) {
     }));
 
     // Replay the latest state to a module iframe that just mounted.
-    cleanups.push(OBR.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
+    cleanups.push(OBR.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, (event) => {
+      const requestedSelectionIds = Array.isArray(event?.data?.selectionIds)
+        ? event.data.selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [];
+      if (requestedSelectionIds.length > 0) {
+        void resolveAndPublish(requestedSelectionIds, "selection-request:popover");
+        return;
+      }
       if (lastPayload?.status === "ready") {
         broadcast(lastPayload);
         return;

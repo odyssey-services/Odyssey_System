@@ -9066,6 +9066,16 @@ function send(channel, data) {
   } catch (_e) {
   }
 }
+async function requestSelectionReplayWithLiveIds() {
+  try {
+    const selectionIds = await lib_default.player.getSelection().catch(() => []);
+    send(BC_HUD_SELECTION_REQUEST, {
+      selectionIds: Array.isArray(selectionIds) ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : []
+    });
+  } catch (_e) {
+    send(BC_HUD_SELECTION_REQUEST, {});
+  }
+}
 function getModuleParam() {
   try {
     return new URLSearchParams(window.location.search).get("module") || "";
@@ -9160,7 +9170,10 @@ function start() {
           } catch (_e) {
           }
         });
-        send(BC_HUD_SELECTION_REQUEST, {});
+        void requestSelectionReplayWithLiveIds();
+        lib_default.player.onChange(() => {
+          void requestSelectionReplayWithLiveIds();
+        });
       } catch (_e) {
       }
     }
