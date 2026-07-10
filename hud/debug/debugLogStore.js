@@ -45,11 +45,22 @@ function notify() {
  *   runtime bundles, full inventory, full target bundles, auth headers, or
  *   access tokens. Caller's responsibility to pre-trim.
  * @param {boolean} [success]
+ * @param {("ok"|"fail"|"pending"|null)} [statusOverride]
  */
-export function logDebugEvent(category, action, details = {}, success = true) {
+export function logDebugEvent(category, action, details = {}, success = true, statusOverride = null) {
   if (!enabled) return; // production / non-debug: zero cost, nothing collected
+  const normalizedStatus = typeof statusOverride === "string" && statusOverride.trim()
+    ? statusOverride.trim().toLowerCase()
+    : (success === false ? "fail" : "ok");
   entries = [
-    { timestamp: Date.now(), category: String(category ?? ""), action: String(action ?? ""), details: details ?? {}, success: !!success },
+    {
+      timestamp: Date.now(),
+      category: String(category ?? ""),
+      action: String(action ?? ""),
+      details: details ?? {},
+      success: !!success,
+      status: normalizedStatus,
+    },
     ...entries,
   ];
   if (entries.length > MAX_ENTRIES) entries = entries.slice(0, MAX_ENTRIES);

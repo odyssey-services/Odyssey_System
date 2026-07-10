@@ -599,6 +599,7 @@ function mapWeaponOption(armory, weapon, activeWeaponId) {
   const vm = mapWeapon({ ...armory, weapons: [weapon], active_weapon_id: str(weapon?.id) });
   const cls = str(weapon?.model?.weapon_class_name) ?? str(weapon?.model?.weapon_class);
   const mag = vm?.loadedMagazine ?? null;
+  const combatMode = str(armory?.combat_context?.mode) ?? "out_of_combat";
   const ammoLabel = mag
     ? `${mag.current}/${mag.max}`
     : (vm?.requiresAmmo ? `${num(vm?.ammo?.current, 0)}/${num(vm?.ammo?.max, 0)}` : "-");
@@ -610,6 +611,7 @@ function mapWeaponOption(armory, weapon, activeWeaponId) {
     switchAllowed: vm?.switchAllowed ?? (vm?.id !== activeWeaponId),
     switchCost: vm?.switchCost ?? "full_move",
     switchBlockedReason: vm?.switchBlockedReason ?? null,
+    combatMode,
     ammoLabel,
   };
 }

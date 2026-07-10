@@ -162,6 +162,102 @@ export function setupSceneSelection(hooks = {}) {
   try { debugEnabled = new URLSearchParams(window.location.search).get("debug") === "1"; } catch (_e) { debugEnabled = false; }
   /** @type {Array<() => void>} */
   const cleanups = [];
+  const inFlightCombatActionKeys = new Set();
+  const inFlightCombatActionCharacters = new Set();
+
+  function waitMs(ms) {
+    return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+  }
+
+  function normalizeOutcomeCode(result) {
+    return String(result?.code ?? result?.error ?? "").trim() || null;
+  }
+
+  function buildCombatActionKey(characterId, actionId, fallbackType = "ability") {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return null;
+    const normalizedActionId = String(actionId ?? "").trim() || String(fallbackType ?? "ability").trim() || "ability";
+    return `${normalizedCharacterId}:${normalizedActionId}`;
+  }
+
+  function isCombatActionBusy(characterId, actionId, fallbackType = "ability") {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return false;
+    const key = buildCombatActionKey(normalizedCharacterId, actionId, fallbackType);
+    return inFlightCombatActionCharacters.has(normalizedCharacterId) || (key ? inFlightCombatActionKeys.has(key) : false);
+  }
+
+  function markCombatActionStarted(characterId, actionId, fallbackType = "ability") {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return null;
+    const key = buildCombatActionKey(normalizedCharacterId, actionId, fallbackType);
+    inFlightCombatActionCharacters.add(normalizedCharacterId);
+    if (key) inFlightCombatActionKeys.add(key);
+    return key;
+  }
+
+  function markCombatActionFinished(characterId, actionKey = null) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return;
+    if (actionKey) inFlightCombatActionKeys.delete(actionKey);
+    const prefix = `${normalizedCharacterId}:`;
+    for (const key of inFlightCombatActionKeys) {
+      if (key.startsWith(prefix)) {
+        return;
+      }
+    }
+    inFlightCombatActionCharacters.delete(normalizedCharacterId);
+  }
+
+  async function executeCombatAbilityWithRetry(executor, {
+    characterId,
+    actionId,
+    debugAction,
+    retryDelayMs = 250,
+  } = {}) {
+    let outcome = await executor();
+    if (normalizeOutcomeCode(outcome) !== "ACTION_BUSY_RETRY") {
+      return outcome;
+    }
+
+    logDebugEvent(
+      "abilities",
+      debugAction || "ability-execute-retry",
+      {
+        characterId: String(characterId ?? "").trim() || null,
+        characterActionId: String(actionId ?? "").trim() || null,
+        reason: "ACTION_BUSY_RETRY",
+        retryDelayMs,
+      },
+      true,
+      "pending",
+    );
+
+    await waitMs(retryDelayMs);
+    outcome = await executor();
+    return outcome;
+  }
+
+  async function refreshCombatSessionSafe(sessionController, command) {
+    if (!sessionController) return;
+    try {
+      await sessionController.refresh();
+    } catch (error) {
+      logDebugEvent("session", "refresh-result", {
+        command,
+        message: String(error?.message ?? error ?? "Unable to refresh combat session."),
+      }, false);
+    }
+  }
+
+  async function waitForCombatActionIdle(characterId, timeoutMs = 3000) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return;
+    const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+    while (inFlightCombatActionCharacters.has(normalizedCharacterId) && Date.now() < deadline) {
+      await waitMs(50);
+    }
+  }
 
   function broadcast(payload) {
     try { OBR.broadcast.sendMessage(BC_HUD_SELECTION, payload, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
@@ -215,6 +311,9 @@ export function setupSceneSelection(hooks = {}) {
         const payload = event.payload ?? {};
         if (payload.source !== "combat-movement" || !payload.runtime) return;
         sessionController.applyExternalRuntime(payload.runtime, "tactical-move");
+        if (String(payload.characterId ?? "").trim() && String(payload.characterId ?? "").trim() === String(ephemeral.characterId ?? "").trim()) {
+          void refreshSelectedCharacterRuntime("tactical-move-applied", { refreshQuickbar: true });
+        }
       });
       if (disposed) { unsubscribeMoveTool?.(); } else { cleanups.push(unsubscribeMoveTool); }
     }
@@ -296,6 +395,17 @@ export function setupSceneSelection(hooks = {}) {
 
         const merged = { ...bundle, __hudDebug: { requestedSections: HUD_RUNTIME_SECTIONS } };
         const canonicalArmory = buildCanonicalArmory(armory, inventory);
+        const armoryForDebug = canonicalArmory ?? (armory && typeof armory === "object" ? armory : null);
+        if (armoryForDebug?.combat_context && characterId) {
+          logDebugEvent("weapon", "armory-combat-context", {
+            characterId,
+            mode: armoryForDebug.combat_context?.mode ?? null,
+            encounterId: armoryForDebug.combat_context?.encounter_id ?? null,
+            moveCurrent: armoryForDebug.combat_context?.move_current ?? null,
+            moveMax: armoryForDebug.combat_context?.move_max ?? null,
+            activeEncounterCount: armoryForDebug.combat_context?.active_encounter_count ?? null,
+          });
+        }
         if (canonicalArmory) {
           merged.armory = canonicalArmory;
           if (merged.sections && typeof merged.sections === "object") {
@@ -400,6 +510,8 @@ export function setupSceneSelection(hooks = {}) {
           await new Promise((resolve) => setTimeout(resolve, waitMs));
         }
 
+        await waitForCombatActionIdle(ephemeral.characterId);
+
         if (currentSelectionIds.length === 1) {
           await resolveAndPublish(currentSelectionIds);
         } else if (lastState) {
@@ -437,6 +549,7 @@ export function setupSceneSelection(hooks = {}) {
         },
         true,
       );
+      await waitForCombatActionIdle(ephemeral.characterId);
       const tasks = [refetchCurrent(reason)];
       if (refreshQuickbar && quickbarController && ephemeral.characterId) {
         tasks.push(quickbarController.refresh());
@@ -670,7 +783,15 @@ export function setupSceneSelection(hooks = {}) {
         // Double-submit guard: per-ability (not a whole-quickbar lock), so a
         // second execute on the SAME ability while it's in flight is a
         // no-op, but every other slot/weapon-attack stays fully interactive.
-        if (ephemeral.pendingDirectAbilityActionId) return;
+        const directAbilityActionKey = buildCombatActionKey(ephemeral.characterId, actionId, "direct-ability");
+        if (isCombatActionBusy(ephemeral.characterId, actionId, "direct-ability")) {
+          logDebugEvent("abilities", "direct-attack-ignored", {
+            characterId: ephemeral.characterId,
+            characterActionId: actionId,
+            reason: "ACTION_ALREADY_PENDING",
+          }, false);
+          return;
+        }
 
         const action = findQuickActionByCharacterActionId(actionId);
         if (!actionId || !action || !isDirectAttackAbility(action)) {
@@ -751,6 +872,7 @@ export function setupSceneSelection(hooks = {}) {
           expectedEncounterVersion: expectedVersionOf(sessionAtRequest),
         });
 
+        const inFlightDirectAbilityActionKey = markCombatActionStarted(ephemeral.characterId, actionId, "direct-ability") ?? directAbilityActionKey;
         ephemeral.pendingDirectAbilityActionId = actionId;
         logDebugEvent("abilities", "direct-attack-payload-prepared", { characterActionId: actionId, targetCharacterId: ctx.targetCharacterId, bodyZone: evalCtx.bodyZoneId });
         if (lastState) publishState(lastState); // slot shows pending immediately
@@ -766,6 +888,7 @@ export function setupSceneSelection(hooks = {}) {
         }
 
         ephemeral.pendingDirectAbilityActionId = null;
+        markCombatActionFinished(requestCtx.sourceCharacterId, inFlightDirectAbilityActionKey);
         const currentCtx = {
           sourceCharacterId: ephemeral.characterId,
           abilityId: actionId,
@@ -816,7 +939,7 @@ export function setupSceneSelection(hooks = {}) {
           logDebugEvent("session", "stale-version", { command: "direct-ability-attack" }, true);
         }
         if ((sessionCost || outcome.code === "STATE_VERSION_CONFLICT") && sessionController) {
-          void sessionController.refresh();
+          await refreshCombatSessionSafe(sessionController, "direct-ability-attack");
         }
 
         if (stale) {
@@ -860,7 +983,14 @@ export function setupSceneSelection(hooks = {}) {
         logDebugEvent("abilities", "ability-execute-requested", { characterActionId: actionId });
 
         // Double-submit guard: per-ability, not a whole-quickbar lock.
-        if (ephemeral.pendingInstantAbilityActionId) return;
+        if (isCombatActionBusy(ephemeral.characterId, actionId, "instant-ability")) {
+          logDebugEvent("abilities", "ability-execute-ignored", {
+            characterId: ephemeral.characterId,
+            characterActionId: actionId,
+            reason: "ACTION_ALREADY_PENDING",
+          }, false);
+          return;
+        }
 
         const action = findQuickActionByCharacterActionId(actionId);
         if (!actionId || !action || !isInstantSelfAbility(action)) {
@@ -927,6 +1057,7 @@ export function setupSceneSelection(hooks = {}) {
           expectedEncounterVersion: expectedVersionOf(sessionAtRequest),
         };
 
+        const inFlightInstantAbilityActionKey = markCombatActionStarted(ephemeral.characterId, actionId, "instant-ability");
         ephemeral.pendingInstantAbilityActionId = actionId;
         logDebugEvent("abilities", "ability-execute-payload-prepared", {
           characterActionId: actionId,
@@ -937,16 +1068,25 @@ export function setupSceneSelection(hooks = {}) {
 
         let outcome;
         try {
-          outcome = await resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) });
+          outcome = await executeCombatAbilityWithRetry(
+            () => resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
+            {
+              characterId: ctx.sourceCharacterId,
+              actionId,
+              debugAction: "ability-execute-retry",
+            },
+          );
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
         }
 
         ephemeral.pendingInstantAbilityActionId = null;
+        markCombatActionFinished(requestCtx.sourceCharacterId, inFlightInstantAbilityActionKey);
         const currentCtx = { sourceCharacterId: ephemeral.characterId, abilityId: actionId };
         const stale = isInstantAbilityResultStale(requestCtx, currentCtx);
 
-        ephemeral.instantAbilityExecutionResult = { ok: outcome.ok, error: outcome.code ?? null, message: outcome.error ?? null };
+        const outcomeCode = normalizeOutcomeCode(outcome);
+        ephemeral.instantAbilityExecutionResult = { ok: outcome.ok, error: outcomeCode, message: outcome.error ?? null };
         pushLog(buildAbilityExecutionLogEntry({
           sourceCharacterId: requestCtx.sourceCharacterId,
           abilityName: action.name,
@@ -961,7 +1101,7 @@ export function setupSceneSelection(hooks = {}) {
           resourceSufficient: action.state?.resourceSufficient ?? null,
           cooldown: action.cooldown ?? null,
           ok: outcome.ok,
-          code: outcome.code ?? null,
+          code: outcomeCode,
           message: outcome.error ?? null,
           stale,
         }, outcome.ok);
@@ -976,19 +1116,20 @@ export function setupSceneSelection(hooks = {}) {
             encounterStateVersionAfter: outcome.normalized.encounterStateVersion,
           }, true);
         }
-        if (outcome.code === "STATE_VERSION_CONFLICT") {
+        if (outcomeCode === "STATE_VERSION_CONFLICT") {
           logDebugEvent("session", "stale-version", { command: "instant-ability" }, true);
         }
-        if (sessionController) void sessionController.refresh();
 
         if (stale) {
           if (lastState) publishState(lastState);
           return;
         }
 
+        await refreshCombatSessionSafe(sessionController, "instant-ability");
+
         if (outcome.ok) {
           ephemeral.commandStatus = { type: "ok", message: "Ability used." };
-          // No target/body-zone concept exists for this ability class —
+          // No target/body-zone concept exists for this ability class -
           // nothing to preserve/clear; the existing target/ring state is
           // simply never referenced by this handler.
           await refetchCurrent();
@@ -1015,7 +1156,14 @@ export function setupSceneSelection(hooks = {}) {
         const actionId = String(command.characterActionId ?? "").trim() || null;
         logDebugEvent("abilities", "directed-ability-requested", { characterActionId: actionId });
 
-        if (ephemeral.pendingDirectedAbilityActionId) return;
+        if (isCombatActionBusy(ephemeral.characterId, actionId, "directed-ability")) {
+          logDebugEvent("abilities", "directed-ability-ignored", {
+            characterId: ephemeral.characterId,
+            characterActionId: actionId,
+            reason: "ACTION_ALREADY_PENDING",
+          }, false);
+          return;
+        }
 
         const action = findQuickActionByCharacterActionId(actionId);
         if (!actionId || !action || !isDirectedTargetAbility(action)) {
@@ -1080,6 +1228,7 @@ export function setupSceneSelection(hooks = {}) {
           expectedEncounterVersion: expectedVersionOf(sessionAtRequest),
         };
 
+        const inFlightDirectedAbilityActionKey = markCombatActionStarted(ephemeral.characterId, actionId, "directed-ability");
         ephemeral.pendingDirectedAbilityActionId = actionId;
         logDebugEvent("abilities", "directed-ability-payload-prepared", {
           characterActionId: actionId,
@@ -1093,12 +1242,20 @@ export function setupSceneSelection(hooks = {}) {
 
         let outcome;
         try {
-          outcome = await resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) });
+          outcome = await executeCombatAbilityWithRetry(
+            () => resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
+            {
+              characterId: ctx.sourceCharacterId,
+              actionId,
+              debugAction: "directed-ability-retry",
+            },
+          );
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
         }
 
         ephemeral.pendingDirectedAbilityActionId = null;
+        markCombatActionFinished(requestCtx.sourceCharacterId, inFlightDirectedAbilityActionKey);
         const currentCtx = {
           sourceCharacterId: ephemeral.characterId,
           abilityId: actionId,
@@ -1106,7 +1263,8 @@ export function setupSceneSelection(hooks = {}) {
         };
         const stale = isDirectedAbilityResultStale(requestCtx, currentCtx);
 
-        ephemeral.directedAbilityExecutionResult = { ok: outcome.ok, error: outcome.code ?? null, message: outcome.error ?? null };
+        const outcomeCode = normalizeOutcomeCode(outcome);
+        ephemeral.directedAbilityExecutionResult = { ok: outcome.ok, error: outcomeCode, message: outcome.error ?? null };
         pushLog(buildDirectedAbilityLogEntry({
           sourceCharacterId: requestCtx.sourceCharacterId,
           targetCharacterId: requestCtx.targetCharacterId,
@@ -1126,7 +1284,7 @@ export function setupSceneSelection(hooks = {}) {
           targetCharacterId: requestCtx.targetCharacterId,
           targetTokenId: evalCtx.targetTokenId,
           ok: outcome.ok,
-          code: outcome.code ?? null,
+          code: outcomeCode,
           message: outcome.error ?? null,
           stale,
         }, outcome.ok);
@@ -1141,15 +1299,16 @@ export function setupSceneSelection(hooks = {}) {
             encounterStateVersionAfter: outcome.normalized.encounterStateVersion,
           }, true);
         }
-        if (outcome.code === "STATE_VERSION_CONFLICT") {
+        if (outcomeCode === "STATE_VERSION_CONFLICT") {
           logDebugEvent("session", "stale-version", { command: "directed-ability" }, true);
         }
-        if (sessionController) void sessionController.refresh();
 
         if (stale) {
           if (lastState) publishState(lastState);
           return;
         }
+
+        await refreshCombatSessionSafe(sessionController, "directed-ability");
 
         if (outcome.ok) {
           ephemeral.commandStatus = { type: "ok", message: "Ability used." };
@@ -1419,24 +1578,6 @@ export function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
-        const switchGate = sessionReloadGate(session, selectedOption?.switchCost ?? "full_move");
-        if (switchGate.blocked) {
-          ephemeral.commandStatus = {
-            type: "error",
-            message: switchGate.reason,
-            source: "weapon_overlay",
-            operation: "switch_active_weapon",
-            code: "SESSION_GATE",
-          };
-          logDebugEvent("weapon", "switch_active_weapon:error", {
-            characterId: ephemeral.characterId,
-            targetWeaponId: weaponId,
-            code: "SESSION_GATE",
-            message: switchGate.reason,
-          }, false);
-          if (lastState) publishState(lastState);
-          return;
-        }
         if (selectedOption?.switchAllowed === false) {
           const message = selectedOption.switchBlockedReason || "Weapon switch unavailable.";
           ephemeral.commandStatus = {
@@ -1488,7 +1629,9 @@ export function setupSceneSelection(hooks = {}) {
               message,
               details: result,
             }, false);
-            if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) void sessionController.refresh();
+            if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) {
+              await refreshCombatSessionSafe(sessionController, "weapon-switched-state-version-conflict");
+            }
             if (lastState) publishState(lastState);
             return;
           }
@@ -1504,7 +1647,7 @@ export function setupSceneSelection(hooks = {}) {
             resultActiveWeaponId: String(result?.active_weapon_id ?? "").trim() || null,
             activeWeaponIdFromArmory: String(result?.armory?.active_weapon_id ?? "").trim() || null,
           }, true);
-          if (result?.combat_session && sessionController) void sessionController.refresh();
+          await refreshCombatSessionSafe(sessionController, "weapon-switched");
           await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });
           return;
         } catch (error) {

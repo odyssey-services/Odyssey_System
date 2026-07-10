@@ -124,8 +124,10 @@
   cursor: pointer;
 }
 .odc-row:hover { background: rgba(255, 255, 255, 0.05); }
+.odc-row.is-pending { background: rgba(255, 201, 92, 0.12); }
 .odc-row.is-failure { background: rgba(220, 80, 80, 0.12); }
 .odc-row.is-selected { background: rgba(120, 170, 255, 0.16); }
+.odc-row.is-pending.is-selected { background: rgba(255, 201, 92, 0.2); }
 .odc-row.is-failure.is-selected { background: rgba(220, 80, 80, 0.22); }
 
 .odc-cell { white-space: nowrap; }
@@ -134,6 +136,7 @@
 .odc-cell.odc-action { flex: 0 0 auto; }
 .odc-cell.odc-status { flex: 0 0 auto; font-weight: 700; }
 .odc-row.is-success .odc-status { color: #7fd88f; }
+.odc-row.is-pending .odc-status { color: #ffcf66; }
 .odc-row.is-failure .odc-status { color: #ff8a8a; }
 .odc-cell.odc-details {
   color: rgba(230, 232, 236, 0.65);

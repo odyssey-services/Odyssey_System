@@ -12,9 +12,10 @@ function weaponOption(option) {
   const ammoLabel = option.ammoLabel || "-";
   const selected = option.selected === true;
   const disabled = option.switchAllowed === false;
+  const isOutOfCombat = String(option.combatMode ?? "").trim().toLowerCase() === "out_of_combat";
   const costLabel = selected
     ? "Active"
-    : (option.switchCost === "free" ? "Free swap" : "Full MOVE");
+    : (isOutOfCombat ? "Free switch" : (option.switchCost === "free" ? "Free swap" : "Full MOVE"));
   const title = disabled && option.switchBlockedReason
     ? `${option.name} - ${option.switchBlockedReason}`
     : option.name;

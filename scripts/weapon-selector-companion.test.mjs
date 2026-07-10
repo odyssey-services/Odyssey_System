@@ -38,6 +38,11 @@ function test(name, fn) {
 function mixedArmory() {
   return {
     ok: true,
+    combat_context: {
+      mode: "single_active",
+      move_current: 10,
+      move_max: 10,
+    },
     weapons: [
       {
         id: "w-katana",
@@ -182,6 +187,30 @@ test("weaponSelectorOpen flag does not change the available weapon list", () => 
   const closed = buildCompanionSelectorState(readyPayload(mixedArmory(), { weaponSelectorOpen: false }));
   assert.equal(open.snapshot.weapon.available.length, closed.snapshot.weapon.available.length);
   assert.equal(closed.snapshot.weapon.available.length, 3, "list survives regardless of open state");
+});
+
+test("out-of-combat weapon options show 'Free switch' and stay enabled when server says can_switch_to=true", () => {
+  const armory = mixedArmory();
+  armory.combat_context = {
+    mode: "out_of_combat",
+    move_current: null,
+    move_max: null,
+  };
+  armory.weapons[1].can_switch_to = true;
+  armory.weapons[1].switch_block_reason = null;
+  const html = renderWeaponSelectorPanel(buildCompanionSelectorState(readyPayload(armory)));
+  assert.ok(html.includes("Free switch"), "out-of-combat switch label should be explicit");
+  const rifleChunk = html.slice(html.indexOf("Standard Rifle"), html.indexOf("</button>", html.indexOf("Standard Rifle")));
+  assert.ok(!/disabled/.test(rifleChunk), "server-allowed out-of-combat switch must stay enabled");
+});
+
+test("weapon selector trusts server switchAllowed=false instead of local move heuristics", () => {
+  const armory = mixedArmory();
+  armory.weapons[1].can_switch_to = false;
+  armory.weapons[1].switch_block_reason = "MOVE already spent";
+  const html = renderWeaponSelectorPanel(buildCompanionSelectorState(readyPayload(armory)));
+  const rifleChunk = html.slice(html.indexOf("Standard Rifle"), html.indexOf("</button>", html.indexOf("Standard Rifle")));
+  assert.match(rifleChunk, /disabled/, "server-blocked weapon must render disabled");
 });
 
 test("magazine companion: null state -> loading, ready state -> reads snapshot", () => {

@@ -97,18 +97,19 @@ export async function resolveDirectedAbilityExecution(ctx, deps) {
   try {
     raw = await deps.executeAction(payload);
   } catch (error) {
+    const code = error?.code ?? error?.details?.code ?? error?.details?.error ?? null;
     return {
       ok: false,
       payload,
       raw: error?.details ?? null,
       normalized: null,
-      code: error?.code ?? null,
+      code,
       error: error?.message || "Network or RPC error.",
     };
   }
 
   if (!raw || raw.ok === false) {
-    const code = raw?.error ?? null;
+    const code = raw?.code ?? raw?.error ?? null;
     return {
       ok: false,
       payload,

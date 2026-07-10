@@ -149,6 +149,8 @@ export function entryKey(entry) {
 }
 
 function statusLabel(entry) {
+  const status = String(entry?.status ?? "").trim().toUpperCase();
+  if (status) return status;
   return entry?.success === false ? "FAIL" : "OK";
 }
 
@@ -158,7 +160,7 @@ export function buildEntryCopyText(entry) {
     `timestamp: ${formatTimestamp(entry.timestamp)}`,
     `category: ${entry.category ?? ""}`,
     `action: ${entry.action ?? ""}`,
-    `status: ${entry?.success === false ? "fail" : "ok"}`,
+    `status: ${String(entry?.status ?? (entry?.success === false ? "fail" : "ok")).trim().toLowerCase() || "ok"}`,
   ];
   const details = detailLines(entry.details);
   if (details.length) {
@@ -179,7 +181,10 @@ export function buildVisibleCopyText(entries, filter) {
 
 function entryRow(entry, selectedKey) {
   const key = entryKey(entry);
-  const statusClass = entry.success === false ? "is-failure" : "is-success";
+  const normalizedStatus = String(entry?.status ?? "").trim().toLowerCase();
+  const statusClass = normalizedStatus === "pending"
+    ? "is-pending"
+    : (entry.success === false ? "is-failure" : "is-success");
   const selectedClass = key === selectedKey ? " is-selected" : "";
   return `<li class="odc-row ${statusClass}${selectedClass}" data-odc-row-key="${esc(key)}">
     <span class="odc-cell odc-time">${esc(formatTimestamp(entry.timestamp))}</span>

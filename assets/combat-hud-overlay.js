@@ -7611,7 +7611,8 @@ function weaponOption(option) {
   const ammoLabel = option.ammoLabel || "-";
   const selected = option.selected === true;
   const disabled = option.switchAllowed === false;
-  const costLabel = selected ? "Active" : option.switchCost === "free" ? "Free swap" : "Full MOVE";
+  const isOutOfCombat = String(option.combatMode ?? "").trim().toLowerCase() === "out_of_combat";
+  const costLabel = selected ? "Active" : isOutOfCombat ? "Free switch" : option.switchCost === "free" ? "Free swap" : "Full MOVE";
   const title = disabled && option.switchBlockedReason ? `${option.name} - ${option.switchBlockedReason}` : option.name;
   return `<button type="button" class="${cls("ohud-weapon-option", selected ? "is-selected" : "", disabled ? "is-disabled" : "")}"
     data-action="select-weapon" data-weapon-id="${esc(option.id)}" title="${esc(title)}" ${disabled ? "disabled" : ""}>

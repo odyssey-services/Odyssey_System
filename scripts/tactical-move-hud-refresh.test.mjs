@@ -150,6 +150,7 @@ test("4. the subscription applies the runtime through the SAME shared applyExter
   const idx = sceneControllerSrc.indexOf("subscribeMoveToolMessages(");
   const block = sceneControllerSrc.slice(idx, sceneControllerSrc.indexOf("cleanups.push(unsubscribeMoveTool)"));
   assert.match(block, /sessionController\.applyExternalRuntime\(payload\.runtime, "tactical-move"\)/);
+  assert.match(block, /refreshSelectedCharacterRuntime\("tactical-move-applied", \{ refreshQuickbar: true \}\)/);
   // No RPC/fetch call anywhere in the handler before applying — the runtime
   // already in the event is used directly, no mandatory second round trip.
   assert.ok(!/getActiveRuntime|fetchActiveSessionRuntime|getCharacterRuntimeBundle/.test(block), "no extra RPC before the immediate apply");

@@ -10024,10 +10024,18 @@ function notify2() {
     }
   }
 }
-function logDebugEvent(category, action, details2 = {}, success = true) {
+function logDebugEvent(category, action, details2 = {}, success = true, statusOverride = null) {
   if (!enabled) return;
+  const normalizedStatus = typeof statusOverride === "string" && statusOverride.trim() ? statusOverride.trim().toLowerCase() : success === false ? "fail" : "ok";
   entries2 = [
-    { timestamp: Date.now(), category: String(category ?? ""), action: String(action ?? ""), details: details2 ?? {}, success: !!success },
+    {
+      timestamp: Date.now(),
+      category: String(category ?? ""),
+      action: String(action ?? ""),
+      details: details2 ?? {},
+      success: !!success,
+      status: normalizedStatus
+    },
     ...entries2
   ];
   if (entries2.length > MAX_ENTRIES) entries2 = entries2.slice(0, MAX_ENTRIES);
