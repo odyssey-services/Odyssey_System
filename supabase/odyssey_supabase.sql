@@ -70010,7 +70010,7 @@ create or replace function public.switch_active_weapon(
 )
 returns jsonb
 language plpgsql
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
   v_character_id uuid := public.odyssey_try_parse_uuid(p_payload->>'character_id');
@@ -70030,6 +70030,11 @@ begin
       'message', 'character_id and character_weapon_id are required.'
     );
   end if;
+
+  perform 1
+  from public.odyssey_character_weapons weapon
+  where weapon.character_id = v_character_id
+  for update;
 
   select *
   into v_weapon
@@ -70053,7 +70058,7 @@ begin
       'active_weapon_id', v_character_weapon_id,
       'cost_mode', public.odyssey_get_weapon_operation_cost_mode(v_character_id, 'switch_weapon', null),
       'combat_session', null,
-      'armory', public.get_character_armory(v_character_id)
+      'armory', public.get_character_armory_context(v_character_id, v_encounter_id)
     );
   end if;
 
@@ -70068,21 +70073,29 @@ begin
     return v_cost_result;
   end if;
 
-  update public.odyssey_character_weapons weapon
+  update public.odyssey_character_weapons
   set
-    equipped_slot = case
-      when weapon.id = v_character_weapon_id then 'primary'
-      when v_current_active_weapon_id is not null and weapon.id = v_current_active_weapon_id then 'secondary'
-      when weapon.equipped_slot = 'primary' then null
-      else weapon.equipped_slot
-    end,
+    equipped_slot = null,
     updated_at = timezone('utc', now())
-  where weapon.character_id = v_character_id
-    and (
-      weapon.id = v_character_weapon_id
-      or (v_current_active_weapon_id is not null and weapon.id = v_current_active_weapon_id)
-      or weapon.equipped_slot = 'primary'
-    );
+  where character_id = v_character_id
+    and equipped_slot in ('primary', 'secondary');
+
+  update public.odyssey_character_weapons
+  set
+    equipped_slot = 'primary',
+    updated_at = timezone('utc', now())
+  where id = v_character_weapon_id
+    and character_id = v_character_id;
+
+  if v_current_active_weapon_id is not null
+     and v_current_active_weapon_id <> v_character_weapon_id then
+    update public.odyssey_character_weapons
+    set
+      equipped_slot = 'secondary',
+      updated_at = timezone('utc', now())
+    where id = v_current_active_weapon_id
+      and character_id = v_character_id;
+  end if;
 
   return jsonb_build_object(
     'ok', true,
@@ -70090,8 +70103,15 @@ begin
     'active_weapon_id', v_character_weapon_id,
     'cost_mode', v_cost_result->>'cost_mode',
     'combat_session', v_cost_result->'combat_session',
-    'armory', public.get_character_armory(v_character_id)
+    'armory', public.get_character_armory_context(v_character_id, v_encounter_id)
   );
+exception
+  when unique_violation then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'WEAPON_SLOT_CONFLICT',
+      'message', 'Weapon slot conflict detected while switching the active weapon.'
+    );
 end;
 $$;
 
