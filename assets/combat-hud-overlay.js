@@ -9135,12 +9135,28 @@ function start() {
     return;
   }
   if (HUD_MODULE_IDS.includes(moduleParam)) {
+    let clearHydrationRetryTimer = function() {
+      if (hydrationRetryTimer) {
+        clearTimeout(hydrationRetryTimer);
+        hydrationRetryTimer = null;
+      }
+    }, scheduleHydrationRetry = function(payload, delayMs = 180) {
+      if (!available || moduleParam !== "player") return;
+      clearHydrationRetryTimer();
+      hydrationRetryTimer = setTimeout(() => {
+        hydrationRetryTimer = null;
+        void maybeHydrateSelectionFromLocal(payload ?? lastSelectionPayload);
+      }, Math.max(0, Number(delayMs) || 0));
+    };
+    let lastSelectionPayload = null;
     let lastHydrationSelectionKey = "";
+    let hydrationRetryTimer = null;
     async function maybeHydrateSelectionFromLocal(payload) {
-      if (!available) return;
+      if (!available || moduleParam !== "player") return;
       const status2 = String(payload?.status ?? "").trim();
       if (status2 !== "no-selection" && status2 !== "loading") {
         lastHydrationSelectionKey = "";
+        clearHydrationRetryTimer();
         return;
       }
       try {
@@ -9177,13 +9193,21 @@ function start() {
     if (available) {
       try {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
+          lastSelectionPayload = event?.data ?? null;
           try {
-            mod.applySelection(event?.data ?? null);
+            mod.applySelection(lastSelectionPayload);
           } catch (_e) {
           }
-          void maybeHydrateSelectionFromLocal(event?.data ?? null);
+          void maybeHydrateSelectionFromLocal(lastSelectionPayload);
+          scheduleHydrationRetry(lastSelectionPayload);
         });
         send(BC_HUD_SELECTION_REQUEST, {});
+        if (moduleParam === "player") {
+          lib_default.player.onChange(() => {
+            void maybeHydrateSelectionFromLocal(lastSelectionPayload);
+          });
+          scheduleHydrationRetry(lastSelectionPayload, 320);
+        }
       } catch (_e) {
       }
     }

@@ -10747,6 +10747,12 @@ function setupSceneSelection(hooks = {}) {
       const currentSignature = currentSelectionIds.join("|");
       const shouldHydrateFromRequest = event?.data?.hydrateIfStale === true && requestedSelectionIds.length === 1 && requestedSignature !== currentSignature && (!lastPayload || lastPayload.status === "no-selection" || lastPayload.status === "loading");
       if (shouldHydrateFromRequest) {
+        logDebugEvent("selection", "selection-hydrate-requested", {
+          tokenIds: requestedSelectionIds,
+          previousStatus: lastPayload?.status ?? null,
+          currentSelectionIds,
+          reason: "selection-request"
+        }, true, "pending");
         scheduleSelectedSelectionRefresh(requestedSelectionIds, "selection-request-hydrate");
         return;
       }

@@ -2323,6 +2323,12 @@ export function setupSceneSelection(hooks = {}) {
         && requestedSignature !== currentSignature
         && (!lastPayload || lastPayload.status === "no-selection" || lastPayload.status === "loading");
       if (shouldHydrateFromRequest) {
+        logDebugEvent("selection", "selection-hydrate-requested", {
+          tokenIds: requestedSelectionIds,
+          previousStatus: lastPayload?.status ?? null,
+          currentSelectionIds,
+          reason: "selection-request",
+        }, true, "pending");
         scheduleSelectedSelectionRefresh(requestedSelectionIds, "selection-request-hydrate");
         return;
       }

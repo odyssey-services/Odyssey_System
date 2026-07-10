@@ -109,6 +109,7 @@ test("selection request with existing payload replays only lastPayload", () => {
   assert.ok(sceneControllerSrc.includes("scheduleSelectedSelectionRefresh(currentSelectionIds, \"selection-request-initial\")"));
   assert.ok(sceneControllerSrc.includes("selection-request-hydrate"));
   assert.ok(sceneControllerSrc.includes("event?.data?.hydrateIfStale === true"));
+  assert.ok(sceneControllerSrc.includes("selection-hydrate-requested"));
 });
 
 await asyncTest("after repeated light runtime failure selection shows runtime fetch failed", async () => {

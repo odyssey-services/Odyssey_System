@@ -148,13 +148,23 @@ function start() {
 
   // --- Single HUD module ---
   if (HUD_MODULE_IDS.includes(moduleParam)) {
+    let lastSelectionPayload = null;
     let lastHydrationSelectionKey = "";
+    let hydrationRetryTimer = null;
+
+    function clearHydrationRetryTimer() {
+      if (hydrationRetryTimer) {
+        clearTimeout(hydrationRetryTimer);
+        hydrationRetryTimer = null;
+      }
+    }
 
     async function maybeHydrateSelectionFromLocal(payload) {
-      if (!available) return;
+      if (!available || moduleParam !== "player") return;
       const status = String(payload?.status ?? "").trim();
       if (status !== "no-selection" && status !== "loading") {
         lastHydrationSelectionKey = "";
+        clearHydrationRetryTimer();
         return;
       }
       try {
@@ -171,6 +181,15 @@ function start() {
           hydrateIfStale: true,
         });
       } catch (_e) { /* best effort */ }
+    }
+
+    function scheduleHydrationRetry(payload, delayMs = 180) {
+      if (!available || moduleParam !== "player") return;
+      clearHydrationRetryTimer();
+      hydrationRetryTimer = setTimeout(() => {
+        hydrationRetryTimer = null;
+        void maybeHydrateSelectionFromLocal(payload ?? lastSelectionPayload);
+      }, Math.max(0, Number(delayMs) || 0));
     }
     const mod = mountCombatHudModule({
       root,
@@ -190,10 +209,18 @@ function start() {
     if (available) {
       try {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
-          try { mod.applySelection(event?.data ?? null); } catch (_e) { /* ignore */ }
-          void maybeHydrateSelectionFromLocal(event?.data ?? null);
+          lastSelectionPayload = event?.data ?? null;
+          try { mod.applySelection(lastSelectionPayload); } catch (_e) { /* ignore */ }
+          void maybeHydrateSelectionFromLocal(lastSelectionPayload);
+          scheduleHydrationRetry(lastSelectionPayload);
         });
         send(BC_HUD_SELECTION_REQUEST, {});
+        if (moduleParam === "player") {
+          OBR.player.onChange(() => {
+            void maybeHydrateSelectionFromLocal(lastSelectionPayload);
+          });
+          scheduleHydrationRetry(lastSelectionPayload, 320);
+        }
       } catch (_e) { /* standalone or broadcast unavailable → mock render stays */ }
     }
     // The Player module is always present: seed the controller with the
