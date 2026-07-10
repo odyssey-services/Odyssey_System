@@ -111,7 +111,29 @@ test("selection request with existing payload replays only lastPayload", () => {
   assert.ok(sceneControllerSrc.includes("event?.data?.hydrateIfStale === true"));
   assert.ok(sceneControllerSrc.includes("selection-hydrate-requested"));
   assert.ok(sceneControllerSrc.includes("selection-hydrate-failed"));
-  assert.ok(sceneControllerSrc.includes("void resolveAndPublish(requestedSelectionIds, \"selection-request-hydrate\", { allowWhileDeferred: true })"));
+  assert.ok(sceneControllerSrc.includes("void readLiveSelectionIds(currentSelectionIds)"));
+  assert.ok(sceneControllerSrc.includes("if (liveSignature !== requestedSignature)"));
+  assert.ok(sceneControllerSrc.includes("selection-hydrate-skipped"));
+  assert.ok(sceneControllerSrc.includes("reason: \"requested-selection-not-live\""));
+  assert.ok(sceneControllerSrc.includes("void resolveAndPublish(liveSelectionIds, \"selection-request-hydrate\", { allowWhileDeferred: true })"));
+});
+
+test("hydrate request is allowed even when previous payload is ready for another token", () => {
+  assert.ok(!sceneControllerSrc.includes("&& (!lastPayload || lastPayload.status === \"no-selection\" || lastPayload.status === \"loading\")"));
+  assert.ok(sceneControllerSrc.includes("&& requestedSignature !== currentSignature;"));
+  assert.ok(sceneControllerSrc.includes("previousCharacterId: lastPayload?.characterId ?? null"));
+});
+
+test("stale payload replay is blocked while another selection is pending", () => {
+  assert.ok(sceneControllerSrc.includes("selection-replay-skipped"));
+  assert.ok(sceneControllerSrc.includes("reason: \"pending-selection-mismatch\""));
+  assert.ok(sceneControllerSrc.includes("lastPayload.selectedItemId !== currentSelectionIds[0]"));
+});
+
+test("native selection-changed path remains primary and is logged", () => {
+  assert.ok(sceneControllerSrc.includes("selection-change-observed"));
+  assert.ok(sceneControllerSrc.includes("previousSelectionIds: currentSelectionIds"));
+  assert.ok(sceneControllerSrc.includes("scheduleSelectedSelectionRefresh(selectionIds, \"selection-changed\")"));
 });
 
 await asyncTest("after repeated light runtime failure selection shows runtime fetch failed", async () => {
