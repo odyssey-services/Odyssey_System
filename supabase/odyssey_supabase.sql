@@ -52105,6 +52105,7 @@ declare
   v_entry record;
   v_roll integer := 0;
   v_reaction integer := 0;
+  v_new_character_ids uuid[] := array[]::uuid[];
 begin
   if not v_actor_is_gm then
     return jsonb_build_object(
@@ -52232,7 +52233,16 @@ begin
       0,
       0
     );
+
+    if not (v_entry.character_id = any(v_new_character_ids)) then
+      v_new_character_ids := array_append(v_new_character_ids, v_entry.character_id);
+    end if;
   end loop;
+
+  perform public.odyssey_cleanup_character_active_participation(
+    v_new_character_ids,
+    v_encounter_id
+  );
 
   with ranked as (
     select
@@ -52401,6 +52411,11 @@ begin
     v_encounter.current_round + 1,
     0,
     0
+  );
+
+  perform public.odyssey_cleanup_character_active_participation(
+    array[v_link.character_id],
+    v_encounter_id
   );
 
   with ranked as (
@@ -56843,6 +56858,7 @@ declare
   v_entry record;
   v_roll integer := 0;
   v_reaction integer := 0;
+  v_new_character_ids uuid[] := array[]::uuid[];
 begin
   if not v_actor_is_gm then
     return jsonb_build_object(
@@ -56970,7 +56986,16 @@ begin
       0,
       0
     );
+
+    if not (v_entry.character_id = any(v_new_character_ids)) then
+      v_new_character_ids := array_append(v_new_character_ids, v_entry.character_id);
+    end if;
   end loop;
+
+  perform public.odyssey_cleanup_character_active_participation(
+    v_new_character_ids,
+    v_encounter_id
+  );
 
   with ranked as (
     select
@@ -57139,6 +57164,11 @@ begin
     v_encounter.current_round + 1,
     0,
     0
+  );
+
+  perform public.odyssey_cleanup_character_active_participation(
+    array[v_link.character_id],
+    v_encounter_id
   );
 
   with ranked as (
@@ -69775,25 +69805,106 @@ create or replace function public.odyssey_apply_weapon_operation_session_cost(
   p_character_id uuid,
   p_operation text,
   p_feed_mode text default null,
-  p_expected_session_version integer default null
+  p_expected_session_version integer default null,
+  p_encounter_id uuid default null
 )
 returns jsonb
 language plpgsql
-set search_path = public
+set search_path = public, pg_temp
 as $$
 declare
-  v_participation jsonb := public.odyssey_get_active_participation(p_character_id);
   v_cost_mode text := public.odyssey_get_weapon_operation_cost_mode(
     p_character_id,
     p_operation,
     p_feed_mode
   );
-  v_entry_id uuid := public.odyssey_try_parse_uuid(v_participation->>'entry_id');
-  v_encounter_id uuid := public.odyssey_try_parse_uuid(v_participation->>'encounter_id');
+  v_active_encounter_count integer := 0;
+  v_participation record;
   v_move_current integer := 0;
   v_move_max integer := 0;
 begin
-  if v_participation is null then
+  select count(distinct e.id)
+  into v_active_encounter_count
+  from public.odyssey_initiative_entries i
+  join public.odyssey_combat_encounters e
+    on e.id = i.encounter_id
+  where i.character_id = p_character_id
+    and i.is_active = true
+    and e.status = 'active'
+    and e.ended_at is null;
+
+  if p_encounter_id is not null then
+    select
+      e.id as encounter_id,
+      e.state_version,
+      e.current_round,
+      e.active_character_id,
+      i.id as entry_id,
+      i.action_current,
+      i.move_current,
+      i.move_max,
+      i.reaction_action_current
+    into v_participation
+    from public.odyssey_initiative_entries i
+    join public.odyssey_combat_encounters e
+      on e.id = i.encounter_id
+    where i.character_id = p_character_id
+      and i.is_active = true
+      and e.id = p_encounter_id
+      and e.status = 'active'
+      and e.ended_at is null
+    limit 1
+    for update of i, e;
+
+    if not found then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'ENCOUNTER_NOT_ACTIVE_FOR_CHARACTER',
+        'message', 'The selected encounter is not active for this character.',
+        'cost_mode', v_cost_mode,
+        'combat_session', null
+      );
+    end if;
+  else
+    if v_active_encounter_count > 1 then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'COMBAT_CONTEXT_AMBIGUOUS',
+        'message', 'Multiple active encounters found for this character. Pass encounter_id explicitly.',
+        'cost_mode', v_cost_mode,
+        'combat_session', null,
+        'combat_context', jsonb_build_object(
+          'mode', 'ambiguous',
+          'active_encounter_count', v_active_encounter_count,
+          'warning', 'Multiple active encounters found for this character. Pass encounter_id explicitly.'
+        )
+      );
+    end if;
+
+    select
+      e.id as encounter_id,
+      e.state_version,
+      e.current_round,
+      e.active_character_id,
+      i.id as entry_id,
+      i.action_current,
+      i.move_current,
+      i.move_max,
+      i.reaction_action_current
+    into v_participation
+    from public.odyssey_initiative_entries i
+    join public.odyssey_combat_encounters e
+      on e.id = i.encounter_id
+    where i.character_id = p_character_id
+      and i.is_active = true
+      and e.status = 'active'
+      and e.ended_at is null
+    order by e.created_at desc, e.id desc
+    limit 1
+    for update of i, e;
+  end if;
+
+  if not found then
     return jsonb_build_object(
       'ok', true,
       'spent', false,
@@ -69803,16 +69914,16 @@ begin
   end if;
 
   if p_expected_session_version is not null
-     and p_expected_session_version <> coalesce((v_participation->>'state_version')::integer, 0) then
+     and p_expected_session_version <> coalesce(v_participation.state_version, 0) then
     return jsonb_build_object(
       'ok', false,
       'error', 'STATE_VERSION_CONFLICT',
       'message', 'Combat state changed. Reload authoritative runtime.',
-      'encounter_state_version', (v_participation->>'state_version')::integer
+      'encounter_state_version', coalesce(v_participation.state_version, 0)
     );
   end if;
 
-  if coalesce((v_participation->>'is_current_turn')::boolean, false) = false then
+  if coalesce(v_participation.active_character_id = p_character_id, false) = false then
     return jsonb_build_object(
       'ok', false,
       'error', 'NOT_CURRENT_TURN',
@@ -69825,19 +69936,20 @@ begin
       'ok', true,
       'spent', false,
       'cost_mode', v_cost_mode,
-      'combat_session', public.odyssey_build_session_cost_summary(v_participation, false)
+      'combat_session', public.odyssey_build_session_cost_summary(
+        jsonb_build_object(
+          'encounter_id', v_participation.encounter_id,
+          'state_version', v_participation.state_version,
+          'current_round', v_participation.current_round,
+          'entry_id', v_participation.entry_id
+        ),
+        false
+      )
     );
   end if;
 
-  select
-    coalesce(i.move_current, 0),
-    coalesce(i.move_max, 0)
-  into
-    v_move_current,
-    v_move_max
-  from public.odyssey_initiative_entries i
-  where i.id = v_entry_id
-  for update;
+  v_move_current := coalesce(v_participation.move_current, 0);
+  v_move_max := coalesce(v_participation.move_max, 0);
 
   if v_move_max <= 0 or v_move_current < v_move_max then
     return jsonb_build_object(
@@ -69848,18 +69960,47 @@ begin
   end if;
 
   perform public.odyssey_apply_turn_costs(
-    v_entry_id,
+    v_participation.entry_id,
     0,
     v_move_current,
     false
   );
-  perform public.odyssey_increment_encounter_state_version(v_encounter_id);
+  perform public.odyssey_increment_encounter_state_version(v_participation.encounter_id);
 
   return jsonb_build_object(
     'ok', true,
     'spent', true,
     'cost_mode', v_cost_mode,
-    'combat_session', public.odyssey_build_session_cost_summary(v_participation, false)
+    'combat_session', public.odyssey_build_session_cost_summary(
+      jsonb_build_object(
+        'encounter_id', v_participation.encounter_id,
+        'state_version', v_participation.state_version,
+        'current_round', v_participation.current_round,
+        'entry_id', v_participation.entry_id
+      ),
+      false
+    )
+  );
+end;
+$$;
+
+create or replace function public.odyssey_apply_weapon_operation_session_cost(
+  p_character_id uuid,
+  p_operation text,
+  p_feed_mode text default null,
+  p_expected_session_version integer default null
+)
+returns jsonb
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  return public.odyssey_apply_weapon_operation_session_cost(
+    p_character_id,
+    p_operation,
+    p_feed_mode,
+    p_expected_session_version,
+    null::uuid
   );
 end;
 $$;
@@ -69877,6 +70018,7 @@ declare
     coalesce(p_payload->>'character_weapon_id', p_payload->>'weapon_id')
   );
   v_expected_session_version integer := nullif(trim(coalesce(p_payload->>'expected_encounter_version', '')), '')::integer;
+  v_encounter_id uuid := public.odyssey_try_parse_uuid(p_payload->>'encounter_id');
   v_weapon public.odyssey_character_weapons%rowtype;
   v_current_active_weapon_id uuid := null;
   v_cost_result jsonb := '{}'::jsonb;
@@ -69919,7 +70061,8 @@ begin
     v_character_id,
     'switch_weapon',
     null,
-    v_expected_session_version
+    v_expected_session_version,
+    v_encounter_id
   );
   if coalesce((v_cost_result->>'ok')::boolean, false) = false then
     return v_cost_result;
@@ -69948,6 +70091,131 @@ begin
     'cost_mode', v_cost_result->>'cost_mode',
     'combat_session', v_cost_result->'combat_session',
     'armory', public.get_character_armory(v_character_id)
+  );
+end;
+$$;
+
+create or replace function public.odyssey_cleanup_character_active_participation(
+  p_character_ids uuid[],
+  p_keep_encounter_id uuid default null
+)
+returns jsonb
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+  v_character_ids uuid[] := coalesce(p_character_ids, array[]::uuid[]);
+  v_old_entry_ids uuid[] := array[]::uuid[];
+  v_old_encounter_ids uuid[] := array[]::uuid[];
+  v_affected_encounter_id uuid;
+  v_deactivated_count integer := 0;
+  v_finished_count integer := 0;
+  v_reactivated_count integer := 0;
+begin
+  if coalesce(array_length(v_character_ids, 1), 0) = 0 then
+    return jsonb_build_object(
+      'ok', true,
+      'deactivated_count', 0,
+      'finished_count', 0,
+      'reactivated_count', 0,
+      'affected_encounter_ids', '[]'::jsonb
+    );
+  end if;
+
+  with duplicate_entries as (
+    select
+      i.id as entry_id,
+      i.encounter_id
+    from public.odyssey_initiative_entries i
+    join public.odyssey_combat_encounters e
+      on e.id = i.encounter_id
+    where i.character_id = any(v_character_ids)
+      and i.is_active = true
+      and e.status = 'active'
+      and e.ended_at is null
+      and (p_keep_encounter_id is null or e.id <> p_keep_encounter_id)
+    for update of i, e
+  )
+  select
+    coalesce(array_agg(distinct duplicate_entries.entry_id), array[]::uuid[]),
+    coalesce(array_agg(distinct duplicate_entries.encounter_id), array[]::uuid[])
+  into
+    v_old_entry_ids,
+    v_old_encounter_ids
+  from duplicate_entries;
+
+  if coalesce(array_length(v_old_entry_ids, 1), 0) = 0 then
+    return jsonb_build_object(
+      'ok', true,
+      'deactivated_count', 0,
+      'finished_count', 0,
+      'reactivated_count', 0,
+      'affected_encounter_ids', '[]'::jsonb
+    );
+  end if;
+
+  update public.odyssey_initiative_entries i
+  set
+    is_active = false,
+    updated_at = timezone('utc', now())
+  where i.id = any(v_old_entry_ids)
+    and i.is_active = true;
+  get diagnostics v_deactivated_count = row_count;
+
+  for v_affected_encounter_id in
+    select unnest(v_old_encounter_ids)
+  loop
+    if not exists (
+      select 1
+      from public.odyssey_initiative_entries i
+      where i.encounter_id = v_affected_encounter_id
+        and i.is_active = true
+    ) then
+      update public.odyssey_combat_encounters e
+      set
+        status = 'finished',
+        ended_at = timezone('utc', now()),
+        active_entry_id = null,
+        active_character_id = null,
+        updated_at = timezone('utc', now()),
+        last_transition_at = timezone('utc', now())
+      where e.id = v_affected_encounter_id
+        and e.status = 'active'
+        and e.ended_at is null;
+
+      if found then
+        v_finished_count := v_finished_count + 1;
+        perform public.odyssey_increment_encounter_state_version(v_affected_encounter_id);
+      end if;
+    else
+      update public.odyssey_combat_encounters e
+      set
+        active_entry_id = null,
+        active_character_id = null,
+        updated_at = timezone('utc', now()),
+        last_transition_at = timezone('utc', now())
+      where e.id = v_affected_encounter_id
+        and e.status = 'active'
+        and e.ended_at is null
+        and (
+          e.active_character_id = any(v_character_ids)
+          or e.active_entry_id = any(v_old_entry_ids)
+        );
+
+      if found then
+        perform public.odyssey_increment_encounter_state_version(v_affected_encounter_id);
+        perform public.odyssey_start_next_eligible_turn(v_affected_encounter_id);
+        v_reactivated_count := v_reactivated_count + 1;
+      end if;
+    end if;
+  end loop;
+
+  return jsonb_build_object(
+    'ok', true,
+    'deactivated_count', v_deactivated_count,
+    'finished_count', v_finished_count,
+    'reactivated_count', v_reactivated_count,
+    'affected_encounter_ids', to_jsonb(v_old_encounter_ids)
   );
 end;
 $$;

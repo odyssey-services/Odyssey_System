@@ -494,6 +494,13 @@ export function setupSceneSelection(hooks = {}) {
             moveMax: armoryForDebug.combat_context?.move_max ?? null,
             activeEncounterCount: armoryForDebug.combat_context?.active_encounter_count ?? null,
           });
+          if (armoryForDebug.combat_context?.mode === "ambiguous") {
+            logDebugEvent("weapon", "armory-combat-context-ambiguous", {
+              characterId,
+              activeEncounterCount: armoryForDebug.combat_context?.active_encounter_count ?? null,
+              warning: armoryForDebug.combat_context?.warning ?? null,
+            }, false);
+          }
         }
         if (canonicalArmory) {
           merged.armory = canonicalArmory;
@@ -1752,16 +1759,25 @@ export function setupSceneSelection(hooks = {}) {
         ephemeral.fireModeRpcResult = null;
         try {
           const expectedVersion = expectedVersionOf(session);
+          logDebugEvent("weapon", "switch_active_weapon:payload", {
+            characterId: ephemeral.characterId,
+            targetWeaponId: weaponId,
+            encounterId: session?.exists && session?.id ? session.id : null,
+            expectedEncounterVersion: expectedVersion ?? null,
+          });
           const result = await switchActiveWeapon(
             {
               character_id: ephemeral.characterId,
               character_weapon_id: weaponId,
+              ...(session?.exists && session?.id ? { encounter_id: session.id } : {}),
               ...(expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}),
             },
             settings,
           );
           if (result?.ok === false) {
-            const message = result.message || result.error || "Weapon switch failed.";
+            const message = result?.error === "COMBAT_CONTEXT_AMBIGUOUS"
+              ? "This character is in multiple active encounters. End old combats or reselect the token."
+              : (result.message || result.error || "Weapon switch failed.");
             ephemeral.commandStatus = {
               type: "error",
               message,
