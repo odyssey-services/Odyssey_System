@@ -81,6 +81,7 @@ const SCENE_RERESOLVE_DEBOUNCE_MS = 600;
 const HUD_LIGHT_RUNTIME_SECTIONS = Object.freeze(["summary", "combat", "armory", "abilities", "effects"]);
 const LIGHT_RUNTIME_RETRY_DELAY_MS = 350;
 const SELECTED_RUNTIME_DEBOUNCE_MS = 200;
+const TRANSIENT_EMPTY_SELECTION_GRACE_MS = 350;
 
 /**
  * @param {{
@@ -100,6 +101,9 @@ export function setupSceneSelection(hooks = {}) {
   let sceneTimer = null;
   let selectedRuntimeReason = "startup";
   let currentSelectionIds = [];
+  let pendingSelectionIds = [];
+  let lastObservedSelectionIds = [];
+  let transientEmptySelectionTimer = null;
   let skillAdminDeleteInFlight = null;
   let refetchCurrentPromise = null;
   let refetchCurrentQueued = false;
@@ -177,9 +181,16 @@ export function setupSceneSelection(hooks = {}) {
   const activeCombatActionCharacters = new Set();
   const characterActionQueues = new Map();
   const selectionRefreshScheduler = createDebouncedRefreshScheduler(
-    (selectionIds, reason = "selection-debounced") => resolveAndPublish(selectionIds, reason),
+    (reason = "selection-debounced", forceResolve = false) => resolveLiveSelection(reason, { forceResolve }),
     SELECTED_RUNTIME_DEBOUNCE_MS,
   );
+
+  function clearTransientEmptySelectionTimer() {
+    if (transientEmptySelectionTimer) {
+      clearTimeout(transientEmptySelectionTimer);
+      transientEmptySelectionTimer = null;
+    }
+  }
 
   function waitMs(ms) {
     return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
@@ -455,7 +466,7 @@ export function setupSceneSelection(hooks = {}) {
             sessionRuntime = runtime;
             if (lastState) publishState(lastState);
             if (previousWasActive && !nextIsActive && ephemeral.characterId) {
-              scheduleSelectedSelectionRefresh(currentSelectionIds, "combat-ended");
+              scheduleLiveSelectionResolve("combat-ended", { forceResolve: true });
               void quickbarController?.refresh?.();
             }
           },
@@ -478,7 +489,7 @@ export function setupSceneSelection(hooks = {}) {
         if (payload.source !== "combat-movement" || !payload.runtime) return;
         sessionController.applyExternalRuntime(payload.runtime, "tactical-move");
         if (String(payload.characterId ?? "").trim() && String(payload.characterId ?? "").trim() === String(ephemeral.characterId ?? "").trim()) {
-          scheduleSelectedSelectionRefresh(currentSelectionIds, "tactical-move-applied");
+          scheduleLiveSelectionResolve("tactical-move-applied", { forceResolve: true });
           void quickbarController?.refresh?.();
         }
       });
@@ -716,9 +727,59 @@ export function setupSceneSelection(hooks = {}) {
       return writeHeavyRuntimeCache(normalizedCharacterId, nextPatch);
     }
 
-    function scheduleSelectedSelectionRefresh(selectionIds, reason = "selection-debounced") {
+    function scheduleLiveSelectionResolve(reason = "selection-debounced", { delayMs = 0, forceResolve = false } = {}) {
       selectedRuntimeReason = reason;
-      selectionRefreshScheduler.schedule(selectionIds, reason);
+      const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
+      if (normalizedDelayMs > 0) {
+        clearTransientEmptySelectionTimer();
+        transientEmptySelectionTimer = setTimeout(() => {
+          transientEmptySelectionTimer = null;
+          selectionRefreshScheduler.schedule(reason, forceResolve === true);
+        }, normalizedDelayMs);
+        return;
+      }
+      clearTransientEmptySelectionTimer();
+      selectionRefreshScheduler.schedule(reason, forceResolve === true);
+    }
+
+    function onObservedSelectionChanged(rawSelectionIds, reason = "selection-changed") {
+      const observed = Array.isArray(rawSelectionIds)
+        ? rawSelectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [];
+      lastObservedSelectionIds = observed.slice();
+      logDebugEvent("selection", "selection-change-observed", {
+        tokenIds: observed,
+        previousSelectionIds: currentSelectionIds,
+        reason,
+      });
+      if (observed.length === 0 && currentSelectionIds.length > 0 && lastPayload?.status === "ready") {
+        scheduleLiveSelectionResolve(`${reason}:empty-grace`, {
+          delayMs: TRANSIENT_EMPTY_SELECTION_GRACE_MS,
+        });
+        return;
+      }
+      scheduleLiveSelectionResolve(reason);
+    }
+
+    async function resolveLiveSelection(reason = "selection-changed", { forceResolve = false } = {}) {
+      const liveSelectionIds = await readLiveSelectionIds(lastObservedSelectionIds.length ? lastObservedSelectionIds : currentSelectionIds);
+      const liveSignature = liveSelectionIds.join("|");
+      const currentSignature = currentSelectionIds.join("|");
+      lastObservedSelectionIds = liveSelectionIds.slice();
+      logDebugEvent("selection", "selection-live-read", {
+        tokenIds: liveSelectionIds,
+        currentSelectionIds,
+        reason,
+      });
+      if (!forceResolve && liveSignature === currentSignature && lastPayload && pendingSelectionIds.length === 0) {
+        logDebugEvent("selection", "selection-live-unchanged", {
+          tokenIds: liveSelectionIds,
+          reason,
+        });
+        broadcast(lastPayload);
+        return lastPayload;
+      }
+      return resolveAndPublish(liveSelectionIds, reason);
     }
 
     const adapter = createSceneSelectionAdapter({
@@ -832,9 +893,15 @@ export function setupSceneSelection(hooks = {}) {
       };
     }
 
-    function publishState(state) {
+    function publishState(state, reason = "state-update") {
       lastPayload = buildBroadcastPayload(state, buildEphemeralForPayload());
       broadcast(lastPayload);
+      logDebugEvent("selection", "selection-payload-broadcast", {
+        status: lastPayload.status ?? null,
+        selectedItemId: lastPayload.selectedItemId ?? null,
+        characterId: lastPayload.characterId ?? null,
+        reason,
+      });
       return lastPayload;
     }
 
@@ -854,7 +921,7 @@ export function setupSceneSelection(hooks = {}) {
         await waitForCombatActionIdle(ephemeral.characterId);
 
         if (currentSelectionIds.length === 1) {
-          await resolveAndPublish(currentSelectionIds, reason);
+          await resolveLiveSelection(reason, { forceResolve: true });
         } else if (lastState) {
           publishState(lastState);
         }
@@ -2256,10 +2323,30 @@ export function setupSceneSelection(hooks = {}) {
         return;
       }
       selectedRuntimeReason = reason;
-      currentSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
-      logDebugEvent("selection", "source-token-selected", { tokenIds: currentSelectionIds, reason });
-      const { stale, state } = await adapter.resolveLatest(selectionIds);
-      if (disposed || stale) return; // only the freshest selection updates the HUD
+      const nextSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
+      const previousCharacterId = lastPayload?.characterId ?? lastState?.characterId ?? null;
+      const previousTokenId = lastPayload?.selectedItemId ?? currentSelectionIds[0] ?? null;
+      const resolveSignature = nextSelectionIds.join("|");
+      pendingSelectionIds = nextSelectionIds.slice();
+      logDebugEvent("selection", "source-token-selected", { tokenIds: nextSelectionIds, reason });
+      let state = null;
+      let resolvedFresh = false;
+      try {
+        const result = await adapter.resolveLatest(nextSelectionIds);
+        if (disposed || result?.stale) return; // only the freshest selection updates the HUD
+        state = result?.state ?? null;
+        resolvedFresh = true;
+      } finally {
+        if (!resolvedFresh && pendingSelectionIds.join("|") === resolveSignature) {
+          pendingSelectionIds = [];
+        }
+      }
+      if (!state) {
+        if (pendingSelectionIds.join("|") === resolveSignature) {
+          pendingSelectionIds = [];
+        }
+        return;
+      }
       if (state.status !== "ready") {
         const unavailableReason = state.error?.code ?? state.access?.reason ?? null;
         if (state.status !== "no-selection" && unavailableReason !== "NO_TOKEN_SELECTED") {
@@ -2277,8 +2364,23 @@ export function setupSceneSelection(hooks = {}) {
           else selectedWeaponMemory.forget(state.characterId);
         }
       }
+      currentSelectionIds = nextSelectionIds.slice();
       lastState = state;
-      const payload = publishState(state);
+      const nextCharacterId = state?.characterId ?? null;
+      const nextTokenId = state?.selectedItemId ?? nextSelectionIds[0] ?? null;
+      if (previousCharacterId !== nextCharacterId || previousTokenId !== nextTokenId) {
+        logDebugEvent("selection", "selected-character-changed", {
+          previousCharacterId,
+          nextCharacterId,
+          previousTokenId,
+          nextTokenId,
+          reason,
+        });
+      }
+      if (pendingSelectionIds.join("|") === resolveSignature) {
+        pendingSelectionIds = [];
+      }
+      const payload = publishState(state, reason);
       if (reason === "selection-request-hydrate") {
         logDebugEvent("selection", "selection-hydrate-resolved", {
           tokenIds: currentSelectionIds,
@@ -2304,19 +2406,10 @@ export function setupSceneSelection(hooks = {}) {
       if (shouldDeferSelection()) return;
       void readLiveSelectionIds(p.selection)
         .then((selectionIds) => {
-          logDebugEvent("selection", "selection-change-observed", {
-            tokenIds: selectionIds,
-            previousSelectionIds: currentSelectionIds,
-          });
-          scheduleSelectedSelectionRefresh(selectionIds, "selection-changed");
+          onObservedSelectionChanged(selectionIds, "selection-changed");
         })
         .catch(() => {
-          logDebugEvent("selection", "selection-change-observed", {
-            tokenIds: p.selection,
-            previousSelectionIds: currentSelectionIds,
-            fallback: true,
-          });
-          scheduleSelectedSelectionRefresh(p.selection, "selection-changed:fallback");
+          onObservedSelectionChanged(p.selection, "selection-changed:fallback");
         });
     }));
 
@@ -2327,7 +2420,7 @@ export function setupSceneSelection(hooks = {}) {
       sceneTimer = setTimeout(() => {
         if (shouldDeferSelection()) return;
         readLiveSelectionIds(currentSelectionIds)
-          .then((sel) => { if (Array.isArray(sel) && sel.length === 1) return scheduleSelectedSelectionRefresh(sel, "scene-items-changed"); })
+          .then((sel) => { if (Array.isArray(sel) && sel.length === 1) return scheduleLiveSelectionResolve("scene-items-changed", { forceResolve: true }); })
           .catch(() => {});
       }, SCENE_RERESOLVE_DEBOUNCE_MS);
     }));
@@ -2341,7 +2434,8 @@ export function setupSceneSelection(hooks = {}) {
       const currentSignature = currentSelectionIds.join("|");
       const shouldHydrateFromRequest = event?.data?.hydrateIfStale === true
         && requestedSelectionIds.length === 1
-        && requestedSignature !== currentSignature;
+        && requestedSignature !== currentSignature
+        && (!lastPayload || lastPayload.status === "no-selection" || lastPayload.status === "loading");
       if (shouldHydrateFromRequest) {
         void readLiveSelectionIds(currentSelectionIds)
           .then((liveSelectionIds) => {
@@ -2360,7 +2454,7 @@ export function setupSceneSelection(hooks = {}) {
               }
               return;
             }
-            currentSelectionIds = liveSelectionIds.slice();
+            pendingSelectionIds = liveSelectionIds.slice();
             logDebugEvent("selection", "selection-hydrate-requested", {
               tokenIds: liveSelectionIds,
               previousStatus: lastPayload?.status ?? null,
@@ -2389,11 +2483,12 @@ export function setupSceneSelection(hooks = {}) {
           });
         return;
       }
-      if (lastPayload && currentSelectionIds.length === 1 && lastPayload.selectedItemId !== currentSelectionIds[0]) {
+      if (lastPayload && pendingSelectionIds.length === 1 && lastPayload.selectedItemId !== pendingSelectionIds[0]) {
         logDebugEvent("selection", "selection-replay-skipped", {
           reason: "pending-selection-mismatch",
           payloadSelectedItemId: lastPayload.selectedItemId ?? null,
           currentSelectionIds,
+          pendingSelectionIds,
           requestedSelectionIds,
         });
         return;
@@ -2408,7 +2503,7 @@ export function setupSceneSelection(hooks = {}) {
         });
         return;
       }
-      scheduleSelectedSelectionRefresh(currentSelectionIds, "selection-request-initial");
+      scheduleLiveSelectionResolve("selection-request-initial", { forceResolve: true });
     }));
 
     cleanups.push(OBR.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
@@ -2435,6 +2530,7 @@ export function setupSceneSelection(hooks = {}) {
   function cleanup() {
     disposed = true;
     if (sceneTimer) { clearTimeout(sceneTimer); sceneTimer = null; }
+    clearTransientEmptySelectionTimer();
     selectionRefreshScheduler.cancel();
     for (const fn of cleanups.splice(0)) { try { fn(); } catch (_e) { /* ignore */ } }
   }
