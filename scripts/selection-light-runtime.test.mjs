@@ -79,6 +79,7 @@ test("inventory failure does not make selection unavailable in staged runtime fl
   assert.ok(!sceneControllerSrc.includes("Promise.all([\n          getCharacterRuntimeBundle("));
   assert.ok(sceneControllerSrc.includes("panel: \"inventory\""));
   assert.ok(sceneControllerSrc.includes("heavy-fetch-failed"));
+  assert.ok(sceneControllerSrc.includes("heavy-fetch-result"));
 });
 
 test("armory failure does not make selection unavailable in staged runtime flow", () => {
@@ -103,14 +104,10 @@ test("startup resolve prefers live OBR selection over the initial player snapsho
   assert.ok(sceneControllerSrc.includes("const liveSelection = await getSelectedTokenIds();"));
 });
 
-test("selection replay self-heals a stale no-selection payload via live selection reread", () => {
-  assert.ok(sceneControllerSrc.includes("if (lastPayload?.status === \"ready\") {"));
-  assert.ok(sceneControllerSrc.includes("await resolveAndPublish(selectionIds, \"selection-request\");"));
-});
-
-test("selection replay accepts explicit popover selection ids as a background fallback", () => {
-  assert.ok(sceneControllerSrc.includes("requestedSelectionIds.length > 0"));
-  assert.ok(sceneControllerSrc.includes("selection-request:popover"));
+test("selection request with existing payload replays only lastPayload", () => {
+  assert.ok(sceneControllerSrc.includes("logDebugEvent(\"selection\", \"selection-replayed\""));
+  assert.ok(sceneControllerSrc.includes("scheduleSelectedSelectionRefresh(currentSelectionIds, \"selection-request-initial\")"));
+  assert.ok(!sceneControllerSrc.includes("selection-request:popover"));
 });
 
 await asyncTest("after repeated light runtime failure selection shows runtime fetch failed", async () => {

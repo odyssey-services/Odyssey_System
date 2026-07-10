@@ -547,7 +547,7 @@ export function setupSceneSelection(hooks = {}) {
       const key = buildLightRuntimeKey(characterId, encounterId);
       const startedAt = Date.now();
       let deduped = false;
-      return singleFlightRuntimeRefresh(
+      const refreshPromise = singleFlightRuntimeRefresh(
         key,
         async () => {
           logDebugEvent("selection", "runtime-refresh-start", {
@@ -587,7 +587,11 @@ export function setupSceneSelection(hooks = {}) {
             }, true);
           },
         },
-      )
+      );
+      if (deduped) {
+        return refreshPromise;
+      }
+      return refreshPromise
         .then((bundle) => {
           logDebugEvent("selection", "runtime-refresh-result", {
             characterId,
@@ -595,7 +599,7 @@ export function setupSceneSelection(hooks = {}) {
             reason,
             encounterId,
             ok: bundle?.ok !== false,
-            deduped,
+            deduped: false,
             elapsedMs: Date.now() - startedAt,
           }, bundle?.ok !== false);
           return bundle;
@@ -608,7 +612,7 @@ export function setupSceneSelection(hooks = {}) {
             reason,
             encounterId,
             ok: false,
-            deduped,
+            deduped: false,
             error: normalized.error,
             retryable: normalized.retryable,
             elapsedMs: Date.now() - startedAt,
@@ -630,6 +634,7 @@ export function setupSceneSelection(hooks = {}) {
       const nextPatch = {};
 
       if (armory) {
+        const armoryStartedAt = Date.now();
         try {
           logDebugEvent("runtime", "heavy-fetch-start", {
             characterId: normalizedCharacterId,
@@ -641,6 +646,13 @@ export function setupSceneSelection(hooks = {}) {
             () => getCharacterArmory(normalizedCharacterId, settings, encounterId),
           );
           nextPatch.armory = armoryResult;
+          logDebugEvent("runtime", "heavy-fetch-result", {
+            characterId: normalizedCharacterId,
+            panel: "armory",
+            reason,
+            ok: armoryResult?.ok !== false,
+            elapsedMs: Date.now() - armoryStartedAt,
+          }, armoryResult?.ok !== false);
         } catch (error) {
           const normalized = normalizeRpcError(error);
           logDebugEvent("runtime", "heavy-fetch-failed", {
@@ -649,12 +661,14 @@ export function setupSceneSelection(hooks = {}) {
             reason,
             error: normalized.error,
             retryable: normalized.retryable,
+            elapsedMs: Date.now() - armoryStartedAt,
             message: normalized.message,
           }, false);
         }
       }
 
       if (inventory) {
+        const inventoryStartedAt = Date.now();
         try {
           logDebugEvent("runtime", "heavy-fetch-start", {
             characterId: normalizedCharacterId,
@@ -666,6 +680,13 @@ export function setupSceneSelection(hooks = {}) {
             () => getCharacterInventory(normalizedCharacterId, settings),
           );
           nextPatch.inventory = inventoryResult;
+          logDebugEvent("runtime", "heavy-fetch-result", {
+            characterId: normalizedCharacterId,
+            panel: "inventory",
+            reason,
+            ok: inventoryResult?.ok !== false,
+            elapsedMs: Date.now() - inventoryStartedAt,
+          }, inventoryResult?.ok !== false);
         } catch (error) {
           const normalized = normalizeRpcError(error);
           logDebugEvent("runtime", "heavy-fetch-failed", {
@@ -674,6 +695,7 @@ export function setupSceneSelection(hooks = {}) {
             reason,
             error: normalized.error,
             retryable: normalized.retryable,
+            elapsedMs: Date.now() - inventoryStartedAt,
             message: normalized.message,
           }, false);
         }
@@ -2290,25 +2312,18 @@ export function setupSceneSelection(hooks = {}) {
     }));
 
     // Replay the latest state to a module iframe that just mounted.
-    cleanups.push(OBR.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, (event) => {
-      const requestedSelectionIds = Array.isArray(event?.data?.selectionIds)
-        ? event.data.selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
-        : [];
-      if (requestedSelectionIds.length > 0) {
-        void resolveAndPublish(requestedSelectionIds, "selection-request:popover");
-        return;
-      }
-      if (lastPayload?.status === "ready") {
+    cleanups.push(OBR.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
+      if (lastPayload) {
         broadcast(lastPayload);
+        logDebugEvent("selection", "selection-replayed", {
+          status: lastPayload.status ?? null,
+          characterId: lastPayload.characterId ?? null,
+          selectedItemId: lastPayload.selectedItemId ?? null,
+          reason: "selection-request",
+        });
         return;
       }
-      void readLiveSelectionIds(currentSelectionIds)
-        .then(async (selectionIds) => {
-          await resolveAndPublish(selectionIds, "selection-request");
-        })
-        .catch(() => {
-          if (lastPayload) broadcast(lastPayload);
-        });
+      scheduleSelectedSelectionRefresh(currentSelectionIds, "selection-request-initial");
     }));
 
     cleanups.push(OBR.broadcast.onMessage(BC_HUD_COMMAND, (event) => {

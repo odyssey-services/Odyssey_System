@@ -181,14 +181,23 @@ function moduleRect(moduleId) {
   return resolveModuleRect(moduleId, lastLayout.modules[moduleId], lastVW, lastVH);
 }
 
-async function openModule(moduleId) {
+async function openModule(moduleId, reason = "apply-mode", {
+  previousStatus = lastSelectionStatus,
+  nextStatus = lastSelectionStatus,
+} = {}) {
   const rect = moduleRect(moduleId);
   await OBR.popover.open({
     id: HUD_MODULE_POPOVER_IDS[moduleId],
     url: pageUrl(moduleId),
     ...paramsForRect(rect),
   });
-  logDebugEvent("popover", "module-opened", { moduleId });
+  logDebugEvent("popover", "module-opened", {
+    moduleId,
+    reason,
+    previousStatus,
+    nextStatus,
+    mode,
+  });
 }
 
 function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W, height = 200) {
@@ -449,10 +458,10 @@ function sendTargetingCommand(command) {
 
 /** Open every module that should currently be visible (Player always; the four
  *  ready-only modules only when the selection is `ready`). */
-async function openVisibleModules() {
+async function openVisibleModules(reason = "apply-mode", statusContext = {}) {
   for (const id of OPEN_ORDER) {
     if (!moduleShouldBeOpen(id)) continue;
-    try { await openModule(id); } catch (_e) { /* skip one bad module, keep the rest */ }
+    try { await openModule(id, reason, statusContext); } catch (_e) { /* skip one bad module, keep the rest */ }
   }
 }
 
@@ -474,11 +483,20 @@ async function reconcileSecondaryModules(prevStatus, nextStatus) {
   }
 }
 
-async function closeAllModules() {
+async function closeAllModules(reason = "apply-mode", {
+  previousStatus = lastSelectionStatus,
+  nextStatus = lastSelectionStatus,
+} = {}) {
   for (const id of HUD_MODULE_IDS) {
     try {
       await OBR.popover.close(HUD_MODULE_POPOVER_IDS[id]);
-      logDebugEvent("popover", "module-closed", { moduleId: id });
+      logDebugEvent("popover", "module-closed", {
+        moduleId: id,
+        reason,
+        previousStatus,
+        nextStatus,
+        mode,
+      });
     } catch (_e) { /* ignore */ }
   }
 }
@@ -494,12 +512,12 @@ async function closeLegacyPopovers() {
 /** Re-open only the modules whose placement changed (in z-order). Re-opening a
  *  module reloads its iframe, so we must NOT touch unchanged ones — re-opening
  *  the Player module re-triggers its BC_HUD_LAYOUT broadcast, which would loop. */
-async function openChangedModules(prev, next) {
+async function openChangedModules(prev, next, reason = "layout-changed") {
   const changed = OPEN_ORDER.filter(
     (id) => moduleShouldBeOpen(id) && !placementsEqual(prev.modules[id], next.modules[id]),
   );
   for (const id of changed) {
-    try { await openModule(id); } catch (_e) { /* skip one, keep the rest */ }
+    try { await openModule(id, reason); } catch (_e) { /* skip one, keep the rest */ }
   }
 }
 
@@ -523,7 +541,7 @@ async function closePill() {
 }
 
 /** Reflect the current `mode` by (re)opening exactly the right popovers. */
-async function applyMode() {
+async function applyMode(reason = "apply-mode") {
   if (mode === "collapsed") {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
@@ -537,7 +555,7 @@ async function applyMode() {
     await OBR.popover.close(QUICKBAR_EDITOR_POPOVER_ID).catch(() => {});
     await closeAbilityDetail();
     await closeEditorPopover();
-    await closeAllModules();
+    await closeAllModules(reason, { previousStatus: lastSelectionStatus, nextStatus: lastSelectionStatus });
     await openPill();
   } else if (mode === "editor") {
     gunWeaponSelectorOpen = false;
@@ -552,12 +570,12 @@ async function applyMode() {
     await OBR.popover.close(QUICKBAR_EDITOR_POPOVER_ID).catch(() => {});
     await closeAbilityDetail();
     await closePill();
-    await closeAllModules();
+    await closeAllModules(reason, { previousStatus: lastSelectionStatus, nextStatus: lastSelectionStatus });
     await openEditor();
   } else {
     await closePill();
     await closeEditorPopover();
-    await openVisibleModules();
+    await openVisibleModules(reason, { previousStatus: lastSelectionStatus, nextStatus: lastSelectionStatus });
   }
 }
 
@@ -568,7 +586,7 @@ function startViewportPoll() {
       const { vw, vh } = { vw: await OBR.viewport.getWidth(), vh: await OBR.viewport.getHeight() };
       if (vw === lastVW && vh === lastVH) return;
       lastVW = vw; lastVH = vh;
-      await applyMode(); // normalized placements + scaled defaults re-flow + clamp
+      await applyMode("apply-mode"); // normalized placements + scaled defaults re-flow + clamp
     } catch (_e) { /* transient; next tick retries */ }
   }, VIEWPORT_POLL_MS);
   cleanups.push(() => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } });
@@ -584,7 +602,7 @@ export function setupCombatHudOverlay() {
       await readViewport();
       await closeLegacyPopovers(); // drop any 2.2.2 Target/Modifiers/Action popovers
       mode = isCollapsed() ? "collapsed" : "modules";
-      await applyMode();
+      await applyMode("startup");
       startViewportPoll();
 
       // Phase 4.0g: local-only map visuals (source outline, target ring, the
@@ -636,7 +654,7 @@ export function setupCombatHudOverlay() {
             gunMagazineSelectorOpen = false;
             gunFireModeSelectorOpen = false;
           }
-          await applyMode();
+          await applyMode(isCollapsed() ? "collapsed" : "controlled-reopen");
         }
       }));
 
@@ -743,8 +761,8 @@ export function setupCombatHudOverlay() {
       // Arrange-HUD editor open/close.
       cleanups.push(OBR.broadcast.onMessage(BC_HUD_EDITOR, async (event) => {
         const open = Boolean(event?.data && event.data.open);
-        if (open && mode !== "editor") { mode = "editor"; await applyMode(); }
-        else if (!open && mode === "editor") { mode = "modules"; await applyMode(); }
+        if (open && mode !== "editor") { mode = "editor"; await applyMode("editor-mode"); }
+        else if (!open && mode === "editor") { mode = "modules"; await applyMode("editor-mode"); }
       }));
 
       // Layout updates: Player module seeds the stored layout on mount; the
@@ -758,7 +776,7 @@ export function setupCombatHudOverlay() {
         if (layoutsEqual(next, lastLayout)) return;
         const prev = lastLayout;
         lastLayout = next;
-        if (mode === "modules") await openChangedModules(prev, next);
+        if (mode === "modules") await openChangedModules(prev, next, "layout-changed");
       }));
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -790,7 +808,7 @@ export async function teardownCombatHudOverlay() {
   mode = "modules";
   await closeEditorPopover();
   await closePill();
-  await closeAllModules();
+  await closeAllModules("cleanup");
   await OBR.popover.close(GUN_WEAPON_SELECTOR_POPOVER_ID).catch(() => {});
   await OBR.popover.close(GUN_MAGAZINE_SELECTOR_POPOVER_ID).catch(() => {});
   await OBR.popover.close(GUN_FIRE_MODE_SELECTOR_POPOVER_ID).catch(() => {});

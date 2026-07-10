@@ -110,6 +110,30 @@ await asyncTest("next request after failure runs again", async () => {
   assert.equal(result, "ok");
 });
 
+await asyncTest("five deduped callers share one owner refresh and notify only deduped followers", async () => {
+  clearRuntimeRefreshCoordinator();
+  let callCount = 0;
+  let dedupedCount = 0;
+  const factory = async () => {
+    callCount += 1;
+    await wait(15);
+    return { ok: true };
+  };
+
+  const requests = [
+    singleFlightRuntimeRefresh("char-a:light", factory, { onDeduped: () => { dedupedCount += 1; } }),
+    singleFlightRuntimeRefresh("char-a:light", factory, { onDeduped: () => { dedupedCount += 1; } }),
+    singleFlightRuntimeRefresh("char-a:light", factory, { onDeduped: () => { dedupedCount += 1; } }),
+    singleFlightRuntimeRefresh("char-a:light", factory, { onDeduped: () => { dedupedCount += 1; } }),
+    singleFlightRuntimeRefresh("char-a:light", factory, { onDeduped: () => { dedupedCount += 1; } }),
+  ];
+
+  await Promise.all(requests);
+
+  assert.equal(callCount, 1);
+  assert.equal(dedupedCount, 4);
+});
+
 await asyncTest("debounce collapses multiple refresh triggers into one", async () => {
   const invocations = [];
   const scheduler = createDebouncedRefreshScheduler((...args) => {

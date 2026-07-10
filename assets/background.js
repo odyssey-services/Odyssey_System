@@ -9261,7 +9261,7 @@ function setupSceneSelection(hooks = {}) {
       const key = buildLightRuntimeKey(characterId, encounterId);
       const startedAt = Date.now();
       let deduped = false;
-      return singleFlightRuntimeRefresh(
+      const refreshPromise = singleFlightRuntimeRefresh(
         key,
         async () => {
           logDebugEvent("selection", "runtime-refresh-start", {
@@ -9301,14 +9301,18 @@ function setupSceneSelection(hooks = {}) {
             }, true);
           }
         }
-      ).then((bundle) => {
+      );
+      if (deduped) {
+        return refreshPromise;
+      }
+      return refreshPromise.then((bundle) => {
         logDebugEvent("selection", "runtime-refresh-result", {
           characterId,
           mode: "light",
           reason,
           encounterId,
           ok: bundle?.ok !== false,
-          deduped,
+          deduped: false,
           elapsedMs: Date.now() - startedAt
         }, bundle?.ok !== false);
         return bundle;
@@ -9320,7 +9324,7 @@ function setupSceneSelection(hooks = {}) {
           reason,
           encounterId,
           ok: false,
-          deduped,
+          deduped: false,
           error: normalized.error,
           retryable: normalized.retryable,
           elapsedMs: Date.now() - startedAt,
@@ -9339,6 +9343,7 @@ function setupSceneSelection(hooks = {}) {
       if (!normalizedCharacterId || !armory && !inventory) return getHeavyRuntimeCache(normalizedCharacterId);
       const nextPatch = {};
       if (armory) {
+        const armoryStartedAt = Date.now();
         try {
           logDebugEvent("runtime", "heavy-fetch-start", {
             characterId: normalizedCharacterId,
@@ -9350,6 +9355,13 @@ function setupSceneSelection(hooks = {}) {
             () => getCharacterArmory(normalizedCharacterId, settings, encounterId)
           );
           nextPatch.armory = armoryResult;
+          logDebugEvent("runtime", "heavy-fetch-result", {
+            characterId: normalizedCharacterId,
+            panel: "armory",
+            reason,
+            ok: armoryResult?.ok !== false,
+            elapsedMs: Date.now() - armoryStartedAt
+          }, armoryResult?.ok !== false);
         } catch (error) {
           const normalized = normalizeRpcError(error);
           logDebugEvent("runtime", "heavy-fetch-failed", {
@@ -9358,11 +9370,13 @@ function setupSceneSelection(hooks = {}) {
             reason,
             error: normalized.error,
             retryable: normalized.retryable,
+            elapsedMs: Date.now() - armoryStartedAt,
             message: normalized.message
           }, false);
         }
       }
       if (inventory) {
+        const inventoryStartedAt = Date.now();
         try {
           logDebugEvent("runtime", "heavy-fetch-start", {
             characterId: normalizedCharacterId,
@@ -9374,6 +9388,13 @@ function setupSceneSelection(hooks = {}) {
             () => getCharacterInventory(normalizedCharacterId, settings)
           );
           nextPatch.inventory = inventoryResult;
+          logDebugEvent("runtime", "heavy-fetch-result", {
+            characterId: normalizedCharacterId,
+            panel: "inventory",
+            reason,
+            ok: inventoryResult?.ok !== false,
+            elapsedMs: Date.now() - inventoryStartedAt
+          }, inventoryResult?.ok !== false);
         } catch (error) {
           const normalized = normalizeRpcError(error);
           logDebugEvent("runtime", "heavy-fetch-failed", {
@@ -9382,6 +9403,7 @@ function setupSceneSelection(hooks = {}) {
             reason,
             error: normalized.error,
             retryable: normalized.retryable,
+            elapsedMs: Date.now() - inventoryStartedAt,
             message: normalized.message
           }, false);
         }
@@ -10719,21 +10741,18 @@ function setupSceneSelection(hooks = {}) {
         });
       }, SCENE_RERESOLVE_DEBOUNCE_MS);
     }));
-    cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, (event) => {
-      const requestedSelectionIds = Array.isArray(event?.data?.selectionIds) ? event.data.selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
-      if (requestedSelectionIds.length > 0) {
-        void resolveAndPublish2(requestedSelectionIds, "selection-request:popover");
-        return;
-      }
-      if (lastPayload?.status === "ready") {
+    cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
+      if (lastPayload) {
         broadcast(lastPayload);
+        logDebugEvent("selection", "selection-replayed", {
+          status: lastPayload.status ?? null,
+          characterId: lastPayload.characterId ?? null,
+          selectedItemId: lastPayload.selectedItemId ?? null,
+          reason: "selection-request"
+        });
         return;
       }
-      void readLiveSelectionIds(currentSelectionIds).then(async (selectionIds) => {
-        await resolveAndPublish2(selectionIds, "selection-request");
-      }).catch(() => {
-        if (lastPayload) broadcast(lastPayload);
-      });
+      scheduleSelectedSelectionRefresh(currentSelectionIds, "selection-request-initial");
     }));
     cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
       void handleCommand(event?.data).catch((error) => {
@@ -12152,14 +12171,23 @@ function paramsForRect(rect) {
 function moduleRect(moduleId) {
   return resolveModuleRect(moduleId, lastLayout.modules[moduleId], lastVW, lastVH);
 }
-async function openModule(moduleId) {
+async function openModule(moduleId, reason = "apply-mode", {
+  previousStatus = lastSelectionStatus,
+  nextStatus = lastSelectionStatus
+} = {}) {
   const rect = moduleRect(moduleId);
   await lib_default.popover.open({
     id: HUD_MODULE_POPOVER_IDS[moduleId],
     url: pageUrl(moduleId),
     ...paramsForRect(rect)
   });
-  logDebugEvent("popover", "module-opened", { moduleId });
+  logDebugEvent("popover", "module-opened", {
+    moduleId,
+    reason,
+    previousStatus,
+    nextStatus,
+    mode
+  });
 }
 function companionPopoverRectAboveGun(width = COMPANION_POPOVER_W, height = 200) {
   if (!lastLayout.modules?.gun) return null;
@@ -12410,11 +12438,11 @@ function sendTargetingCommand(command) {
   } catch (_e) {
   }
 }
-async function openVisibleModules() {
+async function openVisibleModules(reason = "apply-mode", statusContext = {}) {
   for (const id of OPEN_ORDER) {
     if (!moduleShouldBeOpen2(id)) continue;
     try {
-      await openModule(id);
+      await openModule(id, reason, statusContext);
     } catch (_e) {
     }
   }
@@ -12432,11 +12460,20 @@ async function reconcileSecondaryModules(prevStatus, nextStatus) {
     });
   }
 }
-async function closeAllModules() {
+async function closeAllModules(reason = "apply-mode", {
+  previousStatus = lastSelectionStatus,
+  nextStatus = lastSelectionStatus
+} = {}) {
   for (const id of HUD_MODULE_IDS) {
     try {
       await lib_default.popover.close(HUD_MODULE_POPOVER_IDS[id]);
-      logDebugEvent("popover", "module-closed", { moduleId: id });
+      logDebugEvent("popover", "module-closed", {
+        moduleId: id,
+        reason,
+        previousStatus,
+        nextStatus,
+        mode
+      });
     } catch (_e) {
     }
   }
@@ -12449,13 +12486,13 @@ async function closeLegacyPopovers() {
     }
   }
 }
-async function openChangedModules(prev, next) {
+async function openChangedModules(prev, next, reason = "layout-changed") {
   const changed = OPEN_ORDER.filter(
     (id) => moduleShouldBeOpen2(id) && !placementsEqual(prev.modules[id], next.modules[id])
   );
   for (const id of changed) {
     try {
-      await openModule(id);
+      await openModule(id, reason);
     } catch (_e) {
     }
   }
@@ -12483,7 +12520,7 @@ async function closePill() {
   } catch (_e) {
   }
 }
-async function applyMode() {
+async function applyMode(reason = "apply-mode") {
   if (mode === "collapsed") {
     gunWeaponSelectorOpen = false;
     gunMagazineSelectorOpen = false;
@@ -12502,7 +12539,7 @@ async function applyMode() {
     });
     await closeAbilityDetail();
     await closeEditorPopover();
-    await closeAllModules();
+    await closeAllModules(reason, { previousStatus: lastSelectionStatus, nextStatus: lastSelectionStatus });
     await openPill();
   } else if (mode === "editor") {
     gunWeaponSelectorOpen = false;
@@ -12522,12 +12559,12 @@ async function applyMode() {
     });
     await closeAbilityDetail();
     await closePill();
-    await closeAllModules();
+    await closeAllModules(reason, { previousStatus: lastSelectionStatus, nextStatus: lastSelectionStatus });
     await openEditor();
   } else {
     await closePill();
     await closeEditorPopover();
-    await openVisibleModules();
+    await openVisibleModules(reason, { previousStatus: lastSelectionStatus, nextStatus: lastSelectionStatus });
   }
 }
 function startViewportPoll() {
@@ -12538,7 +12575,7 @@ function startViewportPoll() {
       if (vw === lastVW && vh === lastVH) return;
       lastVW = vw;
       lastVH = vh;
-      await applyMode();
+      await applyMode("apply-mode");
     } catch (_e) {
     }
   }, VIEWPORT_POLL_MS);
@@ -12558,7 +12595,7 @@ function setupCombatHudOverlay() {
       await readViewport();
       await closeLegacyPopovers();
       mode = isCollapsed() ? "collapsed" : "modules";
-      await applyMode();
+      await applyMode("startup");
       startViewportPoll();
       targetingVisuals = setupTargetingVisuals();
       targetSelection = setupTargetSelection({
@@ -12610,7 +12647,7 @@ function setupCombatHudOverlay() {
             gunMagazineSelectorOpen = false;
             gunFireModeSelectorOpen = false;
           }
-          await applyMode();
+          await applyMode(isCollapsed() ? "collapsed" : "controlled-reopen");
         }
       }));
       cleanups.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, async (event) => {
@@ -12698,10 +12735,10 @@ function setupCombatHudOverlay() {
         const open = Boolean(event?.data && event.data.open);
         if (open && mode !== "editor") {
           mode = "editor";
-          await applyMode();
+          await applyMode("editor-mode");
         } else if (!open && mode === "editor") {
           mode = "modules";
-          await applyMode();
+          await applyMode("editor-mode");
         }
       }));
       cleanups.push(lib_default.broadcast.onMessage(BC_HUD_LAYOUT, async (event) => {
@@ -12709,7 +12746,7 @@ function setupCombatHudOverlay() {
         if (layoutsEqual(next, lastLayout)) return;
         const prev = lastLayout;
         lastLayout = next;
-        if (mode === "modules") await openChangedModules(prev, next);
+        if (mode === "modules") await openChangedModules(prev, next, "layout-changed");
       }));
     } catch (error) {
       console.error("[combatHud/overlay] setup failed", error);
