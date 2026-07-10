@@ -108,6 +108,8 @@ let lastActiveCharacterId = null;
  *  kept ONLY to size the magazine-selector companion popover to its content
  *  (row count) at open time — never read for anything else here. */
 let lastSelectionPayload = null;
+const lastOpenedRects = new Map();
+const openedModuleIds = new Set();
 /** @type {Array<() => void>} */
 const cleanups = [];
 
@@ -181,19 +183,40 @@ function moduleRect(moduleId) {
   return resolveModuleRect(moduleId, lastLayout.modules[moduleId], lastVW, lastVH);
 }
 
+function rectsEqual(a, b) {
+  if (!a || !b) return false;
+  return ["left", "top", "width", "height"].every((key) => Math.abs(Number(a[key] ?? 0) - Number(b[key] ?? 0)) < 0.01);
+}
+
 async function openModule(moduleId, reason = "apply-mode", {
   previousStatus = lastSelectionStatus,
   nextStatus = lastSelectionStatus,
 } = {}) {
   const rect = moduleRect(moduleId);
+  const previousRect = lastOpenedRects.get(moduleId) ?? null;
+  const wasOpen = openedModuleIds.has(moduleId);
+  if (wasOpen && rectsEqual(previousRect, rect)) {
+    logDebugEvent("popover", "module-open-skipped", {
+      moduleId,
+      reason,
+      cause: "same-layout",
+      previousStatus,
+      nextStatus,
+      mode,
+    });
+    return;
+  }
   await OBR.popover.open({
     id: HUD_MODULE_POPOVER_IDS[moduleId],
     url: pageUrl(moduleId),
     ...paramsForRect(rect),
   });
-  logDebugEvent("popover", "module-opened", {
+  lastOpenedRects.set(moduleId, { left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+  openedModuleIds.add(moduleId);
+  logDebugEvent("popover", wasOpen ? "module-reopened" : "module-opened", {
     moduleId,
     reason,
+    cause: wasOpen ? "rect-changed" : "initial-open",
     previousStatus,
     nextStatus,
     mode,
@@ -490,6 +513,7 @@ async function closeAllModules(reason = "apply-mode", {
   for (const id of HUD_MODULE_IDS) {
     try {
       await OBR.popover.close(HUD_MODULE_POPOVER_IDS[id]);
+      openedModuleIds.delete(id);
       logDebugEvent("popover", "module-closed", {
         moduleId: id,
         reason,
@@ -513,10 +537,21 @@ async function closeLegacyPopovers() {
  *  module reloads its iframe, so we must NOT touch unchanged ones — re-opening
  *  the Player module re-triggers its BC_HUD_LAYOUT broadcast, which would loop. */
 async function openChangedModules(prev, next, reason = "layout-changed") {
-  const changed = OPEN_ORDER.filter(
-    (id) => moduleShouldBeOpen(id) && !placementsEqual(prev.modules[id], next.modules[id]),
-  );
-  for (const id of changed) {
+  for (const id of OPEN_ORDER) {
+    if (!moduleShouldBeOpen(id)) continue;
+    const previousRect = resolveModuleRect(id, prev.modules[id], lastVW, lastVH);
+    const nextRect = resolveModuleRect(id, next.modules[id], lastVW, lastVH);
+    if (rectsEqual(previousRect, nextRect)) {
+      logDebugEvent("popover", "module-open-skipped", {
+        moduleId: id,
+        reason,
+        cause: "same-layout",
+        previousStatus: lastSelectionStatus,
+        nextStatus: lastSelectionStatus,
+        mode,
+      });
+      continue;
+    }
     try { await openModule(id, reason); } catch (_e) { /* skip one, keep the rest */ }
   }
 }

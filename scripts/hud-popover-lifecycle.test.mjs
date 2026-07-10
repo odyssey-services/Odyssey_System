@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   moduleShouldBeOpen,
@@ -14,6 +17,12 @@ import {
 } from "../hud/overlay/hudLayout.js";
 import { SELECTION_STATUS } from "../hud/scene/selectionState.js";
 import { renderSelectionModule } from "../hud/scene/selectionView.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+const overlayControllerSrc = fs
+  .readFileSync(path.join(repoRoot, "hud", "overlay", "combatHudOverlayController.js"), "utf8")
+  .replace(/\r\n/g, "\n");
 
 let passed = 0;
 let failed = 0;
@@ -153,6 +162,18 @@ test("ready to ready source switch keeps primary modules open", () => {
   for (const id of PRIMARY) {
     assert.equal(map[id], true);
   }
+});
+
+test("layout-changed skips same rects and selection status does not drive module reopen", () => {
+  assert.ok(overlayControllerSrc.includes("const lastOpenedRects = new Map();"));
+  assert.ok(overlayControllerSrc.includes("const openedModuleIds = new Set();"));
+  assert.ok(overlayControllerSrc.includes("module-open-skipped"));
+  assert.ok(overlayControllerSrc.includes("cause: \"same-layout\""));
+  assert.ok(overlayControllerSrc.includes("wasOpen ? \"module-reopened\" : \"module-opened\""));
+  assert.ok(overlayControllerSrc.includes("cause: wasOpen ? \"rect-changed\" : \"initial-open\""));
+  assert.ok(overlayControllerSrc.includes("if (wasOpen && rectsEqual(previousRect, rect))"));
+  assert.ok(overlayControllerSrc.includes("const action = secondaryReconcileAction(prevStatus, nextStatus);"));
+  assert.ok(overlayControllerSrc.includes("if (action !== \"none\")"));
 });
 
 function readyPayload() {
