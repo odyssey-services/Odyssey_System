@@ -15,11 +15,11 @@ import { esc, tipAttr, cls } from "./hudDom.js";
 //   - 2+ modes → interactive button opening the fire-mode companion popover.
 // Never fabricates AUTO/SEMI/BURST — only real data from weapon.fireMode
 // (see hud/runtime/runtimeBundleMapper.js readFireMode()).
-function renderFireModeControl(weapon) {
+function renderFireModeControl(weapon, syncPending = false) {
   const fm = weapon.fireMode;
   if (!fm || !fm.isApplicable) return "";
   const label = (fm.selectedCode || fm.selectedName || "").toUpperCase();
-  const tip = tipAttr("Fire mode", [esc(fm.selectedName || fm.selectedCode || "")]);
+  const tip = tipAttr("Fire mode", [esc(syncPending ? "Synchronizing combat..." : (fm.selectedName || fm.selectedCode || ""))]);
 
   if (!fm.isSelectable) {
     return `<span class="ohud-firemode is-readonly"${tip}>
@@ -27,7 +27,7 @@ function renderFireModeControl(weapon) {
     </span>`;
   }
 
-  return `<button type="button" class="ohud-firemode is-selectable" data-action="toggle-fire-mode-selector" aria-label="Choose fire mode"${tip}>
+  return `<button type="button" class="ohud-firemode is-selectable" data-action="toggle-fire-mode-selector" aria-label="Choose fire mode"${syncPending ? " disabled" : ""}${tip}>
     <span class="ohud-firemode-knob"></span><span class="ohud-firemode-letter">${esc(label)}</span><span class="ohud-firemode-caret" aria-hidden="true">${ICON_CARET_DOWN}</span>
   </button>`;
 }
@@ -43,6 +43,7 @@ function emptyGun() {
 export function renderGunBlock(state) {
   const weapon = state?.snapshot?.weapon?.primary ?? null;
   const secondary = state?.snapshot?.weapon?.secondary ?? null;
+  const syncPending = state?.ui?.combatRuntimePending === true;
   if (!weapon) return emptyGun();
 
   const mag = weapon.loadedMagazine ?? null;
@@ -63,15 +64,15 @@ export function renderGunBlock(state) {
   const mainCard = `
     <div class="ohud-gun-main"${tipAttr(weapon.name, [weapon.currentFireMode ? `Mode: ${weapon.currentFireMode}` : ""])}>
       <span class="ohud-gun-name">${esc(weapon.name)}</span>
-      <button type="button" class="ohud-gun-caret" data-action="toggle-weapon-selector" aria-label="Choose weapon" title="Select a different weapon">${ICON_CARET_DOWN}</button>
+      <button type="button" class="ohud-gun-caret" data-action="toggle-weapon-selector" aria-label="Choose weapon" title="${esc(syncPending ? "Synchronizing combat..." : "Select a different weapon")}"${syncPending ? " disabled" : ""}>${ICON_CARET_DOWN}</button>
       <span class="ohud-gun-silhouette">${weaponSvg(weapon.svgRef)}</span>
-      ${renderFireModeControl(weapon)}
+      ${renderFireModeControl(weapon, syncPending)}
       ${secondary ? `<span class="ohud-gun-secondary"${tipAttr("Secondary weapon", [esc(secondary.name || "")])}>2nd</span>` : ""}
     </div>`;
 
   const body = `<div class="${cls("ohud-gun", disabled ? "is-disabled" : "")}"${disabled ? tipAttr("Weapon unavailable", [esc(weapon.disabledReason || "Out of ammo")]) : ""}>
     ${mainCard}
-    <div class="ohud-gun-side">${renderMagazineCard(weapon, reserve, reloadMag)}${renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockReason)}</div>
+    <div class="ohud-gun-side">${renderMagazineCard(weapon, reserve, reloadMag, syncPending)}${renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockReason, syncPending)}</div>
   </div>`;
 
   return panel({ key: "gun", label: "Weapon", bodyHtml: body });
@@ -80,18 +81,18 @@ export function renderGunBlock(state) {
 // The small magazine card shows ONLY the selected spare (reload candidate) —
 // never the inserted magazine's ammo type. The ammo card below is the only
 // place the inserted magazine's rounds are shown; the two must never mix.
-function renderMagazineCard(weapon, reserve, reloadMag) {
+function renderMagazineCard(weapon, reserve, reloadMag, syncPending = false) {
   const usesMag = Boolean(weapon.usesMagazine);
   const spareLabel = reloadMag ? (reloadMag.ammoType ?? reloadMag.caliberLabel ?? "—") : "—";
 
   return `<div class="ohud-mag-card${usesMag ? "" : " is-consumable"}">
     <span class="ohud-mag-icon" aria-hidden="true">${usesMag ? ICON_MAGAZINE : ""}</span>
-    ${usesMag && reserve.length > 0 ? `<button type="button" class="ohud-mag-selector-btn" data-action="toggle-magazine-selector" aria-label="Choose magazine" title="Select spare magazine">${ICON_CARET_DOWN}</button>` : ""}
+    ${usesMag && reserve.length > 0 ? `<button type="button" class="ohud-mag-selector-btn" data-action="toggle-magazine-selector" aria-label="Choose magazine" title="${esc(syncPending ? "Synchronizing combat..." : "Select spare magazine")}"${syncPending ? " disabled" : ""}>${ICON_CARET_DOWN}</button>` : ""}
     <span class="ohud-mag-type"${tipAttr("Selected spare magazine", [esc(spareLabel)])}>${esc(spareLabel)}</span>
   </div>`;
 }
 
-function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockReason) {
+function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockReason, syncPending = false) {
   let ammoDisplay = "—";
   if (mag && (mag.current || mag.max)) {
     ammoDisplay = `${Number(mag.current ?? 0)}/${Number(mag.max ?? 0)}`;
@@ -99,10 +100,13 @@ function renderAmmoCard(weapon, mag, isEmpty, canReload, reloadMag, reloadBlockR
     ammoDisplay = `${Number(weapon.ammo.current ?? 0)}/${Number(weapon.ammo.max ?? 0)}`;
   }
 
+  const reloadDisabled = syncPending || !canReload;
+  const reloadTitle = syncPending ? "Synchronizing combat..." : (canReload ? "Insert compatible magazine" : (reloadBlockReason || "No compatible magazine"));
+
   return `<div class="ohud-ammo-card">
     <span class="ohud-ammo-head">
       <span class="ohud-ammo-label">ammo</span>
-      <button type="button" class="${cls("ohud-ammo-reload", canReload ? "" : "is-off")}" data-action="reload" data-weapon-id="${esc(weapon.id)}" data-magazine-id="${esc(reloadMag?.id ?? "")}" ${canReload ? "" : "disabled"} title="${esc(canReload ? "Insert compatible magazine" : (reloadBlockReason || "No compatible magazine"))}">${ICON_RELOAD}</button>
+      <button type="button" class="${cls("ohud-ammo-reload", reloadDisabled ? "is-off" : "")}" data-action="reload" data-weapon-id="${esc(weapon.id)}" data-magazine-id="${esc(reloadMag?.id ?? "")}" ${reloadDisabled ? "disabled" : ""} title="${esc(reloadTitle)}">${ICON_RELOAD}</button>
     </span>
     <span class="${cls("ohud-ammo-count", isEmpty ? "ohud-ammo-count--empty" : "")}">
       <span>${esc(ammoDisplay)}</span>

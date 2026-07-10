@@ -38,6 +38,8 @@ export { buildAttackPayload, resolveAttack, normalizeResult, describeError, ERRO
  *   distance?: (number|null),
  *   roomContext?: { roomId?, campaignId?, sceneId?, encounterId?, actorTokenId?, targetTokenId? },
  *   armedActionIds?: string[],
+ *   includeRuntimeRefresh?: boolean,
+ *   resultMode?: string,
  * }} input
  */
 export function buildBasicAttackCtx(input = {}) {
@@ -66,6 +68,8 @@ export function buildBasicAttackCtx(input = {}) {
     // Phase 3E.0: optimistic-concurrency check for session-gated attacks —
     // only ever set while an active combat session exists (never fabricated).
     expectedEncounterVersion: input.expectedEncounterVersion ?? null,
+    includeRuntimeRefresh: input.includeRuntimeRefresh,
+    resultMode: input.resultMode,
   };
 }
 
@@ -90,6 +94,8 @@ export function buildBasicAttackCtx(input = {}) {
  *   distance?: (number|null),
  *   roomContext?: { roomId?, campaignId?, sceneId?, encounterId?, actorTokenId?, targetTokenId? },
  *   expectedEncounterVersion?: (number|null),
+ *   includeRuntimeRefresh?: boolean,
+ *   resultMode?: string,
  * }} input
  */
 export function buildDirectAbilityAttackCtx(input = {}) {
@@ -115,5 +121,7 @@ export function buildDirectAbilityAttackCtx(input = {}) {
     // side — see migration 102) — only ever set while an active combat
     // session exists (never fabricated).
     expectedEncounterVersion: input.expectedEncounterVersion ?? null,
+    includeRuntimeRefresh: input.includeRuntimeRefresh,
+    resultMode: input.resultMode,
   };
 }

@@ -20,6 +20,8 @@ import { logDebugEvent } from "../debug/debugLogStore.js";
 import { BC_HUD_COMMAND, BC_HUD_ABILITIES, BC_HUD_ABILITIES_REQUEST } from "../overlay/overlayConstants.js";
 import { mapQuickActionsRuntime } from "./abilityRuntimeMapper.js";
 import { fetchQuickActionsRuntime, saveQuickbarLayout, buildSlotPayload } from "./abilityApi.js";
+import { singleFlightRuntimeRefresh, createDebouncedRefreshScheduler } from "../runtime/runtimeRefreshCoordinator.js";
+import { normalizeRpcError } from "../../utils/rpcErrorNormalizer.js";
 
 /** Short id for debug details — never the full uuid. */
 function shortId(id) {
@@ -33,6 +35,10 @@ export function setupQuickbarController({ settings, getViewer, getSelectedCharac
   let lastRuntime = null; // mapped runtime (safe shape)
   let lastCharacterId = null;
   let mutationInFlight = false;
+  const selectionRuntimeScheduler = createDebouncedRefreshScheduler(
+    (characterId) => loadRuntime(characterId, "selection-changed"),
+    200,
+  );
   /** @type {Array<() => void>} */
   const cleanups = [];
 
@@ -76,7 +82,26 @@ export function setupQuickbarController({ settings, getViewer, getSelectedCharac
 
     logDebugEvent("abilities", "runtime-requested", { character: shortId(cid), origin });
     try {
-      const raw = await fetchQuickActionsRuntime(cid, settings);
+      const raw = await singleFlightRuntimeRefresh(
+        `quickbar:${cid}`,
+        async () => {
+          try {
+            return await fetchQuickActionsRuntime(cid, settings);
+          } catch (error) {
+            const normalized = normalizeRpcError(error);
+            if (normalized.error === "STATEMENT_TIMEOUT" && normalized.retryable) {
+              await new Promise((resolve) => setTimeout(resolve, 350));
+              return fetchQuickActionsRuntime(cid, settings);
+            }
+            throw error;
+          }
+        },
+        {
+          onDeduped: () => {
+            logDebugEvent("abilities", "runtime-deduped", { character: shortId(cid), origin }, true);
+          },
+        },
+      );
       if (disposed) return null;
       const mapped = mapQuickActionsRuntime(raw);
       lastRuntime = mapped;
@@ -96,7 +121,13 @@ export function setupQuickbarController({ settings, getViewer, getSelectedCharac
     } catch (error) {
       if (disposed) return null;
       lastRuntime = null;
-      logDebugEvent("abilities", "runtime-loaded", { character: shortId(cid), message: String(error?.message ?? error) }, false);
+      const normalized = normalizeRpcError(error);
+      logDebugEvent(
+        "abilities",
+        "runtime-loaded",
+        { character: shortId(cid), code: normalized.error, retryable: normalized.retryable, message: normalized.message },
+        false,
+      );
       broadcastAbilities();
       return null;
     }
@@ -106,7 +137,7 @@ export function setupQuickbarController({ settings, getViewer, getSelectedCharac
   function onSelectionChanged(characterId) {
     const cid = String(characterId ?? "") || null;
     if (cid === lastCharacterId) return;
-    void loadRuntime(cid, "selection-changed");
+    selectionRuntimeScheduler.schedule(cid);
   }
 
   async function handleSaveLayout(data) {
@@ -213,6 +244,7 @@ export function setupQuickbarController({ settings, getViewer, getSelectedCharac
     getRuntime: () => lastRuntime,
     cleanup() {
       disposed = true;
+      selectionRuntimeScheduler.cancel();
       for (const fn of cleanups.splice(0)) { try { fn(); } catch (_e) { /* ignore */ } }
     },
   };

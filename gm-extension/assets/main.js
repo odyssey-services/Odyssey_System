@@ -9854,6 +9854,58 @@ __export(supabaseBridge_exports, {
   upsertTokenLinkRecord: () => upsertTokenLinkRecord
 });
 
+// utils/rpcErrorNormalizer.js
+function normalizeRpcError(error) {
+  if (error && typeof error === "object" && error.ok === false) {
+    return {
+      ok: false,
+      error: String(error.error ?? error.code ?? "RPC_EXCEPTION"),
+      message: String(error.message ?? "RPC request failed."),
+      rpcException: Boolean(error.rpcException),
+      retryable: Boolean(error.retryable),
+      details: error.details ?? null,
+      stage: error.stage ?? null
+    };
+  }
+  const message = String(
+    error?.message ?? error?.details ?? error?.error_description ?? error ?? ""
+  ).trim() || "RPC request failed.";
+  const lowered = message.toLowerCase();
+  if (lowered.includes("canceling statement due to statement timeout")) {
+    return {
+      ok: false,
+      error: "STATEMENT_TIMEOUT",
+      message,
+      rpcException: true,
+      retryable: true,
+      details: error?.details ?? null,
+      stage: error?.stage ?? null
+    };
+  }
+  return {
+    ok: false,
+    error: String(error?.code ?? "RPC_EXCEPTION"),
+    message,
+    rpcException: true,
+    retryable: false,
+    details: error?.details ?? null,
+    stage: error?.stage ?? null
+  };
+}
+function toRpcException(normalizedError) {
+  const normalized = normalizeRpcError(normalizedError);
+  const exception = new Error(normalized.message);
+  exception.ok = false;
+  exception.code = normalized.error;
+  exception.error = normalized.error;
+  exception.message = normalized.message;
+  exception.rpcException = normalized.rpcException;
+  exception.retryable = normalized.retryable;
+  exception.details = normalized.details;
+  exception.stage = normalized.stage;
+  return exception;
+}
+
 // constants/rpcNames.js
 var CHARACTER_RPC_NAMES = Object.freeze({
   getCharacterRuleSheet: "get_character_rule_sheet",
@@ -10133,22 +10185,25 @@ async function requestSupabase(path, options = {}) {
     const response = await fetchPromise;
     return await parseSupabaseResponse(response, fallbackMessage, requestId);
   } catch (error) {
+    const normalized = normalizeRpcError(error);
     logDebugEvent(
       "rpc",
       "request-failed",
       {
         method,
         path,
-        message: toErrorMessage(error)
+        code: normalized.error,
+        retryable: normalized.retryable,
+        message: normalized.message
       },
       false
     );
     addDiagnosticEntry(
       "error",
       "Supabase request failed",
-      `${method} ${path}: ${toErrorMessage(error)}`
+      `${method} ${path}: ${normalized.message}`
     );
-    throw error;
+    throw toRpcException(normalized);
   }
 }
 async function callSupabaseRpc(functionName, payload, settings) {

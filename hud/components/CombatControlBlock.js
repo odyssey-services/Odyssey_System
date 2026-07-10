@@ -114,11 +114,12 @@ function endTurnDisabledReason(session, viewerRole) {
 /** Resolve the ATTACK slot's label/action/disabled/tooltip from the SAME
  *  selectors ActionBlock.js already used — no new business logic. */
 function resolveAttackSlot(state) {
+  const syncPending = state?.ui?.combatRuntimePending === true;
   if (!selectSelectedSkill(state)) {
     const ba = state?.ui?.basicAttack ?? { inFlight: false, uiAllowed: false, uiBlockReason: "No character loaded." };
-    const disabled = ba.inFlight || !ba.uiAllowed;
+    const disabled = syncPending || ba.inFlight || !ba.uiAllowed;
     const tip = disabled
-      ? tipAttr("Action unavailable", [esc(ba.uiBlockReason || (ba.inFlight ? "Attack is resolving." : "Not available"))])
+      ? tipAttr("Action unavailable", [esc(syncPending ? "Synchronizing combat..." : (ba.uiBlockReason || (ba.inFlight ? "Attack is resolving." : "Not available")))])
       : tipAttr("Attack", ["Costs: MAIN"]);
     return { label: "Attack", action: "basic-attack", disabled, tip };
   }
@@ -126,11 +127,11 @@ function resolveAttackSlot(state) {
   const label = titleCase(selectActionLabel(state));
   const can = selectCanAct(state);
   const reason = selectDisabledReason(state);
-  const disabled = !can || Boolean(reason);
+  const disabled = syncPending || !can || Boolean(reason);
   const cost = selectCurrentActionCost(state);
   const displayLabel = reason === "Select a target." ? "Select target" : label;
   const tip = disabled
-    ? tipAttr("Action unavailable", [esc(reason || "Not available")])
+    ? tipAttr("Action unavailable", [esc(syncPending ? "Synchronizing combat..." : (reason || "Not available"))])
     : tipAttr(label, [`Costs: ${cost}`, "Resolution arrives in a later phase"]);
   return { label: displayLabel, action: "primary", disabled, tip };
 }

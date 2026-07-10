@@ -90,7 +90,8 @@ export function renderSkillBlock(state) {
       ?? state?.snapshot?.pendingInstantAbilityActionId
       ?? state?.snapshot?.pendingDirectedAbilityActionId
       ?? null;
-    return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId }) });
+    const syncPending = state?.ui?.combatRuntimePending === true;
+    return panel({ key: "skills", bodyHtml: renderQuickbarStrip(quickbar, { canEdit, armedActionId, pendingActionId, syncPending }) });
   }
 
   const slots = selectQuickSlots(state);

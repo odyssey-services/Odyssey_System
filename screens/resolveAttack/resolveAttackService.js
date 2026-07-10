@@ -161,6 +161,13 @@ export function buildAttackPayload(ctx = {}) {
     payload.expected_encounter_version = Number(ctx.expectedEncounterVersion);
   }
 
+  if (ctx.includeRuntimeRefresh === false) {
+    payload.include_runtime_refresh = false;
+  }
+  if (ctx.resultMode) {
+    payload.result_mode = String(ctx.resultMode).trim();
+  }
+
   return payload;
 }
 
@@ -238,9 +245,9 @@ export async function resolveAttack(ctx, deps) {
     return {
       ok: false,
       payload,
-      raw: error?.details ?? null,
+      raw: error?.details ?? error?.raw ?? null,
       normalized: null,
-      code: error?.code ?? null,
+      code: error?.code ?? error?.error ?? "RPC_EXCEPTION",
       error: error?.message || "Network or RPC error.",
     };
   }

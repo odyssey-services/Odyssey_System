@@ -504,6 +504,7 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
       selectedReloadMagazineId: ephemeral.selectedReloadMagazineId ?? null,
       weaponSelectorOpen: !!ephemeral.weaponSelectorOpen,
       fireModeSelectorOpen: !!ephemeral.fireModeSelectorOpen,
+      combatRuntimePending: !!ephemeral.combatRuntimePending,
       preparedAction: ephemeral.preparedAction ?? null,
       targeting: ephemeral.targeting ?? null,
       commandStatus: ephemeral.commandStatus ?? null,

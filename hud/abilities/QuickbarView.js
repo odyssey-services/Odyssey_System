@@ -70,7 +70,7 @@ function stateMarkerHtml(availability, action, pending) {
   }
 }
 
-function occupiedTile(slot, action, armedActionId, pendingActionId) {
+function occupiedTile(slot, action, armedActionId, pendingActionId, syncPending = false) {
   if (!action) {
     // A slot whose action vanished from the library — visible + flagged.
     return `<button type="button" class="${cls("ohud-qb-slot", "is-missing")}" data-action="show-ability-detail" data-slot-index="${slot.slotIndex}" ${tipAttr("Missing action", ["This action is no longer available.", "Open EDIT to remove it."])}>
@@ -128,9 +128,11 @@ function occupiedTile(slot, action, armedActionId, pendingActionId) {
   // not as a permanent disabled state, so a READY ability with no target
   // selected yet still LOOKS clickable and the "Select a target first."
   // error surfaces from the click itself).
-  const disabled = directAttack
-    ? (availability !== SLOT_AVAILABILITY.ready || pending)
-    : (action.state?.available === false || ((instantSelf || directedTarget) && pending));
+  const disabled = syncPending || (
+    directAttack
+      ? (availability !== SLOT_AVAILABILITY.ready || pending)
+      : (action.state?.available === false || ((instantSelf || directedTarget) && pending))
+  );
   const dataAction = directAttack
     ? "execute-direct-ability"
     : instantSelf
@@ -157,7 +159,7 @@ function occupiedTile(slot, action, armedActionId, pendingActionId) {
   const badges = stateMarker || activeMarker
     ? `<span class="ohud-qb-badges">${stateMarker}${activeMarker}</span>`
     : "";
-  return `<button type="button" class="${cls("ohud-qb-slot", `ohud-accent--${accent}`, disabled ? "is-disabled" : "", active ? "is-active" : "", armed ? "is-armed" : "", pending ? "is-pending" : "")}" data-action="${dataAction}" data-action-id="${esc(action.characterActionId)}" data-slot-index="${slot.slotIndex}" data-slot-state="${availability}"${tip}>
+  return `<button type="button" class="${cls("ohud-qb-slot", `ohud-accent--${accent}`, disabled ? "is-disabled" : "", active ? "is-active" : "", armed ? "is-armed" : "", pending ? "is-pending" : "")}" data-action="${dataAction}" data-action-id="${esc(action.characterActionId)}" data-slot-index="${slot.slotIndex}" data-slot-state="${availability}"${disabled ? " disabled" : ""}${tip}>
     <span class="ohud-qb-icon">${skillIconSvg(action.iconKey)}</span>
     <span class="ohud-qb-name">${esc(action.name)}</span>
     ${mark ? `<span class="ohud-qb-type">${esc(mark)}</span>` : ""}
@@ -187,6 +189,7 @@ export function renderQuickbarStrip(runtime, opts = {}) {
   const slots = Array.isArray(rt.quickbar?.slots) ? rt.quickbar.slots : [];
   const canEdit = opts.canEdit !== false;
   const armedActionId = opts.armedActionId ?? null;
+  const syncPending = opts.syncPending === true;
   // Phase 4.1B.0: the ONE direct-ability-attack request currently in flight
   // (if any) — a slot-scoped pending state, never a whole-strip disable, so
   // unrelated abilities/weapon-attack stay fully interactive while one
@@ -209,7 +212,7 @@ export function renderQuickbarStrip(runtime, opts = {}) {
       .sort((a, b) => a.slotIndex - b.slotIndex)
       .map((slot) => {
         if (slot.empty || slot.characterActionId == null) return emptyTile(slot.slotIndex, canEdit);
-        return occupiedTile(slot, actionById(rt, slot.characterActionId), armedActionId, pendingActionId);
+        return occupiedTile(slot, actionById(rt, slot.characterActionId), armedActionId, pendingActionId, syncPending);
       })
       .join("");
     return `<div class="ohud-qb-row" data-row="${r}">${tiles}</div>`;
