@@ -2249,8 +2249,12 @@ export function setupSceneSelection(hooks = {}) {
       }
     }
 
-    async function resolveAndPublish(selectionIds, reason = "selection-change") {
-      if (shouldDeferSelection()) return;
+    async function resolveAndPublish(selectionIds, reason = "selection-change", options = {}) {
+      const allowWhileDeferred = options?.allowWhileDeferred === true;
+      if (shouldDeferSelection() && !allowWhileDeferred) {
+        logDebugEvent("selection", "selection-refresh-deferred", { tokenIds: selectionIds, reason }, true, "pending");
+        return;
+      }
       selectedRuntimeReason = reason;
       currentSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
       logDebugEvent("selection", "source-token-selected", { tokenIds: currentSelectionIds, reason });
@@ -2275,6 +2279,14 @@ export function setupSceneSelection(hooks = {}) {
       }
       lastState = state;
       const payload = publishState(state);
+      if (reason === "selection-request-hydrate") {
+        logDebugEvent("selection", "selection-hydrate-resolved", {
+          tokenIds: currentSelectionIds,
+          status: state?.status ?? null,
+          characterId: state?.characterId ?? null,
+          error: state?.error?.code ?? null,
+        }, state?.status === "ready");
+      }
       if (onSelectionState) {
         try { await onSelectionState(payload); } catch (_e) { /* controller handles its own errors */ }
       }
@@ -2323,13 +2335,20 @@ export function setupSceneSelection(hooks = {}) {
         && requestedSignature !== currentSignature
         && (!lastPayload || lastPayload.status === "no-selection" || lastPayload.status === "loading");
       if (shouldHydrateFromRequest) {
+        currentSelectionIds = requestedSelectionIds.slice();
         logDebugEvent("selection", "selection-hydrate-requested", {
           tokenIds: requestedSelectionIds,
           previousStatus: lastPayload?.status ?? null,
           currentSelectionIds,
           reason: "selection-request",
         }, true, "pending");
-        scheduleSelectedSelectionRefresh(requestedSelectionIds, "selection-request-hydrate");
+        void resolveAndPublish(requestedSelectionIds, "selection-request-hydrate", { allowWhileDeferred: true }).catch((error) => {
+          logDebugEvent("selection", "selection-hydrate-failed", {
+            tokenIds: requestedSelectionIds,
+            message: String(error?.message ?? error ?? "Unable to hydrate selection."),
+            reason: "selection-request",
+          }, false);
+        });
         return;
       }
       if (lastPayload) {
