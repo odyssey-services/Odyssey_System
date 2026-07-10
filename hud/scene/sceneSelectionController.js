@@ -81,7 +81,8 @@ const SCENE_RERESOLVE_DEBOUNCE_MS = 600;
 const HUD_LIGHT_RUNTIME_SECTIONS = Object.freeze(["summary", "combat", "armory", "abilities", "effects"]);
 const LIGHT_RUNTIME_RETRY_DELAY_MS = 350;
 const SELECTED_RUNTIME_DEBOUNCE_MS = 200;
-const TRANSIENT_EMPTY_SELECTION_GRACE_MS = 350;
+const TRANSIENT_EMPTY_SELECTION_GRACE_MS = 500;
+const SELECTION_RESOLVE_TIMEOUT_MS = 5000;
 
 /**
  * @param {{
@@ -104,6 +105,7 @@ export function setupSceneSelection(hooks = {}) {
   let pendingSelectionIds = [];
   let lastObservedSelectionIds = [];
   let transientEmptySelectionTimer = null;
+  let selectionResolveGeneration = 0;
   let skillAdminDeleteInFlight = null;
   let refetchCurrentPromise = null;
   let refetchCurrentQueued = false;
@@ -181,7 +183,7 @@ export function setupSceneSelection(hooks = {}) {
   const activeCombatActionCharacters = new Set();
   const characterActionQueues = new Map();
   const selectionRefreshScheduler = createDebouncedRefreshScheduler(
-    (reason = "selection-debounced", forceResolve = false) => resolveLiveSelection(reason, { forceResolve }),
+    (selectionIds, reason = "selection-debounced") => resolveObservedSelection(selectionIds, reason),
     SELECTED_RUNTIME_DEBOUNCE_MS,
   );
 
@@ -727,6 +729,12 @@ export function setupSceneSelection(hooks = {}) {
       return writeHeavyRuntimeCache(normalizedCharacterId, nextPatch);
     }
 
+    function normalizeSelectionIds(rawSelectionIds) {
+      return Array.isArray(rawSelectionIds)
+        ? rawSelectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [];
+    }
+
     function scheduleLiveSelectionResolve(reason = "selection-debounced", { delayMs = 0, forceResolve = false } = {}) {
       selectedRuntimeReason = reason;
       const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
@@ -734,31 +742,97 @@ export function setupSceneSelection(hooks = {}) {
         clearTransientEmptySelectionTimer();
         transientEmptySelectionTimer = setTimeout(() => {
           transientEmptySelectionTimer = null;
-          selectionRefreshScheduler.schedule(reason, forceResolve === true);
+          void resolveLiveSelection(reason, { forceResolve: forceResolve === true }).catch(() => {});
         }, normalizedDelayMs);
         return;
       }
       clearTransientEmptySelectionTimer();
-      selectionRefreshScheduler.schedule(reason, forceResolve === true);
+      void resolveLiveSelection(reason, { forceResolve: forceResolve === true }).catch(() => {});
+    }
+
+    function buildSelectionTransientState(status, selectionIds, message = null, code = null) {
+      const normalizedSelectionIds = normalizeSelectionIds(selectionIds);
+      const single = normalizedSelectionIds.length === 1 ? normalizedSelectionIds[0] : null;
+      return {
+        status,
+        selectedItemId: single,
+        characterId: null,
+        viewer,
+        access: { canView: false, reason: null },
+        runtimeBundle: null,
+        view: null,
+        error: {
+          code: code ?? null,
+          message: message ?? null,
+        },
+      };
+    }
+
+    function publishSelectionTransientState(status, selectionIds, reason = "selection-loading", { message = null, code = null } = {}) {
+      const state = buildSelectionTransientState(status, selectionIds, message, code);
+      lastState = state;
+      return publishState(state, reason);
+    }
+
+    function scheduleResolveObservedSelection(selectionIds, reason = "selection-changed") {
+      const normalizedSelectionIds = Array.isArray(selectionIds)
+        ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [];
+      clearTransientEmptySelectionTimer();
+      selectionRefreshScheduler.schedule(normalizedSelectionIds, reason);
+    }
+
+    function handleObservedEmptySelection(reason = "selection-changed") {
+      if (currentSelectionIds.length > 0 || pendingSelectionIds.length > 0) {
+        clearTransientEmptySelectionTimer();
+        transientEmptySelectionTimer = setTimeout(async () => {
+          transientEmptySelectionTimer = null;
+          const liveSelectionIds = await readLiveSelectionIds(currentSelectionIds);
+          if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0) {
+            await resolveObservedSelection([], `${reason}:empty-confirmed`);
+          } else {
+            logDebugEvent("selection", "empty-selection-ignored", {
+              reason,
+              liveSelectionIds,
+              currentSelectionIds,
+              pendingSelectionIds,
+            });
+          }
+        }, TRANSIENT_EMPTY_SELECTION_GRACE_MS);
+
+        logDebugEvent("selection", "empty-selection-deferred", {
+          reason,
+          currentSelectionIds,
+          pendingSelectionIds,
+          graceMs: TRANSIENT_EMPTY_SELECTION_GRACE_MS,
+        }, true, "pending");
+        return;
+      }
+
+      scheduleResolveObservedSelection([], reason);
     }
 
     function onObservedSelectionChanged(rawSelectionIds, reason = "selection-changed") {
-      const observed = Array.isArray(rawSelectionIds)
-        ? rawSelectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
-        : [];
+      const observed = normalizeSelectionIds(rawSelectionIds);
+      const observedSignature = observed.join("|");
+      const currentSignature = currentSelectionIds.join("|");
+      const pendingSignature = pendingSelectionIds.join("|");
       lastObservedSelectionIds = observed.slice();
       logDebugEvent("selection", "selection-change-observed", {
         tokenIds: observed,
         previousSelectionIds: currentSelectionIds,
+        pendingSelectionIds,
         reason,
       });
-      if (observed.length === 0 && currentSelectionIds.length > 0 && lastPayload?.status === "ready") {
-        scheduleLiveSelectionResolve(`${reason}:empty-grace`, {
-          delayMs: TRANSIENT_EMPTY_SELECTION_GRACE_MS,
-        });
+      if (observed.length > 0) {
+        clearTransientEmptySelectionTimer();
+        if (observedSignature !== currentSignature || observedSignature !== pendingSignature) {
+          scheduleResolveObservedSelection(observed, reason);
+        }
         return;
       }
-      scheduleLiveSelectionResolve(reason);
+
+      handleObservedEmptySelection(reason);
     }
 
     async function resolveLiveSelection(reason = "selection-changed", { forceResolve = false } = {}) {
@@ -780,6 +854,53 @@ export function setupSceneSelection(hooks = {}) {
         return lastPayload;
       }
       return resolveAndPublish(liveSelectionIds, reason);
+    }
+
+    async function resolveObservedSelection(selectionIds, reason = "selection-changed", options = {}) {
+      const normalizedSelectionIds = normalizeSelectionIds(selectionIds);
+      const generation = ++selectionResolveGeneration;
+      pendingSelectionIds = normalizedSelectionIds.slice();
+      selectedRuntimeReason = reason;
+      logDebugEvent("selection", "selection-resolve-start", {
+        tokenIds: normalizedSelectionIds,
+        reason,
+        generation,
+      }, true, "pending");
+
+      if (normalizedSelectionIds.length > 0) {
+        publishSelectionTransientState("loading", normalizedSelectionIds, `${reason}:loading`);
+      }
+
+      let timedOut = false;
+      let timeoutHandle = null;
+      try {
+        timeoutHandle = setTimeout(() => {
+          if (selectionResolveGeneration !== generation) return;
+          timedOut = true;
+          selectionResolveGeneration += 1;
+          pendingSelectionIds = [];
+          logDebugEvent("selection", "selection-resolve-timeout", {
+            tokenIds: normalizedSelectionIds,
+            reason,
+            generation,
+            timeoutMs: SELECTION_RESOLVE_TIMEOUT_MS,
+          }, false);
+          publishSelectionTransientState("error", normalizedSelectionIds, `${reason}:timeout`, {
+            code: "SELECTION_RESOLVE_TIMEOUT",
+            message: "Unable to resolve selected token. Try selecting it again.",
+          });
+        }, SELECTION_RESOLVE_TIMEOUT_MS);
+
+        await resolveAndPublish(normalizedSelectionIds, reason, {
+          ...options,
+          generation,
+        });
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+        if (!timedOut && selectionResolveGeneration === generation && pendingSelectionIds.join("|") === normalizedSelectionIds.join("|")) {
+          pendingSelectionIds = [];
+        }
+      }
     }
 
     const adapter = createSceneSelectionAdapter({
@@ -2318,6 +2439,7 @@ export function setupSceneSelection(hooks = {}) {
 
     async function resolveAndPublish(selectionIds, reason = "selection-change", options = {}) {
       const allowWhileDeferred = options?.allowWhileDeferred === true;
+      const generation = Number.isFinite(Number(options?.generation)) ? Number(options.generation) : null;
       if (shouldDeferSelection() && !allowWhileDeferred) {
         logDebugEvent("selection", "selection-refresh-deferred", { tokenIds: selectionIds, reason }, true, "pending");
         return;
@@ -2333,7 +2455,7 @@ export function setupSceneSelection(hooks = {}) {
       let resolvedFresh = false;
       try {
         const result = await adapter.resolveLatest(nextSelectionIds);
-        if (disposed || result?.stale) return; // only the freshest selection updates the HUD
+        if (disposed || result?.stale || (generation !== null && generation !== selectionResolveGeneration)) return; // only the freshest selection updates the HUD
         state = result?.state ?? null;
         resolvedFresh = true;
       } finally {
@@ -2345,6 +2467,9 @@ export function setupSceneSelection(hooks = {}) {
         if (pendingSelectionIds.join("|") === resolveSignature) {
           pendingSelectionIds = [];
         }
+        return;
+      }
+      if (generation !== null && generation !== selectionResolveGeneration) {
         return;
       }
       if (state.status !== "ready") {

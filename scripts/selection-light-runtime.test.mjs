@@ -132,16 +132,17 @@ test("stale payload replay is blocked while another selection is pending", () =>
 test("native selection-changed path remains primary and is logged", () => {
   assert.ok(sceneControllerSrc.includes("selection-change-observed"));
   assert.ok(sceneControllerSrc.includes("previousSelectionIds: currentSelectionIds"));
-  assert.ok(sceneControllerSrc.includes("scheduleLiveSelectionResolve(reason);"));
-  assert.ok(sceneControllerSrc.includes("selection-live-read"));
-  assert.ok(sceneControllerSrc.includes("selection-live-unchanged"));
+  assert.ok(sceneControllerSrc.includes("scheduleResolveObservedSelection(observed, reason);"));
+  assert.ok(sceneControllerSrc.includes("selection-resolve-start"));
+  assert.ok(sceneControllerSrc.includes("source-token-selected"));
 });
 
 test("transient empty selection events use grace delay and live-read execution", () => {
-  assert.ok(sceneControllerSrc.includes("const TRANSIENT_EMPTY_SELECTION_GRACE_MS = 350;"));
-  assert.ok(sceneControllerSrc.includes("if (observed.length === 0 && currentSelectionIds.length > 0 && lastPayload?.status === \"ready\")"));
-  assert.ok(sceneControllerSrc.includes("delayMs: TRANSIENT_EMPTY_SELECTION_GRACE_MS"));
-  assert.ok(sceneControllerSrc.includes("const liveSelectionIds = await readLiveSelectionIds(lastObservedSelectionIds.length ? lastObservedSelectionIds : currentSelectionIds);"));
+  assert.ok(sceneControllerSrc.includes("const TRANSIENT_EMPTY_SELECTION_GRACE_MS = 500;"));
+  assert.ok(sceneControllerSrc.includes("if (currentSelectionIds.length > 0 || pendingSelectionIds.length > 0)"));
+  assert.ok(sceneControllerSrc.includes("empty-selection-deferred"));
+  assert.ok(sceneControllerSrc.includes("empty-selection-ignored"));
+  assert.ok(sceneControllerSrc.includes("if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0)"));
 });
 
 test("selected character change and payload broadcast are explicitly logged", () => {
@@ -149,6 +150,19 @@ test("selected character change and payload broadcast are explicitly logged", ()
   assert.ok(sceneControllerSrc.includes("selection-payload-broadcast"));
   assert.ok(sceneControllerSrc.includes("previousCharacterId"));
   assert.ok(sceneControllerSrc.includes("nextCharacterId"));
+});
+
+test("non-empty observed selection schedules resolve when it differs from current or pending", () => {
+  assert.ok(sceneControllerSrc.includes("if (observedSignature !== currentSignature || observedSignature !== pendingSignature)"));
+  assert.ok(sceneControllerSrc.includes("pendingSelectionIds = normalizedSelectionIds.slice();"));
+});
+
+test("selection resolve has timeout protection and latest-wins generation gating", () => {
+  assert.ok(sceneControllerSrc.includes("const SELECTION_RESOLVE_TIMEOUT_MS = 5000;"));
+  assert.ok(sceneControllerSrc.includes("const generation = ++selectionResolveGeneration;"));
+  assert.ok(sceneControllerSrc.includes("selection-resolve-timeout"));
+  assert.ok(sceneControllerSrc.includes("generation !== null && generation !== selectionResolveGeneration"));
+  assert.ok(sceneControllerSrc.includes("SELECTION_RESOLVE_TIMEOUT"));
 });
 
 await asyncTest("after repeated light runtime failure selection shows runtime fetch failed", async () => {
