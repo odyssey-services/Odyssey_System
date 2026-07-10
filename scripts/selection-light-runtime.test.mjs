@@ -98,6 +98,16 @@ test("light runtime timeout retries once", () => {
   assert.ok(sceneControllerSrc.includes("await waitMs(LIGHT_RUNTIME_RETRY_DELAY_MS);"));
 });
 
+test("startup resolve prefers live OBR selection over the initial player snapshot", () => {
+  assert.ok(sceneControllerSrc.includes("await resolveAndPublish(await readLiveSelectionIds(player.selection), \"startup\");"));
+  assert.ok(sceneControllerSrc.includes("const liveSelection = await getSelectedTokenIds();"));
+});
+
+test("selection replay self-heals a stale no-selection payload via live selection reread", () => {
+  assert.ok(sceneControllerSrc.includes("if (lastPayload?.status === \"ready\") {"));
+  assert.ok(sceneControllerSrc.includes("await resolveAndPublish(selectionIds, \"selection-request\");"));
+});
+
 await asyncTest("after repeated light runtime failure selection shows runtime fetch failed", async () => {
   const adapter = createAdapter(async () => {
     throw new Error("canceling statement due to statement timeout");

@@ -19,6 +19,7 @@ import {
   subscribeSceneItems,
   getPlayerInfo,
   getRoomSceneContext,
+  getSelectedTokenIds,
 } from "../../bridge/obrBridge.js";
 import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/settingsBridge.js";
 import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/characterPlacementApi.js";
@@ -409,6 +410,22 @@ export function setupSceneSelection(hooks = {}) {
 
   function broadcast(payload) {
     try { OBR.broadcast.sendMessage(BC_HUD_SELECTION, payload, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
+  }
+
+  async function readLiveSelectionIds(fallbackSelection = []) {
+    try {
+      const liveSelection = await getSelectedTokenIds();
+      if (Array.isArray(liveSelection)) {
+        return liveSelection
+          .map((value) => String(value ?? "").trim())
+          .filter(Boolean);
+      }
+    } catch (_error) {
+      /* best effort */
+    }
+    return Array.isArray(fallbackSelection)
+      ? fallbackSelection.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [];
   }
 
   async function init() {
@@ -2241,14 +2258,23 @@ export function setupSceneSelection(hooks = {}) {
       }
     }
 
-    // Initial resolve from the current selection.
-    await resolveAndPublish(player.selection, "startup");
+    // Initial resolve from the LIVE current selection, not only the startup
+    // player snapshot. In Owlbear the initial snapshot can lag behind the
+    // actual selection state when the HUD/background boots after the user has
+    // already selected a linked token.
+    await resolveAndPublish(await readLiveSelectionIds(player.selection), "startup");
 
     // Selection / role changes (OBR.player.onChange carries selection + role).
     cleanups.push(await subscribePlayerChanges((p) => {
       viewer = normalizeViewer({ playerId: p.id, role: p.role });
       if (shouldDeferSelection()) return;
-      scheduleSelectedSelectionRefresh(p.selection, "selection-changed");
+      void readLiveSelectionIds(p.selection)
+        .then((selectionIds) => {
+          scheduleSelectedSelectionRefresh(selectionIds, "selection-changed");
+        })
+        .catch(() => {
+          scheduleSelectedSelectionRefresh(p.selection, "selection-changed:fallback");
+        });
     }));
 
     // Scene items can change a token's link while it stays selected. Debounced,
@@ -2257,7 +2283,7 @@ export function setupSceneSelection(hooks = {}) {
       if (sceneTimer) clearTimeout(sceneTimer);
       sceneTimer = setTimeout(() => {
         if (shouldDeferSelection()) return;
-        OBR.player.getSelection()
+        readLiveSelectionIds(currentSelectionIds)
           .then((sel) => { if (Array.isArray(sel) && sel.length === 1) return scheduleSelectedSelectionRefresh(sel, "scene-items-changed"); })
           .catch(() => {});
       }, SCENE_RERESOLVE_DEBOUNCE_MS);
@@ -2265,7 +2291,17 @@ export function setupSceneSelection(hooks = {}) {
 
     // Replay the latest state to a module iframe that just mounted.
     cleanups.push(OBR.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
-      if (lastPayload) broadcast(lastPayload);
+      if (lastPayload?.status === "ready") {
+        broadcast(lastPayload);
+        return;
+      }
+      void readLiveSelectionIds(currentSelectionIds)
+        .then(async (selectionIds) => {
+          await resolveAndPublish(selectionIds, "selection-request");
+        })
+        .catch(() => {
+          if (lastPayload) broadcast(lastPayload);
+        });
     }));
 
     cleanups.push(OBR.broadcast.onMessage(BC_HUD_COMMAND, (event) => {

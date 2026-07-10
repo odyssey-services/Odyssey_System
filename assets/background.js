@@ -9173,6 +9173,16 @@ function setupSceneSelection(hooks = {}) {
     } catch (_e) {
     }
   }
+  async function readLiveSelectionIds(fallbackSelection = []) {
+    try {
+      const liveSelection = await getSelectedTokenIds();
+      if (Array.isArray(liveSelection)) {
+        return liveSelection.map((value) => String(value ?? "").trim()).filter(Boolean);
+      }
+    } catch (_error) {
+    }
+    return Array.isArray(fallbackSelection) ? fallbackSelection.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+  }
   async function init() {
     const [player, context, settings] = await Promise.all([
       getPlayerInfo(),
@@ -10689,24 +10699,36 @@ function setupSceneSelection(hooks = {}) {
         }
       }
     }
-    await resolveAndPublish2(player.selection, "startup");
+    await resolveAndPublish2(await readLiveSelectionIds(player.selection), "startup");
     cleanups3.push(await subscribePlayerChanges((p) => {
       viewer = normalizeViewer({ playerId: p.id, role: p.role });
       if (shouldDeferSelection()) return;
-      scheduleSelectedSelectionRefresh(p.selection, "selection-changed");
+      void readLiveSelectionIds(p.selection).then((selectionIds) => {
+        scheduleSelectedSelectionRefresh(selectionIds, "selection-changed");
+      }).catch(() => {
+        scheduleSelectedSelectionRefresh(p.selection, "selection-changed:fallback");
+      });
     }));
     cleanups3.push(await subscribeSceneItems(() => {
       if (sceneTimer) clearTimeout(sceneTimer);
       sceneTimer = setTimeout(() => {
         if (shouldDeferSelection()) return;
-        lib_default.player.getSelection().then((sel) => {
+        readLiveSelectionIds(currentSelectionIds).then((sel) => {
           if (Array.isArray(sel) && sel.length === 1) return scheduleSelectedSelectionRefresh(sel, "scene-items-changed");
         }).catch(() => {
         });
       }, SCENE_RERESOLVE_DEBOUNCE_MS);
     }));
     cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, () => {
-      if (lastPayload) broadcast(lastPayload);
+      if (lastPayload?.status === "ready") {
+        broadcast(lastPayload);
+        return;
+      }
+      void readLiveSelectionIds(currentSelectionIds).then(async (selectionIds) => {
+        await resolveAndPublish2(selectionIds, "selection-request");
+      }).catch(() => {
+        if (lastPayload) broadcast(lastPayload);
+      });
     }));
     cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
       void handleCommand(event?.data).catch((error) => {
