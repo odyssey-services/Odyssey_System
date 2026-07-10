@@ -1586,6 +1586,10 @@ export function mountCharacterScreen({ root, runtime }) {
     state.busy = true;
     render();
     try {
+      publishDebugLog("session", "end-combat-request", {
+        encounterId: encounter.id,
+        scope: "scene",
+      }, true, "pending");
       await ensureSettings();
       const player = await withTimeout(bridges.obr?.getPlayerInfo?.(), OBR_TIMEOUT, null);
       const result = await api.combat.endEncounter(
@@ -1593,12 +1597,20 @@ export function mountCharacterScreen({ root, runtime }) {
           encounter_id: encounter.id,
           actor_player_id: player?.id ?? "",
           actor_is_gm: true,
+          scope: "scene",
         },
         settings(),
       );
       if (!result || result.ok === false) {
         throw new Error(result?.message || result?.error || "Unable to end combat.");
       }
+      publishDebugLog("session", "end-combat-result", {
+        ok: !!result?.ok,
+        scope: result?.scope ?? "scene",
+        endedCount: Number(result?.ended_count ?? 0) || 0,
+        endedEncounterIds: Array.isArray(result?.ended_encounter_ids) ? result.ended_encounter_ids : [],
+        deactivatedEntriesCount: Number(result?.deactivated_entries_count ?? 0) || 0,
+      }, true, "ok");
       state.sceneCombatSnapshot = null;
       state.tacticalSnapshot = null;
       state.moveToolStatus = null;
@@ -1607,6 +1619,11 @@ export function mountCharacterScreen({ root, runtime }) {
       await refreshSelectedTokenContext();
       scheduleSelectionSync(true);
     } catch (error) {
+      publishDebugLog("session", "end-combat-result", {
+        ok: false,
+        scope: "scene",
+        message: toErrorMessage(error, "Unable to end combat."),
+      }, false, "fail");
       setNotice("err", esc(toErrorMessage(error, "Unable to end combat.")));
       render();
     } finally {
