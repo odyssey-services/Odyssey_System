@@ -18,7 +18,12 @@
 
 import OBR from "@owlbear-rodeo/sdk";
 import { initDebugLog, getDebugLogEntries, clearDebugLog, subscribeDebugLog, logDebugEvent } from "./debugLogStore.js";
-import { BC_DEBUG_CONSOLE_ENTRIES, BC_DEBUG_CONSOLE_REQUEST, BC_DEBUG_CONSOLE_COMMAND } from "./debugConsoleConstants.js";
+import {
+  BC_DEBUG_CONSOLE_ENTRIES,
+  BC_DEBUG_CONSOLE_REQUEST,
+  BC_DEBUG_CONSOLE_COMMAND,
+  BC_DEBUG_CONSOLE_LOG,
+} from "./debugConsoleConstants.js";
 import { DEBUG_CONSOLE_POPOVER_ID, DEBUG_LAUNCHER_POPOVER_ID, consoleRect, launcherRect } from "./debugConsoleLayout.js";
 
 const DEBUG_CONSOLE_HTML = "debug-console.html";
@@ -155,6 +160,17 @@ export function startDebugConsole() {
         } else if (type === "clear") {
           clearDebugLog();
         }
+      }));
+
+      cleanups.push(OBR.broadcast.onMessage(BC_DEBUG_CONSOLE_LOG, (event) => {
+        const payload = event?.data ?? {};
+        logDebugEvent(
+          String(payload.category ?? "hud"),
+          String(payload.action ?? "external-log"),
+          payload.details && typeof payload.details === "object" ? payload.details : {},
+          payload.success !== false,
+          typeof payload.status === "string" ? payload.status : null,
+        );
       }));
     } catch (error) {
       // eslint-disable-next-line no-console

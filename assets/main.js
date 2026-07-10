@@ -9953,7 +9953,8 @@ var INVENTORY_RPC_NAMES = Object.freeze({
   removeCharacterAmmoStock: "remove_character_ammo_stock",
   loadRoundsToMagazine: "load_rounds_to_magazine",
   unloadRoundsFromMagazine: "unload_rounds_from_magazine",
-  useCharacterItem: "use_character_item"
+  useCharacterItem: "use_character_item",
+  reloadInventoryResource: "reload_inventory_resource"
 });
 var CHARACTER_PLACEMENT_RPC_NAMES = Object.freeze({
   getCharacterSpawnCatalog: "get_character_spawn_catalog",
@@ -11184,6 +11185,7 @@ __export(inventoryApi_exports, {
   getCharacterInventory: () => getCharacterInventory,
   getCharacterItemQuantity: () => getCharacterItemQuantity,
   loadRoundsToMagazine: () => loadRoundsToMagazine,
+  reloadInventoryResource: () => reloadInventoryResource,
   removeCharacterAmmoStock: () => removeCharacterAmmoStock,
   removeCharacterItemQuantity: () => removeCharacterItemQuantity,
   unloadRoundsFromMagazine: () => unloadRoundsFromMagazine,
@@ -11258,6 +11260,13 @@ function unloadRoundsFromMagazine(payload, settings) {
 function useCharacterItem(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.useCharacterItem,
+    { p_payload: payload },
+    settings
+  );
+}
+function reloadInventoryResource(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.reloadInventoryResource,
     { p_payload: payload },
     settings
   );
@@ -35053,6 +35062,9 @@ async function syncCombatScenePositions({
   };
 }
 
+// hud/debug/debugConsoleConstants.js
+var BC_DEBUG_CONSOLE_LOG = "com.odyssey.debug-console/log";
+
 // movement/moveToolBridge.js
 var MOVE_TOOL_CHANNEL = "odyssey:tactical-move";
 var MOVE_TOOL_COMMANDS = Object.freeze({
@@ -35194,6 +35206,17 @@ function normalizeTacticalGridSettings2(raw) {
 function banner2(kind, html) {
   return `<div class="cp-banner ${kind}">${html}</div>`;
 }
+function toPositiveInt(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : fallback;
+}
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
 function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   injectStylesOnce2();
   const api = runtime2?.api ?? {};
@@ -35255,6 +35278,22 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   function setCombatStartStage(stage) {
     state.combatStartStage = stage;
     console.info("[Odyssey combat]", stage);
+  }
+  function publishDebugLog(category, action, details2 = {}, success = true, status = null) {
+    try {
+      void lib_default.broadcast.sendMessage(
+        BC_DEBUG_CONSOLE_LOG,
+        {
+          category,
+          action,
+          details: details2,
+          success,
+          status
+        },
+        { destination: "LOCAL" }
+      );
+    } catch (_error) {
+    }
   }
   function isSelectionRequestCurrent(requestId) {
     return !requestId || requestId === state.selectionSyncRequestId;
@@ -35878,7 +35917,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       const gmMode = isGM();
       const [bundle, itemDefs, armoryData, perksResult, availablePerksResult] = await Promise.all([
         loadBundle(id, ALL_SECTIONS),
-        gmMode && !state.itemDefs.length ? fetchItemDefs().catch(() => []) : Promise.resolve(state.itemDefs),
+        !state.itemDefs.length ? fetchItemDefs().catch(() => []) : Promise.resolve(state.itemDefs),
         api.weapon.getCharacterArmory(id, settings()).catch(() => null),
         api.perk.getCharacterPerks({ character_id: id }, settings()).catch(() => null),
         gmMode ? api.perk.getCharacterAvailablePerks({ character_id: id }, settings()).catch(() => null) : Promise.resolve(null)
@@ -36935,6 +36974,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const cd = a.current_cooldown_rounds;
     const effect = a.level_data?.effect_data?.summary || a.description || "";
     const canUse = !passive && !cd;
+    const reloadable = buildAbilityReloadable(a);
     return `<div class="cp-card"${canUse ? ` role="button" tabindex="0" data-ability-use="${esc2(a.id)}"` : ""} aria-label="Ability ${esc2(a.name)}">
       <div class="cp-rowitem"><span><b>${esc2(a.name)}</b> <span class="cp-pill">${esc2(a.source_type || "ability")}</span></span>
       <span class="cp-pill ${passive ? "" : "good"}">${passive ? "passive" : cd ? "cooldown" : "active"}</span></div>
@@ -36945,6 +36985,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         ${a.attack_type && a.attack_type !== "none" ? `<span class="cp-chip">attack: ${esc2(a.attack_type)}</span>` : ""}
       </div>
       ${effect ? `<div class="cp-muted" style="margin-top:6px">${esc2(effect)}</div>` : ""}
+      ${reloadable ? renderReloadableBlock(reloadable) : ""}
     </div>`;
   }
   function getWeaponAbilities(weapon) {
@@ -36959,6 +37000,215 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         is_available_for_active_profile: entry.is_available_for_active_profile !== false
       } : entry;
     });
+  }
+  function findItemDefByCode(itemCode) {
+    const normalized = String(itemCode ?? "").trim().toLowerCase();
+    if (!normalized) return null;
+    return arr2(state.itemDefs).find((entry) => String(entry?.code ?? "").trim().toLowerCase() === normalized) ?? null;
+  }
+  function getInventoryItemQuantityByCode(itemCode) {
+    const normalized = String(itemCode ?? "").trim().toLowerCase();
+    if (!normalized) return 0;
+    return arr2(state.inv.items).reduce((total, item) => {
+      const code = String(item?.code ?? item?.item_code ?? "").trim().toLowerCase();
+      if (code !== normalized) return total;
+      return total + toPositiveInt(item?.quantity, 0);
+    }, 0);
+  }
+  function getInventoryItemNameByCode(itemCode) {
+    const normalized = String(itemCode ?? "").trim().toLowerCase();
+    if (!normalized) return "";
+    const owned = arr2(state.inv.items).find((item) => String(item?.code ?? item?.item_code ?? "").trim().toLowerCase() === normalized);
+    if (owned?.name) return String(owned.name);
+    return String(findItemDefByCode(normalized)?.name ?? normalized);
+  }
+  function getReloadConfig(rawData, fallbackItemCode = "", fallbackCost = 1) {
+    const data = rawData && typeof rawData === "object" ? rawData : {};
+    const reload = data.reload && typeof data.reload === "object" ? data.reload : {};
+    const itemCode = firstText(
+      reload.item_code,
+      reload.itemCode,
+      data.reload_item_code,
+      data.requires_reload_item_code,
+      fallbackItemCode
+    ).toLowerCase();
+    const itemCost = Math.max(
+      1,
+      toPositiveInt(
+        reload.item_cost_per_reload ?? reload.itemCostPerReload ?? data.reload_item_cost ?? fallbackCost,
+        fallbackCost
+      )
+    );
+    const mode = firstText(reload.mode, data.reload_mode, "reset").toLowerCase();
+    return {
+      itemCode,
+      itemCost,
+      mode,
+      usesLabel: firstText(
+        data?.ui?.uses_label,
+        data?.ui?.usesLabel,
+        data?.uses_label,
+        data?.usesLabel
+      )
+    };
+  }
+  function buildReloadState({
+    itemCode,
+    itemCost,
+    currentCharges,
+    maxCharges,
+    requiresReload,
+    isActive = false,
+    activeUsesLeft = null,
+    itemName = ""
+  }) {
+    const normalizedItemCode = String(itemCode ?? "").trim().toLowerCase();
+    const availableQuantity = normalizedItemCode ? getInventoryItemQuantityByCode(normalizedItemCode) : 0;
+    const name = itemName || getInventoryItemNameByCode(normalizedItemCode) || normalizedItemCode;
+    let disabledReason = null;
+    const canGainCharges = currentCharges < maxCharges || requiresReload;
+    if (isActive && toPositiveInt(activeUsesLeft, 0) > 0) {
+      disabledReason = "Feature is still active.";
+    } else if (!canGainCharges) {
+      disabledReason = "Already fully charged.";
+    } else if (!normalizedItemCode) {
+      disabledReason = "No reload item.";
+    } else if (availableQuantity < itemCost) {
+      disabledReason = `Not enough ${name}.`;
+    }
+    return {
+      itemCode: normalizedItemCode,
+      itemName: name,
+      itemCost,
+      availableQuantity,
+      canReload: !disabledReason,
+      disabledReason
+    };
+  }
+  function getAbilitySourceType(ability) {
+    return firstText(
+      ability?.source?.type,
+      ability?.source_type,
+      ability?.data?.generated_from,
+      "ability"
+    ).toLowerCase();
+  }
+  function buildWeaponFeatureReloadable(weapon, feature) {
+    const currentCharges = toPositiveInt(feature?.current_charges, 0);
+    const maxCharges = toPositiveInt(feature?.max_charges, 0);
+    const activeUsesLeft = feature?.active_uses_left == null ? null : toPositiveInt(feature.active_uses_left, 0);
+    const reloadConfig = getReloadConfig(feature?.data, "");
+    const hasReloadState = maxCharges > 0 || currentCharges > 0 || !!reloadConfig.itemCode || !!feature?.requires_reload;
+    if (!hasReloadState) return null;
+    return {
+      kind: "weapon_feature",
+      sourceType: "weapon",
+      sourceId: String(weapon?.id ?? "").trim(),
+      stateId: String(feature?.state_id ?? "").trim(),
+      featureCode: String(feature?.code ?? "").trim(),
+      name: String(feature?.name ?? feature?.code ?? "Feature"),
+      isActive: feature?.is_active === true,
+      currentCharges,
+      maxCharges,
+      activeUsesLeft,
+      defaultActiveUses: toPositiveInt(
+        feature?.data?.default_active_uses ?? feature?.data?.defaultActiveUses ?? feature?.data?.active_uses ?? feature?.data?.activeUses ?? activeUsesLeft,
+        activeUsesLeft ?? 0
+      ) || activeUsesLeft,
+      requiresReload: feature?.requires_reload === true,
+      usesLabel: reloadConfig.usesLabel || "Active uses left",
+      reload: buildReloadState({
+        itemCode: reloadConfig.itemCode,
+        itemCost: reloadConfig.itemCost,
+        currentCharges,
+        maxCharges,
+        requiresReload: feature?.requires_reload === true,
+        isActive: feature?.is_active === true,
+        activeUsesLeft
+      })
+    };
+  }
+  function buildAbilityReloadable(ability) {
+    const currentCharges = toPositiveInt(ability?.current_charges, 0);
+    const maxCharges = toPositiveInt(ability?.max_charges, 0);
+    const reloadConfig = getReloadConfig(ability?.data, ability?.resource?.item_code, 1);
+    const hasReloadState = maxCharges > 0 || currentCharges > 0 || !!reloadConfig.itemCode;
+    if (!hasReloadState) return null;
+    const requiresReload = ability?.reload?.required === true || !!reloadConfig.itemCode && maxCharges > 0 && currentCharges <= 0;
+    return {
+      kind: "character_ability",
+      sourceType: getAbilitySourceType(ability),
+      sourceId: firstText(
+        ability?.sourceId,
+        ability?.source_character_weapon_id,
+        ability?.source?.character_weapon_id,
+        ability?.source_equipment_item_id,
+        ability?.source?.character_equipment_item_id,
+        ability?.source_character_item_id,
+        ability?.source?.character_item_id
+      ),
+      characterAbilityId: String(ability?.id ?? "").trim(),
+      abilityCode: String(ability?.code ?? "").trim(),
+      name: String(ability?.name ?? ability?.code ?? "Ability"),
+      currentCharges,
+      maxCharges,
+      activeUsesLeft: null,
+      defaultActiveUses: null,
+      requiresReload,
+      usesLabel: "Active uses left",
+      reload: buildReloadState({
+        itemCode: reloadConfig.itemCode,
+        itemCost: reloadConfig.itemCost,
+        currentCharges,
+        maxCharges,
+        requiresReload
+      })
+    };
+  }
+  function abilityReloadablesForSource(sourceType, sourceId) {
+    const normalizedType = String(sourceType ?? "").trim().toLowerCase();
+    const normalizedId = String(sourceId ?? "").trim();
+    if (!normalizedId) return [];
+    return arr2(state.abilities).filter((ability) => {
+      if (!ability) return false;
+      if (getAbilitySourceType(ability) !== normalizedType) return false;
+      const resolvedSourceId = String(
+        ability?.sourceId ?? ability?.source_character_weapon_id ?? ability?.source_equipment_item_id ?? ability?.source_character_item_id ?? ability?.source?.character_weapon_id ?? ability?.source?.character_equipment_item_id ?? ability?.source?.character_item_id ?? ""
+      ).trim();
+      return resolvedSourceId === normalizedId;
+    }).map(buildAbilityReloadable).filter(Boolean);
+  }
+  function renderReloadableBlock(reloadable) {
+    if (!reloadable) return "";
+    const showReloadButton = !!reloadable.reload?.itemCode && reloadable.maxCharges > 0;
+    return `<div class="cp-card" style="margin-top:8px">
+      <div class="cp-rowitem">
+        <span><b>${esc2(reloadable.name)}</b> <span class="cp-pill">${esc2(reloadable.kind === "weapon_feature" ? "weapon feature" : "ability")}</span></span>
+        ${reloadable.requiresReload ? `<span class="cp-pill bad">Requires reload</span>` : ""}
+      </div>
+      <div class="cp-row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+        ${reloadable.isActive ? `<span class="cp-chip good">Active</span>` : ""}
+        ${reloadable.activeUsesLeft != null ? `<span class="cp-chip">${esc2(reloadable.usesLabel || "Active uses left")} ${dash2(reloadable.activeUsesLeft)}${reloadable.defaultActiveUses != null ? `/${dash2(reloadable.defaultActiveUses)}` : ""}</span>` : ""}
+        <span class="cp-chip">Charges ${dash2(reloadable.currentCharges)}/${dash2(reloadable.maxCharges)}</span>
+      </div>
+      ${showReloadButton ? `<div class="cp-muted" style="margin-top:6px">Reload item: ${esc2(reloadable.reload.itemName || reloadable.reload.itemCode)} x${dash2(reloadable.reload.itemCost)}</div>
+      <div class="cp-muted" style="margin-top:4px">Available: ${dash2(reloadable.reload.availableQuantity)}</div>` : ""}
+      ${showReloadButton ? `<div class="button-row" style="margin-top:8px">
+        <button
+          class="cp-btn-sm"
+          type="button"
+          data-rbtn="reload"
+          data-kind="${esc2(reloadable.kind)}"
+          data-state-id="${esc2(reloadable.stateId || "")}"
+          data-ability-id="${esc2(reloadable.characterAbilityId || "")}"
+          data-source-id="${esc2(reloadable.sourceId || "")}"
+          data-item-code="${esc2(reloadable.reload.itemCode || "")}"
+          data-item-cost="${esc2(reloadable.reload.itemCost || 1)}"
+          ${reloadable.reload.canReload ? "" : "disabled"}
+        >Reload</button>
+      </div>` : ""}
+      ${showReloadButton && reloadable.reload.disabledReason ? `<div class="cp-muted" style="margin-top:4px">${esc2(reloadable.reload.disabledReason)}</div>` : ""}
+    </div>`;
   }
   function renderInventory() {
     const armory = state.armory;
@@ -37088,6 +37338,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const ammoState = getWeaponAmmoState(w);
     const ammoChips = isMelee ? `<span class="cp-chip">melee</span>` : isInternal ? `<span class="cp-chip ${ammoState.current <= 0 ? "bad" : ""}">${dash2(ammoState.current)}/${dash2(ammoState.max)} - ${esc2(ammoState.ammoTypeName || "empty internal load")}</span>` : mag ? `<span class="cp-chip ${(mag.current_rounds ?? 0) <= 0 ? "bad" : ""}">${dash2(mag.current_rounds)}/${dash2(mag.capacity || mag.magazine_def?.capacity)} - ${esc2(mag.ammo_type_name || mag.ammo_type?.name || "")}</span>` : `<span class="cp-chip bad">no magazine</span>`;
     const weaponAbilities = getWeaponAbilities(w);
+    const featureReloadables = arr2(w.features).map((feature) => buildWeaponFeatureReloadable(w, feature)).filter(Boolean);
     return `<div class="cp-card" data-weapon="${esc2(w.id)}">
       <div class="cp-rowitem"><span><b>${esc2(w.name)}</b> <span class="cp-pill">${esc2(w.model?.weapon_class_name || w.model?.weapon_class || "")}</span></span>
         <span class="cp-row" style="gap:6px">${w.model?.caliber_name ? `<span class="cp-chip">${esc2(w.model.caliber_name)}</span>` : ""}${ammoChips}</span></div>
@@ -37102,6 +37353,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       const cooldown = ability.current_cooldown_rounds;
       const attackAbility = ability.attack_type && ability.attack_type !== "none";
       const canUse = !passive && !cooldown && !attackAbility && ability.is_available_for_active_profile !== false;
+      const reloadable = buildAbilityReloadable(ability);
       return `<div class="cp-card">
           <div class="cp-rowitem">
             <span><b>${esc2(ability.name || ability.code || "Ability")}</b> <span class="cp-pill">weapon ability</span></span>
@@ -37111,9 +37363,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
               ${ability.is_available_for_active_profile === false ? `<span class="cp-chip bad">profile mismatch</span>` : ""}
             </span>
           </div>
+          ${reloadable ? renderReloadableBlock(reloadable) : ""}
           ${canUse ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" type="button" data-ability-use="${esc2(ability.id)}">Use ability</button></div>` : ""}
         </div>`;
     }).join("")}</div>` : ""}
+      ${featureReloadables.length ? `<div class="cp-list" style="margin-top:8px">${featureReloadables.map(renderReloadableBlock).join("")}</div>` : ""}
       ${!isMelee && !isInternal ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="reload" data-weapon="${esc2(w.id)}" type="button" ${compatMags.length ? "" : "disabled"}>Reload (insert magazine)</button><button class="cp-btn-sm secondary" data-wbtn="unloadmag" data-weapon="${esc2(w.id)}" type="button" ${mag ? "" : "disabled"}>Unload magazine</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button>` : ""}</div>${compatMags.length ? "" : `<div class="cp-muted">No compatible magazine to insert.</div>`}` : ""}
       ${!isMelee && isInternal ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm" data-wbtn="loadinternalone" data-weapon="${esc2(w.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load 1</button><button class="cp-btn-sm" data-wbtn="loadinternalfull" data-weapon="${esc2(w.id)}" type="button" ${compatAmmo.length ? "" : "disabled"}>Load full</button><button class="cp-btn-sm secondary" data-wbtn="unloadinternalone" data-weapon="${esc2(w.id)}" type="button" ${ammoState.current > 0 ? "" : "disabled"}>Unload 1</button><button class="cp-btn-sm secondary" data-wbtn="unloadinternalall" data-weapon="${esc2(w.id)}" type="button" ${ammoState.current > 0 ? "" : "disabled"}>Unload all</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button>` : ""}</div>${compatAmmo.length ? "" : `<div class="cp-muted">No compatible ammo in stock for this internal magazine.</div>`}` : ""}
       ${isMelee ? `${isGM() ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-gmdel="weapon" data-id="${esc2(w.id)}" type="button">GM delete</button></div>` : ""}` : ""}
@@ -37149,12 +37403,14 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
   }
   function itemCard(i) {
     const healable = i.use_action_type === "heal" || i.code === "basic_medkit";
+    const reloadables = abilityReloadablesForSource("item", i.id);
     return `<div class="cp-card" data-item="${esc2(i.id)}">
       <div class="cp-rowitem"><span><b>${esc2(i.name)}</b> <span class="cp-pill">${esc2(i.item_type || "")}</span></span><span class="cp-mono">x${dash2(i.quantity)}</span></div>
       ${healable ? `<div class="cp-row" style="gap:8px;margin-top:8px">
         <label class="cp-field" style="min-width:160px"><span>Heal body part</span><select data-iact="part" data-item="${esc2(i.id)}">${arr2(state.sheet.body_parts).map((p) => `<option value="${esc2(p.id)}" ${p.destroyed ? "disabled" : ""}>${esc2(p.name)}${p.destroyed ? " (destroyed)" : ""}</option>`).join("")}</select></label>
         <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-ibtn="use" data-item="${esc2(i.id)}" type="button">Use</button></div>
       </div>` : ""}
+      ${reloadables.length ? `<div class="cp-list" style="margin-top:8px">${reloadables.map(renderReloadableBlock).join("")}</div>` : ""}
       ${isGM() ? `<div class="cp-row" style="gap:6px;margin-top:6px;align-items:center">
         <input data-gmqty="${esc2(i.id)}" type="number" min="1" max="${i.quantity}" value="1" class="cp-mono" style="width:46px;padding:3px 4px;font-size:11px">
         <button class="cp-btn-sm secondary" data-gmitem="removeqty" data-item="${esc2(i.id)}" data-code="${esc2(i.code || "")}" type="button">GM -N</button>
@@ -37274,6 +37530,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const hasCrit = (it.armor_critical || 0) > 0;
     const hasSerious = (it.armor_serious || 0) > 0;
     const hasMinor = (it.armor_minor || 0) > 0;
+    const reloadables = abilityReloadablesForSource("equipment", it.id);
     const status = dest ? ["Destroyed", "bad"] : hasCrit ? ["Damaged", ""] : hasSerious ? ["Damaged", ""] : hasMinor ? ["Minor damage", ""] : ["OK", "good"];
     const slot = it.body_part?.name || it.equipped_body_part_name || it.default_body_part_code || it.model?.default_body_part_code || "-";
     return `<div class="cp-card" data-equip="${esc2(it.id)}">
@@ -37286,6 +37543,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         <span class="cp-chip${(it.armor_serious || 0) > 0 ? " warn" : ""}">Serious ${dash2(it.armor_serious)}/${dash2(it.armor_max_serious)}</span>
         <span class="cp-chip${hasCrit ? " bad" : ""}">Crit ${dash2(it.armor_critical)}/${dash2(it.armor_max_critical)}</span>
       </div>
+      ${reloadables.length ? `<div class="cp-list" style="margin-top:8px">${reloadables.map(renderReloadableBlock).join("")}</div>` : ""}
       ${it.is_equipped ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-armorbtn="unequip" data-equip="${esc2(it.id)}" type="button">Unequip</button>${isGM() ? `<button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc2(it.id)}" type="button">GM delete</button>` : ""}</div>` : `<div class="cp-row" style="gap:8px;margin-top:8px">
             <label class="cp-field" style="min-width:150px"><span>Equip to body part</span>
               <select data-equip-part="${esc2(it.id)}">${armorSlotOptions(it)}</select></label>
@@ -37304,6 +37562,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const eff = it.model?.effect_data;
     const effTxt = eff && typeof eff === "object" ? eff.summary || eff.description || "" : "";
     const active = it.is_equipped;
+    const reloadables = abilityReloadablesForSource("equipment", it.id);
     const slot = it.body_part?.name || it.equipped_body_part_name || it.default_body_part_code || it.model?.default_body_part_code || "-";
     const canInstall = isGM() && it.model?.can_equip !== false && it.model?.can_equip_to_body_part !== false;
     const slotOptions = equipmentSlotOptions(it);
@@ -37317,6 +37576,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         ${it.max_charges ? `<span class="cp-chip">charges ${dash2(it.current_charges)}/${dash2(it.max_charges)}</span>` : ""}
         ${effTxt ? `<span class="cp-chip">${esc2(effTxt)}</span>` : ""}
       </div>
+      ${reloadables.length ? `<div class="cp-list" style="margin-top:8px">${reloadables.map(renderReloadableBlock).join("")}</div>` : ""}
       ${isGM() && active ? `<div class="button-row" style="margin-top:8px"><button class="cp-btn-sm secondary" data-armorbtn="unequip" data-equip="${esc2(it.id)}" type="button">Uninstall</button><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc2(it.id)}" type="button">GM delete</button></div>` : isGM() && canInstall ? `<div class="cp-row" style="gap:8px;margin-top:8px">
               <label class="cp-field" style="min-width:150px"><span>Install to body part</span><select data-equip-part="${esc2(it.id)}">${slotOptions}</select></label>
               <div class="button-row" style="margin:0;align-items:flex-end"><button class="cp-btn-sm" data-armorbtn="equip" data-equip="${esc2(it.id)}" type="button" ${hasCompatiblePart ? "" : "disabled"}>Install</button><button class="cp-btn-sm secondary" data-gmdel="equip" data-id="${esc2(it.id)}" type="button">GM delete</button></div>
@@ -37527,6 +37787,11 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       if (wbtn.dataset.wbtn === "loadinternalfull") onLoadWeaponInternalRounds(wbtn.dataset.weapon, 0);
       if (wbtn.dataset.wbtn === "unloadinternalone") onUnloadWeaponInternalRounds(wbtn.dataset.weapon, 1);
       if (wbtn.dataset.wbtn === "unloadinternalall") onUnloadWeaponInternalRounds(wbtn.dataset.weapon, 0);
+      return;
+    }
+    const rbtn = t.closest("[data-rbtn]");
+    if (rbtn) {
+      onReloadResource(rbtn.dataset);
       return;
     }
     const mbtn = t.closest("[data-mbtn]");
@@ -37866,6 +38131,125 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
       return;
     }
     runMutation("Use item", () => api.inventory.useCharacterItem({ character_item_id: itemId, target_body_part_id: partId, used_by_character_id: state.characterId }, settings()), () => refresh());
+  }
+  async function onReloadResource(dataset) {
+    if (state.busy) return;
+    const kind = String(dataset?.kind ?? "").trim();
+    const stateId = String(dataset?.stateId ?? "").trim();
+    const characterAbilityId = String(dataset?.abilityId ?? "").trim();
+    const sourceId = String(dataset?.sourceId ?? "").trim();
+    const itemCode = String(dataset?.itemCode ?? "").trim().toLowerCase();
+    const itemCost = Math.max(1, toPositiveInt(dataset?.itemCost, 1));
+    if (!kind || !stateId && !characterAbilityId) {
+      setNotice("err", "Reload source is incomplete.");
+      render();
+      return;
+    }
+    state.busy = true;
+    state.notice = "Reloading resource...";
+    render();
+    publishDebugLog(
+      "inventory",
+      "reload-resource-request",
+      {
+        characterId: state.characterId,
+        kind,
+        stateId: stateId || null,
+        characterAbilityId: characterAbilityId || null,
+        sourceId: sourceId || null,
+        itemCode: itemCode || null,
+        itemCost
+      },
+      true,
+      "pending"
+    );
+    try {
+      const payload = {
+        character_id: state.characterId,
+        kind,
+        quantity: 1
+      };
+      if (kind === "weapon_feature") {
+        payload.state_id = stateId;
+      } else {
+        payload.character_ability_id = characterAbilityId;
+      }
+      const result = await api.inventory.reloadInventoryResource(payload, settings());
+      if (!result || result.ok === false) {
+        const message = describeError(result?.error, result?.message || "Reload failed.");
+        publishDebugLog(
+          "inventory",
+          "reload-resource-result",
+          {
+            characterId: state.characterId,
+            kind,
+            sourceId: sourceId || null,
+            stateId: stateId || null,
+            characterAbilityId: characterAbilityId || null,
+            code: result?.error ?? null,
+            message,
+            requiredItemCode: itemCode || null,
+            requiredQuantity: itemCost,
+            availableQuantity: itemCode ? getInventoryItemQuantityByCode(itemCode) : null
+          },
+          false,
+          "fail"
+        );
+        setNotice("err", `${esc2(message)}${result?.error ? ` <span class="cp-mono">[${esc2(result.error)}]</span>` : ""}`);
+        return;
+      }
+      publishDebugLog(
+        "inventory",
+        "reload-resource-result",
+        {
+          characterId: state.characterId,
+          kind,
+          sourceId: sourceId || null,
+          stateId: stateId || null,
+          characterAbilityId: characterAbilityId || null,
+          currentCharges: result?.charges?.after ?? null,
+          maxCharges: result?.charges?.max ?? null,
+          spentItemCode: result?.resource?.item_code ?? itemCode ?? null,
+          spentQuantity: result?.resource?.quantity_spent ?? itemCost,
+          remainingQuantity: result?.resource?.inventory_after ?? null
+        },
+        true,
+        "ok"
+      );
+      await refresh({
+        sheet: true,
+        armory: true,
+        equipment: true,
+        inventory: true,
+        abilities: true,
+        perkAvailability: false
+      });
+      setNotice("ok", esc2(result?.message || "Resource reloaded."));
+    } catch (error) {
+      const message = toErrorMessage(error, "Unable to reload resource.");
+      publishDebugLog(
+        "inventory",
+        "reload-resource-result",
+        {
+          characterId: state.characterId,
+          kind,
+          sourceId: sourceId || null,
+          stateId: stateId || null,
+          characterAbilityId: characterAbilityId || null,
+          code: "RPC_EXCEPTION",
+          message,
+          requiredItemCode: itemCode || null,
+          requiredQuantity: itemCost,
+          availableQuantity: itemCode ? getInventoryItemQuantityByCode(itemCode) : null
+        },
+        false,
+        "fail"
+      );
+      setNotice("err", esc2(message));
+    } finally {
+      state.busy = false;
+      render();
+    }
   }
   function equipmentSlotOptions(it) {
     const def = normalizeBodyPartCode(it?.default_body_part_code || it?.model?.default_body_part_code || "");

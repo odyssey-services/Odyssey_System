@@ -107,6 +107,7 @@ export const INVENTORY_RPC_NAMES = Object.freeze({
   loadRoundsToMagazine: "load_rounds_to_magazine",
   unloadRoundsFromMagazine: "unload_rounds_from_magazine",
   useCharacterItem: "use_character_item",
+  reloadInventoryResource: "reload_inventory_resource",
 });
 
 export const CHARACTER_PLACEMENT_RPC_NAMES = Object.freeze({

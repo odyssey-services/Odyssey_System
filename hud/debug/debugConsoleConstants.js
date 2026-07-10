@@ -7,3 +7,4 @@
 export const BC_DEBUG_CONSOLE_ENTRIES = "com.odyssey.debug-console/entries";
 export const BC_DEBUG_CONSOLE_REQUEST = "com.odyssey.debug-console/request";
 export const BC_DEBUG_CONSOLE_COMMAND = "com.odyssey.debug-console/command";
+export const BC_DEBUG_CONSOLE_LOG = "com.odyssey.debug-console/log";

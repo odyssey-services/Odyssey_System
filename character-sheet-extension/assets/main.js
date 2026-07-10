@@ -9953,7 +9953,8 @@ var INVENTORY_RPC_NAMES = Object.freeze({
   removeCharacterAmmoStock: "remove_character_ammo_stock",
   loadRoundsToMagazine: "load_rounds_to_magazine",
   unloadRoundsFromMagazine: "unload_rounds_from_magazine",
-  useCharacterItem: "use_character_item"
+  useCharacterItem: "use_character_item",
+  reloadInventoryResource: "reload_inventory_resource"
 });
 var CHARACTER_PLACEMENT_RPC_NAMES = Object.freeze({
   getCharacterSpawnCatalog: "get_character_spawn_catalog",
@@ -11184,6 +11185,7 @@ __export(inventoryApi_exports, {
   getCharacterInventory: () => getCharacterInventory,
   getCharacterItemQuantity: () => getCharacterItemQuantity,
   loadRoundsToMagazine: () => loadRoundsToMagazine,
+  reloadInventoryResource: () => reloadInventoryResource,
   removeCharacterAmmoStock: () => removeCharacterAmmoStock,
   removeCharacterItemQuantity: () => removeCharacterItemQuantity,
   unloadRoundsFromMagazine: () => unloadRoundsFromMagazine,
@@ -11258,6 +11260,13 @@ function unloadRoundsFromMagazine(payload, settings) {
 function useCharacterItem(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.useCharacterItem,
+    { p_payload: payload },
+    settings
+  );
+}
+function reloadInventoryResource(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.reloadInventoryResource,
     { p_payload: payload },
     settings
   );

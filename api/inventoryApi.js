@@ -82,3 +82,11 @@ export function useCharacterItem(payload, settings) {
     settings,
   );
 }
+
+export function reloadInventoryResource(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.reloadInventoryResource,
+    { p_payload: payload },
+    settings,
+  );
+}

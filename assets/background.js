@@ -4369,7 +4369,8 @@ var INVENTORY_RPC_NAMES = Object.freeze({
   removeCharacterAmmoStock: "remove_character_ammo_stock",
   loadRoundsToMagazine: "load_rounds_to_magazine",
   unloadRoundsFromMagazine: "unload_rounds_from_magazine",
-  useCharacterItem: "use_character_item"
+  useCharacterItem: "use_character_item",
+  reloadInventoryResource: "reload_inventory_resource"
 });
 var CHARACTER_PLACEMENT_RPC_NAMES = Object.freeze({
   getCharacterSpawnCatalog: "get_character_spawn_catalog",
@@ -5039,6 +5040,7 @@ __export(inventoryApi_exports, {
   getCharacterInventory: () => getCharacterInventory,
   getCharacterItemQuantity: () => getCharacterItemQuantity,
   loadRoundsToMagazine: () => loadRoundsToMagazine,
+  reloadInventoryResource: () => reloadInventoryResource,
   removeCharacterAmmoStock: () => removeCharacterAmmoStock,
   removeCharacterItemQuantity: () => removeCharacterItemQuantity,
   unloadRoundsFromMagazine: () => unloadRoundsFromMagazine,
@@ -5113,6 +5115,13 @@ function unloadRoundsFromMagazine(payload, settings) {
 function useCharacterItem(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.useCharacterItem,
+    { p_payload: payload },
+    settings
+  );
+}
+function reloadInventoryResource(payload, settings) {
+  return callSupabaseRpc(
+    INVENTORY_RPC_NAMES.reloadInventoryResource,
     { p_payload: payload },
     settings
   );
@@ -13165,7 +13174,7 @@ function resolveCombatMovementPermission({
 }
 
 // movement/moveToolController.js
-var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.76";
+var MOVE_TOOL_ICON_URL = "https://odyssey-services.github.io/Odyssey_System/icon.svg?v=1.8.78";
 var PREVIEW_IDS = [PREVIEW_LINE_ID, PREVIEW_LABEL_ID, PREVIEW_GHOST_ID];
 var MARKER_TTL_MS = 15e3;
 var POSITION_EPSILON = 0.01;
@@ -14917,6 +14926,7 @@ function setupTacticalMoveTool({ runtime }) {
 var BC_DEBUG_CONSOLE_ENTRIES = "com.odyssey.debug-console/entries";
 var BC_DEBUG_CONSOLE_REQUEST = "com.odyssey.debug-console/request";
 var BC_DEBUG_CONSOLE_COMMAND = "com.odyssey.debug-console/command";
+var BC_DEBUG_CONSOLE_LOG = "com.odyssey.debug-console/log";
 
 // hud/debug/debugConsoleLayout.js
 var DEBUG_CONSOLE_POPOVER_ID = "odyssey-hud-debug-console";
@@ -15070,6 +15080,16 @@ function startDebugConsole() {
         } else if (type === "clear") {
           clearDebugLog();
         }
+      }));
+      cleanups2.push(lib_default.broadcast.onMessage(BC_DEBUG_CONSOLE_LOG, (event) => {
+        const payload = event?.data ?? {};
+        logDebugEvent(
+          String(payload.category ?? "hud"),
+          String(payload.action ?? "external-log"),
+          payload.details && typeof payload.details === "object" ? payload.details : {},
+          payload.success !== false,
+          typeof payload.status === "string" ? payload.status : null
+        );
       }));
     } catch (error) {
       console.error("[debugConsole] setup failed", error);

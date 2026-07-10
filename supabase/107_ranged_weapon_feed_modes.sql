@@ -1904,10 +1904,27 @@ $old$,
       $new$
   if v_error_code is null then
     v_attack_type := coalesce(v_weapon_profile.attack_type, '');
-    v_profile_feed_mode := coalesce(v_weapon_profile.feed_mode, 'detachable_magazine');
-    v_internal_ammo_type_id := v_weapon_profile.internal_ammo_type_id;
-    v_internal_current_rounds := greatest(coalesce(v_weapon_profile.internal_current_rounds, 0), 0);
-    v_internal_max_rounds := greatest(coalesce(v_weapon_profile.internal_max_rounds, v_weapon_profile.internal_capacity, 0), 0);
+    select
+      coalesce(profile.feed_mode, 'detachable_magazine'),
+      state.internal_ammo_type_id,
+      greatest(coalesce(state.internal_current_rounds, 0), 0),
+      greatest(coalesce(state.internal_max_rounds, profile.internal_capacity, 0), 0)
+    into
+      v_profile_feed_mode,
+      v_internal_ammo_type_id,
+      v_internal_current_rounds,
+      v_internal_max_rounds
+    from public.odyssey_weapon_model_profiles profile
+    left join public.odyssey_character_weapon_profile_states state
+      on state.id = v_weapon_profile.profile_state_id
+    where profile.id = v_weapon_profile.profile_id;
+
+    if not found then
+      v_profile_feed_mode := 'detachable_magazine';
+      v_internal_ammo_type_id := null;
+      v_internal_current_rounds := 0;
+      v_internal_max_rounds := 0;
+    end if;
     if v_attack_type not in ('ranged', 'melee') then
       v_error_code := 'ATTACK_TYPE_REQUIRED_FOR_PROFILE';
       v_error_message := 'Active weapon profile must be a strict ranged or melee profile.';
