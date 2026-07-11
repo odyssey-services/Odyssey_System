@@ -8905,6 +8905,7 @@ function setupSceneSelection(hooks = {}) {
   let lastRefetchAt = 0;
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
+  let publishCurrentStateSafe = () => null;
   let movementPreviewActive = false;
   const heavyRuntimeCache = /* @__PURE__ */ new Map();
   const selectedWeaponMemory = createSelectedWeaponMemory();
@@ -9164,7 +9165,7 @@ function setupSceneSelection(hooks = {}) {
           timeoutMs: COMBAT_RUNTIME_PENDING_MAX_MS
         }, false);
         try {
-          publishCurrentState("runtime-sync-force-cleared");
+          publishCurrentStateSafe("runtime-sync-force-cleared");
         } catch (error) {
           logDebugEvent("session", "runtime-sync-publish-error", {
             reason: "runtime-sync-force-cleared",
@@ -9177,7 +9178,7 @@ function setupSceneSelection(hooks = {}) {
       logDebugEvent("session", "runtime-sync-ready", { reason }, true);
     }
     try {
-      publishCurrentState(normalized ? "runtime-sync-pending" : "runtime-sync-ready");
+      publishCurrentStateSafe(normalized ? "runtime-sync-pending" : "runtime-sync-ready");
     } catch (error) {
       logDebugEvent("session", "runtime-sync-publish-error", {
         reason,
@@ -9962,10 +9963,11 @@ function setupSceneSelection(hooks = {}) {
       });
       return lastPayload;
     }
-    function publishCurrentState2(reason = "state-update") {
+    function publishCurrentState(reason = "state-update") {
       if (!lastState) return null;
       return publishState(lastState, reason);
     }
+    publishCurrentStateSafe = publishCurrentState;
     function isCurrentSource(characterId, selectedItemId) {
       return String(ephemeral.characterId ?? "").trim() === String(characterId ?? "").trim() && String(lastPayload?.selectedItemId ?? "").trim() === String(selectedItemId ?? "").trim();
     }
@@ -9994,7 +9996,7 @@ function setupSceneSelection(hooks = {}) {
         if (currentSelectionIds.length === 1) {
           await resolveLiveSelection(reason, { forceResolve: true });
         } else if (lastState) {
-          publishCurrentState2(reason);
+          publishCurrentState(reason);
         }
         lastRefetchAt = Date.now();
       })();
@@ -10070,7 +10072,7 @@ function setupSceneSelection(hooks = {}) {
         distance: Number.isFinite(Number(target?.distance?.value)) ? Number(target.distance.value) : null,
         error: payload?.error ?? null
       };
-      publishCurrentState2("targeting-updated");
+      publishCurrentState("targeting-updated");
     }
     function isCombatSyncBlockedCommand(command) {
       if (!combatRuntimePending || !command || typeof command !== "object") return false;
@@ -10088,7 +10090,7 @@ function setupSceneSelection(hooks = {}) {
       if (!lastPayload || lastPayload.status !== "ready") return;
       if (isCombatSyncBlockedCommand(command)) {
         ephemeral.commandStatus = { type: "error", message: "Synchronizing combat..." };
-        publishCurrentState2("command-blocked:combat-sync");
+        publishCurrentState("command-blocked:combat-sync");
         return;
       }
       if (command?.scope === "combat-hud" && command?.feature === "gm-skill-admin") {
@@ -11002,7 +11004,7 @@ function setupSceneSelection(hooks = {}) {
             code: "RPC_EXCEPTION",
             message
           }, false);
-          publishCurrentState2("weapon-switch-rpc-failed");
+          publishCurrentState("weapon-switch-rpc-failed");
           ephemeral.weaponSwitchInFlight = false;
           return;
         }
@@ -11025,7 +11027,7 @@ function setupSceneSelection(hooks = {}) {
           if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) {
             await refreshCombatSessionSafe(sessionController, "weapon-switched-state-version-conflict");
           }
-          publishCurrentState2("weapon-switch-server-failed");
+          publishCurrentState("weapon-switch-server-failed");
           ephemeral.weaponSwitchInFlight = false;
           return;
         }
@@ -11060,7 +11062,7 @@ function setupSceneSelection(hooks = {}) {
           }
           await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });
           if (isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
-            publishCurrentState2("weapon-switched");
+            publishCurrentState("weapon-switched");
           } else {
             logDebugEvent("weapon", "switch_active_weapon:stale-result-ignored", {
               characterIdAtRequest,
@@ -11077,7 +11079,7 @@ function setupSceneSelection(hooks = {}) {
             targetWeaponId: weaponId,
             message
           }, false);
-          publishCurrentState2("weapon-switch-ui-update-error");
+          publishCurrentState("weapon-switch-ui-update-error");
           return;
         } finally {
           ephemeral.weaponSwitchInFlight = false;

@@ -116,6 +116,7 @@ export function setupSceneSelection(hooks = {}) {
   let lastRefetchAt = 0;
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
+  let publishCurrentStateSafe = () => null;
   let movementPreviewActive = false;
   const heavyRuntimeCache = new Map();
   // Phase 3D.1: controller-local, session-scoped "last weapon per character"
@@ -403,7 +404,7 @@ export function setupSceneSelection(hooks = {}) {
           timeoutMs: COMBAT_RUNTIME_PENDING_MAX_MS,
         }, false);
         try {
-          publishCurrentState("runtime-sync-force-cleared");
+          publishCurrentStateSafe("runtime-sync-force-cleared");
         } catch (error) {
           logDebugEvent("session", "runtime-sync-publish-error", {
             reason: "runtime-sync-force-cleared",
@@ -412,11 +413,11 @@ export function setupSceneSelection(hooks = {}) {
           }, false);
         }
       }, COMBAT_RUNTIME_PENDING_MAX_MS);
-    } else {
+      } else {
       logDebugEvent("session", "runtime-sync-ready", { reason }, true);
     }
     try {
-      publishCurrentState(normalized ? "runtime-sync-pending" : "runtime-sync-ready");
+      publishCurrentStateSafe(normalized ? "runtime-sync-pending" : "runtime-sync-ready");
     } catch (error) {
       logDebugEvent("session", "runtime-sync-publish-error", {
         reason,
@@ -1362,6 +1363,7 @@ export function setupSceneSelection(hooks = {}) {
       if (!lastState) return null;
       return publishState(lastState, reason);
     }
+    publishCurrentStateSafe = publishCurrentState;
 
     function isCurrentSource(characterId, selectedItemId) {
       return String(ephemeral.characterId ?? "").trim() === String(characterId ?? "").trim()

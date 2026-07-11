@@ -105,9 +105,12 @@ test("popover modules log payload receipt instead of relying on remounts", () =>
 test("combat runtime pending is safely published, auto-cleared, and never blocks forever", () => {
   assert.ok(sceneControllerSrc.includes("const COMBAT_RUNTIME_PENDING_MAX_MS = 5000;"));
   assert.ok(sceneControllerSrc.includes("let combatRuntimePendingTimer = null;"));
+  assert.ok(sceneControllerSrc.includes("let publishCurrentStateSafe = () => null;"));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("session", "runtime-sync-force-cleared"'));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("session", "runtime-sync-publish-error"'));
-  assert.ok(sceneControllerSrc.includes('publishCurrentState(normalized ? "runtime-sync-pending" : "runtime-sync-ready")'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentStateSafe(normalized ? "runtime-sync-pending" : "runtime-sync-ready")'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentStateSafe("runtime-sync-force-cleared")'));
+  assert.ok(sceneControllerSrc.includes("publishCurrentStateSafe = publishCurrentState;"));
   assert.ok(sceneControllerSrc.includes('publishCurrentState("command-blocked:combat-sync")'));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("selection", "runtime-refresh-exception"'));
 });
