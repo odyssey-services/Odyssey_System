@@ -189,6 +189,7 @@ test("13. every minimum-required event category/action is logged from somewhere 
   const combined = [
     readSource("hud/debug/debugConsoleController.js"),
     readSource("hud/scene/sceneSelectionController.js"),
+    readSource("selection/stableOwlbearSelectionResolver.js"),
     readSource("hud/overlay/combatHudOverlayController.js"),
     readSource("hud/targeting/targetSelectionController.js"),
   ].join("\n");

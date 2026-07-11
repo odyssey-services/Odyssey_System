@@ -7738,6 +7738,455 @@ function resolveWeaponSwitchErrorMessage(result) {
   return result?.message || result?.error || "Weapon switch failed.";
 }
 
+// selection/stableOwlbearSelectionResolver.js
+function normalizeTokens(rawTokens) {
+  if (!Array.isArray(rawTokens)) return [];
+  const seen = /* @__PURE__ */ new Set();
+  const tokens = [];
+  for (const token of rawTokens) {
+    const id = String(token?.id ?? "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    tokens.push({
+      ...token,
+      id,
+      name: String(token?.name ?? "").trim()
+    });
+  }
+  return tokens;
+}
+function buildSelectionSignature(tokens) {
+  return `${tokens.length}:${tokens.map((token) => token.id).sort().join("|")}`;
+}
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+function asArray2(value) {
+  return Array.isArray(value) ? value : [];
+}
+function defaultIsGm(player) {
+  return String(player?.role ?? "").trim().toUpperCase() === "GM";
+}
+function createStableOwlbearSelectionResolver({
+  getSelectedOwlbearTokens: getSelectedOwlbearTokens2,
+  getRoomSceneContext: getRoomSceneContext2,
+  getPlayerInfo: getPlayerInfo2,
+  getActiveCombatRuntime,
+  getSceneTokenLinks: getSceneTokenLinks2,
+  hasUsableSettings,
+  getSettings,
+  isGm: isGm2 = defaultIsGm,
+  logDebugEvent: logDebugEvent2 = null,
+  debounceMs = 100,
+  onState
+} = {}) {
+  let selectionTimer = null;
+  let selectionRequestId = 0;
+  let lastSelectionSignature = "";
+  let disposed = false;
+  let lastResolvedSelectionIds = [];
+  function log(category, action, details2 = {}, ok = true, status = "ok") {
+    if (typeof logDebugEvent2 !== "function") return;
+    logDebugEvent2(category, action, details2, ok, status);
+  }
+  function isCurrentRequest(requestId) {
+    return !disposed && requestId === selectionRequestId;
+  }
+  async function emit(state) {
+    if (disposed || typeof onState !== "function") return;
+    await onState(state);
+  }
+  function finishRequest(requestId, tokens, reason, timedOut = false) {
+    log("selection", "selection-resolve-finished", {
+      tokenIds: tokens.map((token) => token.id),
+      reason,
+      requestId,
+      timedOut
+    }, !timedOut);
+  }
+  async function sync({ force = false, reason = "selection-changed" } = {}) {
+    const requestId = ++selectionRequestId;
+    let finished = false;
+    const finish = (tokens = [], timedOut = false) => {
+      if (finished) return;
+      finished = true;
+      finishRequest(requestId, tokens, reason, timedOut);
+    };
+    try {
+      const selectedTokens = normalizeTokens(await getSelectedOwlbearTokens2?.());
+      if (!isCurrentRequest(requestId)) {
+        finish(selectedTokens);
+        return;
+      }
+      const selectionIds = selectedTokens.map((token) => token.id);
+      const signature = buildSelectionSignature(selectedTokens);
+      log("selection", "selection-live-read", {
+        tokenIds: selectionIds,
+        currentSelectionIds: lastResolvedSelectionIds,
+        reason
+      });
+      if (!force && signature === lastSelectionSignature) {
+        log("selection", "selection-live-unchanged", {
+          tokenIds: selectionIds,
+          reason
+        });
+        finish(selectedTokens);
+        return;
+      }
+      lastSelectionSignature = signature;
+      log("selection", "selection-resolve-start", {
+        tokenIds: selectionIds,
+        reason,
+        requestId
+      }, true, "pending");
+      if (selectedTokens.length === 0) {
+        lastResolvedSelectionIds = [];
+        const state2 = {
+          status: "no-selection",
+          tokenId: null,
+          tokenName: "",
+          characterId: null,
+          characterName: "",
+          source: "",
+          requestId,
+          reason,
+          selectedTokens,
+          error: "NO_TOKEN_SELECTED"
+        };
+        log("selection", "selection-resolve-result", {
+          tokenIds: [],
+          reason,
+          requestId,
+          status: state2.status,
+          selectedItemId: null,
+          characterId: null
+        });
+        await emit(state2);
+        finish(selectedTokens);
+        return;
+      }
+      if (selectedTokens.length > 1) {
+        lastResolvedSelectionIds = selectionIds.slice();
+        const state2 = {
+          status: "multiple-selection",
+          tokenId: null,
+          tokenName: "",
+          characterId: null,
+          characterName: "",
+          source: "",
+          requestId,
+          reason,
+          selectedTokens,
+          error: "MULTIPLE_TOKENS_SELECTED"
+        };
+        log("selection", "selection-resolve-result", {
+          tokenIds: selectionIds,
+          reason,
+          requestId,
+          status: state2.status,
+          selectedItemId: null,
+          characterId: null
+        });
+        await emit(state2);
+        finish(selectedTokens);
+        return;
+      }
+      const selectedToken = selectedTokens[0];
+      const tokenId = selectedToken.id;
+      const tokenName = selectedToken.name;
+      lastResolvedSelectionIds = [tokenId];
+      log("selection", "source-token-selected", {
+        tokenIds: [tokenId],
+        reason
+      });
+      await emit({
+        status: "loading",
+        tokenId,
+        tokenName,
+        characterId: null,
+        characterName: "",
+        source: "",
+        requestId,
+        reason,
+        selectedTokens
+      });
+      if (!isCurrentRequest(requestId)) {
+        finish(selectedTokens);
+        return;
+      }
+      const [context2, player] = await Promise.all([
+        getRoomSceneContext2?.(),
+        getPlayerInfo2?.()
+      ]);
+      if (!isCurrentRequest(requestId)) {
+        finish(selectedTokens);
+        return;
+      }
+      const settings2 = typeof getSettings === "function" ? getSettings() : null;
+      if (!context2?.campaignId || !context2?.roomId || !context2?.sceneId || typeof hasUsableSettings === "function" && !hasUsableSettings(settings2)) {
+        const state2 = {
+          status: "error",
+          tokenId,
+          tokenName,
+          characterId: null,
+          characterName: "",
+          source: "",
+          requestId,
+          reason,
+          selectedTokens,
+          error: "SCENE_CONTEXT_UNAVAILABLE",
+          message: "Unable to resolve Owlbear scene context."
+        };
+        log("selection", "selection-resolve-result", {
+          tokenIds: [tokenId],
+          reason,
+          requestId,
+          status: state2.status,
+          selectedItemId: tokenId,
+          characterId: null,
+          error: state2.error
+        }, false);
+        await emit(state2);
+        finish(selectedTokens);
+        return;
+      }
+      const viewerIsGm = typeof isGm2 === "function" ? isGm2(player) : defaultIsGm(player);
+      let runtime = null;
+      try {
+        runtime = await getActiveCombatRuntime?.({
+          context: context2,
+          player,
+          viewerIsGm,
+          settings: settings2
+        });
+      } catch (_error) {
+        runtime = null;
+      }
+      if (!isCurrentRequest(requestId)) {
+        finish(selectedTokens);
+        return;
+      }
+      const participant = asArray2(runtime?.visible_participants).find(
+        (row) => String(row?.token_id ?? "").trim() === tokenId
+      ) ?? null;
+      if (participant) {
+        const characterId = String(participant?.character_id ?? "").trim();
+        const characterName = firstText(
+          participant?.display_name,
+          participant?.character_key
+        );
+        const controlledIds = new Set(
+          asArray2(runtime?.viewer_controlled_character_ids).map((id) => String(id ?? "").trim()).filter(Boolean)
+        );
+        const allowed2 = viewerIsGm || controlledIds.has(characterId);
+        const state2 = allowed2 ? {
+          status: "ready",
+          tokenId,
+          tokenName,
+          characterId,
+          characterName,
+          source: "combat_runtime",
+          requestId,
+          reason,
+          selectedTokens
+        } : {
+          status: "not-owned",
+          tokenId,
+          tokenName,
+          characterId,
+          characterName: "",
+          source: "combat_runtime",
+          requestId,
+          reason,
+          selectedTokens,
+          error: "CHARACTER_NOT_CONTROLLED",
+          message: "You can only control characters assigned to you."
+        };
+        log("selection", "selection-resolve-result", {
+          tokenIds: [tokenId],
+          reason,
+          requestId,
+          status: state2.status,
+          selectedItemId: tokenId,
+          characterId,
+          source: state2.source
+        }, allowed2);
+        await emit(state2);
+        finish(selectedTokens);
+        return;
+      }
+      let linkResult = null;
+      try {
+        linkResult = await getSceneTokenLinks2?.({
+          campaign_id: context2.campaignId,
+          room_id: context2.roomId,
+          scene_id: context2.sceneId,
+          token_id: tokenId,
+          actor_player_id: player?.id ?? "",
+          actor_is_gm: viewerIsGm
+        }, settings2);
+      } catch (error) {
+        const state2 = {
+          status: "error",
+          tokenId,
+          tokenName,
+          characterId: null,
+          characterName: "",
+          source: "scene_link",
+          requestId,
+          reason,
+          selectedTokens,
+          error: "LINK_FETCH_FAILED",
+          message: String(error?.message ?? error ?? "Unable to resolve scene token link.")
+        };
+        log("selection", "selection-resolve-result", {
+          tokenIds: [tokenId],
+          reason,
+          requestId,
+          status: state2.status,
+          selectedItemId: tokenId,
+          characterId: null,
+          error: state2.error
+        }, false);
+        await emit(state2);
+        finish(selectedTokens);
+        return;
+      }
+      if (!isCurrentRequest(requestId)) {
+        finish(selectedTokens);
+        return;
+      }
+      const link = asArray2(linkResult?.links).find(
+        (row) => String(row?.token_id ?? "").trim() === tokenId && row?.is_active !== false
+      ) ?? null;
+      const linkCharacterId = String(link?.character?.id ?? "").trim();
+      if (!linkCharacterId) {
+        const state2 = {
+          status: "unlinked-token",
+          tokenId,
+          tokenName,
+          characterId: null,
+          characterName: "",
+          source: "scene_link",
+          requestId,
+          reason,
+          selectedTokens,
+          error: "TOKEN_HAS_NO_CHARACTER",
+          message: "Selected token is not linked to a character."
+        };
+        log("selection", "selection-resolve-result", {
+          tokenIds: [tokenId],
+          reason,
+          requestId,
+          status: state2.status,
+          selectedItemId: tokenId,
+          characterId: null,
+          source: state2.source
+        }, false);
+        await emit(state2);
+        finish(selectedTokens);
+        return;
+      }
+      const allowed = viewerIsGm || link?.character?.control?.allowed === true || link?.character?.can_control === true;
+      const state = allowed ? {
+        status: "ready",
+        tokenId,
+        tokenName,
+        characterId: linkCharacterId,
+        characterName: firstText(link?.character?.display_name, link?.character?.character_key),
+        source: "scene_link",
+        requestId,
+        reason,
+        selectedTokens
+      } : {
+        status: "not-owned",
+        tokenId,
+        tokenName,
+        characterId: linkCharacterId,
+        characterName: "",
+        source: "scene_link",
+        requestId,
+        reason,
+        selectedTokens,
+        error: "CHARACTER_NOT_CONTROLLED",
+        message: "You can only control characters assigned to you."
+      };
+      log("selection", "selection-resolve-result", {
+        tokenIds: [tokenId],
+        reason,
+        requestId,
+        status: state.status,
+        selectedItemId: tokenId,
+        characterId: linkCharacterId,
+        source: state.source
+      }, allowed);
+      await emit(state);
+      finish(selectedTokens);
+    } catch (error) {
+      const requestId2 = selectionRequestId;
+      const state = {
+        status: "error",
+        tokenId: null,
+        tokenName: "",
+        characterId: null,
+        characterName: "",
+        source: "",
+        requestId: requestId2,
+        reason,
+        selectedTokens: [],
+        error: "SELECTION_RESOLVE_FAILED",
+        message: String(error?.message ?? error ?? "Unable to resolve selected token.")
+      };
+      log("selection", "selection-resolve-result", {
+        tokenIds: [],
+        reason,
+        requestId: requestId2,
+        status: state.status,
+        selectedItemId: null,
+        characterId: null,
+        error: state.error
+      }, false);
+      await emit(state);
+      finish([], false);
+    }
+  }
+  async function runSelectionSync({ force = false, reason = "selection-changed" } = {}) {
+    if (disposed) return;
+    if (selectionTimer) {
+      clearTimeout(selectionTimer);
+      selectionTimer = null;
+    }
+    await sync({ force, reason });
+  }
+  function scheduleSelectionSync({ force = false, reason = "selection-changed" } = {}) {
+    if (disposed) return;
+    if (selectionTimer) clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(() => {
+      selectionTimer = null;
+      void sync({ force, reason });
+    }, Math.max(0, Number(debounceMs) || 0));
+  }
+  function dispose() {
+    disposed = true;
+    if (selectionTimer) {
+      clearTimeout(selectionTimer);
+      selectionTimer = null;
+    }
+  }
+  return {
+    runSelectionSync,
+    scheduleSelectionSync,
+    dispose,
+    getCurrentRequestId() {
+      return selectionRequestId;
+    }
+  };
+}
+
 // hud/targeting/bodyConditionPolicy.js
 var BODY_CONDITION_STATE = Object.freeze({
   healthy: "healthy",
@@ -8407,19 +8856,6 @@ var ACCESS_REASON = Object.freeze({
   runtimeUnavailable: "RUNTIME_UNAVAILABLE"
 });
 var SECONDARY_MODULE_IDS = Object.freeze(["gun", "skills", "combatControl", "log"]);
-function normalizeSelectionIds2(raw) {
-  if (!Array.isArray(raw)) return [];
-  const seen = /* @__PURE__ */ new Set();
-  const out = [];
-  for (const v of raw) {
-    const s = String(v ?? "").trim();
-    if (s && !seen.has(s)) {
-      seen.add(s);
-      out.push(s);
-    }
-  }
-  return out;
-}
 function normalizeViewer(raw) {
   const playerId = String(raw?.playerId ?? raw?.id ?? "").trim() || null;
   let role = String(raw?.role ?? "").trim().toUpperCase();
@@ -8441,78 +8877,6 @@ function emptyState(status, viewer, reason, extra) {
 }
 function createInitialSelectionState(viewer) {
   return emptyState(SELECTION_STATUS.loading, viewer, null);
-}
-function buildView(bundle, viewer) {
-  const character = bundle?.character ?? {};
-  const state = bundle?.state ?? {};
-  const ownerId = String(character.owner_player_id ?? "").trim() || null;
-  return {
-    name: String(character.display_name ?? character.character_key ?? "").trim() || null,
-    characterKey: character.character_key ?? null,
-    ownerName: String(character.owner_player_name ?? "").trim() || null,
-    ownerPlayerId: ownerId,
-    gmView: viewer.role === "GM",
-    isAlive: state.is_alive !== false,
-    isConscious: state.is_conscious !== false,
-    statusSummary: String(state.status_summary ?? "").trim() || null
-  };
-}
-function deriveSelectionState(input) {
-  const viewer = normalizeViewer(input?.viewer);
-  const ids = normalizeSelectionIds2(input?.selectionIds);
-  const single = ids.length === 1 ? ids[0] : null;
-  if (input?.failure) {
-    const f = input.failure;
-    return emptyState(f.status === "unavailable" ? SELECTION_STATUS.unavailable : SELECTION_STATUS.error, viewer, f.code, {
-      selectedItemId: single,
-      characterId: input?.link?.characterId ?? null,
-      error: { code: f.code ?? null, message: f.message ?? null }
-    });
-  }
-  if (ids.length === 0) return emptyState(SELECTION_STATUS.noSelection, viewer, ACCESS_REASON.noToken);
-  if (ids.length > 1) return emptyState(SELECTION_STATUS.multipleSelection, viewer, ACCESS_REASON.multipleTokens);
-  const link = input?.link ?? null;
-  if (!link || !link.characterId) {
-    return emptyState(SELECTION_STATUS.unlinkedToken, viewer, ACCESS_REASON.noLink, { selectedItemId: single });
-  }
-  const bundle = input?.bundle ?? null;
-  if (!bundle || bundle.ok === false) {
-    return emptyState(SELECTION_STATUS.unavailable, viewer, ACCESS_REASON.runtimeUnavailable, {
-      selectedItemId: single,
-      characterId: link.characterId,
-      error: { code: bundle?.error ?? ACCESS_REASON.runtimeUnavailable, message: bundle?.message ?? null }
-    });
-  }
-  const ownerId = String(bundle.character?.owner_player_id ?? "").trim() || null;
-  if (viewer.role === "GM") {
-    return readyState(viewer, single, link.characterId, bundle);
-  }
-  if (!ownerId) {
-    return emptyState(SELECTION_STATUS.unavailable, viewer, ACCESS_REASON.ownershipUnverifiable, {
-      selectedItemId: single,
-      characterId: link.characterId,
-      error: { code: ACCESS_REASON.ownershipUnverifiable, message: "Runtime bundle did not provide owner_player_id." }
-    });
-  }
-  if (ownerId !== viewer.playerId) {
-    return emptyState(SELECTION_STATUS.notOwned, viewer, ACCESS_REASON.notOwner, {
-      selectedItemId: single,
-      characterId: link.characterId
-    });
-  }
-  return readyState(viewer, single, link.characterId, bundle);
-}
-function readyState(viewer, selectedItemId, characterId, bundle) {
-  return {
-    status: SELECTION_STATUS.ready,
-    selectedItemId,
-    characterId,
-    viewer,
-    access: { canView: true, reason: null },
-    runtimeBundle: bundle,
-    view: buildView(bundle, viewer),
-    error: { code: null, message: null }
-  };
 }
 function buildReloadDebugInfo(hudSnapshot, ephemeral) {
   const weapon = hudSnapshot?.weapon?.primary ?? null;
@@ -8766,103 +9130,6 @@ function buildBroadcastPayload(state, ephemeral = {}) {
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null }
   };
 }
-function createGenerationGate() {
-  let current2 = 0;
-  return {
-    next() {
-      current2 += 1;
-      return current2;
-    },
-    isCurrent(token) {
-      return token === current2;
-    },
-    get current() {
-      return current2;
-    }
-  };
-}
-
-// hud/scene/sceneSelectionAdapter.js
-function errMessage(err) {
-  return String((err && (err.message || err)) ?? "Unknown error");
-}
-function pickLink(res, tokenId) {
-  const links = Array.isArray(res?.links) ? res.links : [];
-  const match = links.find(
-    (l) => String(l?.token_id ?? "").trim() === tokenId && l?.is_active !== false
-  );
-  if (!match || !match.character || !match.character.id) return null;
-  return {
-    characterId: String(match.character.id).trim() || null,
-    characterName: match.character.display_name ?? null,
-    raw: match
-  };
-}
-function createSceneSelectionAdapter(deps) {
-  const {
-    fetchSceneTokenLink,
-    fetchCharacterBundle,
-    getViewer,
-    backendConfigured = true
-  } = deps ?? {};
-  const gate = createGenerationGate();
-  async function resolve(selectionIds) {
-    const ids = normalizeSelectionIds2(selectionIds);
-    const viewer = typeof getViewer === "function" ? getViewer() : null;
-    if (!backendConfigured) {
-      return deriveSelectionState({
-        viewer,
-        selectionIds: ids,
-        failure: {
-          status: "unavailable",
-          code: ACCESS_REASON.backendUnconfigured,
-          message: "Supabase backend is not configured for this room."
-        }
-      });
-    }
-    if (ids.length !== 1) return deriveSelectionState({ viewer, selectionIds: ids });
-    const tokenId = ids[0];
-    let link = null;
-    try {
-      const res = await fetchSceneTokenLink(tokenId);
-      if (res && res.ok === false) {
-        return deriveSelectionState({
-          viewer,
-          selectionIds: ids,
-          failure: { status: "error", code: "LINK_FETCH_FAILED", message: res.message || "Scene token links unavailable." }
-        });
-      }
-      link = pickLink(res, tokenId);
-    } catch (err) {
-      return deriveSelectionState({
-        viewer,
-        selectionIds: ids,
-        failure: { status: "error", code: "LINK_FETCH_FAILED", message: errMessage(err) }
-      });
-    }
-    if (!link || !link.characterId) {
-      return deriveSelectionState({ viewer, selectionIds: ids, link: link || null });
-    }
-    let bundle = null;
-    try {
-      bundle = await fetchCharacterBundle(link.characterId);
-    } catch (err) {
-      return deriveSelectionState({
-        viewer,
-        selectionIds: ids,
-        link,
-        failure: { status: "error", code: "RUNTIME_FETCH_FAILED", message: errMessage(err) }
-      });
-    }
-    return deriveSelectionState({ viewer, selectionIds: ids, link, bundle });
-  }
-  async function resolveLatest(selectionIds) {
-    const token = gate.next();
-    const state = await resolve(selectionIds);
-    return { stale: !gate.isCurrent(token), state };
-  }
-  return { resolve, resolveLatest, SELECTION_STATUS };
-}
 
 // hud/scene/sceneSelectionController.js
 var ARMED_TECHNIQUE_ERROR_CODES = /* @__PURE__ */ new Set([
@@ -8878,9 +9145,7 @@ var ARMED_TECHNIQUE_ERROR_CODES = /* @__PURE__ */ new Set([
 var SCENE_RERESOLVE_DEBOUNCE_MS = 600;
 var HUD_LIGHT_RUNTIME_SECTIONS = Object.freeze(["summary", "combat", "armory", "abilities", "effects"]);
 var LIGHT_RUNTIME_RETRY_DELAY_MS = 350;
-var SELECTED_RUNTIME_DEBOUNCE_MS = 200;
 var TRANSIENT_EMPTY_SELECTION_GRACE_MS = 500;
-var SELECTION_RESOLVE_TIMEOUT_MS = 5e3;
 var COMBAT_RUNTIME_PENDING_MAX_MS = 5e3;
 function setupSceneSelection(hooks = {}) {
   if (typeof lib_default === "undefined" || lib_default.isAvailable === false) return () => {
@@ -8896,7 +9161,6 @@ function setupSceneSelection(hooks = {}) {
   let pendingSelectionIds = [];
   let lastObservedSelectionIds = [];
   let transientEmptySelectionTimer = null;
-  let selectionResolveGeneration = 0;
   let lastResolvedCharacterId = null;
   let lastResolvedTokenId = null;
   let skillAdminDeleteInFlight = null;
@@ -8906,6 +9170,7 @@ function setupSceneSelection(hooks = {}) {
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
   let publishCurrentStateSafe = () => null;
+  let stableSelectionResolver = null;
   let movementPreviewActive = false;
   const heavyRuntimeCache = /* @__PURE__ */ new Map();
   const selectedWeaponMemory = createSelectedWeaponMemory();
@@ -8974,10 +9239,6 @@ function setupSceneSelection(hooks = {}) {
   const activeCombatActionKeys = /* @__PURE__ */ new Set();
   const activeCombatActionCharacters = /* @__PURE__ */ new Set();
   const characterActionQueues = /* @__PURE__ */ new Map();
-  const selectionRefreshScheduler = createDebouncedRefreshScheduler(
-    (selectionIds, reason = "selection-debounced") => startSelectionResolve(selectionIds, reason),
-    SELECTED_RUNTIME_DEBOUNCE_MS
-  );
   function clearTransientEmptySelectionTimer() {
     if (!transientEmptySelectionTimer) return false;
     clearTimeout(transientEmptySelectionTimer);
@@ -9368,8 +9629,7 @@ function setupSceneSelection(hooks = {}) {
       return;
     }
     if (nextSignature !== currentSignature || nextSignature !== pendingSignature) {
-      void startSelectionResolve(nextSelectionIds, reason).catch(() => {
-      });
+      scheduleLiveSelectionResolve(reason, { forceResolve: false });
     }
   }
   async function readLiveSelectionIds(fallbackSelection = []) {
@@ -9402,7 +9662,7 @@ function setupSceneSelection(hooks = {}) {
         sessionRuntime = runtime;
         if (lastState) publishState(lastState);
         if (previousWasActive && !nextIsActive && ephemeral.characterId) {
-          scheduleLiveSelectionResolve("combat-ended", { forceResolve: true });
+          scheduleLiveSelectionResolve2("combat-ended", { forceResolve: true });
           void quickbarController?.refresh?.();
         }
       }
@@ -9424,7 +9684,7 @@ function setupSceneSelection(hooks = {}) {
         if (payload.source !== "combat-movement" || !payload.runtime) return;
         sessionController.applyExternalRuntime(payload.runtime, "tactical-move");
         if (String(payload.characterId ?? "").trim() && String(payload.characterId ?? "").trim() === String(ephemeral.characterId ?? "").trim()) {
-          scheduleLiveSelectionResolve("tactical-move-applied", { forceResolve: true });
+          scheduleLiveSelectionResolve2("tactical-move-applied", { forceResolve: true });
           void quickbarController?.refresh?.();
         }
       });
@@ -9563,6 +9823,18 @@ function setupSceneSelection(hooks = {}) {
             () => getCharacterArmory(normalizedCharacterId, settings2, encounterId)
           );
           nextPatch.armory = armoryResult;
+          if (armoryResult?.combat_context) {
+            logDebugEvent("weapon", "armory-combat-context", {
+              characterId: normalizedCharacterId,
+              reason,
+              encounterId: String(encounterId ?? "").trim() || null,
+              mode: armoryResult.combat_context?.mode ?? null,
+              currentTurn: armoryResult.combat_context?.is_current_turn ?? null,
+              canSwitchTo: armoryResult.combat_context?.can_switch_to ?? null,
+              switchCost: armoryResult.combat_context?.switch_cost ?? null,
+              warning: armoryResult.combat_context?.warning ?? null
+            }, armoryResult?.ok !== false);
+          }
           logDebugEvent("runtime", "heavy-fetch-result", {
             characterId: normalizedCharacterId,
             panel: "armory",
@@ -9628,27 +9900,25 @@ function setupSceneSelection(hooks = {}) {
       }
       return writeHeavyRuntimeCache(normalizedCharacterId, nextPatch);
     }
-    function normalizeSelectionIds3(rawSelectionIds) {
+    function normalizeSelectionIds2(rawSelectionIds) {
       return Array.isArray(rawSelectionIds) ? rawSelectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
     }
-    function scheduleLiveSelectionResolve(reason = "selection-debounced", { delayMs = 0, forceResolve = false } = {}) {
+    function scheduleLiveSelectionResolve2(reason = "selection-debounced", { delayMs = 0, forceResolve = false } = {}) {
       selectedRuntimeReason = reason;
       const normalizedDelayMs = Math.max(0, Number(delayMs) || 0);
       if (normalizedDelayMs > 0) {
         clearTransientEmptySelectionTimer();
         transientEmptySelectionTimer = setTimeout(() => {
           transientEmptySelectionTimer = null;
-          void resolveLiveSelection(reason, { forceResolve: forceResolve === true }).catch(() => {
-          });
+          stableSelectionResolver?.scheduleSelectionSync({ force: forceResolve === true, reason });
         }, normalizedDelayMs);
         return;
       }
       clearTransientEmptySelectionTimer();
-      void resolveLiveSelection(reason, { forceResolve: forceResolve === true }).catch(() => {
-      });
+      stableSelectionResolver?.scheduleSelectionSync({ force: forceResolve === true, reason });
     }
     function buildSelectionTransientState(status, selectionIds, message = null, code = null) {
-      const normalizedSelectionIds = normalizeSelectionIds3(selectionIds);
+      const normalizedSelectionIds = normalizeSelectionIds2(selectionIds);
       const single = normalizedSelectionIds.length === 1 ? normalizedSelectionIds[0] : null;
       return {
         status,
@@ -9669,10 +9939,220 @@ function setupSceneSelection(hooks = {}) {
       lastState = state;
       return publishState(state, reason);
     }
+    function buildReadySelectionView(bundle) {
+      const character = bundle?.character ?? {};
+      const state = bundle?.state ?? {};
+      const ownerId = String(character?.owner_player_id ?? "").trim() || null;
+      const statusSummary = String(state?.status_summary ?? "").trim();
+      return {
+        name: String(character?.display_name ?? character?.character_key ?? "").trim() || null,
+        characterKey: character?.character_key ?? null,
+        ownerName: String(character?.owner_player_name ?? "").trim() || null,
+        ownerPlayerId: ownerId,
+        gmView: viewer.role === "GM",
+        isAlive: state?.is_alive !== false,
+        isConscious: state?.is_conscious !== false,
+        statusSummary: statusSummary || null
+      };
+    }
+    function buildSelectionStateFromResolver(resolvedState, runtimeBundle = null) {
+      const tokenId = String(resolvedState?.tokenId ?? "").trim() || null;
+      const characterId = String(resolvedState?.characterId ?? "").trim() || null;
+      const errorCode = String(resolvedState?.error ?? "").trim() || null;
+      const errorMessage = String(resolvedState?.message ?? "").trim() || null;
+      if (resolvedState?.status === "ready" && runtimeBundle) {
+        return {
+          status: SELECTION_STATUS.ready,
+          selectedItemId: tokenId,
+          characterId,
+          viewer,
+          access: { canView: true, reason: null },
+          runtimeBundle,
+          view: buildReadySelectionView(runtimeBundle),
+          error: { code: null, message: null }
+        };
+      }
+      if (resolvedState?.status === "loading") {
+        return buildSelectionTransientState(SELECTION_STATUS.loading, tokenId ? [tokenId] : [], errorMessage || "Resolving selected token...", errorCode);
+      }
+      if (resolvedState?.status === "multiple-selection") {
+        return {
+          status: SELECTION_STATUS.multipleSelection,
+          selectedItemId: null,
+          characterId: null,
+          viewer,
+          access: { canView: false, reason: ACCESS_REASON.multipleTokens },
+          runtimeBundle: null,
+          view: null,
+          error: { code: errorCode, message: errorMessage }
+        };
+      }
+      if (resolvedState?.status === "no-selection") {
+        return {
+          status: SELECTION_STATUS.noSelection,
+          selectedItemId: null,
+          characterId: null,
+          viewer,
+          access: { canView: false, reason: ACCESS_REASON.noToken },
+          runtimeBundle: null,
+          view: null,
+          error: { code: errorCode, message: errorMessage }
+        };
+      }
+      if (resolvedState?.status === "unlinked-token") {
+        return {
+          status: SELECTION_STATUS.unlinkedToken,
+          selectedItemId: tokenId,
+          characterId: null,
+          viewer,
+          access: { canView: false, reason: ACCESS_REASON.noLink },
+          runtimeBundle: null,
+          view: null,
+          error: { code: errorCode, message: errorMessage }
+        };
+      }
+      if (resolvedState?.status === "not-owned") {
+        return {
+          status: SELECTION_STATUS.notOwned,
+          selectedItemId: tokenId,
+          characterId,
+          viewer,
+          access: { canView: false, reason: ACCESS_REASON.notOwner },
+          runtimeBundle: null,
+          view: null,
+          error: { code: errorCode, message: errorMessage }
+        };
+      }
+      return {
+        status: SELECTION_STATUS.error,
+        selectedItemId: tokenId,
+        characterId,
+        viewer,
+        access: { canView: false, reason: errorCode ?? ACCESS_REASON.runtimeUnavailable },
+        runtimeBundle: null,
+        view: null,
+        error: { code: errorCode, message: errorMessage || "Unable to resolve selected token." }
+      };
+    }
+    async function commitResolvedSelectionState(state, reason = "state-update", requestId = null) {
+      const previousCharacterId = lastResolvedCharacterId ?? lastPayload?.characterId ?? lastState?.characterId ?? null;
+      const previousTokenId = lastResolvedTokenId ?? lastPayload?.selectedItemId ?? currentSelectionIds[0] ?? null;
+      const nextCharacterId = state?.status === SELECTION_STATUS.ready ? state?.characterId ?? null : null;
+      const nextTokenId = state?.selectedItemId ?? null;
+      if (state?.status === SELECTION_STATUS.ready) {
+        const changed = resetEphemeralForCharacter(nextCharacterId);
+        if (changed) restoreSelectedWeapon(nextCharacterId, state.runtimeBundle);
+        const activeWeapon = pickActiveWeapon(state.runtimeBundle?.armory ?? state.runtimeBundle?.sections?.armory ?? null);
+        const activeWeaponId = String(activeWeapon?.id ?? "").trim() || null;
+        ephemeral.selectedWeaponId = activeWeaponId;
+        if (nextCharacterId) {
+          if (activeWeaponId) selectedWeaponMemory.set(nextCharacterId, activeWeaponId);
+          else selectedWeaponMemory.forget(nextCharacterId);
+        }
+        lastResolvedCharacterId = nextCharacterId;
+        lastResolvedTokenId = nextTokenId ?? lastResolvedTokenId;
+      } else if (state?.status !== SELECTION_STATUS.loading) {
+        resetEphemeralForCharacter(null);
+      }
+      currentSelectionIds = nextTokenId ? [nextTokenId] : [];
+      if (state?.status !== SELECTION_STATUS.loading) {
+        pendingSelectionIds = [];
+      }
+      lastState = state;
+      if (previousCharacterId !== nextCharacterId || previousTokenId !== nextTokenId) {
+        logDebugEvent("selection", "selected-character-changed", {
+          previousCharacterId,
+          nextCharacterId,
+          previousTokenId,
+          nextTokenId,
+          reason
+        });
+      }
+      const payload = publishState(state, reason);
+      if (reason === "selection-request-hydrate") {
+        logDebugEvent("selection", "selection-hydrate-resolved", {
+          tokenIds: currentSelectionIds,
+          status: payload?.status ?? null,
+          characterId: payload?.characterId ?? null,
+          requestId,
+          error: payload?.error?.code ?? payload?.access?.reason ?? null
+        }, payload?.status === SELECTION_STATUS.ready);
+      }
+      if (onSelectionState) {
+        try {
+          await onSelectionState(payload);
+        } catch (_e) {
+        }
+      }
+      return payload;
+    }
+    async function applyStableSelectionState(resolvedState) {
+      const requestId = Number(resolvedState?.requestId) || 0;
+      const reason = String(resolvedState?.reason ?? "selection-changed").trim() || "selection-changed";
+      selectedRuntimeReason = reason;
+      const tokenId = String(resolvedState?.tokenId ?? "").trim() || null;
+      pendingSelectionIds = tokenId ? [tokenId] : [];
+      if (resolvedState?.status === "loading") {
+        await commitResolvedSelectionState(
+          buildSelectionStateFromResolver(resolvedState),
+          `${reason}:loading`,
+          requestId
+        );
+        return;
+      }
+      if (resolvedState?.status !== "ready") {
+        const unavailableReason = String(resolvedState?.error ?? "").trim() || buildSelectionStateFromResolver(resolvedState)?.access?.reason || null;
+        if (resolvedState?.status !== SELECTION_STATUS.noSelection && unavailableReason !== ACCESS_REASON.noToken) {
+          logDebugEvent("selection", "source-character-unavailable", {
+            status: resolvedState?.status ?? null,
+            reason: unavailableReason
+          }, false);
+        }
+        await commitResolvedSelectionState(
+          buildSelectionStateFromResolver(resolvedState),
+          reason,
+          requestId
+        );
+        return;
+      }
+      try {
+        const runtimeBundle = await fetchLightRuntimeBundle(resolvedState.characterId, reason);
+        if (disposed || !stableSelectionResolver || stableSelectionResolver.getCurrentRequestId() !== requestId) {
+          return;
+        }
+        await commitResolvedSelectionState(
+          buildSelectionStateFromResolver(resolvedState, runtimeBundle),
+          reason,
+          requestId
+        );
+      } catch (error) {
+        if (disposed || !stableSelectionResolver || stableSelectionResolver.getCurrentRequestId() !== requestId) {
+          return;
+        }
+        const normalized = normalizeRpcError(error);
+        logDebugEvent("selection", "runtime-refresh-exception", {
+          characterId: String(resolvedState?.characterId ?? "").trim() || null,
+          reason,
+          requestId,
+          message: normalized.message,
+          error: normalized.error,
+          retryable: normalized.retryable
+        }, false);
+        await commitResolvedSelectionState(
+          buildSelectionStateFromResolver({
+            ...resolvedState,
+            status: "error",
+            error: normalized.error || "RUNTIME_FETCH_FAILED",
+            message: normalized.message || "Unable to load character runtime."
+          }),
+          reason,
+          requestId
+        );
+      }
+    }
     function scheduleResolveObservedSelection(selectionIds, reason = "selection-changed") {
-      const normalizedSelectionIds = normalizeSelectionIds3(selectionIds);
       clearTransientEmptySelectionTimer();
-      selectionRefreshScheduler.schedule(normalizedSelectionIds, reason);
+      stableSelectionResolver?.scheduleSelectionSync({ force: false, reason });
     }
     function handleObservedEmptySelection2(reason = "selection-changed") {
       if (currentSelectionIds.length > 0 || pendingSelectionIds.length > 0) {
@@ -9704,7 +10184,7 @@ function setupSceneSelection(hooks = {}) {
               if (lastState) publishState(lastState, `${reason}:sticky-last-selection`);
               return;
             }
-            await startSelectionResolve2([], `${reason}:empty-confirmed`);
+            scheduleLiveSelectionResolve2(`${reason}:empty-confirmed`, { forceResolve: true });
           } else if (pendingSelectionIds.length > 0) {
             logDebugEvent("selection", "empty-selection-ignored", {
               reason: "pending-non-empty-selection",
@@ -9714,8 +10194,7 @@ function setupSceneSelection(hooks = {}) {
               pendingSelectionIds
             });
             if (liveSelectionIds.length > 0) {
-              void startSelectionResolve2(liveSelectionIds, "selection-empty-recovered-live").catch(() => {
-              });
+              scheduleLiveSelectionResolve2("selection-empty-recovered-live", { forceResolve: true });
             }
           } else {
             logDebugEvent("selection", "empty-selection-ignored", {
@@ -9725,8 +10204,7 @@ function setupSceneSelection(hooks = {}) {
               pendingSelectionIds
             });
             if (liveSelectionIds.length > 0) {
-              void startSelectionResolve2(liveSelectionIds, "selection-empty-recovered-live").catch(() => {
-              });
+              scheduleLiveSelectionResolve2("selection-empty-recovered-live", { forceResolve: true });
             }
           }
         }, TRANSIENT_EMPTY_SELECTION_GRACE_MS);
@@ -9741,7 +10219,7 @@ function setupSceneSelection(hooks = {}) {
       scheduleResolveObservedSelection([], reason);
     }
     function onObservedSelectionChanged(rawSelectionIds, reason = "selection-changed") {
-      const observed = normalizeSelectionIds3(rawSelectionIds);
+      const observed = normalizeSelectionIds2(rawSelectionIds);
       const observedSignature = observed.join("|");
       const currentSignature = currentSelectionIds.join("|");
       const pendingSignature = pendingSelectionIds.join("|");
@@ -9776,115 +10254,42 @@ function setupSceneSelection(hooks = {}) {
       handleObservedEmptySelection2(reason);
     }
     async function resolveLiveSelection(reason = "selection-changed", { forceResolve = false } = {}) {
-      const liveSelectionIds = await readLiveSelectionIds(lastObservedSelectionIds.length ? lastObservedSelectionIds : currentSelectionIds);
-      const liveSignature = liveSelectionIds.join("|");
-      const currentSignature = currentSelectionIds.join("|");
-      lastObservedSelectionIds = liveSelectionIds.slice();
-      logDebugEvent("selection", "selection-live-read", {
-        tokenIds: liveSelectionIds,
-        currentSelectionIds,
-        reason
-      });
-      if (!forceResolve && liveSignature === currentSignature && lastPayload && pendingSelectionIds.length === 0) {
-        logDebugEvent("selection", "selection-live-unchanged", {
-          tokenIds: liveSelectionIds,
-          reason
-        });
-        broadcast(lastPayload);
-        return lastPayload;
-      }
-      return resolveAndPublish(liveSelectionIds, reason);
+      return stableSelectionResolver?.runSelectionSync({ force: forceResolve === true, reason }) ?? null;
     }
-    async function startSelectionResolve2(selectionIds, reason = "selection-changed", options = {}) {
-      const normalizedSelectionIds = normalizeSelectionIds3(selectionIds);
-      const generation = ++selectionResolveGeneration;
-      pendingSelectionIds = normalizedSelectionIds.slice();
-      selectedRuntimeReason = reason;
-      logDebugEvent("selection", "selection-resolve-start", {
-        tokenIds: normalizedSelectionIds,
-        reason,
-        generation
-      }, true, "pending");
-      if (normalizedSelectionIds.length > 0) {
-        publishSelectionTransientState("loading", normalizedSelectionIds, `${reason}:loading`);
-      }
-      let timedOut = false;
-      let timeoutHandle = null;
-      try {
-        timeoutHandle = setTimeout(() => {
-          if (selectionResolveGeneration !== generation) return;
-          timedOut = true;
-          selectionResolveGeneration += 1;
-          pendingSelectionIds = [];
-          logDebugEvent("selection", "selection-resolve-timeout", {
-            tokenIds: normalizedSelectionIds,
-            reason,
-            generation,
-            timeoutMs: SELECTION_RESOLVE_TIMEOUT_MS
-          }, false);
-          publishSelectionTransientState("error", normalizedSelectionIds, `${reason}:timeout`, {
-            code: "SELECTION_RESOLVE_TIMEOUT",
-            message: "Unable to resolve selected token. Try selecting it again."
-          });
-        }, SELECTION_RESOLVE_TIMEOUT_MS);
-        const payload = await resolveAndPublish(normalizedSelectionIds, reason, {
-          ...options,
-          generation
-        });
-        logDebugEvent("selection", "selection-resolve-result", {
-          tokenIds: normalizedSelectionIds,
-          reason,
-          generation,
-          status: payload?.status ?? null,
-          selectedItemId: payload?.selectedItemId ?? normalizedSelectionIds[0] ?? null,
-          characterId: payload?.characterId ?? null
-        }, payload?.status === "ready");
-      } finally {
-        if (timeoutHandle) clearTimeout(timeoutHandle);
-        logDebugEvent("selection", "selection-resolve-finished", {
-          tokenIds: normalizedSelectionIds,
-          reason,
-          generation,
-          timedOut,
-          pendingSelectionIds
-        }, !timedOut);
-        if (!timedOut && selectionResolveGeneration === generation && pendingSelectionIds.join("|") === normalizedSelectionIds.join("|")) {
-          pendingSelectionIds = [];
-        }
-      }
+    async function startSelectionResolve(selectionIds, reason = "selection-changed", options = {}) {
+      void selectionIds;
+      void options;
+      return resolveLiveSelection(reason, { forceResolve: true });
     }
-    const adapter = createSceneSelectionAdapter({
-      backendConfigured: configured,
-      getViewer: () => viewer,
-      fetchSceneTokenLink: (tokenId) => getSceneTokenLinks(
-        { room_id: context2.roomId, scene_id: context2.sceneId, campaign_id: context2.campaignId, token_id: tokenId },
-        settings2
-      ),
-      fetchCharacterBundle: async (characterId) => {
-        const bundle = await fetchLightRuntimeBundle(characterId, selectedRuntimeReason);
-        if (!bundle || typeof bundle !== "object") return bundle;
-        const merged = { ...bundle, __hudDebug: { requestedSections: HUD_LIGHT_RUNTIME_SECTIONS } };
-        const cacheEntry = getHeavyRuntimeCache(characterId);
-        const armoryForDebug = cacheEntry?.canonicalArmory ?? cacheEntry?.armory ?? merged.armory ?? merged.sections?.armory ?? null;
-        if (armoryForDebug?.combat_context && characterId) {
-          logDebugEvent("weapon", "armory-combat-context", {
-            characterId,
-            mode: armoryForDebug.combat_context?.mode ?? null,
-            encounterId: armoryForDebug.combat_context?.encounter_id ?? null,
-            moveCurrent: armoryForDebug.combat_context?.move_current ?? null,
-            moveMax: armoryForDebug.combat_context?.move_max ?? null,
-            activeEncounterCount: armoryForDebug.combat_context?.active_encounter_count ?? null
-          });
-          if (armoryForDebug.combat_context?.mode === "ambiguous") {
-            logDebugEvent("weapon", "armory-combat-context-ambiguous", {
-              characterId,
-              activeEncounterCount: armoryForDebug.combat_context?.active_encounter_count ?? null,
-              warning: armoryForDebug.combat_context?.warning ?? null
-            }, false);
-          }
-        }
-        return merged;
-      }
+    stableSelectionResolver = createStableOwlbearSelectionResolver({
+      getSelectedOwlbearTokens: async () => {
+        const selectionIds = await readLiveSelectionIds(lastObservedSelectionIds.length ? lastObservedSelectionIds : currentSelectionIds);
+        const selectionSet = new Set(selectionIds);
+        const rawItems = await getSceneItems();
+        const items = Array.isArray(rawItems) ? rawItems : [];
+        return items.filter((item) => selectionSet.has(String(item?.id ?? "").trim()));
+      },
+      getRoomSceneContext: async () => getRoomSceneContext(),
+      getPlayerInfo: async () => getPlayerInfo(),
+      getActiveCombatRuntime: async ({ context: liveContext, player: player2, viewerIsGm }) => {
+        if (sessionRuntime?.encounter?.id) return sessionRuntime;
+        if (!configured) return null;
+        return getActiveRuntime({
+          campaign_id: liveContext?.campaignId ?? context2.campaignId,
+          room_id: liveContext?.roomId ?? context2.roomId,
+          scene_id: liveContext?.sceneId ?? context2.sceneId,
+          actor_player_id: player2?.id ?? "",
+          actor_is_gm: viewerIsGm,
+          include_hidden: viewerIsGm
+        }, settings2).catch(() => null);
+      },
+      getSceneTokenLinks,
+      hasUsableSettings: hasSupabaseSettings,
+      getSettings: () => settings2,
+      isGm: (playerInfo) => String(playerInfo?.role ?? "").toUpperCase() === "GM",
+      logDebugEvent,
+      debounceMs: 100,
+      onState: applyStableSelectionState
     });
     function resetEphemeralForCharacter(characterId) {
       if (ephemeral.characterId === characterId) return false;
@@ -9948,7 +10353,7 @@ function setupSceneSelection(hooks = {}) {
         combatRuntimePending
       };
     }
-    function publishState(state, reason = "state-update") {
+    function publishHudState(state, reason = "state-update") {
       lastPayload = buildBroadcastPayload(state, buildEphemeralForPayload());
       if (lastPayload?.status === "ready") {
         lastResolvedCharacterId = lastPayload.characterId ?? lastResolvedCharacterId;
@@ -9962,6 +10367,9 @@ function setupSceneSelection(hooks = {}) {
         reason
       });
       return lastPayload;
+    }
+    function publishState(state, reason = "state-update") {
+      return publishHudState(state, reason);
     }
     function publishCurrentState(reason = "state-update") {
       if (!lastState) return null;
@@ -11212,91 +11620,12 @@ function setupSceneSelection(hooks = {}) {
       }
     }
     async function resolveAndPublish(selectionIds, reason = "selection-change", options = {}) {
-      const allowWhileDeferred = options?.allowWhileDeferred === true;
-      const generation = Number.isFinite(Number(options?.generation)) ? Number(options.generation) : null;
-      if (shouldDeferSelection() && !allowWhileDeferred) {
-        logDebugEvent("selection", "selection-refresh-deferred", { tokenIds: selectionIds, reason }, true, "pending");
-        return;
-      }
-      selectedRuntimeReason = reason;
-      const nextSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
-      const previousCharacterId = lastResolvedCharacterId ?? lastPayload?.characterId ?? lastState?.characterId ?? null;
-      const previousTokenId = lastResolvedTokenId ?? lastPayload?.selectedItemId ?? currentSelectionIds[0] ?? null;
-      const resolveSignature = nextSelectionIds.join("|");
-      pendingSelectionIds = nextSelectionIds.slice();
-      logDebugEvent("selection", "source-token-selected", { tokenIds: nextSelectionIds, reason });
-      let state = null;
-      let resolvedFresh = false;
-      try {
-        const result = await adapter.resolveLatest(nextSelectionIds);
-        if (disposed || result?.stale || generation !== null && generation !== selectionResolveGeneration) return null;
-        state = result?.state ?? null;
-        resolvedFresh = true;
-      } finally {
-        if (!resolvedFresh && pendingSelectionIds.join("|") === resolveSignature) {
-          pendingSelectionIds = [];
-        }
-      }
-      if (!state) {
-        if (pendingSelectionIds.join("|") === resolveSignature) {
-          pendingSelectionIds = [];
-        }
-        return null;
-      }
-      if (generation !== null && generation !== selectionResolveGeneration) {
-        return null;
-      }
-      if (state.status !== "ready") {
-        const unavailableReason = state.error?.code ?? state.access?.reason ?? null;
-        if (state.status !== "no-selection" && unavailableReason !== "NO_TOKEN_SELECTED") {
-          logDebugEvent("selection", "source-character-unavailable", { status: state.status ?? null, reason: unavailableReason }, false);
-        }
-        resetEphemeralForCharacter(null);
-      } else {
-        const changed = resetEphemeralForCharacter(state.characterId ?? null);
-        if (changed) restoreSelectedWeapon(state.characterId ?? null, state.runtimeBundle);
-        const activeWeapon = pickActiveWeapon(state.runtimeBundle?.armory ?? state.runtimeBundle?.sections?.armory ?? null);
-        const activeWeaponId = String(activeWeapon?.id ?? "").trim() || null;
-        ephemeral.selectedWeaponId = activeWeaponId;
-        if (state.characterId) {
-          if (activeWeaponId) selectedWeaponMemory.set(state.characterId, activeWeaponId);
-          else selectedWeaponMemory.forget(state.characterId);
-        }
-      }
-      currentSelectionIds = nextSelectionIds.slice();
-      lastState = state;
-      const nextCharacterId = state?.characterId ?? null;
-      const nextTokenId = state?.selectedItemId ?? nextSelectionIds[0] ?? null;
-      if (previousCharacterId !== nextCharacterId || previousTokenId !== nextTokenId) {
-        logDebugEvent("selection", "selected-character-changed", {
-          previousCharacterId,
-          nextCharacterId,
-          previousTokenId,
-          nextTokenId,
-          reason
-        });
-      }
-      if (pendingSelectionIds.join("|") === resolveSignature) {
-        pendingSelectionIds = [];
-      }
-      const payload = publishState(state, reason);
-      if (reason === "selection-request-hydrate") {
-        logDebugEvent("selection", "selection-hydrate-resolved", {
-          tokenIds: currentSelectionIds,
-          status: state?.status ?? null,
-          characterId: state?.characterId ?? null,
-          error: state?.error?.code ?? null
-        }, state?.status === "ready");
-      }
-      if (onSelectionState) {
-        try {
-          await onSelectionState(payload);
-        } catch (_e) {
-        }
-      }
-      return payload;
+      void selectionIds;
+      void options;
+      return resolveLiveSelection(reason, { forceResolve: true });
     }
-    await resolveAndPublish(await readLiveSelectionIds(player.selection), "startup");
+    stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "startup" });
+    cleanups3.push(() => stableSelectionResolver?.dispose?.());
     cleanups3.push(await subscribePlayerChanges((p) => {
       viewer = normalizeViewer({ playerId: p.id, role: p.role });
       if (shouldDeferSelection()) return;
@@ -11311,7 +11640,7 @@ function setupSceneSelection(hooks = {}) {
       sceneTimer = setTimeout(() => {
         if (shouldDeferSelection()) return;
         readLiveSelectionIds(currentSelectionIds).then((sel) => {
-          if (Array.isArray(sel) && sel.length === 1) return scheduleLiveSelectionResolve("scene-items-changed", { forceResolve: true });
+          if (Array.isArray(sel) && sel.length === 1) return scheduleLiveSelectionResolve2("scene-items-changed", { forceResolve: true });
         }).catch(() => {
         });
       }, SCENE_RERESOLVE_DEBOUNCE_MS);
@@ -11355,13 +11684,7 @@ function setupSceneSelection(hooks = {}) {
             currentSelectionIds,
             reason: "selection-request"
           }, true, "pending");
-          void resolveAndPublish(liveSelectionIds, "selection-request-hydrate", { allowWhileDeferred: true }).catch((error) => {
-            logDebugEvent("selection", "selection-hydrate-failed", {
-              tokenIds: liveSelectionIds,
-              message: String(error?.message ?? error ?? "Unable to hydrate selection."),
-              reason: "selection-request"
-            }, false);
-          });
+          stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "selection-request-hydrate" });
         }).catch((error) => {
           logDebugEvent("selection", "selection-hydrate-skipped", {
             reason: "live-selection-read-failed",
@@ -11395,7 +11718,7 @@ function setupSceneSelection(hooks = {}) {
         });
         return;
       }
-      scheduleLiveSelectionResolve("selection-request-initial", { forceResolve: true });
+      scheduleLiveSelectionResolve2("selection-request-initial", { forceResolve: true });
     }));
     cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
       void handleCommand(event?.data).catch((error) => {
@@ -11421,7 +11744,7 @@ function setupSceneSelection(hooks = {}) {
       sceneTimer = null;
     }
     clearTransientEmptySelectionTimer();
-    selectionRefreshScheduler.cancel();
+    stableSelectionResolver?.dispose?.();
     for (const fn of cleanups3.splice(0)) {
       try {
         fn();

@@ -13,6 +13,7 @@ const readText = (...segments) =>
   fs.readFileSync(path.join(repoRoot, ...segments), "utf8").replace(/\r\n/g, "\n");
 
 const sceneControllerSrc = readText("hud", "scene", "sceneSelectionController.js");
+const resolverSrc = readText("selection", "stableOwlbearSelectionResolver.js");
 
 let passed = 0;
 let failed = 0;
@@ -75,7 +76,7 @@ await asyncTest("selection ready uses light runtime success", async () => {
 });
 
 test("inventory failure does not make selection unavailable in staged runtime flow", () => {
-  assert.ok(sceneControllerSrc.includes("const bundle = await fetchLightRuntimeBundle(characterId, selectedRuntimeReason);"));
+  assert.ok(sceneControllerSrc.includes("const runtimeBundle = await fetchLightRuntimeBundle(resolvedState.characterId, reason);"));
   assert.ok(!sceneControllerSrc.includes("Promise.all([\n          getCharacterRuntimeBundle("));
   assert.ok(sceneControllerSrc.includes("panel: \"inventory\""));
   assert.ok(sceneControllerSrc.includes("heavy-fetch-failed"));
@@ -100,8 +101,9 @@ test("light runtime timeout retries once", () => {
 });
 
 test("startup resolve prefers live OBR selection over the initial player snapshot", () => {
-  assert.ok(sceneControllerSrc.includes("await resolveAndPublish(await readLiveSelectionIds(player.selection), \"startup\");"));
-  assert.ok(sceneControllerSrc.includes("const liveSelection = await getSelectedTokenIds();"));
+  assert.ok(sceneControllerSrc.includes('stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "startup" });'));
+  assert.ok(resolverSrc.includes("getSelectedOwlbearTokens"));
+  assert.ok(resolverSrc.includes("const signature = buildSelectionSignature(selectedTokens);"));
 });
 
 test("selection request with existing payload replays only lastPayload", () => {
@@ -110,12 +112,11 @@ test("selection request with existing payload replays only lastPayload", () => {
   assert.ok(sceneControllerSrc.includes("selection-request-hydrate"));
   assert.ok(sceneControllerSrc.includes("event?.data?.hydrateIfStale === true"));
   assert.ok(sceneControllerSrc.includes("selection-hydrate-requested"));
-  assert.ok(sceneControllerSrc.includes("selection-hydrate-failed"));
   assert.ok(sceneControllerSrc.includes("void readLiveSelectionIds(currentSelectionIds)"));
   assert.ok(sceneControllerSrc.includes("if (liveSignature !== requestedSignature)"));
   assert.ok(sceneControllerSrc.includes("selection-hydrate-skipped"));
   assert.ok(sceneControllerSrc.includes("reason: \"requested-selection-not-live\""));
-  assert.ok(sceneControllerSrc.includes("void resolveAndPublish(liveSelectionIds, \"selection-request-hydrate\", { allowWhileDeferred: true })"));
+  assert.ok(sceneControllerSrc.includes('stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "selection-request-hydrate" });'));
 });
 
 test("selection request hydrate remains a startup fallback only", () => {
@@ -134,8 +135,9 @@ test("native selection-changed path remains primary and is logged", () => {
   assert.ok(sceneControllerSrc.includes("selection-change-observed"));
   assert.ok(sceneControllerSrc.includes("previousSelectionIds: currentSelectionIds"));
   assert.ok(sceneControllerSrc.includes("void handleObservedNonEmptySelection(observed, reason).catch(() => {});"));
-  assert.ok(sceneControllerSrc.includes("selection-resolve-start"));
-  assert.ok(sceneControllerSrc.includes("source-token-selected"));
+  assert.ok(sceneControllerSrc.includes("stableSelectionResolver?.runSelectionSync({ force: forceResolve === true, reason })"));
+  assert.ok(resolverSrc.includes('log("selection", "selection-resolve-start"'));
+  assert.ok(resolverSrc.includes('log("selection", "source-token-selected"'));
 });
 
 test("transient empty selection events use grace delay and live-read execution", () => {
@@ -175,18 +177,19 @@ test("selected character change and payload broadcast are explicitly logged", ()
 
 test("non-empty observed selection schedules resolve when it differs from current or pending", () => {
   assert.ok(sceneControllerSrc.includes("if (observedSignature !== currentSignature || observedSignature !== pendingSignature)"));
-  assert.ok(sceneControllerSrc.includes("pendingSelectionIds = normalizedSelectionIds.slice();"));
+  assert.ok(sceneControllerSrc.includes('stableSelectionResolver?.scheduleSelectionSync({ force: false, reason });'));
   assert.ok(sceneControllerSrc.includes("empty-selection-cancelled"));
 });
 
-test("selection resolve has timeout protection and latest-wins generation gating", () => {
-  assert.ok(sceneControllerSrc.includes("const SELECTION_RESOLVE_TIMEOUT_MS = 5000;"));
-  assert.ok(sceneControllerSrc.includes("const generation = ++selectionResolveGeneration;"));
-  assert.ok(sceneControllerSrc.includes("selection-resolve-timeout"));
-  assert.ok(sceneControllerSrc.includes("selection-resolve-result"));
-  assert.ok(sceneControllerSrc.includes("selection-resolve-finished"));
-  assert.ok(sceneControllerSrc.includes("generation !== null && generation !== selectionResolveGeneration"));
-  assert.ok(sceneControllerSrc.includes("SELECTION_RESOLVE_TIMEOUT"));
+test("shared resolver owns signature dedupe and latest-wins request id", () => {
+  assert.ok(resolverSrc.includes("let selectionRequestId = 0;"));
+  assert.ok(resolverSrc.includes("let lastSelectionSignature = \"\";"));
+  assert.ok(resolverSrc.includes("const requestId = ++selectionRequestId;"));
+  assert.ok(resolverSrc.includes("if (!isCurrentRequest(requestId))"));
+  assert.ok(resolverSrc.includes("if (!force && signature === lastSelectionSignature)"));
+  assert.ok(resolverSrc.includes('log("selection", "selection-resolve-result"'));
+  assert.ok(resolverSrc.includes('log("selection", "selection-resolve-finished"'));
+  assert.ok(sceneControllerSrc.includes("stableSelectionResolver.getCurrentRequestId() !== requestId"));
 });
 
 await asyncTest("after repeated light runtime failure selection shows runtime fetch failed", async () => {

@@ -25,7 +25,7 @@ import {
 import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/settingsBridge.js";
 import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/characterPlacementApi.js";
 import { loadWeaponProfileMagazine, getCharacterArmory, switchWeaponFireMode, switchActiveWeapon } from "../../api/weaponApi.js";
-import { performAttack, executeAction } from "../../api/combatApi.js";
+import { performAttack, executeAction, getActiveRuntime } from "../../api/combatApi.js";
 import { getCharacterInventory } from "../../api/inventoryApi.js";
 import { resolveReloadMagazineId, normalizeReloadRpcResult } from "./reloadPolicy.js";
 import { normalizeFireModeRpcResult } from "./fireModePolicy.js";
@@ -56,6 +56,7 @@ import { setupQuickbarController } from "../abilities/quickbarController.js";
 import { mapCombatRuntimeToSession } from "../session/combatSessionMapper.js";
 import { sessionAttackGate, sessionReloadGate, expectedVersionOf } from "../session/combatSessionPolicy.js";
 import { buildSwitchActiveWeaponPayload, resolveWeaponSwitchErrorMessage } from "../session/weaponSwitchPayload.js";
+import { createStableOwlbearSelectionResolver } from "../../selection/stableOwlbearSelectionResolver.js";
 
 // Phase 4.1A: perform_attack error codes specific to an armed attack
 // technique (migration 100) — used only to classify a Debug Console event,
@@ -71,11 +72,10 @@ const ARMED_TECHNIQUE_ERROR_CODES = new Set([
   "ACTION_EFFECT_NOT_IMPLEMENTED",
 ]);
 import { BC_HUD_COMMAND, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_TARGETING_COMMAND } from "../overlay/overlayConstants.js";
-import { createSceneSelectionAdapter } from "./sceneSelectionAdapter.js";
 import { buildCanonicalArmory, pickActiveWeapon } from "../runtime/runtimeBundleMapper.js";
-import { buildBroadcastPayload, normalizeViewer } from "./selectionState.js";
+import { buildBroadcastPayload, normalizeViewer, SELECTION_STATUS, ACCESS_REASON } from "./selectionState.js";
 import { mutateSupabaseRows } from "../../bridge/supabaseBridge.js";
-import { createDebouncedRefreshScheduler, singleFlightRuntimeRefresh } from "../runtime/runtimeRefreshCoordinator.js";
+import { singleFlightRuntimeRefresh } from "../runtime/runtimeRefreshCoordinator.js";
 import { normalizeRpcError } from "../../utils/rpcErrorNormalizer.js";
 
 const SCENE_RERESOLVE_DEBOUNCE_MS = 600;
@@ -107,7 +107,6 @@ export function setupSceneSelection(hooks = {}) {
   let pendingSelectionIds = [];
   let lastObservedSelectionIds = [];
   let transientEmptySelectionTimer = null;
-  let selectionResolveGeneration = 0;
   let lastResolvedCharacterId = null;
   let lastResolvedTokenId = null;
   let skillAdminDeleteInFlight = null;
@@ -117,6 +116,7 @@ export function setupSceneSelection(hooks = {}) {
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
   let publishCurrentStateSafe = () => null;
+  let stableSelectionResolver = null;
   let movementPreviewActive = false;
   const heavyRuntimeCache = new Map();
   // Phase 3D.1: controller-local, session-scoped "last weapon per character"
@@ -193,11 +193,6 @@ export function setupSceneSelection(hooks = {}) {
   const activeCombatActionKeys = new Set();
   const activeCombatActionCharacters = new Set();
   const characterActionQueues = new Map();
-  const selectionRefreshScheduler = createDebouncedRefreshScheduler(
-    (selectionIds, reason = "selection-debounced") => startSelectionResolve(selectionIds, reason),
-    SELECTED_RUNTIME_DEBOUNCE_MS,
-  );
-
   function clearTransientEmptySelectionTimer() {
     if (!transientEmptySelectionTimer) return false;
     clearTimeout(transientEmptySelectionTimer);
@@ -671,9 +666,9 @@ export function setupSceneSelection(hooks = {}) {
       return;
     }
 
-    if (nextSignature !== currentSignature || nextSignature !== pendingSignature) {
-      void startSelectionResolve(nextSelectionIds, reason).catch(() => {});
-    }
+      if (nextSignature !== currentSignature || nextSignature !== pendingSignature) {
+        scheduleLiveSelectionResolve(reason, { forceResolve: false });
+      }
   }
 
   async function readLiveSelectionIds(fallbackSelection = []) {
@@ -921,6 +916,18 @@ export function setupSceneSelection(hooks = {}) {
             () => getCharacterArmory(normalizedCharacterId, settings, encounterId),
           );
           nextPatch.armory = armoryResult;
+          if (armoryResult?.combat_context) {
+            logDebugEvent("weapon", "armory-combat-context", {
+              characterId: normalizedCharacterId,
+              reason,
+              encounterId: String(encounterId ?? "").trim() || null,
+              mode: armoryResult.combat_context?.mode ?? null,
+              currentTurn: armoryResult.combat_context?.is_current_turn ?? null,
+              canSwitchTo: armoryResult.combat_context?.can_switch_to ?? null,
+              switchCost: armoryResult.combat_context?.switch_cost ?? null,
+              warning: armoryResult.combat_context?.warning ?? null,
+            }, armoryResult?.ok !== false);
+          }
           logDebugEvent("runtime", "heavy-fetch-result", {
             characterId: normalizedCharacterId,
             panel: "armory",
@@ -1004,12 +1011,12 @@ export function setupSceneSelection(hooks = {}) {
         clearTransientEmptySelectionTimer();
         transientEmptySelectionTimer = setTimeout(() => {
           transientEmptySelectionTimer = null;
-          void resolveLiveSelection(reason, { forceResolve: forceResolve === true }).catch(() => {});
+          stableSelectionResolver?.scheduleSelectionSync({ force: forceResolve === true, reason });
         }, normalizedDelayMs);
         return;
       }
       clearTransientEmptySelectionTimer();
-      void resolveLiveSelection(reason, { forceResolve: forceResolve === true }).catch(() => {});
+      stableSelectionResolver?.scheduleSelectionSync({ force: forceResolve === true, reason });
     }
 
     function buildSelectionTransientState(status, selectionIds, message = null, code = null) {
@@ -1036,10 +1043,237 @@ export function setupSceneSelection(hooks = {}) {
       return publishState(state, reason);
     }
 
+    function buildReadySelectionView(bundle) {
+      const character = bundle?.character ?? {};
+      const state = bundle?.state ?? {};
+      const ownerId = String(character?.owner_player_id ?? "").trim() || null;
+      const statusSummary = String(state?.status_summary ?? "").trim();
+      return {
+        name: String(character?.display_name ?? character?.character_key ?? "").trim() || null,
+        characterKey: character?.character_key ?? null,
+        ownerName: String(character?.owner_player_name ?? "").trim() || null,
+        ownerPlayerId: ownerId,
+        gmView: viewer.role === "GM",
+        isAlive: state?.is_alive !== false,
+        isConscious: state?.is_conscious !== false,
+        statusSummary: statusSummary || null,
+      };
+    }
+
+    function buildSelectionStateFromResolver(resolvedState, runtimeBundle = null) {
+      const tokenId = String(resolvedState?.tokenId ?? "").trim() || null;
+      const characterId = String(resolvedState?.characterId ?? "").trim() || null;
+      const errorCode = String(resolvedState?.error ?? "").trim() || null;
+      const errorMessage = String(resolvedState?.message ?? "").trim() || null;
+
+      if (resolvedState?.status === "ready" && runtimeBundle) {
+        return {
+          status: SELECTION_STATUS.ready,
+          selectedItemId: tokenId,
+          characterId,
+          viewer,
+          access: { canView: true, reason: null },
+          runtimeBundle,
+          view: buildReadySelectionView(runtimeBundle),
+          error: { code: null, message: null },
+        };
+      }
+
+      if (resolvedState?.status === "loading") {
+        return buildSelectionTransientState(SELECTION_STATUS.loading, tokenId ? [tokenId] : [], errorMessage || "Resolving selected token...", errorCode);
+      }
+
+      if (resolvedState?.status === "multiple-selection") {
+        return {
+          status: SELECTION_STATUS.multipleSelection,
+          selectedItemId: null,
+          characterId: null,
+          viewer,
+          access: { canView: false, reason: ACCESS_REASON.multipleTokens },
+          runtimeBundle: null,
+          view: null,
+          error: { code: errorCode, message: errorMessage },
+        };
+      }
+
+      if (resolvedState?.status === "no-selection") {
+        return {
+          status: SELECTION_STATUS.noSelection,
+          selectedItemId: null,
+          characterId: null,
+          viewer,
+          access: { canView: false, reason: ACCESS_REASON.noToken },
+          runtimeBundle: null,
+          view: null,
+          error: { code: errorCode, message: errorMessage },
+        };
+      }
+
+      if (resolvedState?.status === "unlinked-token") {
+        return {
+          status: SELECTION_STATUS.unlinkedToken,
+          selectedItemId: tokenId,
+          characterId: null,
+          viewer,
+          access: { canView: false, reason: ACCESS_REASON.noLink },
+          runtimeBundle: null,
+          view: null,
+          error: { code: errorCode, message: errorMessage },
+        };
+      }
+
+      if (resolvedState?.status === "not-owned") {
+        return {
+          status: SELECTION_STATUS.notOwned,
+          selectedItemId: tokenId,
+          characterId,
+          viewer,
+          access: { canView: false, reason: ACCESS_REASON.notOwner },
+          runtimeBundle: null,
+          view: null,
+          error: { code: errorCode, message: errorMessage },
+        };
+      }
+
+      return {
+        status: SELECTION_STATUS.error,
+        selectedItemId: tokenId,
+        characterId,
+        viewer,
+        access: { canView: false, reason: errorCode ?? ACCESS_REASON.runtimeUnavailable },
+        runtimeBundle: null,
+        view: null,
+        error: { code: errorCode, message: errorMessage || "Unable to resolve selected token." },
+      };
+    }
+
+    async function commitResolvedSelectionState(state, reason = "state-update", requestId = null) {
+      const previousCharacterId = lastResolvedCharacterId ?? lastPayload?.characterId ?? lastState?.characterId ?? null;
+      const previousTokenId = lastResolvedTokenId ?? lastPayload?.selectedItemId ?? currentSelectionIds[0] ?? null;
+      const nextCharacterId = state?.status === SELECTION_STATUS.ready ? (state?.characterId ?? null) : null;
+      const nextTokenId = state?.selectedItemId ?? null;
+
+      if (state?.status === SELECTION_STATUS.ready) {
+        const changed = resetEphemeralForCharacter(nextCharacterId);
+        if (changed) restoreSelectedWeapon(nextCharacterId, state.runtimeBundle);
+        const activeWeapon = pickActiveWeapon(state.runtimeBundle?.armory ?? state.runtimeBundle?.sections?.armory ?? null);
+        const activeWeaponId = String(activeWeapon?.id ?? "").trim() || null;
+        ephemeral.selectedWeaponId = activeWeaponId;
+        if (nextCharacterId) {
+          if (activeWeaponId) selectedWeaponMemory.set(nextCharacterId, activeWeaponId);
+          else selectedWeaponMemory.forget(nextCharacterId);
+        }
+        lastResolvedCharacterId = nextCharacterId;
+        lastResolvedTokenId = nextTokenId ?? lastResolvedTokenId;
+      } else if (state?.status !== SELECTION_STATUS.loading) {
+        resetEphemeralForCharacter(null);
+      }
+
+      currentSelectionIds = nextTokenId ? [nextTokenId] : [];
+      if (state?.status !== SELECTION_STATUS.loading) {
+        pendingSelectionIds = [];
+      }
+      lastState = state;
+
+      if (previousCharacterId !== nextCharacterId || previousTokenId !== nextTokenId) {
+        logDebugEvent("selection", "selected-character-changed", {
+          previousCharacterId,
+          nextCharacterId,
+          previousTokenId,
+          nextTokenId,
+          reason,
+        });
+      }
+
+      const payload = publishState(state, reason);
+      if (reason === "selection-request-hydrate") {
+        logDebugEvent("selection", "selection-hydrate-resolved", {
+          tokenIds: currentSelectionIds,
+          status: payload?.status ?? null,
+          characterId: payload?.characterId ?? null,
+          requestId,
+          error: payload?.error?.code ?? payload?.access?.reason ?? null,
+        }, payload?.status === SELECTION_STATUS.ready);
+      }
+      if (onSelectionState) {
+        try { await onSelectionState(payload); } catch (_e) { /* controller handles its own errors */ }
+      }
+      return payload;
+    }
+
+    async function applyStableSelectionState(resolvedState) {
+      const requestId = Number(resolvedState?.requestId) || 0;
+      const reason = String(resolvedState?.reason ?? "selection-changed").trim() || "selection-changed";
+      selectedRuntimeReason = reason;
+      const tokenId = String(resolvedState?.tokenId ?? "").trim() || null;
+      pendingSelectionIds = tokenId ? [tokenId] : [];
+
+      if (resolvedState?.status === "loading") {
+        await commitResolvedSelectionState(
+          buildSelectionStateFromResolver(resolvedState),
+          `${reason}:loading`,
+          requestId,
+        );
+        return;
+      }
+
+      if (resolvedState?.status !== "ready") {
+        const unavailableReason = String(resolvedState?.error ?? "").trim()
+          || buildSelectionStateFromResolver(resolvedState)?.access?.reason
+          || null;
+        if (resolvedState?.status !== SELECTION_STATUS.noSelection && unavailableReason !== ACCESS_REASON.noToken) {
+          logDebugEvent("selection", "source-character-unavailable", {
+            status: resolvedState?.status ?? null,
+            reason: unavailableReason,
+          }, false);
+        }
+        await commitResolvedSelectionState(
+          buildSelectionStateFromResolver(resolvedState),
+          reason,
+          requestId,
+        );
+        return;
+      }
+
+      try {
+        const runtimeBundle = await fetchLightRuntimeBundle(resolvedState.characterId, reason);
+        if (disposed || !stableSelectionResolver || stableSelectionResolver.getCurrentRequestId() !== requestId) {
+          return;
+        }
+        await commitResolvedSelectionState(
+          buildSelectionStateFromResolver(resolvedState, runtimeBundle),
+          reason,
+          requestId,
+        );
+      } catch (error) {
+        if (disposed || !stableSelectionResolver || stableSelectionResolver.getCurrentRequestId() !== requestId) {
+          return;
+        }
+        const normalized = normalizeRpcError(error);
+        logDebugEvent("selection", "runtime-refresh-exception", {
+          characterId: String(resolvedState?.characterId ?? "").trim() || null,
+          reason,
+          requestId,
+          message: normalized.message,
+          error: normalized.error,
+          retryable: normalized.retryable,
+        }, false);
+        await commitResolvedSelectionState(
+          buildSelectionStateFromResolver({
+            ...resolvedState,
+            status: "error",
+            error: normalized.error || "RUNTIME_FETCH_FAILED",
+            message: normalized.message || "Unable to load character runtime.",
+          }),
+          reason,
+          requestId,
+        );
+      }
+    }
+
     function scheduleResolveObservedSelection(selectionIds, reason = "selection-changed") {
-      const normalizedSelectionIds = normalizeSelectionIds(selectionIds);
       clearTransientEmptySelectionTimer();
-      selectionRefreshScheduler.schedule(normalizedSelectionIds, reason);
+      stableSelectionResolver?.scheduleSelectionSync({ force: false, reason });
     }
 
     function handleObservedEmptySelection(reason = "selection-changed") {
@@ -1072,7 +1306,7 @@ export function setupSceneSelection(hooks = {}) {
               if (lastState) publishState(lastState, `${reason}:sticky-last-selection`);
               return;
             }
-            await startSelectionResolve([], `${reason}:empty-confirmed`);
+            scheduleLiveSelectionResolve(`${reason}:empty-confirmed`, { forceResolve: true });
           } else if (pendingSelectionIds.length > 0) {
             logDebugEvent("selection", "empty-selection-ignored", {
               reason: "pending-non-empty-selection",
@@ -1082,7 +1316,7 @@ export function setupSceneSelection(hooks = {}) {
               pendingSelectionIds,
             });
             if (liveSelectionIds.length > 0) {
-              void startSelectionResolve(liveSelectionIds, "selection-empty-recovered-live").catch(() => {});
+              scheduleLiveSelectionResolve("selection-empty-recovered-live", { forceResolve: true });
             }
           } else {
             logDebugEvent("selection", "empty-selection-ignored", {
@@ -1092,7 +1326,7 @@ export function setupSceneSelection(hooks = {}) {
               pendingSelectionIds,
             });
             if (liveSelectionIds.length > 0) {
-              void startSelectionResolve(liveSelectionIds, "selection-empty-recovered-live").catch(() => {});
+              scheduleLiveSelectionResolve("selection-empty-recovered-live", { forceResolve: true });
             }
           }
         }, TRANSIENT_EMPTY_SELECTION_GRACE_MS);
@@ -1146,121 +1380,44 @@ export function setupSceneSelection(hooks = {}) {
     }
 
     async function resolveLiveSelection(reason = "selection-changed", { forceResolve = false } = {}) {
-      const liveSelectionIds = await readLiveSelectionIds(lastObservedSelectionIds.length ? lastObservedSelectionIds : currentSelectionIds);
-      const liveSignature = liveSelectionIds.join("|");
-      const currentSignature = currentSelectionIds.join("|");
-      lastObservedSelectionIds = liveSelectionIds.slice();
-      logDebugEvent("selection", "selection-live-read", {
-        tokenIds: liveSelectionIds,
-        currentSelectionIds,
-        reason,
-      });
-      if (!forceResolve && liveSignature === currentSignature && lastPayload && pendingSelectionIds.length === 0) {
-        logDebugEvent("selection", "selection-live-unchanged", {
-          tokenIds: liveSelectionIds,
-          reason,
-        });
-        broadcast(lastPayload);
-        return lastPayload;
-      }
-      return resolveAndPublish(liveSelectionIds, reason);
+      return stableSelectionResolver?.runSelectionSync({ force: forceResolve === true, reason }) ?? null;
     }
 
     async function startSelectionResolve(selectionIds, reason = "selection-changed", options = {}) {
-      const normalizedSelectionIds = normalizeSelectionIds(selectionIds);
-      const generation = ++selectionResolveGeneration;
-      pendingSelectionIds = normalizedSelectionIds.slice();
-      selectedRuntimeReason = reason;
-      logDebugEvent("selection", "selection-resolve-start", {
-        tokenIds: normalizedSelectionIds,
-        reason,
-        generation,
-      }, true, "pending");
-
-      if (normalizedSelectionIds.length > 0) {
-        publishSelectionTransientState("loading", normalizedSelectionIds, `${reason}:loading`);
-      }
-
-      let timedOut = false;
-      let timeoutHandle = null;
-      try {
-        timeoutHandle = setTimeout(() => {
-          if (selectionResolveGeneration !== generation) return;
-          timedOut = true;
-          selectionResolveGeneration += 1;
-          pendingSelectionIds = [];
-          logDebugEvent("selection", "selection-resolve-timeout", {
-            tokenIds: normalizedSelectionIds,
-            reason,
-            generation,
-            timeoutMs: SELECTION_RESOLVE_TIMEOUT_MS,
-          }, false);
-          publishSelectionTransientState("error", normalizedSelectionIds, `${reason}:timeout`, {
-            code: "SELECTION_RESOLVE_TIMEOUT",
-            message: "Unable to resolve selected token. Try selecting it again.",
-          });
-        }, SELECTION_RESOLVE_TIMEOUT_MS);
-
-        const payload = await resolveAndPublish(normalizedSelectionIds, reason, {
-          ...options,
-          generation,
-        });
-        logDebugEvent("selection", "selection-resolve-result", {
-          tokenIds: normalizedSelectionIds,
-          reason,
-          generation,
-          status: payload?.status ?? null,
-          selectedItemId: payload?.selectedItemId ?? normalizedSelectionIds[0] ?? null,
-          characterId: payload?.characterId ?? null,
-        }, payload?.status === "ready");
-      } finally {
-        if (timeoutHandle) clearTimeout(timeoutHandle);
-        logDebugEvent("selection", "selection-resolve-finished", {
-          tokenIds: normalizedSelectionIds,
-          reason,
-          generation,
-          timedOut,
-          pendingSelectionIds,
-        }, !timedOut);
-        if (!timedOut && selectionResolveGeneration === generation && pendingSelectionIds.join("|") === normalizedSelectionIds.join("|")) {
-          pendingSelectionIds = [];
-        }
-      }
+      void selectionIds;
+      void options;
+      return resolveLiveSelection(reason, { forceResolve: true });
     }
 
-    const adapter = createSceneSelectionAdapter({
-      backendConfigured: configured,
-      getViewer: () => viewer,
-      fetchSceneTokenLink: (tokenId) => getSceneTokenLinks(
-        { room_id: context.roomId, scene_id: context.sceneId, campaign_id: context.campaignId, token_id: tokenId },
-        settings,
-      ),
-      fetchCharacterBundle: async (characterId) => {
-        const bundle = await fetchLightRuntimeBundle(characterId, selectedRuntimeReason);
-        if (!bundle || typeof bundle !== "object") return bundle;
-
-        const merged = { ...bundle, __hudDebug: { requestedSections: HUD_LIGHT_RUNTIME_SECTIONS } };
-        const cacheEntry = getHeavyRuntimeCache(characterId);
-        const armoryForDebug = cacheEntry?.canonicalArmory ?? cacheEntry?.armory ?? merged.armory ?? merged.sections?.armory ?? null;
-        if (armoryForDebug?.combat_context && characterId) {
-          logDebugEvent("weapon", "armory-combat-context", {
-            characterId,
-            mode: armoryForDebug.combat_context?.mode ?? null,
-            encounterId: armoryForDebug.combat_context?.encounter_id ?? null,
-            moveCurrent: armoryForDebug.combat_context?.move_current ?? null,
-            moveMax: armoryForDebug.combat_context?.move_max ?? null,
-            activeEncounterCount: armoryForDebug.combat_context?.active_encounter_count ?? null,
-          });
-          if (armoryForDebug.combat_context?.mode === "ambiguous") {
-            logDebugEvent("weapon", "armory-combat-context-ambiguous", {
-              characterId,
-              activeEncounterCount: armoryForDebug.combat_context?.active_encounter_count ?? null,
-              warning: armoryForDebug.combat_context?.warning ?? null,
-            }, false);
-          }
-        }
-        return merged;
+    stableSelectionResolver = createStableOwlbearSelectionResolver({
+      getSelectedOwlbearTokens: async () => {
+        const selectionIds = await readLiveSelectionIds(lastObservedSelectionIds.length ? lastObservedSelectionIds : currentSelectionIds);
+        const selectionSet = new Set(selectionIds);
+        const rawItems = await getSceneItems();
+        const items = Array.isArray(rawItems) ? rawItems : [];
+        return items.filter((item) => selectionSet.has(String(item?.id ?? "").trim()));
       },
+      getRoomSceneContext: async () => getRoomSceneContext(),
+      getPlayerInfo: async () => getPlayerInfo(),
+      getActiveCombatRuntime: async ({ context: liveContext, player, viewerIsGm }) => {
+        if (sessionRuntime?.encounter?.id) return sessionRuntime;
+        if (!configured) return null;
+        return getActiveRuntime({
+          campaign_id: liveContext?.campaignId ?? context.campaignId,
+          room_id: liveContext?.roomId ?? context.roomId,
+          scene_id: liveContext?.sceneId ?? context.sceneId,
+          actor_player_id: player?.id ?? "",
+          actor_is_gm: viewerIsGm,
+          include_hidden: viewerIsGm,
+        }, settings).catch(() => null);
+      },
+      getSceneTokenLinks,
+      hasUsableSettings: hasSupabaseSettings,
+      getSettings: () => settings,
+      isGm: (playerInfo) => String(playerInfo?.role ?? "").toUpperCase() === "GM",
+      logDebugEvent,
+      debounceMs: 100,
+      onState: applyStableSelectionState,
     });
 
     /** @returns {boolean} true when the character actually changed (and the reset ran) */
@@ -1343,7 +1500,7 @@ export function setupSceneSelection(hooks = {}) {
       };
     }
 
-    function publishState(state, reason = "state-update") {
+    function publishHudState(state, reason = "state-update") {
       lastPayload = buildBroadcastPayload(state, buildEphemeralForPayload());
       if (lastPayload?.status === "ready") {
         lastResolvedCharacterId = lastPayload.characterId ?? lastResolvedCharacterId;
@@ -1357,6 +1514,10 @@ export function setupSceneSelection(hooks = {}) {
         reason,
       });
       return lastPayload;
+    }
+
+    function publishState(state, reason = "state-update") {
+      return publishHudState(state, reason);
     }
 
     function publishCurrentState(reason = "state-update") {
@@ -2860,93 +3021,17 @@ export function setupSceneSelection(hooks = {}) {
     }
 
     async function resolveAndPublish(selectionIds, reason = "selection-change", options = {}) {
-      const allowWhileDeferred = options?.allowWhileDeferred === true;
-      const generation = Number.isFinite(Number(options?.generation)) ? Number(options.generation) : null;
-      if (shouldDeferSelection() && !allowWhileDeferred) {
-        logDebugEvent("selection", "selection-refresh-deferred", { tokenIds: selectionIds, reason }, true, "pending");
-        return;
-      }
-      selectedRuntimeReason = reason;
-      const nextSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
-      const previousCharacterId = lastResolvedCharacterId ?? lastPayload?.characterId ?? lastState?.characterId ?? null;
-      const previousTokenId = lastResolvedTokenId ?? lastPayload?.selectedItemId ?? currentSelectionIds[0] ?? null;
-      const resolveSignature = nextSelectionIds.join("|");
-      pendingSelectionIds = nextSelectionIds.slice();
-      logDebugEvent("selection", "source-token-selected", { tokenIds: nextSelectionIds, reason });
-      let state = null;
-      let resolvedFresh = false;
-      try {
-        const result = await adapter.resolveLatest(nextSelectionIds);
-        if (disposed || result?.stale || (generation !== null && generation !== selectionResolveGeneration)) return null; // only the freshest selection updates the HUD
-        state = result?.state ?? null;
-        resolvedFresh = true;
-      } finally {
-        if (!resolvedFresh && pendingSelectionIds.join("|") === resolveSignature) {
-          pendingSelectionIds = [];
-        }
-      }
-      if (!state) {
-        if (pendingSelectionIds.join("|") === resolveSignature) {
-          pendingSelectionIds = [];
-        }
-        return null;
-      }
-      if (generation !== null && generation !== selectionResolveGeneration) {
-        return null;
-      }
-      if (state.status !== "ready") {
-        const unavailableReason = state.error?.code ?? state.access?.reason ?? null;
-        if (state.status !== "no-selection" && unavailableReason !== "NO_TOKEN_SELECTED") {
-          logDebugEvent("selection", "source-character-unavailable", { status: state.status ?? null, reason: unavailableReason }, false);
-        }
-        resetEphemeralForCharacter(null);
-      } else {
-        const changed = resetEphemeralForCharacter(state.characterId ?? null);
-        if (changed) restoreSelectedWeapon(state.characterId ?? null, state.runtimeBundle);
-        const activeWeapon = pickActiveWeapon(state.runtimeBundle?.armory ?? state.runtimeBundle?.sections?.armory ?? null);
-        const activeWeaponId = String(activeWeapon?.id ?? "").trim() || null;
-        ephemeral.selectedWeaponId = activeWeaponId;
-        if (state.characterId) {
-          if (activeWeaponId) selectedWeaponMemory.set(state.characterId, activeWeaponId);
-          else selectedWeaponMemory.forget(state.characterId);
-        }
-      }
-      currentSelectionIds = nextSelectionIds.slice();
-      lastState = state;
-      const nextCharacterId = state?.characterId ?? null;
-      const nextTokenId = state?.selectedItemId ?? nextSelectionIds[0] ?? null;
-      if (previousCharacterId !== nextCharacterId || previousTokenId !== nextTokenId) {
-        logDebugEvent("selection", "selected-character-changed", {
-          previousCharacterId,
-          nextCharacterId,
-          previousTokenId,
-          nextTokenId,
-          reason,
-        });
-      }
-      if (pendingSelectionIds.join("|") === resolveSignature) {
-        pendingSelectionIds = [];
-      }
-      const payload = publishState(state, reason);
-      if (reason === "selection-request-hydrate") {
-        logDebugEvent("selection", "selection-hydrate-resolved", {
-          tokenIds: currentSelectionIds,
-          status: state?.status ?? null,
-          characterId: state?.characterId ?? null,
-          error: state?.error?.code ?? null,
-        }, state?.status === "ready");
-      }
-      if (onSelectionState) {
-        try { await onSelectionState(payload); } catch (_e) { /* controller handles its own errors */ }
-      }
-      return payload;
+      void selectionIds;
+      void options;
+      return resolveLiveSelection(reason, { forceResolve: true });
     }
 
     // Initial resolve from the LIVE current selection, not only the startup
     // player snapshot. In Owlbear the initial snapshot can lag behind the
     // actual selection state when the HUD/background boots after the user has
     // already selected a linked token.
-    await resolveAndPublish(await readLiveSelectionIds(player.selection), "startup");
+    stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "startup" });
+    cleanups.push(() => stableSelectionResolver?.dispose?.());
 
     // Selection / role changes (OBR.player.onChange carries selection + role).
     cleanups.push(await subscribePlayerChanges((p) => {
@@ -3020,13 +3105,7 @@ export function setupSceneSelection(hooks = {}) {
               currentSelectionIds,
               reason: "selection-request",
             }, true, "pending");
-            void resolveAndPublish(liveSelectionIds, "selection-request-hydrate", { allowWhileDeferred: true }).catch((error) => {
-              logDebugEvent("selection", "selection-hydrate-failed", {
-                tokenIds: liveSelectionIds,
-                message: String(error?.message ?? error ?? "Unable to hydrate selection."),
-                reason: "selection-request",
-              }, false);
-            });
+            stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "selection-request-hydrate" });
           })
           .catch((error) => {
             logDebugEvent("selection", "selection-hydrate-skipped", {
@@ -3089,7 +3168,7 @@ export function setupSceneSelection(hooks = {}) {
     disposed = true;
     if (sceneTimer) { clearTimeout(sceneTimer); sceneTimer = null; }
     clearTransientEmptySelectionTimer();
-    selectionRefreshScheduler.cancel();
+    stableSelectionResolver?.dispose?.();
     for (const fn of cleanups.splice(0)) { try { fn(); } catch (_e) { /* ignore */ } }
   }
 
