@@ -9487,6 +9487,19 @@ function setupSceneSelection(hooks = {}) {
           transientEmptySelectionTimer = null;
           const liveSelectionIds = await readLiveSelectionIds(currentSelectionIds);
           if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0) {
+            if (currentSelectionIds.length > 0 && lastPayload?.status === "ready") {
+              logDebugEvent("selection", "empty-selection-ignored", {
+                reason: "sticky-last-selection",
+                triggerReason: reason,
+                liveSelectionIds,
+                currentSelectionIds,
+                pendingSelectionIds,
+                stickyCharacterId: lastPayload?.characterId ?? null,
+                stickyTokenId: lastPayload?.selectedItemId ?? null
+              });
+              if (lastState) publishState2(lastState, `${reason}:sticky-last-selection`);
+              return;
+            }
             await startSelectionResolve2([], `${reason}:empty-confirmed`);
           } else if (pendingSelectionIds.length > 0) {
             logDebugEvent("selection", "empty-selection-ignored", {
@@ -9742,6 +9755,16 @@ function setupSceneSelection(hooks = {}) {
       });
       return lastPayload;
     }
+    function replayLastVisibleState(reason = "state-update") {
+      if (lastState) {
+        return publishState2(lastState, reason);
+      }
+      if (lastPayload) {
+        broadcast(lastPayload);
+        return lastPayload;
+      }
+      return null;
+    }
     async function refetchCurrent(reason = "generic") {
       if (refetchCurrentPromise) {
         refetchCurrentQueued = true;
@@ -9837,7 +9860,7 @@ function setupSceneSelection(hooks = {}) {
         return true;
       }
       if (feature === "fire-mode" && type === "select") return true;
-      return type === "select-weapon" || type === "reload";
+      return type === "reload";
     }
     async function handleCommand(command) {
       if (!command || typeof command !== "object") return;
@@ -10690,11 +10713,11 @@ function setupSceneSelection(hooks = {}) {
             code: "WEAPON_SWITCH_UNAVAILABLE",
             message
           }, false);
-          if (lastState) publishState2(lastState);
+          replayLastVisibleState("weapon-switch-unavailable");
           return;
         }
         if (weaponId === activeWeaponId) {
-          if (lastState) publishState2(lastState);
+          replayLastVisibleState("weapon-switch-same-weapon");
           return;
         }
         if (selectedOption?.switchAllowed === false) {
@@ -10712,7 +10735,7 @@ function setupSceneSelection(hooks = {}) {
             code: "SWITCH_BLOCKED",
             message
           }, false);
-          if (lastState) publishState2(lastState);
+          replayLastVisibleState("weapon-switch-blocked");
           return;
         }
         ephemeral.selectedReloadMagazineId = null;
@@ -10753,7 +10776,7 @@ function setupSceneSelection(hooks = {}) {
             if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) {
               await refreshCombatSessionSafe(sessionController, "weapon-switched-state-version-conflict");
             }
-            if (lastState) publishState2(lastState);
+            replayLastVisibleState("weapon-switch-failed");
             return;
           }
           ephemeral.commandStatus = {
@@ -10792,7 +10815,7 @@ function setupSceneSelection(hooks = {}) {
             code: "RPC_EXCEPTION",
             message
           }, false);
-          if (lastState) publishState2(lastState);
+          replayLastVisibleState("weapon-switch-exception");
           return;
         }
       }

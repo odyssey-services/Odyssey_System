@@ -68,6 +68,7 @@ test("successful switch flow does not regress to publishState ReferenceError", (
   assert.ok(!sceneControllerSrc.includes("publishState is not defined"));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:success"'));
   assert.ok(sceneControllerSrc.includes('await refreshHeavyCharacterData(ephemeral.characterId, {'));
+  assert.ok(sceneControllerSrc.includes("function replayLastVisibleState("));
 });
 
 test("weapon switch is no longer tied to move spending", () => {
@@ -92,6 +93,11 @@ test("weapon switch is no longer tied to move spending", () => {
   assert.equal(rifle?.can_switch_to, true);
   assert.equal(rifle?.switch_block_reason, null);
   assert.ok(sqlSrc.includes("'cost_mode', 'free'"));
+});
+
+test("weapon switch is not blocked by combat runtime sync gate", () => {
+  assert.ok(sceneControllerSrc.includes("return type === \"reload\";"));
+  assert.ok(!sceneControllerSrc.includes("return type === \"select-weapon\" || type === \"reload\";"));
 });
 
 test("ambiguous combat context resolves to a user-facing error message", () => {

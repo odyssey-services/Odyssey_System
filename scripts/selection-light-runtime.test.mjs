@@ -144,6 +144,8 @@ test("transient empty selection events use grace delay and live-read execution",
   assert.ok(sceneControllerSrc.includes("empty-selection-deferred"));
   assert.ok(sceneControllerSrc.includes("empty-selection-ignored"));
   assert.ok(sceneControllerSrc.includes("if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0)"));
+  assert.ok(sceneControllerSrc.includes("reason: \"sticky-last-selection\""));
+  assert.ok(sceneControllerSrc.includes("publishState(lastState, `${reason}:sticky-last-selection`)"));
   assert.ok(sceneControllerSrc.includes("selection-empty-recovered-live"));
   assert.ok(sceneControllerSrc.includes("reason: \"pending-non-empty-selection\""));
   assert.ok(sceneControllerSrc.includes("reason: \"cancelled-by-live-selection\""));

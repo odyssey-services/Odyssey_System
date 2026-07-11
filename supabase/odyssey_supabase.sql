@@ -71311,7 +71311,7 @@ declare
   v_weapons jsonb := '[]'::jsonb;
   v_magazines jsonb := '[]'::jsonb;
   v_active_weapon_id uuid := public.odyssey_get_character_active_weapon_id(p_character_id);
-  v_switch_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'switch_weapon', null);
+  v_switch_cost text := 'free';
   v_detachable_reload_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'reload', 'detachable_magazine');
   v_internal_reload_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'reload', 'internal_magazine');
   v_has_active_session boolean := false;
@@ -71395,13 +71395,9 @@ begin
 
   if v_has_active_session then
     if not v_is_current_turn then
-      v_switch_block_reason := 'Waiting for your turn';
       v_detachable_reload_block_reason := 'Waiting for your turn';
       v_internal_reload_block_reason := 'Waiting for your turn';
     else
-      if v_switch_cost <> 'free' and (v_move_max <= 0 or v_move_current < v_move_max) then
-        v_switch_block_reason := 'FULL MOVE already spent';
-      end if;
       if v_detachable_reload_cost <> 'free' and (v_move_max <= 0 or v_move_current < v_move_max) then
         v_detachable_reload_block_reason := 'FULL MOVE already spent';
       end if;
@@ -72195,7 +72191,7 @@ declare
   v_weapons jsonb := '[]'::jsonb;
   v_magazines jsonb := '[]'::jsonb;
   v_active_weapon_id uuid := public.odyssey_get_character_active_weapon_id(p_character_id);
-  v_switch_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'switch_weapon', null);
+  v_switch_cost text := 'free';
   v_detachable_reload_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'reload', 'detachable_magazine');
   v_internal_reload_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'reload', 'internal_magazine');
   v_has_active_session boolean := false;
@@ -72275,13 +72271,9 @@ begin
 
   if v_has_active_session then
     if not v_is_current_turn then
-      v_switch_block_reason := 'Waiting for your turn';
       v_detachable_reload_block_reason := 'Waiting for your turn';
       v_internal_reload_block_reason := 'Waiting for your turn';
     else
-      if v_switch_cost <> 'free' and (v_move_max <= 0 or v_move_current < v_move_max) then
-        v_switch_block_reason := 'FULL MOVE already spent';
-      end if;
       if v_detachable_reload_cost <> 'free' and (v_move_max <= 0 or v_move_current < v_move_max) then
         v_detachable_reload_block_reason := 'FULL MOVE already spent';
       end if;
@@ -72543,7 +72535,7 @@ declare
   v_weapons jsonb := '[]'::jsonb;
   v_magazines jsonb := '[]'::jsonb;
   v_active_weapon_id uuid := public.odyssey_get_character_active_weapon_id(p_character_id);
-  v_switch_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'switch_weapon', null);
+  v_switch_cost text := 'free';
   v_detachable_reload_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'reload', 'detachable_magazine');
   v_internal_reload_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'reload', 'internal_magazine');
   v_has_active_session boolean := false;
@@ -72623,13 +72615,9 @@ begin
 
   if v_has_active_session then
     if not v_is_current_turn then
-      v_switch_block_reason := 'Waiting for your turn';
       v_detachable_reload_block_reason := 'Waiting for your turn';
       v_internal_reload_block_reason := 'Waiting for your turn';
     else
-      if v_switch_cost <> 'free' and (v_move_max <= 0 or v_move_current < v_move_max) then
-        v_switch_block_reason := 'FULL MOVE already spent';
-      end if;
       if v_detachable_reload_cost <> 'free' and (v_move_max <= 0 or v_move_current < v_move_max) then
         v_detachable_reload_block_reason := 'FULL MOVE already spent';
       end if;
