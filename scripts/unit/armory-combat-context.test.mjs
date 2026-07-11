@@ -92,26 +92,26 @@ test("out-of-combat weapon switch stays enabled", () => {
   assert.equal(rifle?.switch_block_reason, null);
 });
 
-test("in combat and not current turn blocks weapon switch", () => {
+test("in combat and not current turn still allows weapon switch", () => {
   const result = buildArmoryCombatContextMock({
     characterId: fx.characters.testAttacker.id,
     activeEncounters: [activeEncounter({ participant: { character_id: fx.characters.testAttacker.id, is_current_turn: false, move_current: 10, move_max: 10 } })],
     weapons: weapons(),
   });
   const rifle = result.weapons.find((weapon) => weapon.id === fx.characterWeapons.pistolLoaded.id);
-  assert.equal(rifle?.can_switch_to, false);
-  assert.equal(rifle?.switch_block_reason, "Waiting for your turn");
+  assert.equal(rifle?.can_switch_to, true);
+  assert.equal(rifle?.switch_block_reason, null);
 });
 
-test("in combat with move spent blocks weapon switch", () => {
+test("in combat with move spent still allows weapon switch", () => {
   const result = buildArmoryCombatContextMock({
     characterId: fx.characters.testAttacker.id,
     activeEncounters: [activeEncounter({ participant: { character_id: fx.characters.testAttacker.id, is_current_turn: true, move_current: 4, move_max: 10 } })],
     weapons: weapons(),
   });
   const rifle = result.weapons.find((weapon) => weapon.id === fx.characterWeapons.pistolLoaded.id);
-  assert.equal(rifle?.can_switch_to, false);
-  assert.match(rifle?.switch_block_reason ?? "", /FULL MOVE/i);
+  assert.equal(rifle?.can_switch_to, true);
+  assert.equal(rifle?.switch_block_reason, null);
 });
 
 test("in combat with full move available allows weapon switch", () => {

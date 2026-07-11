@@ -4,10 +4,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildSwitchActiveWeaponPayload, resolveWeaponSwitchErrorMessage } from "../hud/session/weaponSwitchPayload.js";
+import { buildArmoryCombatContextMock } from "./unit/_mockAdapters.mjs";
+import { fixtureSet } from "./unit/_fixtures.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const sceneControllerSrc = fs.readFileSync(path.join(repoRoot, "hud", "scene", "sceneSelectionController.js"), "utf8");
+const sqlSrc = fs.readFileSync(path.join(repoRoot, "supabase", "odyssey_supabase.sql"), "utf8");
+const fx = fixtureSet();
 
 let passed = 0;
 let failed = 0;
@@ -64,6 +68,30 @@ test("successful switch flow does not regress to publishState ReferenceError", (
   assert.ok(!sceneControllerSrc.includes("publishState is not defined"));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:success"'));
   assert.ok(sceneControllerSrc.includes('await refreshHeavyCharacterData(ephemeral.characterId, {'));
+});
+
+test("weapon switch is no longer tied to move spending", () => {
+  const result = buildArmoryCombatContextMock({
+    characterId: fx.characters.testAttacker.id,
+    activeEncounters: [{
+      id: "enc-1",
+      status: "active",
+      participant: {
+        character_id: fx.characters.testAttacker.id,
+        is_current_turn: true,
+        move_current: 0,
+        move_max: 10,
+      },
+    }],
+    weapons: [
+      { id: fx.characterWeapons.katanaEquipped.id, name: "Unarmed", equipped_slot: "primary" },
+      { id: fx.characterWeapons.pistolLoaded.id, name: "Standard Rifle", equipped_slot: null },
+    ],
+  });
+  const rifle = result.weapons.find((weapon) => weapon.id === fx.characterWeapons.pistolLoaded.id);
+  assert.equal(rifle?.can_switch_to, true);
+  assert.equal(rifle?.switch_block_reason, null);
+  assert.ok(sqlSrc.includes("'cost_mode', 'free'"));
 });
 
 test("ambiguous combat context resolves to a user-facing error message", () => {

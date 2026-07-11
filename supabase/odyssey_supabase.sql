@@ -71045,7 +71045,7 @@ declare
   v_weapons jsonb := '[]'::jsonb;
   v_magazines jsonb := '[]'::jsonb;
   v_active_weapon_id uuid := public.odyssey_get_character_active_weapon_id(p_character_id);
-  v_switch_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'switch_weapon', null);
+  v_switch_cost text := 'free';
   v_detachable_reload_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'reload', 'detachable_magazine');
   v_internal_reload_cost text := public.odyssey_get_weapon_operation_cost_mode(p_character_id, 'reload', 'internal_magazine');
   v_has_active_session boolean := false;
@@ -71081,13 +71081,9 @@ begin
 
   if v_has_active_session then
     if not v_is_current_turn then
-      v_switch_block_reason := 'Waiting for your turn';
       v_detachable_reload_block_reason := 'Waiting for your turn';
       v_internal_reload_block_reason := 'Waiting for your turn';
     else
-      if v_switch_cost <> 'free' and (v_move_max <= 0 or v_move_current < v_move_max) then
-        v_switch_block_reason := 'FULL MOVE already spent';
-      end if;
       if v_detachable_reload_cost <> 'free' and (v_move_max <= 0 or v_move_current < v_move_max) then
         v_detachable_reload_block_reason := 'FULL MOVE already spent';
       end if;
@@ -71639,11 +71635,9 @@ declare
   v_character_weapon_id uuid := public.odyssey_try_parse_uuid(
     coalesce(p_payload->>'character_weapon_id', p_payload->>'weapon_id')
   );
-  v_expected_session_version integer := nullif(trim(coalesce(p_payload->>'expected_encounter_version', '')), '')::integer;
   v_encounter_id uuid := public.odyssey_try_parse_uuid(p_payload->>'encounter_id');
   v_weapon public.odyssey_character_weapons%rowtype;
   v_current_active_weapon_id uuid := null;
-  v_cost_result jsonb := '{}'::jsonb;
 begin
   if v_character_id is null or v_character_weapon_id is null then
     return jsonb_build_object(
@@ -71678,21 +71672,10 @@ begin
       'ok', true,
       'weapon_id', v_character_weapon_id,
       'active_weapon_id', v_character_weapon_id,
-      'cost_mode', public.odyssey_get_weapon_operation_cost_mode(v_character_id, 'switch_weapon', null),
+      'cost_mode', 'free',
       'combat_session', null,
       'armory', public.get_character_armory_context(v_character_id, v_encounter_id)
     );
-  end if;
-
-  v_cost_result := public.odyssey_apply_weapon_operation_session_cost(
-    v_character_id,
-    'switch_weapon',
-    null,
-    v_expected_session_version,
-    v_encounter_id
-  );
-  if coalesce((v_cost_result->>'ok')::boolean, false) = false then
-    return v_cost_result;
   end if;
 
   update public.odyssey_character_weapons
@@ -71723,8 +71706,8 @@ begin
     'ok', true,
     'weapon_id', v_character_weapon_id,
     'active_weapon_id', v_character_weapon_id,
-    'cost_mode', v_cost_result->>'cost_mode',
-    'combat_session', v_cost_result->'combat_session',
+    'cost_mode', 'free',
+    'combat_session', null,
     'armory', public.get_character_armory_context(v_character_id, v_encounter_id)
   );
 exception

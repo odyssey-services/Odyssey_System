@@ -120,6 +120,7 @@ test("selection request with existing payload replays only lastPayload", () => {
 
 test("selection request hydrate remains a startup fallback only", () => {
   assert.ok(sceneControllerSrc.includes("&& (!lastPayload || lastPayload.status === \"no-selection\" || lastPayload.status === \"loading\")"));
+  assert.ok(sceneControllerSrc.includes("&& requestedSignature !== pendingSignature"));
   assert.ok(sceneControllerSrc.includes("previousCharacterId: lastPayload?.characterId ?? null"));
 });
 
@@ -145,12 +146,13 @@ test("transient empty selection events use grace delay and live-read execution",
   assert.ok(sceneControllerSrc.includes("if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0)"));
   assert.ok(sceneControllerSrc.includes("selection-empty-recovered-live"));
   assert.ok(sceneControllerSrc.includes("reason: \"pending-non-empty-selection\""));
+  assert.ok(sceneControllerSrc.includes("reason: \"cancelled-by-live-selection\""));
 });
 
 test("selected character change and payload broadcast are explicitly logged", () => {
   assert.ok(sceneControllerSrc.includes("selected-character-changed"));
   assert.ok(sceneControllerSrc.includes("selection-payload-broadcast"));
-  assert.ok(sceneControllerSrc.includes("previousCharacterId"));
+  assert.ok(sceneControllerSrc.includes("const previousCharacterId = lastResolvedCharacterId"));
   assert.ok(sceneControllerSrc.includes("nextCharacterId"));
 });
 
@@ -164,6 +166,8 @@ test("selection resolve has timeout protection and latest-wins generation gating
   assert.ok(sceneControllerSrc.includes("const SELECTION_RESOLVE_TIMEOUT_MS = 5000;"));
   assert.ok(sceneControllerSrc.includes("const generation = ++selectionResolveGeneration;"));
   assert.ok(sceneControllerSrc.includes("selection-resolve-timeout"));
+  assert.ok(sceneControllerSrc.includes("selection-resolve-result"));
+  assert.ok(sceneControllerSrc.includes("selection-resolve-finished"));
   assert.ok(sceneControllerSrc.includes("generation !== null && generation !== selectionResolveGeneration"));
   assert.ok(sceneControllerSrc.includes("SELECTION_RESOLVE_TIMEOUT"));
 });

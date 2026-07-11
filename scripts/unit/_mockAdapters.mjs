@@ -785,14 +785,6 @@ export function buildArmoryCombatContextMock({
       if (mode === "ambiguous") {
         canSwitchTo = false;
         switchBlockedReason = warning;
-      } else if (participant) {
-        if (!isCurrentTurn) {
-          canSwitchTo = false;
-          switchBlockedReason = "Waiting for your turn";
-        } else if (!Number.isFinite(moveCurrent) || !Number.isFinite(moveMax) || moveMax <= 0 || moveCurrent < moveMax) {
-          canSwitchTo = false;
-          switchBlockedReason = "FULL MOVE already spent";
-        }
       }
     }
     return {

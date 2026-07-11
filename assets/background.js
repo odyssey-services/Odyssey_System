@@ -8896,6 +8896,8 @@ function setupSceneSelection(hooks = {}) {
   let lastObservedSelectionIds = [];
   let transientEmptySelectionTimer = null;
   let selectionResolveGeneration = 0;
+  let lastResolvedCharacterId = null;
+  let lastResolvedTokenId = null;
   let skillAdminDeleteInFlight = null;
   let refetchCurrentPromise = null;
   let refetchCurrentQueued = false;
@@ -9541,6 +9543,12 @@ function setupSceneSelection(hooks = {}) {
             currentSelectionIds,
             pendingSelectionIds
           });
+          logDebugEvent("selection", "empty-selection-ignored", {
+            reason: "cancelled-by-live-selection",
+            tokenIds: observed,
+            currentSelectionIds,
+            pendingSelectionIds
+          });
         }
         if (observedSignature !== currentSignature || observedSignature !== pendingSignature) {
           void startSelectionResolve2(observed, reason).catch(() => {
@@ -9602,12 +9610,27 @@ function setupSceneSelection(hooks = {}) {
             message: "Unable to resolve selected token. Try selecting it again."
           });
         }, SELECTION_RESOLVE_TIMEOUT_MS);
-        await resolveAndPublish(normalizedSelectionIds, reason, {
+        const payload = await resolveAndPublish(normalizedSelectionIds, reason, {
           ...options,
           generation
         });
+        logDebugEvent("selection", "selection-resolve-result", {
+          tokenIds: normalizedSelectionIds,
+          reason,
+          generation,
+          status: payload?.status ?? null,
+          selectedItemId: payload?.selectedItemId ?? normalizedSelectionIds[0] ?? null,
+          characterId: payload?.characterId ?? null
+        }, payload?.status === "ready");
       } finally {
         if (timeoutHandle) clearTimeout(timeoutHandle);
+        logDebugEvent("selection", "selection-resolve-finished", {
+          tokenIds: normalizedSelectionIds,
+          reason,
+          generation,
+          timedOut,
+          pendingSelectionIds
+        }, !timedOut);
         if (!timedOut && selectionResolveGeneration === generation && pendingSelectionIds.join("|") === normalizedSelectionIds.join("|")) {
           pendingSelectionIds = [];
         }
@@ -9706,6 +9729,10 @@ function setupSceneSelection(hooks = {}) {
     }
     function publishState2(state, reason = "state-update") {
       lastPayload = buildBroadcastPayload(state, buildEphemeralForPayload());
+      if (lastPayload?.status === "ready") {
+        lastResolvedCharacterId = lastPayload.characterId ?? lastResolvedCharacterId;
+        lastResolvedTokenId = lastPayload.selectedItemId ?? lastResolvedTokenId;
+      }
       broadcast(lastPayload);
       logDebugEvent("selection", "selection-payload-broadcast", {
         status: lastPayload.status ?? null,
@@ -10892,8 +10919,8 @@ function setupSceneSelection(hooks = {}) {
       }
       selectedRuntimeReason = reason;
       const nextSelectionIds = Array.isArray(selectionIds) ? selectionIds.slice() : [];
-      const previousCharacterId = lastPayload?.characterId ?? lastState?.characterId ?? null;
-      const previousTokenId = lastPayload?.selectedItemId ?? currentSelectionIds[0] ?? null;
+      const previousCharacterId = lastResolvedCharacterId ?? lastPayload?.characterId ?? lastState?.characterId ?? null;
+      const previousTokenId = lastResolvedTokenId ?? lastPayload?.selectedItemId ?? currentSelectionIds[0] ?? null;
       const resolveSignature = nextSelectionIds.join("|");
       pendingSelectionIds = nextSelectionIds.slice();
       logDebugEvent("selection", "source-token-selected", { tokenIds: nextSelectionIds, reason });
@@ -10901,7 +10928,7 @@ function setupSceneSelection(hooks = {}) {
       let resolvedFresh = false;
       try {
         const result = await adapter.resolveLatest(nextSelectionIds);
-        if (disposed || result?.stale || generation !== null && generation !== selectionResolveGeneration) return;
+        if (disposed || result?.stale || generation !== null && generation !== selectionResolveGeneration) return null;
         state = result?.state ?? null;
         resolvedFresh = true;
       } finally {
@@ -10913,10 +10940,10 @@ function setupSceneSelection(hooks = {}) {
         if (pendingSelectionIds.join("|") === resolveSignature) {
           pendingSelectionIds = [];
         }
-        return;
+        return null;
       }
       if (generation !== null && generation !== selectionResolveGeneration) {
-        return;
+        return null;
       }
       if (state.status !== "ready") {
         const unavailableReason = state.error?.code ?? state.access?.reason ?? null;
@@ -10966,6 +10993,7 @@ function setupSceneSelection(hooks = {}) {
         } catch (_e) {
         }
       }
+      return payload;
     }
     await resolveAndPublish(await readLiveSelectionIds(player.selection), "startup");
     cleanups3.push(await subscribePlayerChanges((p) => {
@@ -10991,7 +11019,16 @@ function setupSceneSelection(hooks = {}) {
       const requestedSelectionIds = Array.isArray(event?.data?.selectionIds) ? event.data.selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
       const requestedSignature = requestedSelectionIds.join("|");
       const currentSignature = currentSelectionIds.join("|");
-      const shouldHydrateFromRequest = event?.data?.hydrateIfStale === true && requestedSelectionIds.length === 1 && requestedSignature !== currentSignature && (!lastPayload || lastPayload.status === "no-selection" || lastPayload.status === "loading");
+      const pendingSignature = pendingSelectionIds.join("|");
+      const shouldHydrateFromRequest = event?.data?.hydrateIfStale === true && requestedSelectionIds.length === 1 && requestedSignature !== currentSignature && requestedSignature !== pendingSignature && (!lastPayload || lastPayload.status === "no-selection" || lastPayload.status === "loading");
+      if (event?.data?.hydrateIfStale === true && requestedSelectionIds.length === 1 && requestedSignature === pendingSignature) {
+        logDebugEvent("selection", "selection-hydrate-skipped", {
+          reason: "same-pending-selection",
+          requestedSelectionIds,
+          currentSelectionIds,
+          pendingSelectionIds
+        });
+      }
       if (shouldHydrateFromRequest) {
         void readLiveSelectionIds(currentSelectionIds).then((liveSelectionIds) => {
           const liveSignature = liveSelectionIds.join("|");
