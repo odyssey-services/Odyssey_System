@@ -19,6 +19,7 @@ import {
   subscribeSceneItems,
   getPlayerInfo,
   getRoomSceneContext,
+  getSceneItems,
   getSelectedTokenIds,
 } from "../../bridge/obrBridge.js";
 import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/settingsBridge.js";
@@ -113,6 +114,7 @@ export function setupSceneSelection(hooks = {}) {
   let refetchCurrentQueued = false;
   let lastRefetchAt = 0;
   let combatRuntimePending = false;
+  let movementPreviewActive = false;
   const heavyRuntimeCache = new Map();
   // Phase 3D.1: controller-local, session-scoped "last weapon per character"
   // memory — see selectedWeaponMemory.js for why this exists. We still keep it
@@ -132,6 +134,7 @@ export function setupSceneSelection(hooks = {}) {
     characterId: null,
     selectedWeaponId: null,
     selectedReloadMagazineId: null,
+    magazineSelectorOpen: false,
     weaponSelectorOpen: false,
     preparedAction: null,
     targeting: { mode: "none", selectedTargetIds: [], selectedBodyPartId: "torso" },
@@ -148,6 +151,9 @@ export function setupSceneSelection(hooks = {}) {
     // weapons away and back never carries a mode over from a different weapon.
     fireModeSelectorOpen: false,
     fireModeRpcResult: null,
+    weaponSwitchInFlight: false,
+    reloadInFlight: false,
+    fireModeInFlight: false,
     // Basic Weapon Attack v1: true only for the duration of an in-flight
     // perform_attack call — blocks double-submit (see handleCommand's
     // "execute" branch) and disables the Action button client-side.
@@ -427,6 +433,217 @@ export function setupSceneSelection(hooks = {}) {
     try { OBR.broadcast.sendMessage(BC_HUD_SELECTION, payload, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
   }
 
+  function normalizeSceneItemType(item) {
+    return String(item?.type ?? "").trim().toUpperCase();
+  }
+
+  function normalizeSceneItemLayer(item) {
+    return String(item?.layer ?? "").trim().toUpperCase();
+  }
+
+  function normalizeSelectionClassification(selection) {
+    return Array.isArray(selection)
+      ? selection.map((entry) => ({
+          id: String(entry?.id ?? "").trim(),
+          kind: String(entry?.kind ?? "").trim() || "unknown-non-token",
+          type: String(entry?.type ?? "").trim() || null,
+          layer: String(entry?.layer ?? "").trim() || null,
+          characterId: String(entry?.characterId ?? "").trim() || null,
+        }))
+      : [];
+  }
+
+  function sceneItemLooksLikeDrawing(item) {
+    const type = normalizeSceneItemType(item);
+    const layer = normalizeSceneItemLayer(item);
+    return layer === "DRAWING" || type === "LINE" || type === "SHAPE" || type === "PATH";
+  }
+
+  function sceneItemLooksLikeHudPreview(item) {
+    const type = normalizeSceneItemType(item);
+    const layer = normalizeSceneItemLayer(item);
+    const itemId = String(item?.id ?? "").trim().toLowerCase();
+    const metadataKeys = item?.metadata && typeof item.metadata === "object"
+      ? Object.keys(item.metadata).map((key) => String(key ?? "").trim().toLowerCase())
+      : [];
+    return layer === "POINTER"
+      || layer === "POPOVER"
+      || type === "TEXT"
+      || itemId.startsWith("odyssey-")
+      || metadataKeys.some((key) => key.startsWith("com.odyssey"));
+  }
+
+  function sceneItemLooksLikeToken(item) {
+    if (!item || typeof item !== "object") return false;
+    if (sceneItemLooksLikeDrawing(item) || sceneItemLooksLikeHudPreview(item)) return false;
+    const type = normalizeSceneItemType(item);
+    const layer = normalizeSceneItemLayer(item);
+    if (type === "IMAGE") return true;
+    return layer === "CHARACTER" || layer === "MOUNT";
+  }
+
+  async function classifySelectionIds(selectionIds) {
+    const normalizedSelectionIds = normalizeSelectionIds(selectionIds);
+    if (normalizedSelectionIds.length === 0) return [];
+
+    let sceneItems = [];
+    try {
+      sceneItems = await getSceneItems();
+    } catch {
+      sceneItems = [];
+    }
+    const itemById = new Map(
+      (Array.isArray(sceneItems) ? sceneItems : []).map((item) => [String(item?.id ?? "").trim(), item]),
+    );
+
+    const classifications = [];
+    for (const selectionId of normalizedSelectionIds) {
+      const item = itemById.get(selectionId) ?? null;
+      const base = {
+        id: selectionId,
+        type: normalizeSceneItemType(item),
+        layer: normalizeSceneItemLayer(item),
+      };
+      if (sceneItemLooksLikeDrawing(item)) {
+        classifications.push({ ...base, kind: "drawing-item", characterId: null });
+        continue;
+      }
+      if (sceneItemLooksLikeHudPreview(item)) {
+        classifications.push({ ...base, kind: "hud-preview-item", characterId: null });
+        continue;
+      }
+      if (!sceneItemLooksLikeToken(item)) {
+        classifications.push({ ...base, kind: "unknown-non-token", characterId: null });
+        continue;
+      }
+
+      let tokenLinkResult = null;
+      try {
+        tokenLinkResult = await getSceneTokenLinks({
+          room_id: context.roomId,
+          scene_id: context.sceneId,
+          campaign_id: context.campaignId || undefined,
+          token_id: selectionId,
+        }, settings);
+      } catch {
+        tokenLinkResult = null;
+      }
+      const link = Array.isArray(tokenLinkResult?.links)
+        ? tokenLinkResult.links.find((entry) => String(entry?.token_id ?? "").trim() === selectionId && entry?.is_active !== false)
+        : null;
+      const characterId = String(link?.character?.id ?? "").trim() || null;
+      classifications.push({
+        ...base,
+        kind: characterId ? "linked-character-token" : "unlinked-token",
+        characterId,
+      });
+    }
+
+    return classifications;
+  }
+
+  function isHudInteractionSelectionStickyActive() {
+    return lastPayload?.status === "ready"
+      && !!lastPayload?.characterId
+      && (
+        ephemeral.weaponSelectorOpen
+        || ephemeral.magazineSelectorOpen
+        || ephemeral.fireModeSelectorOpen
+        || ephemeral.weaponSwitchInFlight
+        || ephemeral.reloadInFlight
+        || ephemeral.fireModeInFlight
+        || ephemeral.targeting?.mode === "picking"
+        || movementPreviewActive === true
+      );
+  }
+
+  function shouldIgnoreUnlinkedSelectionNoise(selectionIds, classification, reason = "selection-changed") {
+    const hasReadyCharacter = lastPayload?.status === "ready" && !!lastPayload?.characterId;
+    const onlyUnlinkedOrNonCharacter = Array.isArray(classification)
+      && classification.length > 0
+      && classification.every((entry) => (
+        entry?.kind === "unlinked-token"
+        || entry?.kind === "drawing-item"
+        || entry?.kind === "hud-preview-item"
+        || entry?.kind === "unknown-non-token"
+      ));
+    if (!hasReadyCharacter || !onlyUnlinkedOrNonCharacter) return false;
+    if (reason === "selection-request-hydrate") return false;
+    return isHudInteractionSelectionStickyActive();
+  }
+
+  function shouldIgnoreNonCharacterSelection(classification) {
+    const hasReadyCharacter = lastPayload?.status === "ready" && !!lastPayload?.characterId;
+    return hasReadyCharacter
+      && Array.isArray(classification)
+      && classification.length > 0
+      && classification.every((entry) => (
+        entry?.kind === "drawing-item"
+        || entry?.kind === "hud-preview-item"
+        || entry?.kind === "unknown-non-token"
+      ));
+  }
+
+  function logSelectionNoiseIgnored(selectionIds, classification, reason = "selection-changed") {
+    logDebugEvent("selection", "selection-noise-ignored", {
+      tokenIds: normalizeSelectionIds(selectionIds),
+      reason,
+      currentCharacterId: lastPayload?.characterId ?? null,
+      currentSelectedItemId: lastPayload?.selectedItemId ?? null,
+      classification: normalizeSelectionClassification(classification),
+    });
+  }
+
+  async function handleObservedNonEmptySelection(selectionIds, reason = "selection-changed") {
+    const observed = normalizeSelectionIds(selectionIds);
+    if (observed.length === 0) return;
+    const classification = await classifySelectionIds(observed);
+    const linkedSelectionIds = classification
+      .filter((entry) => entry.kind === "linked-character-token")
+      .map((entry) => entry.id);
+    const unlinkedSelectionIds = classification
+      .filter((entry) => entry.kind === "unlinked-token")
+      .map((entry) => entry.id);
+
+    if (shouldIgnoreNonCharacterSelection(classification)) {
+      lastObservedSelectionIds = currentSelectionIds.slice();
+      logSelectionNoiseIgnored(observed, classification, reason);
+      replayLastVisibleState(`${reason}:selection-noise-ignored`);
+      return;
+    }
+
+    if (shouldIgnoreUnlinkedSelectionNoise(observed, classification, reason)) {
+      lastObservedSelectionIds = currentSelectionIds.slice();
+      logSelectionNoiseIgnored(observed, classification, reason);
+      replayLastVisibleState(`${reason}:selection-noise-ignored`);
+      return;
+    }
+
+    const nextSelectionIds = linkedSelectionIds.length > 0
+      ? linkedSelectionIds
+      : unlinkedSelectionIds.length > 0
+        ? unlinkedSelectionIds
+        : [];
+    const nextSignature = nextSelectionIds.join("|");
+    const currentSignature = currentSelectionIds.join("|");
+    const pendingSignature = pendingSelectionIds.join("|");
+
+    if (nextSelectionIds.length === 0) {
+      if (lastPayload?.status === "ready") {
+        lastObservedSelectionIds = currentSelectionIds.slice();
+        logSelectionNoiseIgnored(observed, classification, `${reason}:no-character-selection`);
+        replayLastVisibleState(`${reason}:no-character-selection`);
+        return;
+      }
+      handleObservedEmptySelection(`${reason}:non-character-selection`);
+      return;
+    }
+
+    if (nextSignature !== currentSignature || nextSignature !== pendingSignature) {
+      void startSelectionResolve(nextSelectionIds, reason).catch(() => {});
+    }
+  }
+
   async function readLiveSelectionIds(fallbackSelection = []) {
     try {
       const liveSelection = await getSelectedTokenIds();
@@ -488,7 +705,18 @@ export function setupSceneSelection(hooks = {}) {
     // rather than forking a second runtime-apply mechanism for movement.
     if (sessionController) {
       const unsubscribeMoveTool = await subscribeMoveToolMessages((event) => {
+        if (event.type === MOVE_TOOL_EVENTS.Status) {
+          movementPreviewActive = event?.payload?.active === true
+            || event?.payload?.pending === true
+            || !!event?.payload?.preview;
+          return;
+        }
+        if (event.type === MOVE_TOOL_EVENTS.Cancelled || event.type === MOVE_TOOL_EVENTS.Error) {
+          movementPreviewActive = false;
+          return;
+        }
         if (event.type !== MOVE_TOOL_EVENTS.Applied) return;
+        movementPreviewActive = false;
         const payload = event.payload ?? {};
         if (payload.source !== "combat-movement" || !payload.runtime) return;
         sessionController.applyExternalRuntime(payload.runtime, "tactical-move");
@@ -789,6 +1017,16 @@ export function setupSceneSelection(hooks = {}) {
           transientEmptySelectionTimer = null;
           const liveSelectionIds = await readLiveSelectionIds(currentSelectionIds);
           if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0) {
+            if (isHudInteractionSelectionStickyActive()) {
+              logDebugEvent("selection", "empty-selection-ignored", {
+                reason: "hud-interaction-active",
+                triggerReason: reason,
+                currentCharacterId: lastPayload?.characterId ?? null,
+                currentSelectedItemId: lastPayload?.selectedItemId ?? null,
+              });
+              replayLastVisibleState(`${reason}:hud-interaction-active`);
+              return;
+            }
             if (currentSelectionIds.length > 0 && lastPayload?.status === "ready") {
               logDebugEvent("selection", "empty-selection-ignored", {
                 reason: "sticky-last-selection",
@@ -867,7 +1105,7 @@ export function setupSceneSelection(hooks = {}) {
           });
         }
         if (observedSignature !== currentSignature || observedSignature !== pendingSignature) {
-          void startSelectionResolve(observed, reason).catch(() => {});
+          void handleObservedNonEmptySelection(observed, reason).catch(() => {});
         }
         return;
       }
@@ -1045,6 +1283,7 @@ export function setupSceneSelection(hooks = {}) {
         selectedWeaponId: ephemeral.selectedWeaponId,
         selectedReloadMagazineId: ephemeral.selectedReloadMagazineId,
         weaponSelectorOpen: ephemeral.weaponSelectorOpen,
+        magazineSelectorOpen: ephemeral.magazineSelectorOpen,
         preparedAction: ephemeral.preparedAction,
         targeting: ephemeral.targeting,
         commandStatus: ephemeral.commandStatus,
@@ -1053,6 +1292,9 @@ export function setupSceneSelection(hooks = {}) {
         reloadRpcResult: ephemeral.reloadRpcResult,
         fireModeSelectorOpen: ephemeral.fireModeSelectorOpen,
         fireModeRpcResult: ephemeral.fireModeRpcResult,
+        weaponSwitchInFlight: ephemeral.weaponSwitchInFlight,
+        reloadInFlight: ephemeral.reloadInFlight,
+        fireModeInFlight: ephemeral.fireModeInFlight,
         basicAttackInFlight: ephemeral.basicAttackInFlight,
         basicAttackResult: ephemeral.basicAttackResult,
         pendingDirectAbilityActionId: ephemeral.pendingDirectAbilityActionId,
@@ -1338,12 +1580,14 @@ export function setupSceneSelection(hooks = {}) {
           const profileId = weapon?.activeProfileId ?? null;
           const fireModeId = String(command.fireModeId ?? "").trim() || null;
           ephemeral.fireModeSelectorOpen = false;
+          ephemeral.fireModeInFlight = true;
           ephemeral.commandStatus = null;
           logDebugEvent("fire-mode", "selected", { weaponId, fireModeId });
           if (!weaponId || !profileId || !fireModeId) {
             ephemeral.commandStatus = { type: "error", message: "Fire mode switch unavailable: missing weapon, profile, or mode." };
             ephemeral.fireModeRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/fireModeId missing before RPC call." };
             logDebugEvent("fire-mode", "result", { error: "MISSING_FIELDS" }, false);
+            ephemeral.fireModeInFlight = false;
             if (lastState) publishState(lastState);
             return;
           }
@@ -1378,6 +1622,8 @@ export function setupSceneSelection(hooks = {}) {
             pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: normalized.message }));
             logDebugEvent("fire-mode", "result", { weaponId, fireModeId, error: normalized.error, message: normalized.message }, false);
             if (lastState) publishState(lastState);
+          } finally {
+            ephemeral.fireModeInFlight = false;
           }
           return;
         }
@@ -2297,6 +2543,8 @@ export function setupSceneSelection(hooks = {}) {
         ephemeral.selectedReloadMagazineId = null;
         ephemeral.reloadRpcResult = null;
         ephemeral.weaponSelectorOpen = false;
+        ephemeral.magazineSelectorOpen = false;
+        ephemeral.weaponSwitchInFlight = true;
         // A new weapon has its own active profile / fire mode — never carry
         // the previous weapon's selector state or last RPC result forward.
         ephemeral.fireModeSelectorOpen = false;
@@ -2377,6 +2625,8 @@ export function setupSceneSelection(hooks = {}) {
           }, false);
           replayLastVisibleState("weapon-switch-exception");
           return;
+        } finally {
+          ephemeral.weaponSwitchInFlight = false;
         }
       }
       if (type === "toggle-weapon-selector") {
@@ -2398,8 +2648,15 @@ export function setupSceneSelection(hooks = {}) {
         if (lastState) publishState(lastState);
         return;
       }
+      if (type === "toggle-magazine-selector") {
+        ephemeral.magazineSelectorOpen = !ephemeral.magazineSelectorOpen;
+        logDebugEvent("magazine", "selector-toggled", { open: ephemeral.magazineSelectorOpen });
+        if (lastState) publishState(lastState);
+        return;
+      }
       if (type === "select-reload-mag") {
         ephemeral.selectedReloadMagazineId = String(command.magazineId ?? "").trim() || null;
+        ephemeral.magazineSelectorOpen = false;
         logDebugEvent("magazine", "selected", { magazineId: ephemeral.selectedReloadMagazineId });
         if (lastState) publishState(lastState);
         return;
@@ -2422,6 +2679,7 @@ export function setupSceneSelection(hooks = {}) {
         const magazineId = resolveReloadMagazineId(command, ephemeral, weapon) ?? "";
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
         logDebugEvent("magazine", "reload-requested", { weaponId, magazineId });
+        ephemeral.reloadInFlight = true;
 
         // Phase 3E.0: client-side MOVE pre-gate (UX mirror — the server
         // re-checks turn/MOVE inside load_weapon_profile_magazine anyway).
@@ -2431,6 +2689,7 @@ export function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: reloadGate.reason };
           ephemeral.reloadRpcResult = { ok: false, error: "SESSION_GATE", message: reloadGate.reason };
           logDebugEvent("reload", "session-gate-blocked", { reason: reloadGate.reason, sessionId: reloadSession.id, round: reloadSession.roundNumber }, false);
+          ephemeral.reloadInFlight = false;
           if (lastState) publishState(lastState);
           return;
         }
@@ -2440,6 +2699,7 @@ export function setupSceneSelection(hooks = {}) {
           ephemeral.reloadRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/magazineId missing before RPC call." };
           pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
           logDebugEvent("magazine", "reload-result", { error: "MISSING_FIELDS" }, false);
+          ephemeral.reloadInFlight = false;
           if (lastState) publishState(lastState);
           return;
         }
@@ -2503,6 +2763,8 @@ export function setupSceneSelection(hooks = {}) {
           pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
           logDebugEvent("magazine", "reload-result", { error: "RPC_EXCEPTION", message: ephemeral.commandStatus.message }, false);
           if (lastState) publishState(lastState);
+        } finally {
+          ephemeral.reloadInFlight = false;
         }
       }
     }

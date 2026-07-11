@@ -71,6 +71,17 @@ test("successful switch flow does not regress to publishState ReferenceError", (
   assert.ok(sceneControllerSrc.includes("function replayLastVisibleState("));
 });
 
+test("weapon switch and reload keep HUD interaction sticky while commands are in flight", () => {
+  assert.ok(sceneControllerSrc.includes("ephemeral.weaponSwitchInFlight = true;"));
+  assert.ok(sceneControllerSrc.includes("ephemeral.weaponSwitchInFlight = false;"));
+  assert.ok(sceneControllerSrc.includes("ephemeral.magazineSelectorOpen = false;"));
+  assert.ok(sceneControllerSrc.includes('if (type === "toggle-magazine-selector") {'));
+  assert.ok(sceneControllerSrc.includes("ephemeral.reloadInFlight = true;"));
+  assert.ok(sceneControllerSrc.includes("ephemeral.reloadInFlight = false;"));
+  assert.ok(sceneControllerSrc.includes("ephemeral.fireModeInFlight = true;"));
+  assert.ok(sceneControllerSrc.includes("ephemeral.fireModeInFlight = false;"));
+});
+
 test("weapon switch is no longer tied to move spending", () => {
   const result = buildArmoryCombatContextMock({
     characterId: fx.characters.testAttacker.id,

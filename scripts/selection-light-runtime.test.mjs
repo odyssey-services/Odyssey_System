@@ -133,7 +133,7 @@ test("stale payload replay is blocked while another selection is pending", () =>
 test("native selection-changed path remains primary and is logged", () => {
   assert.ok(sceneControllerSrc.includes("selection-change-observed"));
   assert.ok(sceneControllerSrc.includes("previousSelectionIds: currentSelectionIds"));
-  assert.ok(sceneControllerSrc.includes("void startSelectionResolve(observed, reason).catch(() => {});"));
+  assert.ok(sceneControllerSrc.includes("void handleObservedNonEmptySelection(observed, reason).catch(() => {});"));
   assert.ok(sceneControllerSrc.includes("selection-resolve-start"));
   assert.ok(sceneControllerSrc.includes("source-token-selected"));
 });
@@ -144,11 +144,26 @@ test("transient empty selection events use grace delay and live-read execution",
   assert.ok(sceneControllerSrc.includes("empty-selection-deferred"));
   assert.ok(sceneControllerSrc.includes("empty-selection-ignored"));
   assert.ok(sceneControllerSrc.includes("if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0)"));
+  assert.ok(sceneControllerSrc.includes("reason: \"hud-interaction-active\""));
   assert.ok(sceneControllerSrc.includes("reason: \"sticky-last-selection\""));
   assert.ok(sceneControllerSrc.includes("publishState(lastState, `${reason}:sticky-last-selection`)"));
   assert.ok(sceneControllerSrc.includes("selection-empty-recovered-live"));
   assert.ok(sceneControllerSrc.includes("reason: \"pending-non-empty-selection\""));
   assert.ok(sceneControllerSrc.includes("reason: \"cancelled-by-live-selection\""));
+});
+
+test("selection noise from unlinked and non-character items is classified and ignored during HUD interaction", () => {
+  assert.ok(sceneControllerSrc.includes("async function classifySelectionIds(selectionIds)"));
+  assert.ok(sceneControllerSrc.includes("linked-character-token"));
+  assert.ok(sceneControllerSrc.includes("unlinked-token"));
+  assert.ok(sceneControllerSrc.includes("drawing-item"));
+  assert.ok(sceneControllerSrc.includes("hud-preview-item"));
+  assert.ok(sceneControllerSrc.includes("unknown-non-token"));
+  assert.ok(sceneControllerSrc.includes("selection-noise-ignored"));
+  assert.ok(sceneControllerSrc.includes("function shouldIgnoreUnlinkedSelectionNoise(selectionIds, classification, reason = \"selection-changed\")"));
+  assert.ok(sceneControllerSrc.includes("function shouldIgnoreNonCharacterSelection(classification)"));
+  assert.ok(sceneControllerSrc.includes("currentCharacterId: lastPayload?.characterId ?? null"));
+  assert.ok(sceneControllerSrc.includes("currentSelectedItemId: lastPayload?.selectedItemId ?? null"));
 });
 
 test("selected character change and payload broadcast are explicitly logged", () => {
