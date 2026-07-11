@@ -183,15 +183,15 @@ export function setupSceneSelection(hooks = {}) {
   const activeCombatActionCharacters = new Set();
   const characterActionQueues = new Map();
   const selectionRefreshScheduler = createDebouncedRefreshScheduler(
-    (selectionIds, reason = "selection-debounced") => resolveObservedSelection(selectionIds, reason),
+    (selectionIds, reason = "selection-debounced") => startSelectionResolve(selectionIds, reason),
     SELECTED_RUNTIME_DEBOUNCE_MS,
   );
 
   function clearTransientEmptySelectionTimer() {
-    if (transientEmptySelectionTimer) {
-      clearTimeout(transientEmptySelectionTimer);
-      transientEmptySelectionTimer = null;
-    }
+    if (!transientEmptySelectionTimer) return false;
+    clearTimeout(transientEmptySelectionTimer);
+    transientEmptySelectionTimer = null;
+    return true;
   }
 
   function waitMs(ms) {
@@ -775,9 +775,7 @@ export function setupSceneSelection(hooks = {}) {
     }
 
     function scheduleResolveObservedSelection(selectionIds, reason = "selection-changed") {
-      const normalizedSelectionIds = Array.isArray(selectionIds)
-        ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
-        : [];
+      const normalizedSelectionIds = normalizeSelectionIds(selectionIds);
       clearTransientEmptySelectionTimer();
       selectionRefreshScheduler.schedule(normalizedSelectionIds, reason);
     }
@@ -789,7 +787,18 @@ export function setupSceneSelection(hooks = {}) {
           transientEmptySelectionTimer = null;
           const liveSelectionIds = await readLiveSelectionIds(currentSelectionIds);
           if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0) {
-            await resolveObservedSelection([], `${reason}:empty-confirmed`);
+            await startSelectionResolve([], `${reason}:empty-confirmed`);
+          } else if (pendingSelectionIds.length > 0) {
+            logDebugEvent("selection", "empty-selection-ignored", {
+              reason: "pending-non-empty-selection",
+              triggerReason: reason,
+              liveSelectionIds,
+              currentSelectionIds,
+              pendingSelectionIds,
+            });
+            if (liveSelectionIds.length > 0) {
+              void startSelectionResolve(liveSelectionIds, "selection-empty-recovered-live").catch(() => {});
+            }
           } else {
             logDebugEvent("selection", "empty-selection-ignored", {
               reason,
@@ -797,6 +806,9 @@ export function setupSceneSelection(hooks = {}) {
               currentSelectionIds,
               pendingSelectionIds,
             });
+            if (liveSelectionIds.length > 0) {
+              void startSelectionResolve(liveSelectionIds, "selection-empty-recovered-live").catch(() => {});
+            }
           }
         }, TRANSIENT_EMPTY_SELECTION_GRACE_MS);
 
@@ -825,9 +837,16 @@ export function setupSceneSelection(hooks = {}) {
         reason,
       });
       if (observed.length > 0) {
-        clearTransientEmptySelectionTimer();
+        if (clearTransientEmptySelectionTimer()) {
+          logDebugEvent("selection", "empty-selection-cancelled", {
+            reason,
+            tokenIds: observed,
+            currentSelectionIds,
+            pendingSelectionIds,
+          });
+        }
         if (observedSignature !== currentSignature || observedSignature !== pendingSignature) {
-          scheduleResolveObservedSelection(observed, reason);
+          void startSelectionResolve(observed, reason).catch(() => {});
         }
         return;
       }
@@ -856,7 +875,7 @@ export function setupSceneSelection(hooks = {}) {
       return resolveAndPublish(liveSelectionIds, reason);
     }
 
-    async function resolveObservedSelection(selectionIds, reason = "selection-changed", options = {}) {
+    async function startSelectionResolve(selectionIds, reason = "selection-changed", options = {}) {
       const normalizedSelectionIds = normalizeSelectionIds(selectionIds);
       const generation = ++selectionResolveGeneration;
       pendingSelectionIds = normalizedSelectionIds.slice();

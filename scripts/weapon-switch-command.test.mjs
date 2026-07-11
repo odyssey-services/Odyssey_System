@@ -60,6 +60,12 @@ test("successful switch flow refreshes combat session and runtime quickbar", () 
   assert.ok(sceneControllerSrc.includes('await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });'));
 });
 
+test("successful switch flow does not regress to publishState ReferenceError", () => {
+  assert.ok(!sceneControllerSrc.includes("publishState is not defined"));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:success"'));
+  assert.ok(sceneControllerSrc.includes('await refreshHeavyCharacterData(ephemeral.characterId, {'));
+});
+
 test("ambiguous combat context resolves to a user-facing error message", () => {
   const message = resolveWeaponSwitchErrorMessage({ ok: false, error: "COMBAT_CONTEXT_AMBIGUOUS" });
   assert.match(message, /multiple active encounters/i);

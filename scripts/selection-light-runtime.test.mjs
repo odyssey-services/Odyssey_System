@@ -132,7 +132,7 @@ test("stale payload replay is blocked while another selection is pending", () =>
 test("native selection-changed path remains primary and is logged", () => {
   assert.ok(sceneControllerSrc.includes("selection-change-observed"));
   assert.ok(sceneControllerSrc.includes("previousSelectionIds: currentSelectionIds"));
-  assert.ok(sceneControllerSrc.includes("scheduleResolveObservedSelection(observed, reason);"));
+  assert.ok(sceneControllerSrc.includes("void startSelectionResolve(observed, reason).catch(() => {});"));
   assert.ok(sceneControllerSrc.includes("selection-resolve-start"));
   assert.ok(sceneControllerSrc.includes("source-token-selected"));
 });
@@ -143,6 +143,8 @@ test("transient empty selection events use grace delay and live-read execution",
   assert.ok(sceneControllerSrc.includes("empty-selection-deferred"));
   assert.ok(sceneControllerSrc.includes("empty-selection-ignored"));
   assert.ok(sceneControllerSrc.includes("if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0)"));
+  assert.ok(sceneControllerSrc.includes("selection-empty-recovered-live"));
+  assert.ok(sceneControllerSrc.includes("reason: \"pending-non-empty-selection\""));
 });
 
 test("selected character change and payload broadcast are explicitly logged", () => {
@@ -155,6 +157,7 @@ test("selected character change and payload broadcast are explicitly logged", ()
 test("non-empty observed selection schedules resolve when it differs from current or pending", () => {
   assert.ok(sceneControllerSrc.includes("if (observedSignature !== currentSignature || observedSignature !== pendingSignature)"));
   assert.ok(sceneControllerSrc.includes("pendingSelectionIds = normalizedSelectionIds.slice();"));
+  assert.ok(sceneControllerSrc.includes("empty-selection-cancelled"));
 });
 
 test("selection resolve has timeout protection and latest-wins generation gating", () => {

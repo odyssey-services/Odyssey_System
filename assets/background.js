@@ -8965,14 +8965,14 @@ function setupSceneSelection(hooks = {}) {
   const activeCombatActionCharacters = /* @__PURE__ */ new Set();
   const characterActionQueues = /* @__PURE__ */ new Map();
   const selectionRefreshScheduler = createDebouncedRefreshScheduler(
-    (selectionIds, reason = "selection-debounced") => resolveObservedSelection(selectionIds, reason),
+    (selectionIds, reason = "selection-debounced") => startSelectionResolve(selectionIds, reason),
     SELECTED_RUNTIME_DEBOUNCE_MS
   );
   function clearTransientEmptySelectionTimer() {
-    if (transientEmptySelectionTimer) {
-      clearTimeout(transientEmptySelectionTimer);
-      transientEmptySelectionTimer = null;
-    }
+    if (!transientEmptySelectionTimer) return false;
+    clearTimeout(transientEmptySelectionTimer);
+    transientEmptySelectionTimer = null;
+    return true;
   }
   function waitMs(ms) {
     return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
@@ -9474,7 +9474,7 @@ function setupSceneSelection(hooks = {}) {
       return publishState2(state, reason);
     }
     function scheduleResolveObservedSelection(selectionIds, reason = "selection-changed") {
-      const normalizedSelectionIds = Array.isArray(selectionIds) ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+      const normalizedSelectionIds = normalizeSelectionIds2(selectionIds);
       clearTransientEmptySelectionTimer();
       selectionRefreshScheduler.schedule(normalizedSelectionIds, reason);
     }
@@ -9485,7 +9485,19 @@ function setupSceneSelection(hooks = {}) {
           transientEmptySelectionTimer = null;
           const liveSelectionIds = await readLiveSelectionIds(currentSelectionIds);
           if (liveSelectionIds.length === 0 && pendingSelectionIds.length === 0) {
-            await resolveObservedSelection2([], `${reason}:empty-confirmed`);
+            await startSelectionResolve2([], `${reason}:empty-confirmed`);
+          } else if (pendingSelectionIds.length > 0) {
+            logDebugEvent("selection", "empty-selection-ignored", {
+              reason: "pending-non-empty-selection",
+              triggerReason: reason,
+              liveSelectionIds,
+              currentSelectionIds,
+              pendingSelectionIds
+            });
+            if (liveSelectionIds.length > 0) {
+              void startSelectionResolve2(liveSelectionIds, "selection-empty-recovered-live").catch(() => {
+              });
+            }
           } else {
             logDebugEvent("selection", "empty-selection-ignored", {
               reason,
@@ -9493,6 +9505,10 @@ function setupSceneSelection(hooks = {}) {
               currentSelectionIds,
               pendingSelectionIds
             });
+            if (liveSelectionIds.length > 0) {
+              void startSelectionResolve2(liveSelectionIds, "selection-empty-recovered-live").catch(() => {
+              });
+            }
           }
         }, TRANSIENT_EMPTY_SELECTION_GRACE_MS);
         logDebugEvent("selection", "empty-selection-deferred", {
@@ -9518,9 +9534,17 @@ function setupSceneSelection(hooks = {}) {
         reason
       });
       if (observed.length > 0) {
-        clearTransientEmptySelectionTimer();
+        if (clearTransientEmptySelectionTimer()) {
+          logDebugEvent("selection", "empty-selection-cancelled", {
+            reason,
+            tokenIds: observed,
+            currentSelectionIds,
+            pendingSelectionIds
+          });
+        }
         if (observedSignature !== currentSignature || observedSignature !== pendingSignature) {
-          scheduleResolveObservedSelection(observed, reason);
+          void startSelectionResolve2(observed, reason).catch(() => {
+          });
         }
         return;
       }
@@ -9546,7 +9570,7 @@ function setupSceneSelection(hooks = {}) {
       }
       return resolveAndPublish(liveSelectionIds, reason);
     }
-    async function resolveObservedSelection2(selectionIds, reason = "selection-changed", options = {}) {
+    async function startSelectionResolve2(selectionIds, reason = "selection-changed", options = {}) {
       const normalizedSelectionIds = normalizeSelectionIds2(selectionIds);
       const generation = ++selectionResolveGeneration;
       pendingSelectionIds = normalizedSelectionIds.slice();
