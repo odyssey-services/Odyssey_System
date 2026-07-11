@@ -75,6 +75,7 @@ function logPayloadReceived(moduleId, payload, reason = "broadcast") {
       moduleId,
       selectedItemId: payload?.selectedItemId ?? null,
       characterId: payload?.characterId ?? null,
+      status: payload?.status ?? null,
       reason,
     });
   } catch (_e) { /* ignore */ }

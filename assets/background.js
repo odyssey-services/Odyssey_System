@@ -8881,6 +8881,7 @@ var LIGHT_RUNTIME_RETRY_DELAY_MS = 350;
 var SELECTED_RUNTIME_DEBOUNCE_MS = 200;
 var TRANSIENT_EMPTY_SELECTION_GRACE_MS = 500;
 var SELECTION_RESOLVE_TIMEOUT_MS = 5e3;
+var COMBAT_RUNTIME_PENDING_MAX_MS = 5e3;
 function setupSceneSelection(hooks = {}) {
   if (typeof lib_default === "undefined" || lib_default.isAvailable === false) return () => {
   };
@@ -8903,6 +8904,7 @@ function setupSceneSelection(hooks = {}) {
   let refetchCurrentQueued = false;
   let lastRefetchAt = 0;
   let combatRuntimePending = false;
+  let combatRuntimePendingTimer = null;
   let movementPreviewActive = false;
   const heavyRuntimeCache = /* @__PURE__ */ new Map();
   const selectedWeaponMemory = createSelectedWeaponMemory();
@@ -9147,13 +9149,42 @@ function setupSceneSelection(hooks = {}) {
     const normalized = next === true;
     if (combatRuntimePending === normalized) return;
     combatRuntimePending = normalized;
-    if (normalized && reason) {
-      logDebugEvent("session", "runtime-sync-pending", { reason }, true, "pending");
+    if (combatRuntimePendingTimer) {
+      clearTimeout(combatRuntimePendingTimer);
+      combatRuntimePendingTimer = null;
     }
-    if (!normalized && reason) {
+    if (normalized) {
+      logDebugEvent("session", "runtime-sync-pending", { reason, timeoutMs: COMBAT_RUNTIME_PENDING_MAX_MS }, true, "pending");
+      combatRuntimePendingTimer = setTimeout(() => {
+        if (!combatRuntimePending) return;
+        combatRuntimePending = false;
+        combatRuntimePendingTimer = null;
+        logDebugEvent("session", "runtime-sync-force-cleared", {
+          reason,
+          timeoutMs: COMBAT_RUNTIME_PENDING_MAX_MS
+        }, false);
+        try {
+          publishCurrentState("runtime-sync-force-cleared");
+        } catch (error) {
+          logDebugEvent("session", "runtime-sync-publish-error", {
+            reason: "runtime-sync-force-cleared",
+            pending: false,
+            message: String(error?.message ?? error)
+          }, false);
+        }
+      }, COMBAT_RUNTIME_PENDING_MAX_MS);
+    } else {
       logDebugEvent("session", "runtime-sync-ready", { reason }, true);
     }
-    if (lastState) publishState(lastState);
+    try {
+      publishCurrentState(normalized ? "runtime-sync-pending" : "runtime-sync-ready");
+    } catch (error) {
+      logDebugEvent("session", "runtime-sync-publish-error", {
+        reason,
+        pending: normalized,
+        message: String(error?.message ?? error)
+      }, false);
+    }
   }
   function getHeavyRuntimeCache(characterId) {
     const normalizedCharacterId = String(characterId ?? "").trim();
@@ -9368,7 +9399,7 @@ function setupSceneSelection(hooks = {}) {
         const previousWasActive = sessionRuntime?.encounter?.status === "active";
         const nextIsActive = runtime?.encounter?.status === "active";
         sessionRuntime = runtime;
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         if (previousWasActive && !nextIsActive && ephemeral.characterId) {
           scheduleLiveSelectionResolve("combat-ended", { forceResolve: true });
           void quickbarController?.refresh?.();
@@ -9409,7 +9440,7 @@ function setupSceneSelection(hooks = {}) {
       getSelectedCharacterId: () => ephemeral.characterId ?? null,
       onRuntime: (runtime) => {
         abilitiesRuntime = runtime;
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
       }
     }) : null;
     if (quickbarController) cleanups3.push(() => quickbarController.cleanup());
@@ -9635,7 +9666,7 @@ function setupSceneSelection(hooks = {}) {
     function publishSelectionTransientState(status, selectionIds, reason = "selection-loading", { message = null, code = null } = {}) {
       const state = buildSelectionTransientState(status, selectionIds, message, code);
       lastState = state;
-      return publishState2(state, reason);
+      return publishState(state, reason);
     }
     function scheduleResolveObservedSelection(selectionIds, reason = "selection-changed") {
       const normalizedSelectionIds = normalizeSelectionIds3(selectionIds);
@@ -9669,7 +9700,7 @@ function setupSceneSelection(hooks = {}) {
                 stickyCharacterId: lastPayload?.characterId ?? null,
                 stickyTokenId: lastPayload?.selectedItemId ?? null
               });
-              if (lastState) publishState2(lastState, `${reason}:sticky-last-selection`);
+              if (lastState) publishState(lastState, `${reason}:sticky-last-selection`);
               return;
             }
             await startSelectionResolve2([], `${reason}:empty-confirmed`);
@@ -9916,7 +9947,7 @@ function setupSceneSelection(hooks = {}) {
         combatRuntimePending
       };
     }
-    function publishState2(state, reason = "state-update") {
+    function publishState(state, reason = "state-update") {
       lastPayload = buildBroadcastPayload(state, buildEphemeralForPayload());
       if (lastPayload?.status === "ready") {
         lastResolvedCharacterId = lastPayload.characterId ?? lastResolvedCharacterId;
@@ -9931,16 +9962,16 @@ function setupSceneSelection(hooks = {}) {
       });
       return lastPayload;
     }
-    function publishCurrentState(reason = "state-update") {
+    function publishCurrentState2(reason = "state-update") {
       if (!lastState) return null;
-      return publishState2(lastState, reason);
+      return publishState(lastState, reason);
     }
     function isCurrentSource(characterId, selectedItemId) {
       return String(ephemeral.characterId ?? "").trim() === String(characterId ?? "").trim() && String(lastPayload?.selectedItemId ?? "").trim() === String(selectedItemId ?? "").trim();
     }
     function replayLastVisibleState2(reason = "state-update") {
       if (lastState) {
-        return publishState2(lastState, reason);
+        return publishState(lastState, reason);
       }
       if (lastPayload) {
         broadcast(lastPayload);
@@ -9963,7 +9994,7 @@ function setupSceneSelection(hooks = {}) {
         if (currentSelectionIds.length === 1) {
           await resolveLiveSelection(reason, { forceResolve: true });
         } else if (lastState) {
-          publishState2(lastState);
+          publishCurrentState2(reason);
         }
         lastRefetchAt = Date.now();
       })();
@@ -9995,14 +10026,21 @@ function setupSceneSelection(hooks = {}) {
           },
           true
         );
-        await waitForCombatActionIdle(characterId);
-        const tasks = [refetchCurrent(reason)];
-        if (refreshQuickbar && quickbarController && characterId) {
-          tasks.push(quickbarController.refresh());
-        }
         setCombatRuntimePending(true, reason);
         try {
+          await waitForCombatActionIdle(characterId);
+          const tasks = [refetchCurrent(reason)];
+          if (refreshQuickbar && quickbarController && characterId) {
+            tasks.push(quickbarController.refresh());
+          }
           await Promise.allSettled(tasks);
+        } catch (error) {
+          logDebugEvent("selection", "runtime-refresh-exception", {
+            characterId,
+            reason,
+            queueKey,
+            message: String(error?.message ?? error)
+          }, false);
         } finally {
           setCombatRuntimePending(false, reason);
         }
@@ -10032,7 +10070,7 @@ function setupSceneSelection(hooks = {}) {
         distance: Number.isFinite(Number(target?.distance?.value)) ? Number(target.distance.value) : null,
         error: payload?.error ?? null
       };
-      if (lastState) publishState2(lastState);
+      publishCurrentState2("targeting-updated");
     }
     function isCombatSyncBlockedCommand(command) {
       if (!combatRuntimePending || !command || typeof command !== "object") return false;
@@ -10050,7 +10088,7 @@ function setupSceneSelection(hooks = {}) {
       if (!lastPayload || lastPayload.status !== "ready") return;
       if (isCombatSyncBlockedCommand(command)) {
         ephemeral.commandStatus = { type: "error", message: "Synchronizing combat..." };
-        if (lastState) publishState2(lastState);
+        publishCurrentState2("command-blocked:combat-sync");
         return;
       }
       if (command?.scope === "combat-hud" && command?.feature === "gm-skill-admin") {
@@ -10071,7 +10109,7 @@ function setupSceneSelection(hooks = {}) {
             source: "gm-skill-admin",
             deleteKey
           };
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         if (skillAdminDeleteInFlight) return;
@@ -10083,7 +10121,7 @@ function setupSceneSelection(hooks = {}) {
             source: "gm-skill-admin",
             deleteKey
           };
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         if (deleteType === "delete-ability" && !characterActionId) {
@@ -10093,7 +10131,7 @@ function setupSceneSelection(hooks = {}) {
             source: "gm-skill-admin",
             deleteKey
           };
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         skillAdminDeleteInFlight = deleteKey;
@@ -10136,7 +10174,7 @@ function setupSceneSelection(hooks = {}) {
             deleteKey
           };
           logDebugEvent("skills", "gm-delete-result", { ok: false, type: deleteType, deleteKey, error: message }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
         } finally {
           skillAdminDeleteInFlight = null;
         }
@@ -10147,13 +10185,13 @@ function setupSceneSelection(hooks = {}) {
         if (fmType === "toggle-selector") {
           ephemeral.fireModeSelectorOpen = !ephemeral.fireModeSelectorOpen;
           logDebugEvent("fire-mode", "selector-toggled", { open: ephemeral.fireModeSelectorOpen });
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         if (fmType === "close-selector") {
           ephemeral.fireModeSelectorOpen = false;
           logDebugEvent("fire-mode", "selector-closed", {});
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         if (fmType === "select") {
@@ -10170,7 +10208,7 @@ function setupSceneSelection(hooks = {}) {
             ephemeral.fireModeRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/fireModeId missing before RPC call." };
             logDebugEvent("fire-mode", "result", { error: "MISSING_FIELDS" }, false);
             ephemeral.fireModeInFlight = false;
-            if (lastState) publishState2(lastState);
+            if (lastState) publishState(lastState);
             return;
           }
           try {
@@ -10193,7 +10231,7 @@ function setupSceneSelection(hooks = {}) {
             ephemeral.commandStatus = { type: "error", message: normalized.message || "Fire mode switch failed." };
             pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: normalized.message }));
             logDebugEvent("fire-mode", "result", { weaponId, fireModeId, error: normalized.error, message: normalized.message }, false);
-            if (lastState) publishState2(lastState);
+            if (lastState) publishState(lastState);
           } finally {
             ephemeral.fireModeInFlight = false;
           }
@@ -10210,7 +10248,7 @@ function setupSceneSelection(hooks = {}) {
             characterActionId: actionId,
             previousCharacterActionId: previousId ?? null
           });
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
         }
         return;
       }
@@ -10240,7 +10278,7 @@ function setupSceneSelection(hooks = {}) {
           }, false);
           if (!abilitiesRuntime) {
             ephemeral.commandStatus = { type: "error", message: "Ability runtime is not loaded yet." };
-            if (lastState) publishState2(lastState);
+            if (lastState) publishState(lastState);
             void quickbarController?.refresh();
           }
           return;
@@ -10261,7 +10299,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: evalResult.uiBlockReason };
           ephemeral.directAbilityAttackResult = { ok: false, error: "PRECONDITION_FAILED", message: evalResult.uiBlockReason };
           logDebugEvent("abilities", "direct-attack-blocked", { characterActionId: actionId, reason: evalResult.uiBlockReason }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         const sessionAtRequest = currentMappedSession();
@@ -10270,7 +10308,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
           ephemeral.directAbilityAttackResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
           logDebugEvent("abilities", "direct-attack-blocked", { characterActionId: actionId, reason: sessionGate.reason }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, abilityId: actionId, targetCharacterId: evalCtx.targetCharacterId };
@@ -10296,7 +10334,7 @@ function setupSceneSelection(hooks = {}) {
           compact: true,
           source: "direct-ability"
         }, true, "pending");
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         let outcome;
         try {
           outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings2) });
@@ -10347,7 +10385,7 @@ function setupSceneSelection(hooks = {}) {
           await refreshCombatSessionSafe(sessionController, "direct-ability-attack");
         }
         if (stale) {
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         if (outcome.ok) {
@@ -10392,7 +10430,7 @@ function setupSceneSelection(hooks = {}) {
           }, false);
           if (!abilitiesRuntime) {
             ephemeral.commandStatus = { type: "error", message: "Ability runtime is not loaded yet." };
-            if (lastState) publishState2(lastState);
+            if (lastState) publishState(lastState);
             void quickbarController?.refresh();
           }
           return;
@@ -10410,7 +10448,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: evalResult.uiBlockReason };
           ephemeral.instantAbilityExecutionResult = { ok: false, error: "PRECONDITION_FAILED", message: evalResult.uiBlockReason };
           logDebugEvent("abilities", "ability-execute-blocked", { characterActionId: actionId, reason: evalResult.uiBlockReason }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         const sessionGate = sessionAttackGate(sessionAtRequest);
@@ -10418,7 +10456,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
           ephemeral.instantAbilityExecutionResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
           logDebugEvent("abilities", "ability-execute-blocked", { characterActionId: actionId, reason: sessionGate.reason }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, abilityId: actionId };
@@ -10450,7 +10488,7 @@ function setupSceneSelection(hooks = {}) {
           semanticKind: action.semanticKind,
           queueKey
         });
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         try {
           await runCharacterActionQueue(
             ctx.sourceCharacterId,
@@ -10510,7 +10548,7 @@ function setupSceneSelection(hooks = {}) {
                 logDebugEvent("session", "stale-version", { command: "instant-ability" }, true);
               }
               if (stale) {
-                if (lastState) publishState2(lastState);
+                if (lastState) publishState(lastState);
                 return;
               }
               await refreshCombatSessionSafe(sessionController, "instant-ability");
@@ -10557,7 +10595,7 @@ function setupSceneSelection(hooks = {}) {
           }, false);
           if (!abilitiesRuntime) {
             ephemeral.commandStatus = { type: "error", message: "Ability runtime is not loaded yet." };
-            if (lastState) publishState2(lastState);
+            if (lastState) publishState(lastState);
             void quickbarController?.refresh();
           }
           return;
@@ -10578,7 +10616,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: evalResult.uiBlockReason };
           ephemeral.directedAbilityExecutionResult = { ok: false, error: "PRECONDITION_FAILED", message: evalResult.uiBlockReason };
           logDebugEvent("abilities", "directed-ability-blocked", { characterActionId: actionId, reason: evalResult.uiBlockReason }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         const sessionGate = sessionAttackGate(sessionAtRequest);
@@ -10586,7 +10624,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
           ephemeral.directedAbilityExecutionResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
           logDebugEvent("abilities", "directed-ability-blocked", { characterActionId: actionId, reason: sessionGate.reason }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, abilityId: actionId, targetCharacterId: evalCtx.targetCharacterId };
@@ -10623,7 +10661,7 @@ function setupSceneSelection(hooks = {}) {
           targetTokenId: evalCtx.targetTokenId,
           queueKey
         });
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         try {
           await runCharacterActionQueue(ctx.sourceCharacterId, async () => {
             markCombatActionActive(requestCtx.sourceCharacterId, inFlightDirectedAbilityActionKey);
@@ -10690,7 +10728,7 @@ function setupSceneSelection(hooks = {}) {
               logDebugEvent("session", "stale-version", { command: "directed-ability" }, true);
             }
             if (stale) {
-              if (lastState) publishState2(lastState);
+              if (lastState) publishState(lastState);
               return;
             }
             await refreshCombatSessionSafe(sessionController, "directed-ability");
@@ -10737,7 +10775,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: evalResult.uiBlockReason };
           ephemeral.basicAttackResult = { ok: false, error: "PRECONDITION_FAILED", message: evalResult.uiBlockReason };
           logDebugEvent("attack", "blocked", { reason: evalResult.uiBlockReason }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         const sessionAtRequest = currentMappedSession();
@@ -10746,7 +10784,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
           ephemeral.basicAttackResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
           logDebugEvent("attack", "session-gate-blocked", { reason: sessionGate.reason, sessionId: sessionAtRequest.id, round: sessionAtRequest.roundNumber }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, weaponId: evalCtx.weaponId, targetCharacterId: evalCtx.targetCharacterId };
@@ -10778,7 +10816,7 @@ function setupSceneSelection(hooks = {}) {
         if (requestArmedActionId) {
           logDebugEvent("abilities", "attack-modifier-validation-requested", { characterActionId: requestArmedActionId });
         }
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         let outcome;
         try {
           outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings2) });
@@ -10828,7 +10866,7 @@ function setupSceneSelection(hooks = {}) {
           void sessionController.refresh();
         }
         if (stale) {
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         if (requestArmedActionId) {
@@ -10964,7 +11002,7 @@ function setupSceneSelection(hooks = {}) {
             code: "RPC_EXCEPTION",
             message
           }, false);
-          publishCurrentState("weapon-switch-rpc-failed");
+          publishCurrentState2("weapon-switch-rpc-failed");
           ephemeral.weaponSwitchInFlight = false;
           return;
         }
@@ -10987,7 +11025,7 @@ function setupSceneSelection(hooks = {}) {
           if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) {
             await refreshCombatSessionSafe(sessionController, "weapon-switched-state-version-conflict");
           }
-          publishCurrentState("weapon-switch-server-failed");
+          publishCurrentState2("weapon-switch-server-failed");
           ephemeral.weaponSwitchInFlight = false;
           return;
         }
@@ -11022,7 +11060,7 @@ function setupSceneSelection(hooks = {}) {
           }
           await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });
           if (isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
-            publishCurrentState("weapon-switched");
+            publishCurrentState2("weapon-switched");
           } else {
             logDebugEvent("weapon", "switch_active_weapon:stale-result-ignored", {
               characterIdAtRequest,
@@ -11039,7 +11077,7 @@ function setupSceneSelection(hooks = {}) {
             targetWeaponId: weaponId,
             message
           }, false);
-          publishCurrentState("weapon-switch-ui-update-error");
+          publishCurrentState2("weapon-switch-ui-update-error");
           return;
         } finally {
           ephemeral.weaponSwitchInFlight = false;
@@ -11056,31 +11094,31 @@ function setupSceneSelection(hooks = {}) {
             inventory: true
           }).then(() => refetchCurrent("weapon-selector-opened"));
         }
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         return;
       }
       if (type === "close-weapon-selector") {
         ephemeral.weaponSelectorOpen = false;
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         return;
       }
       if (type === "toggle-magazine-selector") {
         ephemeral.magazineSelectorOpen = !ephemeral.magazineSelectorOpen;
         logDebugEvent("magazine", "selector-toggled", { open: ephemeral.magazineSelectorOpen });
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         return;
       }
       if (type === "select-reload-mag") {
         ephemeral.selectedReloadMagazineId = String(command.magazineId ?? "").trim() || null;
         ephemeral.magazineSelectorOpen = false;
         logDebugEvent("magazine", "selected", { magazineId: ephemeral.selectedReloadMagazineId });
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         return;
       }
       if (type === "prepare-skill") {
         const skillId = String(command.skillId ?? "").trim();
         ephemeral.preparedAction = ephemeral.preparedAction?.id === skillId ? null : { kind: "skill", id: skillId };
-        if (lastState) publishState2(lastState);
+        if (lastState) publishState(lastState);
         return;
       }
       if (type === "pick-target" || type === "cancel-target" || type === "clear-target" || type === "select-target-zone") {
@@ -11100,7 +11138,7 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.reloadRpcResult = { ok: false, error: "SESSION_GATE", message: reloadGate.reason };
           logDebugEvent("reload", "session-gate-blocked", { reason: reloadGate.reason, sessionId: reloadSession.id, round: reloadSession.roundNumber }, false);
           ephemeral.reloadInFlight = false;
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         if (!weaponId || !magazineId || !profileId) {
@@ -11109,7 +11147,7 @@ function setupSceneSelection(hooks = {}) {
           pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
           logDebugEvent("magazine", "reload-result", { error: "MISSING_FIELDS" }, false);
           ephemeral.reloadInFlight = false;
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
           return;
         }
         try {
@@ -11158,14 +11196,14 @@ function setupSceneSelection(hooks = {}) {
               logDebugEvent("session", "stale-version", { command: "reload" }, true);
               if (sessionController) void sessionController.refresh();
             }
-            if (lastState) publishState2(lastState);
+            if (lastState) publishState(lastState);
           }
         } catch (error) {
           ephemeral.reloadRpcResult = { ok: false, error: "RPC_EXCEPTION", message: String(error?.message ?? error ?? "Reload failed.") };
           ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed.") };
           pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
           logDebugEvent("magazine", "reload-result", { error: "RPC_EXCEPTION", message: ephemeral.commandStatus.message }, false);
-          if (lastState) publishState2(lastState);
+          if (lastState) publishState(lastState);
         } finally {
           ephemeral.reloadInFlight = false;
         }
@@ -11239,7 +11277,7 @@ function setupSceneSelection(hooks = {}) {
       if (pendingSelectionIds.join("|") === resolveSignature) {
         pendingSelectionIds = [];
       }
-      const payload = publishState2(state, reason);
+      const payload = publishState(state, reason);
       if (reason === "selection-request-hydrate") {
         logDebugEvent("selection", "selection-hydrate-resolved", {
           tokenIds: currentSelectionIds,

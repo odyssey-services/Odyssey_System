@@ -84,6 +84,7 @@ const LIGHT_RUNTIME_RETRY_DELAY_MS = 350;
 const SELECTED_RUNTIME_DEBOUNCE_MS = 200;
 const TRANSIENT_EMPTY_SELECTION_GRACE_MS = 500;
 const SELECTION_RESOLVE_TIMEOUT_MS = 5000;
+const COMBAT_RUNTIME_PENDING_MAX_MS = 5000;
 
 /**
  * @param {{
@@ -114,6 +115,7 @@ export function setupSceneSelection(hooks = {}) {
   let refetchCurrentQueued = false;
   let lastRefetchAt = 0;
   let combatRuntimePending = false;
+  let combatRuntimePendingTimer = null;
   let movementPreviewActive = false;
   const heavyRuntimeCache = new Map();
   // Phase 3D.1: controller-local, session-scoped "last weapon per character"
@@ -386,13 +388,42 @@ export function setupSceneSelection(hooks = {}) {
     const normalized = next === true;
     if (combatRuntimePending === normalized) return;
     combatRuntimePending = normalized;
-    if (normalized && reason) {
-      logDebugEvent("session", "runtime-sync-pending", { reason }, true, "pending");
+    if (combatRuntimePendingTimer) {
+      clearTimeout(combatRuntimePendingTimer);
+      combatRuntimePendingTimer = null;
     }
-    if (!normalized && reason) {
+    if (normalized) {
+      logDebugEvent("session", "runtime-sync-pending", { reason, timeoutMs: COMBAT_RUNTIME_PENDING_MAX_MS }, true, "pending");
+      combatRuntimePendingTimer = setTimeout(() => {
+        if (!combatRuntimePending) return;
+        combatRuntimePending = false;
+        combatRuntimePendingTimer = null;
+        logDebugEvent("session", "runtime-sync-force-cleared", {
+          reason,
+          timeoutMs: COMBAT_RUNTIME_PENDING_MAX_MS,
+        }, false);
+        try {
+          publishCurrentState("runtime-sync-force-cleared");
+        } catch (error) {
+          logDebugEvent("session", "runtime-sync-publish-error", {
+            reason: "runtime-sync-force-cleared",
+            pending: false,
+            message: String(error?.message ?? error),
+          }, false);
+        }
+      }, COMBAT_RUNTIME_PENDING_MAX_MS);
+    } else {
       logDebugEvent("session", "runtime-sync-ready", { reason }, true);
     }
-    if (lastState) publishState(lastState);
+    try {
+      publishCurrentState(normalized ? "runtime-sync-pending" : "runtime-sync-ready");
+    } catch (error) {
+      logDebugEvent("session", "runtime-sync-publish-error", {
+        reason,
+        pending: normalized,
+        message: String(error?.message ?? error),
+      }, false);
+    }
   }
 
   function getHeavyRuntimeCache(characterId) {
@@ -1366,7 +1397,7 @@ export function setupSceneSelection(hooks = {}) {
         if (currentSelectionIds.length === 1) {
           await resolveLiveSelection(reason, { forceResolve: true });
         } else if (lastState) {
-          publishState(lastState);
+          publishCurrentState(reason);
         }
 
         lastRefetchAt = Date.now();
@@ -1404,14 +1435,21 @@ export function setupSceneSelection(hooks = {}) {
           },
           true,
         );
-        await waitForCombatActionIdle(characterId);
-        const tasks = [refetchCurrent(reason)];
-        if (refreshQuickbar && quickbarController && characterId) {
-          tasks.push(quickbarController.refresh());
-        }
         setCombatRuntimePending(true, reason);
         try {
+          await waitForCombatActionIdle(characterId);
+          const tasks = [refetchCurrent(reason)];
+          if (refreshQuickbar && quickbarController && characterId) {
+            tasks.push(quickbarController.refresh());
+          }
           await Promise.allSettled(tasks);
+        } catch (error) {
+          logDebugEvent("selection", "runtime-refresh-exception", {
+            characterId,
+            reason,
+            queueKey,
+            message: String(error?.message ?? error),
+          }, false);
         } finally {
           setCombatRuntimePending(false, reason);
         }
@@ -1443,7 +1481,7 @@ export function setupSceneSelection(hooks = {}) {
         distance: Number.isFinite(Number(target?.distance?.value)) ? Number(target.distance.value) : null,
         error: payload?.error ?? null,
       };
-      if (lastState) publishState(lastState);
+      publishCurrentState("targeting-updated");
     }
 
     function isCombatSyncBlockedCommand(command) {
@@ -1463,7 +1501,7 @@ export function setupSceneSelection(hooks = {}) {
       if (!lastPayload || lastPayload.status !== "ready") return;
       if (isCombatSyncBlockedCommand(command)) {
         ephemeral.commandStatus = { type: "error", message: "Synchronizing combat..." };
-        if (lastState) publishState(lastState);
+        publishCurrentState("command-blocked:combat-sync");
         return;
       }
 

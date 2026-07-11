@@ -99,6 +99,17 @@ test("popover modules log payload receipt instead of relying on remounts", () =>
   assert.ok(overlayPageSrc.includes('console.info("[combatHud/popover] payload-received"'));
   assert.ok(overlayPageSrc.includes('logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");'));
   assert.ok(overlayPageSrc.includes('logPayloadReceived(moduleParam, rawPayload, "broadcast");'));
+  assert.ok(overlayPageSrc.includes("status: payload?.status ?? null"));
+});
+
+test("combat runtime pending is safely published, auto-cleared, and never blocks forever", () => {
+  assert.ok(sceneControllerSrc.includes("const COMBAT_RUNTIME_PENDING_MAX_MS = 5000;"));
+  assert.ok(sceneControllerSrc.includes("let combatRuntimePendingTimer = null;"));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("session", "runtime-sync-force-cleared"'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("session", "runtime-sync-publish-error"'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentState(normalized ? "runtime-sync-pending" : "runtime-sync-ready")'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentState("command-blocked:combat-sync")'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("selection", "runtime-refresh-exception"'));
 });
 
 test("weapon switch is no longer tied to move spending", () => {
