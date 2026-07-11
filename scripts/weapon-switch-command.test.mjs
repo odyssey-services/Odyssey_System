@@ -10,6 +10,7 @@ import { fixtureSet } from "./unit/_fixtures.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const sceneControllerSrc = fs.readFileSync(path.join(repoRoot, "hud", "scene", "sceneSelectionController.js"), "utf8");
+const overlayPageSrc = fs.readFileSync(path.join(repoRoot, "hud", "overlay", "combatHudOverlayPage.js"), "utf8");
 const sqlSrc = fs.readFileSync(path.join(repoRoot, "supabase", "odyssey_supabase.sql"), "utf8");
 const fx = fixtureSet();
 
@@ -67,8 +68,10 @@ test("successful switch flow refreshes combat session and runtime quickbar", () 
 test("successful switch flow does not regress to publishState ReferenceError", () => {
   assert.ok(!sceneControllerSrc.includes("publishState is not defined"));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:success"'));
-  assert.ok(sceneControllerSrc.includes('await refreshHeavyCharacterData(ephemeral.characterId, {'));
+  assert.ok(sceneControllerSrc.includes('await refreshHeavyCharacterData(characterIdAtRequest, {'));
+  assert.ok(sceneControllerSrc.includes("function publishCurrentState("));
   assert.ok(sceneControllerSrc.includes("function replayLastVisibleState("));
+  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switched");'));
 });
 
 test("weapon switch and reload keep HUD interaction sticky while commands are in flight", () => {
@@ -80,6 +83,22 @@ test("weapon switch and reload keep HUD interaction sticky while commands are in
   assert.ok(sceneControllerSrc.includes("ephemeral.reloadInFlight = false;"));
   assert.ok(sceneControllerSrc.includes("ephemeral.fireModeInFlight = true;"));
   assert.ok(sceneControllerSrc.includes("ephemeral.fireModeInFlight = false;"));
+});
+
+test("weapon switch separates RPC failures from UI update failures and ignores stale reselection results", () => {
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:ui-update-error"'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-rpc-failed");'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-server-failed");'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-ui-update-error");'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:stale-result-ignored"'));
+  assert.ok(sceneControllerSrc.includes("function isCurrentSource(characterId, selectedItemId)"));
+});
+
+test("popover modules log payload receipt instead of relying on remounts", () => {
+  assert.ok(overlayPageSrc.includes("function logPayloadReceived(moduleId, payload, reason = \"broadcast\")"));
+  assert.ok(overlayPageSrc.includes('console.info("[combatHud/popover] payload-received"'));
+  assert.ok(overlayPageSrc.includes('logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");'));
+  assert.ok(overlayPageSrc.includes('logPayloadReceived(moduleParam, rawPayload, "broadcast");'));
 });
 
 test("weapon switch is no longer tied to move spending", () => {

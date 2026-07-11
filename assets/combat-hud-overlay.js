@@ -9066,6 +9066,17 @@ function send(channel, data) {
   } catch (_e) {
   }
 }
+function logPayloadReceived(moduleId, payload, reason = "broadcast") {
+  try {
+    console.info("[combatHud/popover] payload-received", {
+      moduleId,
+      selectedItemId: payload?.selectedItemId ?? null,
+      characterId: payload?.characterId ?? null,
+      reason
+    });
+  } catch (_e) {
+  }
+}
 function getModuleParam() {
   try {
     return new URLSearchParams(window.location.search).get("module") || "";
@@ -9194,6 +9205,7 @@ function start() {
       try {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           lastSelectionPayload = event?.data ?? null;
+          logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");
           try {
             mod.applySelection(lastSelectionPayload);
           } catch (_e) {
@@ -9260,6 +9272,7 @@ function start() {
       try {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
+          logPayloadReceived(moduleParam, rawPayload, "broadcast");
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});
@@ -9350,6 +9363,7 @@ function start() {
       try {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
+          logPayloadReceived(moduleParam, rawPayload, "broadcast");
           renderCard();
         });
         lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {
