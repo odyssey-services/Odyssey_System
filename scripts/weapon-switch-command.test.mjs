@@ -95,9 +95,8 @@ test("weapon switch is no longer tied to move spending", () => {
   assert.ok(sqlSrc.includes("'cost_mode', 'free'"));
 });
 
-test("weapon switch is not blocked by combat runtime sync gate", () => {
-  assert.ok(sceneControllerSrc.includes("return type === \"reload\";"));
-  assert.ok(!sceneControllerSrc.includes("return type === \"select-weapon\" || type === \"reload\";"));
+test("weapon switch is blocked during combat runtime sync gate", () => {
+  assert.ok(sceneControllerSrc.includes("return type === \"select-weapon\" || type === \"reload\";"));
 });
 
 test("ambiguous combat context resolves to a user-facing error message", () => {

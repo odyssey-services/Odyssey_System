@@ -1203,7 +1203,7 @@ export function setupSceneSelection(hooks = {}) {
         return true;
       }
       if (feature === "fire-mode" && type === "select") return true;
-      return type === "reload";
+      return type === "select-weapon" || type === "reload";
     }
 
     async function handleCommand(command) {

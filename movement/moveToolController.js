@@ -32,6 +32,10 @@ import {
   PREVIEW_LABEL_ID,
   PREVIEW_LINE_ID,
 } from "./combatMovementPreview.js";
+import {
+  collectOwlbearDrawingObstacles,
+  findBlockingDrawingObstacleForPath,
+} from "./drawingObstacles.js";
 import { resolveCombatMovementPermission } from "./combatMovementPermissions.js";
 import { syncCombatScenePositions } from "./tacticalSync.js";
 import {
@@ -169,6 +173,9 @@ function createInitialState() {
     obstructionDebugDone: false,
     lastVanillaMoveBlockAt: 0,
     pendingUnauthorizedRevertTimers: new Map(),
+    sceneItems: [],
+    drawingObstacleSummarySignature: "",
+    lastDrawingBlockSignature: "",
   };
 }
 
@@ -336,6 +343,9 @@ function buildStatus(state, extras = {}) {
           blockedTokenId: String(preview.blockedTokenId ?? "").trim(),
           blockedCharacterId: String(preview.blockedCharacterId ?? "").trim(),
           blockReason: String(preview.blockReason ?? "").trim(),
+          blockedObstacleId: String(preview.blockedObstacleId ?? "").trim(),
+          blockedObstacleKind: String(preview.blockedObstacleKind ?? "").trim(),
+          blockedObstacleSource: String(preview.blockedObstacleSource ?? "").trim(),
           distanceCells: preview.distanceCells,
           moveCostM: preview.moveCostM,
           moveLimitM: preview.moveLimitM,
@@ -884,6 +894,78 @@ export function setupTacticalMoveTool({ runtime }) {
     return null;
   }
 
+  function collectDrawingObstaclesForMovement() {
+    const { obstacles, skipped } = collectOwlbearDrawingObstacles(state.sceneItems, {
+      excludeItemIds: [String(state.selectedToken?.id ?? "").trim()],
+      metadataKey: COMBAT_MOVEMENT_METADATA_KEY,
+    });
+    const summary = {
+      count: obstacles.length,
+      kinds: [...new Set(
+        obstacles
+          .map((obstacle) => String(obstacle?.obstacleKind ?? obstacle?.kind ?? "").trim())
+          .filter(Boolean),
+      )].sort(),
+    };
+    const summarySignature = JSON.stringify(summary);
+    if (state.drawingObstacleSummarySignature !== summarySignature) {
+      state.drawingObstacleSummarySignature = summarySignature;
+      addDiagnosticEntry(
+        "info",
+        "movement / drawing-obstacles-collected / ok",
+        JSON.stringify(summary),
+      );
+    }
+    if (skipped.length && state.obstructionDebugDone) {
+      for (const entry of skipped.slice(0, 10)) {
+        addDiagnosticEntry(
+          "info",
+          "movement / drawing-obstacle-skipped / ok",
+          JSON.stringify(entry),
+        );
+      }
+    }
+    return obstacles;
+  }
+
+  function getCombinedRouteBlock(path) {
+    const occupiedRoute = getOccupiedRouteBlock(path);
+    const drawingRoute = findBlockingDrawingObstacleForPath({
+      path,
+      grid: state.grid,
+      obstacles: collectDrawingObstaclesForMovement(),
+    });
+
+    if (drawingRoute) {
+      const blockSignature = JSON.stringify({
+        obstacleId: drawingRoute.obstacleId,
+        obstacleKind: drawingRoute.obstacleKind,
+        blockedCell: drawingRoute.blockedCell,
+      });
+      if (state.lastDrawingBlockSignature !== blockSignature) {
+        state.lastDrawingBlockSignature = blockSignature;
+        addDiagnosticEntry(
+          "warn",
+          "movement / blocked-by-drawing-obstacle / fail",
+          JSON.stringify({
+            characterId: String(state.selectedParticipant?.character_id ?? "").trim(),
+            tokenId: String(state.selectedToken?.id ?? "").trim(),
+            obstacleId: drawingRoute.obstacleId,
+            obstacleKind: drawingRoute.obstacleKind,
+            obstacleSource: drawingRoute.obstacleSource,
+            reason: drawingRoute.blockReason,
+            blockedCell: drawingRoute.blockedCell,
+            obstacleGeometry: drawingRoute.obstacleGeometry,
+          }),
+        );
+      }
+      return drawingRoute;
+    }
+
+    state.lastDrawingBlockSignature = "";
+    return occupiedRoute;
+  }
+
   function buildPreviewFromScenePosition(scenePosition, tokenIdOverride = "") {
     const grid = state.grid;
     const participant = state.selectedParticipant;
@@ -968,7 +1050,7 @@ export function setupTacticalMoveTool({ runtime }) {
     const distanceCells = Math.max(path.length - 1, 0);
     const moveCostM = distanceCells * Math.max(Number(grid.metersPerCell ?? 1) || 1, 1);
     const moveLimitM = Number(participant.move_current ?? 0) || 0;
-    const blockedRoute = getOccupiedRouteBlock(path);
+    const blockedRoute = getCombinedRouteBlock(path);
 
     const preview = {
       cell,
@@ -982,6 +1064,9 @@ export function setupTacticalMoveTool({ runtime }) {
       blockedTokenId: String(blockedRoute?.blockedTokenId ?? "").trim(),
       blockedCharacterId: String(blockedRoute?.blockedCharacterId ?? "").trim(),
       blockReason: String(blockedRoute?.blockReason ?? "").trim(),
+      blockedObstacleId: String(blockedRoute?.obstacleId ?? "").trim(),
+      blockedObstacleKind: String(blockedRoute?.obstacleKind ?? "").trim(),
+      blockedObstacleSource: String(blockedRoute?.obstacleSource ?? "").trim(),
       distanceCells,
       moveCostM,
       moveLimitM,
@@ -1830,6 +1915,7 @@ export function setupTacticalMoveTool({ runtime }) {
 
   async function handleSceneItemsChanged(items) {
     const sceneItems = ensureArray(items);
+    state.sceneItems = sceneItems;
     const indexed = new Map(
       sceneItems.map((item) => [String(item?.id ?? "").trim(), item]),
     );
@@ -1973,6 +2059,7 @@ export function setupTacticalMoveTool({ runtime }) {
   async function start() {
     try {
       await registerTool();
+      state.sceneItems = await getSceneItems();
       void inspectSceneObstructionCandidates("startup");
       unsubscribeBroadcast = await subscribeMoveToolMessages(handleBroadcastMessage);
       unsubscribeSceneItems = await subscribeSceneItems(handleSceneItemsChanged);
