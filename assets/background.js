@@ -9160,6 +9160,8 @@ function setupSceneSelection(hooks = {}) {
   let selectedRuntimeReason = "startup";
   let currentSelectionIds = [];
   let pendingSelectionIds = [];
+  let pendingSelectionRequestSignature = "";
+  let pendingSelectionRequestReason = "";
   let lastObservedSelectionIds = [];
   let transientEmptySelectionTimer = null;
   let lastResolvedCharacterId = null;
@@ -10058,6 +10060,10 @@ function setupSceneSelection(hooks = {}) {
       currentSelectionIds = nextTokenId ? [nextTokenId] : [];
       if (state?.status !== SELECTION_STATUS.loading) {
         pendingSelectionIds = [];
+      }
+      if (reason === "selection-request-hydrate" || !nextTokenId || state?.status !== SELECTION_STATUS.loading) {
+        pendingSelectionRequestSignature = "";
+        pendingSelectionRequestReason = "";
       }
       lastState = state;
       if (previousCharacterId !== nextCharacterId || previousTokenId !== nextTokenId) {
@@ -11665,6 +11671,7 @@ function setupSceneSelection(hooks = {}) {
       const requestedSignature = requestedSelectionIds.join("|");
       const currentSignature = currentSelectionIds.join("|");
       const pendingSignature = pendingSelectionIds.join("|");
+      const requestReason = String(event?.data?.reason ?? "selection-request").trim() || "selection-request";
       const forceResolveIfDifferent = event?.data?.forceResolveIfDifferent === true;
       const forceReplay = event?.data?.forceReplay === true;
       logDebugEvent("selection", "selection-request-received", {
@@ -11677,21 +11684,60 @@ function setupSceneSelection(hooks = {}) {
         forceResolveIfDifferent,
         forceReplay,
         moduleId: event?.data?.moduleId ?? null,
-        reason: event?.data?.reason ?? "selection-request"
+        reason: requestReason
       });
-      const shouldResolveRequestedSelection = forceReplay === true || requestedSelectionIds.length === 1 && requestedSignature !== currentSignature && requestedSignature !== pendingSignature && (event?.data?.hydrateIfStale === true || forceResolveIfDifferent);
-      if (event?.data?.hydrateIfStale === true && requestedSelectionIds.length === 1 && requestedSignature === pendingSignature) {
-        logDebugEvent("selection", "selection-hydrate-skipped", {
-          reason: "same-pending-selection",
+      if (requestedSelectionIds.length === 0 && forceReplay !== true) {
+        logDebugEvent("selection", "selection-request-ignored", {
           requestedSelectionIds,
           currentSelectionIds,
-          pendingSelectionIds
+          pendingSelectionIds,
+          reason: "empty-live-selection",
+          requestReason
         });
+        return;
       }
+      if (requestedSelectionIds.length === 1 && requestedSignature === currentSignature && forceReplay !== true) {
+        logDebugEvent("selection", "selection-request-ignored", {
+          requestedSelectionIds,
+          currentSelectionIds,
+          pendingSelectionIds,
+          reason: "same-current-selection",
+          requestReason
+        });
+        return;
+      }
+      if (requestedSelectionIds.length === 1 && requestedSignature === pendingSignature && forceReplay !== true) {
+        logDebugEvent("selection", "selection-request-ignored", {
+          requestedSelectionIds,
+          currentSelectionIds,
+          pendingSelectionIds,
+          reason: "same-pending-selection",
+          requestReason
+        });
+        return;
+      }
+      if (requestedSelectionIds.length === 1 && pendingSelectionRequestSignature === requestedSignature) {
+        logDebugEvent("selection", "selection-request-deduped", {
+          requestedSelectionIds,
+          currentSelectionIds,
+          pendingSelectionIds,
+          reason: requestReason,
+          pendingRequestReason: pendingSelectionRequestReason || null
+        });
+        return;
+      }
+      const shouldResolveRequestedSelection = forceReplay === true || requestedSelectionIds.length === 1 && requestedSignature !== currentSignature && requestedSignature !== pendingSignature && (event?.data?.hydrateIfStale === true || forceResolveIfDifferent);
       if (shouldResolveRequestedSelection) {
+        if (requestedSelectionIds.length === 1) {
+          pendingSelectionRequestSignature = requestedSignature;
+          pendingSelectionRequestReason = requestReason;
+          pendingSelectionIds = requestedSelectionIds.slice();
+        }
         void readLiveSelectionIds(currentSelectionIds).then((liveSelectionIds) => {
           const liveSignature = liveSelectionIds.join("|");
           if (liveSignature !== requestedSignature) {
+            pendingSelectionRequestSignature = "";
+            pendingSelectionRequestReason = "";
             logDebugEvent("selection", "selection-hydrate-skipped", {
               reason: "requested-selection-not-live",
               requestedSelectionIds,
@@ -11722,10 +11768,12 @@ function setupSceneSelection(hooks = {}) {
           }, true, "pending");
           logDebugEvent("selection", "selection-request-resolve-start", {
             requestedSelectionIds: liveSelectionIds,
-            reason: event?.data?.reason ?? "selection-request"
+            reason: requestReason
           }, true, "pending");
           stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "selection-request-hydrate" });
         }).catch((error) => {
+          pendingSelectionRequestSignature = "";
+          pendingSelectionRequestReason = "";
           logDebugEvent("selection", "selection-hydrate-skipped", {
             reason: "live-selection-read-failed",
             requestedSelectionIds,

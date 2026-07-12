@@ -142,6 +142,22 @@ test("stale replay for a different requested ready token is blocked", () => {
   assert.ok(sceneControllerSrc.includes("requestedSignature !== String(lastPayload.selectedItemId)"));
 });
 
+test("duplicate requested token replays are deduped before async live-selection read", () => {
+  assert.ok(sceneControllerSrc.includes("let pendingSelectionRequestSignature = \"\";"));
+  assert.ok(sceneControllerSrc.includes("let pendingSelectionRequestReason = \"\";"));
+  assert.ok(sceneControllerSrc.includes("selection-request-deduped"));
+  assert.ok(sceneControllerSrc.includes("pendingSelectionRequestSignature === requestedSignature"));
+  assert.ok(sceneControllerSrc.includes("pendingSelectionRequestSignature = requestedSignature;"));
+  assert.ok(sceneControllerSrc.includes("pendingSelectionIds = requestedSelectionIds.slice();"));
+});
+
+test("empty and same-selection request noise is ignored instead of creating pending chains", () => {
+  assert.ok(sceneControllerSrc.includes("selection-request-ignored"));
+  assert.ok(sceneControllerSrc.includes("reason: \"empty-live-selection\""));
+  assert.ok(sceneControllerSrc.includes("reason: \"same-current-selection\""));
+  assert.ok(sceneControllerSrc.includes("reason: \"same-pending-selection\""));
+});
+
 test("native selection-changed path remains primary and is logged", () => {
   assert.ok(sceneControllerSrc.includes("selection-change-observed"));
   assert.ok(sceneControllerSrc.includes("previousSelectionIds: currentSelectionIds"));

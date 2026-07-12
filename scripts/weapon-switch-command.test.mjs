@@ -104,14 +104,25 @@ test("popover modules log payload receipt instead of relying on remounts", () =>
 });
 
 test("popover iframe requests replay when live Owlbear selection differs from ready payload", () => {
+  assert.ok(overlayPageSrc.includes('const isReplayDriverModule = moduleParam === "player";'));
   assert.ok(overlayPageSrc.includes("async function requestSelectionReplayIfLiveSelectionDiffers(payload, reason = \"player-change\")"));
+  assert.ok(overlayPageSrc.includes("if (!available || !isReplayDriverModule) return;"));
   assert.ok(overlayPageSrc.includes("if (normalizedSelectionIds.length !== 1)"));
   assert.ok(overlayPageSrc.includes("forceReplay: true"));
   assert.ok(overlayPageSrc.includes("if (liveSignature !== payloadSignature)"));
   assert.ok(overlayPageSrc.includes("forceResolveIfDifferent: true"));
+  assert.ok(overlayPageSrc.includes("if (isReplayDriverModule) {"));
   assert.ok(overlayPageSrc.includes('scheduleSelectionReplayCheck(lastSelectionPayload, "payload-received-check", 70);'));
   assert.ok(overlayPageSrc.includes('scheduleSelectionReplayCheck(lastSelectionPayload, "player-change", 70);'));
   assert.ok(overlayPageSrc.includes('sendDebugEvent("selection-replay-requested"'));
+});
+
+test("transient empty player-change selection is suppressed instead of forceReplay []", () => {
+  assert.ok(overlayPageSrc.includes('sendDebugEvent("selection-replay-suppressed"'));
+  assert.ok(overlayPageSrc.includes('reason === "player-change"'));
+  assert.ok(overlayPageSrc.includes("normalizedSelectionIds.length === 0"));
+  assert.ok(overlayPageSrc.includes("payloadStatus === \"ready\""));
+  assert.ok(overlayPageSrc.includes("payloadSelectedItemId"));
 });
 
 test("combat runtime pending is safely published, auto-cleared, and never blocks forever", () => {
