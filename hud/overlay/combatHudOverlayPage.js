@@ -20,7 +20,7 @@ import moduleStyles from "../components/combatHudModule.css";
 
 import { mountCombatHudModule } from "../components/CombatHudModule.js";
 import { mountCombatHudLayoutEditor } from "../components/CombatHudLayoutEditor.js";
-import { BC_HUD_COMMAND, BC_HUD_UI_STATE, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_SESSION, BC_HUD_SESSION_REQUEST, BC_HUD_ABILITIES, BC_HUD_ABILITIES_REQUEST, parseHudUiState } from "./overlayConstants.js";
+import { BC_HUD_COMMAND, BC_HUD_UI_STATE, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_SESSION, BC_HUD_SESSION_REQUEST, BC_HUD_ABILITIES, BC_HUD_ABILITIES_REQUEST, BC_HUD_DEBUG_EVENT, parseHudUiState } from "./overlayConstants.js";
 import {
   HUD_MODULE_IDS,
   BC_HUD_LAYOUT,
@@ -77,6 +77,17 @@ function logPayloadReceived(moduleId, payload, reason = "broadcast") {
       characterId: payload?.characterId ?? null,
       status: payload?.status ?? null,
       reason,
+    });
+  } catch (_e) { /* ignore */ }
+}
+
+function sendDebugEvent(action, details = {}, status = "ok") {
+  try {
+    send(BC_HUD_DEBUG_EVENT, {
+      category: "popover",
+      action,
+      status,
+      details,
     });
   } catch (_e) { /* ignore */ }
 }
@@ -163,11 +174,20 @@ function start() {
     let lastSelectionPayload = null;
     let lastHydrationSelectionKey = "";
     let hydrationRetryTimer = null;
+    let replayRequestTimer = null;
+    let lastReplayRequestKey = "";
 
     function clearHydrationRetryTimer() {
       if (hydrationRetryTimer) {
         clearTimeout(hydrationRetryTimer);
         hydrationRetryTimer = null;
+      }
+    }
+
+    function clearReplayRequestTimer() {
+      if (replayRequestTimer) {
+        clearTimeout(replayRequestTimer);
+        replayRequestTimer = null;
       }
     }
 
@@ -189,10 +209,85 @@ function start() {
         if (lastHydrationSelectionKey === hydrationKey) return;
         lastHydrationSelectionKey = hydrationKey;
         send(BC_HUD_SELECTION_REQUEST, {
+          moduleId: moduleParam,
+          reason: "startup-hydrate",
           selectionIds: normalizedSelectionIds,
           hydrateIfStale: true,
         });
       } catch (_e) { /* best effort */ }
+    }
+
+    function emitSelectionReplayRequest({
+      reason = "player-change",
+      selectionIds = [],
+      hydrateIfStale = false,
+      forceReplay = false,
+      forceResolveIfDifferent = false,
+      payload = lastSelectionPayload,
+    } = {}) {
+      const normalizedSelectionIds = Array.isArray(selectionIds)
+        ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [];
+      sendDebugEvent("selection-replay-requested", {
+        moduleId: moduleParam,
+        reason,
+        liveSelectionIds: normalizedSelectionIds,
+        payloadSelectedItemId: payload?.selectedItemId ?? null,
+        payloadStatus: payload?.status ?? null,
+      }, "pending");
+      send(BC_HUD_SELECTION_REQUEST, {
+        moduleId: moduleParam,
+        reason,
+        selectionIds: normalizedSelectionIds,
+        hydrateIfStale,
+        forceReplay,
+        forceResolveIfDifferent,
+      });
+    }
+
+    async function requestSelectionReplayIfLiveSelectionDiffers(payload, reason = "player-change") {
+      if (!available) return;
+      const selectionIds = await OBR.player.getSelection().catch(() => []);
+      const normalizedSelectionIds = Array.isArray(selectionIds)
+        ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+        : [];
+      const liveSignature = normalizedSelectionIds.join("|");
+      const payloadSignature = payload?.selectedItemId ? String(payload.selectedItemId).trim() : "";
+      const requestKey = `${reason}:${liveSignature}:${payloadSignature}:${String(payload?.status ?? "")}`;
+      if (lastReplayRequestKey === requestKey) return;
+      lastReplayRequestKey = requestKey;
+
+      if (normalizedSelectionIds.length !== 1) {
+        emitSelectionReplayRequest({
+          reason,
+          selectionIds: normalizedSelectionIds,
+          forceReplay: true,
+          payload,
+        });
+        return;
+      }
+
+      if (liveSignature !== payloadSignature) {
+        emitSelectionReplayRequest({
+          reason,
+          selectionIds: normalizedSelectionIds,
+          hydrateIfStale: true,
+          forceResolveIfDifferent: true,
+          payload,
+        });
+        return;
+      }
+
+      lastReplayRequestKey = "";
+    }
+
+    function scheduleSelectionReplayCheck(payload, reason = "player-change", delayMs = 90) {
+      if (!available) return;
+      clearReplayRequestTimer();
+      replayRequestTimer = setTimeout(() => {
+        replayRequestTimer = null;
+        void requestSelectionReplayIfLiveSelectionDiffers(payload ?? lastSelectionPayload, reason);
+      }, Math.max(0, Number(delayMs) || 0));
     }
 
     function scheduleHydrationRetry(payload, delayMs = 180) {
@@ -223,15 +318,24 @@ function start() {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           lastSelectionPayload = event?.data ?? null;
           logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");
+          sendDebugEvent("payload-received", {
+            moduleId: moduleParam,
+            status: lastSelectionPayload?.status ?? null,
+            selectedItemId: lastSelectionPayload?.selectedItemId ?? null,
+            characterId: lastSelectionPayload?.characterId ?? null,
+            reason: "broadcast",
+          });
           try { mod.applySelection(lastSelectionPayload); } catch (_e) { /* ignore */ }
           void maybeHydrateSelectionFromLocal(lastSelectionPayload);
+          scheduleSelectionReplayCheck(lastSelectionPayload, "payload-received-check", 70);
           scheduleHydrationRetry(lastSelectionPayload);
         });
         send(BC_HUD_SELECTION_REQUEST, {});
+        OBR.player.onChange(() => {
+          void maybeHydrateSelectionFromLocal(lastSelectionPayload);
+          scheduleSelectionReplayCheck(lastSelectionPayload, "player-change", 70);
+        });
         if (moduleParam === "player") {
-          OBR.player.onChange(() => {
-            void maybeHydrateSelectionFromLocal(lastSelectionPayload);
-          });
           scheduleHydrationRetry(lastSelectionPayload, 320);
         }
       } catch (_e) { /* standalone or broadcast unavailable → mock render stays */ }
@@ -315,6 +419,13 @@ function start() {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
           logPayloadReceived(moduleParam, rawPayload, "broadcast");
+          sendDebugEvent("payload-received", {
+            moduleId: moduleParam,
+            status: rawPayload?.status ?? null,
+            selectedItemId: rawPayload?.selectedItemId ?? null,
+            characterId: rawPayload?.characterId ?? null,
+            reason: "broadcast",
+          });
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});

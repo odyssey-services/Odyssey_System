@@ -6050,6 +6050,7 @@ function parsePlacement(rawJson) {
 var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 var BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
 var BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
+var BC_HUD_DEBUG_EVENT = "com.odyssey.combat-hud/debug-event";
 var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
 var BC_HUD_SESSION = "com.odyssey.combat-hud/session-state";
 var BC_HUD_SESSION_REQUEST = "com.odyssey.combat-hud/session-state-request";
@@ -9078,6 +9079,17 @@ function logPayloadReceived(moduleId, payload, reason = "broadcast") {
   } catch (_e) {
   }
 }
+function sendDebugEvent(action, details2 = {}, status2 = "ok") {
+  try {
+    send(BC_HUD_DEBUG_EVENT, {
+      category: "popover",
+      action,
+      status: status2,
+      details: details2
+    });
+  } catch (_e) {
+  }
+}
 function getModuleParam() {
   try {
     return new URLSearchParams(window.location.search).get("module") || "";
@@ -9152,6 +9164,42 @@ function start() {
         clearTimeout(hydrationRetryTimer);
         hydrationRetryTimer = null;
       }
+    }, clearReplayRequestTimer = function() {
+      if (replayRequestTimer) {
+        clearTimeout(replayRequestTimer);
+        replayRequestTimer = null;
+      }
+    }, emitSelectionReplayRequest = function({
+      reason = "player-change",
+      selectionIds = [],
+      hydrateIfStale = false,
+      forceReplay = false,
+      forceResolveIfDifferent = false,
+      payload = lastSelectionPayload
+    } = {}) {
+      const normalizedSelectionIds = Array.isArray(selectionIds) ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+      sendDebugEvent("selection-replay-requested", {
+        moduleId: moduleParam,
+        reason,
+        liveSelectionIds: normalizedSelectionIds,
+        payloadSelectedItemId: payload?.selectedItemId ?? null,
+        payloadStatus: payload?.status ?? null
+      }, "pending");
+      send(BC_HUD_SELECTION_REQUEST, {
+        moduleId: moduleParam,
+        reason,
+        selectionIds: normalizedSelectionIds,
+        hydrateIfStale,
+        forceReplay,
+        forceResolveIfDifferent
+      });
+    }, scheduleSelectionReplayCheck = function(payload, reason = "player-change", delayMs = 90) {
+      if (!available) return;
+      clearReplayRequestTimer();
+      replayRequestTimer = setTimeout(() => {
+        replayRequestTimer = null;
+        void requestSelectionReplayIfLiveSelectionDiffers(payload ?? lastSelectionPayload, reason);
+      }, Math.max(0, Number(delayMs) || 0));
     }, scheduleHydrationRetry = function(payload, delayMs = 180) {
       if (!available || moduleParam !== "player") return;
       clearHydrationRetryTimer();
@@ -9163,6 +9211,8 @@ function start() {
     let lastSelectionPayload = null;
     let lastHydrationSelectionKey = "";
     let hydrationRetryTimer = null;
+    let replayRequestTimer = null;
+    let lastReplayRequestKey = "";
     async function maybeHydrateSelectionFromLocal(payload) {
       if (!available || moduleParam !== "player") return;
       const status2 = String(payload?.status ?? "").trim();
@@ -9179,11 +9229,43 @@ function start() {
         if (lastHydrationSelectionKey === hydrationKey) return;
         lastHydrationSelectionKey = hydrationKey;
         send(BC_HUD_SELECTION_REQUEST, {
+          moduleId: moduleParam,
+          reason: "startup-hydrate",
           selectionIds: normalizedSelectionIds,
           hydrateIfStale: true
         });
       } catch (_e) {
       }
+    }
+    async function requestSelectionReplayIfLiveSelectionDiffers(payload, reason = "player-change") {
+      if (!available) return;
+      const selectionIds = await lib_default.player.getSelection().catch(() => []);
+      const normalizedSelectionIds = Array.isArray(selectionIds) ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
+      const liveSignature = normalizedSelectionIds.join("|");
+      const payloadSignature = payload?.selectedItemId ? String(payload.selectedItemId).trim() : "";
+      const requestKey = `${reason}:${liveSignature}:${payloadSignature}:${String(payload?.status ?? "")}`;
+      if (lastReplayRequestKey === requestKey) return;
+      lastReplayRequestKey = requestKey;
+      if (normalizedSelectionIds.length !== 1) {
+        emitSelectionReplayRequest({
+          reason,
+          selectionIds: normalizedSelectionIds,
+          forceReplay: true,
+          payload
+        });
+        return;
+      }
+      if (liveSignature !== payloadSignature) {
+        emitSelectionReplayRequest({
+          reason,
+          selectionIds: normalizedSelectionIds,
+          hydrateIfStale: true,
+          forceResolveIfDifferent: true,
+          payload
+        });
+        return;
+      }
+      lastReplayRequestKey = "";
     }
     const mod = mountCombatHudModule({
       root,
@@ -9207,18 +9289,27 @@ function start() {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           lastSelectionPayload = event?.data ?? null;
           logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");
+          sendDebugEvent("payload-received", {
+            moduleId: moduleParam,
+            status: lastSelectionPayload?.status ?? null,
+            selectedItemId: lastSelectionPayload?.selectedItemId ?? null,
+            characterId: lastSelectionPayload?.characterId ?? null,
+            reason: "broadcast"
+          });
           try {
             mod.applySelection(lastSelectionPayload);
           } catch (_e) {
           }
           void maybeHydrateSelectionFromLocal(lastSelectionPayload);
+          scheduleSelectionReplayCheck(lastSelectionPayload, "payload-received-check", 70);
           scheduleHydrationRetry(lastSelectionPayload);
         });
         send(BC_HUD_SELECTION_REQUEST, {});
+        lib_default.player.onChange(() => {
+          void maybeHydrateSelectionFromLocal(lastSelectionPayload);
+          scheduleSelectionReplayCheck(lastSelectionPayload, "player-change", 70);
+        });
         if (moduleParam === "player") {
-          lib_default.player.onChange(() => {
-            void maybeHydrateSelectionFromLocal(lastSelectionPayload);
-          });
           scheduleHydrationRetry(lastSelectionPayload, 320);
         }
       } catch (_e) {
@@ -9274,6 +9365,13 @@ function start() {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
           logPayloadReceived(moduleParam, rawPayload, "broadcast");
+          sendDebugEvent("payload-received", {
+            moduleId: moduleParam,
+            status: rawPayload?.status ?? null,
+            selectedItemId: rawPayload?.selectedItemId ?? null,
+            characterId: rawPayload?.characterId ?? null,
+            reason: "broadcast"
+          });
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});

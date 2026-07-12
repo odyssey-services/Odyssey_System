@@ -41,6 +41,11 @@ export const BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
  *  selection change still renders the current state). */
 export const BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
 
+/** LOCAL broadcast: popover iframe -> background debug bridge.
+ * Carries lightweight UI diagnostics so the Debug Console can show whether
+ * mounted modules actually received payloads / requested replay. */
+export const BC_HUD_DEBUG_EVENT = "com.odyssey.combat-hud/debug-event";
+
 /** LOCAL broadcast: module iframe → background scene controller. Carries
  *  ephemeral HUD commands (weapon pick, reload, prepared action, target pick).
  *  The iframe never calls Supabase directly. */

@@ -4149,6 +4149,7 @@ var OVERLAY_HTML = "combat-hud-overlay.html";
 var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 var BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
 var BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
+var BC_HUD_DEBUG_EVENT = "com.odyssey.combat-hud/debug-event";
 var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
 var BC_HUD_TARGETING = "com.odyssey.combat-hud/targeting";
 var BC_HUD_TARGETING_REQUEST = "com.odyssey.combat-hud/targeting-request";
@@ -11645,12 +11646,40 @@ function setupSceneSelection(hooks = {}) {
         });
       }, SCENE_RERESOLVE_DEBOUNCE_MS);
     }));
+    cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_DEBUG_EVENT, (event) => {
+      const payload = event?.data ?? {};
+      const category = String(payload?.category ?? "popover").trim() || "popover";
+      const action = String(payload?.action ?? "").trim();
+      if (!action) return;
+      const status = String(payload?.status ?? "ok").trim() || "ok";
+      logDebugEvent(
+        category,
+        action,
+        payload?.details && typeof payload.details === "object" ? payload.details : {},
+        status !== "fail",
+        status
+      );
+    }));
     cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_SELECTION_REQUEST, (event) => {
       const requestedSelectionIds = Array.isArray(event?.data?.selectionIds) ? event.data.selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
       const requestedSignature = requestedSelectionIds.join("|");
       const currentSignature = currentSelectionIds.join("|");
       const pendingSignature = pendingSelectionIds.join("|");
-      const shouldHydrateFromRequest = event?.data?.hydrateIfStale === true && requestedSelectionIds.length === 1 && requestedSignature !== currentSignature && requestedSignature !== pendingSignature && (!lastPayload || lastPayload.status === "no-selection" || lastPayload.status === "loading");
+      const forceResolveIfDifferent = event?.data?.forceResolveIfDifferent === true;
+      const forceReplay = event?.data?.forceReplay === true;
+      logDebugEvent("selection", "selection-request-received", {
+        requestedSelectionIds,
+        currentSelectionIds,
+        pendingSelectionIds,
+        lastPayloadSelectedItemId: lastPayload?.selectedItemId ?? null,
+        lastPayloadStatus: lastPayload?.status ?? null,
+        hydrateIfStale: event?.data?.hydrateIfStale === true,
+        forceResolveIfDifferent,
+        forceReplay,
+        moduleId: event?.data?.moduleId ?? null,
+        reason: event?.data?.reason ?? "selection-request"
+      });
+      const shouldResolveRequestedSelection = forceReplay === true || requestedSelectionIds.length === 1 && requestedSignature !== currentSignature && requestedSignature !== pendingSignature && (event?.data?.hydrateIfStale === true || forceResolveIfDifferent);
       if (event?.data?.hydrateIfStale === true && requestedSelectionIds.length === 1 && requestedSignature === pendingSignature) {
         logDebugEvent("selection", "selection-hydrate-skipped", {
           reason: "same-pending-selection",
@@ -11659,7 +11688,7 @@ function setupSceneSelection(hooks = {}) {
           pendingSelectionIds
         });
       }
-      if (shouldHydrateFromRequest) {
+      if (shouldResolveRequestedSelection) {
         void readLiveSelectionIds(currentSelectionIds).then((liveSelectionIds) => {
           const liveSignature = liveSelectionIds.join("|");
           if (liveSignature !== requestedSignature) {
@@ -11671,8 +11700,14 @@ function setupSceneSelection(hooks = {}) {
               currentStatus: lastPayload?.status ?? null,
               currentCharacterId: lastPayload?.characterId ?? null
             });
-            if (lastPayload && lastPayload.selectedItemId === currentSelectionIds[0]) {
+            if (lastPayload && (liveSelectionIds.length === 1 && lastPayload.selectedItemId === liveSelectionIds[0] || liveSelectionIds.length === 0 && !lastPayload.selectedItemId)) {
               broadcast(lastPayload);
+              logDebugEvent("selection", "selection-replayed", {
+                status: lastPayload.status ?? null,
+                characterId: lastPayload.characterId ?? null,
+                selectedItemId: lastPayload.selectedItemId ?? null,
+                reason: "selection-request:not-live-fallback"
+              });
             }
             return;
           }
@@ -11682,7 +11717,12 @@ function setupSceneSelection(hooks = {}) {
             previousStatus: lastPayload?.status ?? null,
             previousCharacterId: lastPayload?.characterId ?? null,
             currentSelectionIds,
-            reason: "selection-request"
+            reason: "selection-request",
+            forceResolveIfDifferent
+          }, true, "pending");
+          logDebugEvent("selection", "selection-request-resolve-start", {
+            requestedSelectionIds: liveSelectionIds,
+            reason: event?.data?.reason ?? "selection-request"
           }, true, "pending");
           stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "selection-request-hydrate" });
         }).catch((error) => {
@@ -11694,7 +11734,23 @@ function setupSceneSelection(hooks = {}) {
           }, false);
           if (lastPayload && lastPayload.selectedItemId === currentSelectionIds[0]) {
             broadcast(lastPayload);
+            logDebugEvent("selection", "selection-replayed", {
+              status: lastPayload.status ?? null,
+              characterId: lastPayload.characterId ?? null,
+              selectedItemId: lastPayload.selectedItemId ?? null,
+              reason: "selection-request:read-failed-fallback"
+            });
           }
+        });
+        return;
+      }
+      if (requestedSelectionIds.length === 1 && lastPayload?.selectedItemId && requestedSignature !== String(lastPayload.selectedItemId)) {
+        logDebugEvent("selection", "selection-replay-blocked", {
+          reason: "requested-selection-differs-from-last-payload",
+          requestedSelectionIds,
+          payloadSelectedItemId: lastPayload.selectedItemId,
+          currentSelectionIds,
+          pendingSelectionIds
         });
         return;
       }

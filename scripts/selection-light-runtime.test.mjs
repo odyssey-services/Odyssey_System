@@ -111,7 +111,10 @@ test("selection request with existing payload replays only lastPayload", () => {
   assert.ok(sceneControllerSrc.includes("scheduleLiveSelectionResolve(\"selection-request-initial\", { forceResolve: true })"));
   assert.ok(sceneControllerSrc.includes("selection-request-hydrate"));
   assert.ok(sceneControllerSrc.includes("event?.data?.hydrateIfStale === true"));
+  assert.ok(sceneControllerSrc.includes("forceResolveIfDifferent"));
   assert.ok(sceneControllerSrc.includes("selection-hydrate-requested"));
+  assert.ok(sceneControllerSrc.includes("selection-request-received"));
+  assert.ok(sceneControllerSrc.includes("selection-request-resolve-start"));
   assert.ok(sceneControllerSrc.includes("void readLiveSelectionIds(currentSelectionIds)"));
   assert.ok(sceneControllerSrc.includes("if (liveSignature !== requestedSignature)"));
   assert.ok(sceneControllerSrc.includes("selection-hydrate-skipped"));
@@ -119,9 +122,11 @@ test("selection request with existing payload replays only lastPayload", () => {
   assert.ok(sceneControllerSrc.includes('stableSelectionResolver?.scheduleSelectionSync({ force: true, reason: "selection-request-hydrate" });'));
 });
 
-test("selection request hydrate remains a startup fallback only", () => {
-  assert.ok(sceneControllerSrc.includes("&& (!lastPayload || lastPayload.status === \"no-selection\" || lastPayload.status === \"loading\")"));
-  assert.ok(sceneControllerSrc.includes("&& requestedSignature !== pendingSignature"));
+test("selection request hydrate now supports ready -> ready token recovery", () => {
+  assert.ok(!sceneControllerSrc.includes("&& (!lastPayload || lastPayload.status === \"no-selection\" || lastPayload.status === \"loading\")"));
+  assert.ok(sceneControllerSrc.includes("const shouldResolveRequestedSelection = ("));
+  assert.ok(sceneControllerSrc.includes("forceReplay === true"));
+  assert.ok(sceneControllerSrc.includes("&& (event?.data?.hydrateIfStale === true || forceResolveIfDifferent)"));
   assert.ok(sceneControllerSrc.includes("previousCharacterId: lastPayload?.characterId ?? null"));
 });
 
@@ -129,6 +134,12 @@ test("stale payload replay is blocked while another selection is pending", () =>
   assert.ok(sceneControllerSrc.includes("selection-replay-skipped"));
   assert.ok(sceneControllerSrc.includes("reason: \"pending-selection-mismatch\""));
   assert.ok(sceneControllerSrc.includes("lastPayload.selectedItemId !== pendingSelectionIds[0]"));
+});
+
+test("stale replay for a different requested ready token is blocked", () => {
+  assert.ok(sceneControllerSrc.includes("selection-replay-blocked"));
+  assert.ok(sceneControllerSrc.includes("reason: \"requested-selection-differs-from-last-payload\""));
+  assert.ok(sceneControllerSrc.includes("requestedSignature !== String(lastPayload.selectedItemId)"));
 });
 
 test("native selection-changed path remains primary and is logged", () => {

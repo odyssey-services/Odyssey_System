@@ -97,9 +97,21 @@ test("weapon switch separates RPC failures from UI update failures and ignores s
 test("popover modules log payload receipt instead of relying on remounts", () => {
   assert.ok(overlayPageSrc.includes("function logPayloadReceived(moduleId, payload, reason = \"broadcast\")"));
   assert.ok(overlayPageSrc.includes('console.info("[combatHud/popover] payload-received"'));
+  assert.ok(overlayPageSrc.includes("sendDebugEvent(\"payload-received\""));
   assert.ok(overlayPageSrc.includes('logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");'));
   assert.ok(overlayPageSrc.includes('logPayloadReceived(moduleParam, rawPayload, "broadcast");'));
   assert.ok(overlayPageSrc.includes("status: payload?.status ?? null"));
+});
+
+test("popover iframe requests replay when live Owlbear selection differs from ready payload", () => {
+  assert.ok(overlayPageSrc.includes("async function requestSelectionReplayIfLiveSelectionDiffers(payload, reason = \"player-change\")"));
+  assert.ok(overlayPageSrc.includes("if (normalizedSelectionIds.length !== 1)"));
+  assert.ok(overlayPageSrc.includes("forceReplay: true"));
+  assert.ok(overlayPageSrc.includes("if (liveSignature !== payloadSignature)"));
+  assert.ok(overlayPageSrc.includes("forceResolveIfDifferent: true"));
+  assert.ok(overlayPageSrc.includes('scheduleSelectionReplayCheck(lastSelectionPayload, "payload-received-check", 70);'));
+  assert.ok(overlayPageSrc.includes('scheduleSelectionReplayCheck(lastSelectionPayload, "player-change", 70);'));
+  assert.ok(overlayPageSrc.includes('sendDebugEvent("selection-replay-requested"'));
 });
 
 test("combat runtime pending is safely published, auto-cleared, and never blocks forever", () => {
