@@ -9249,10 +9249,10 @@ function start() {
       const requestKey = `${reason}:${liveSignature}:${payloadSignature}:${String(payload?.status ?? "")}`;
       if (lastReplayRequestKey === requestKey) return;
       lastReplayRequestKey = requestKey;
-      if (reason === "player-change" && normalizedSelectionIds.length === 0 && payloadStatus === "ready" && payloadSelectedItemId) {
+      if (normalizedSelectionIds.length === 0 && payloadStatus === "ready" && payloadSelectedItemId) {
         sendDebugEvent("selection-replay-suppressed", {
           moduleId: moduleParam,
-          reason: "transient-empty-selection",
+          reason: "empty-live-selection-with-ready-payload",
           payloadSelectedItemId,
           payloadStatus
         });

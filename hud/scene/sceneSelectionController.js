@@ -3102,6 +3102,19 @@ export function setupSceneSelection(hooks = {}) {
         moduleId: event?.data?.moduleId ?? null,
         reason: requestReason,
       });
+      if (
+        requestedSelectionIds.length === 0
+        && lastPayload?.status === "ready"
+        && lastPayload?.selectedItemId
+      ) {
+        logDebugEvent("selection", "selection-request-ignored", {
+          reason: "empty-request-while-ready-sticky",
+          lastPayloadSelectedItemId: lastPayload.selectedItemId,
+          lastPayloadStatus: lastPayload.status,
+        });
+        broadcast(lastPayload);
+        return;
+      }
       if (requestedSelectionIds.length === 0 && forceReplay !== true) {
         logDebugEvent("selection", "selection-request-ignored", {
           requestedSelectionIds,

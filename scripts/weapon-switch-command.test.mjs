@@ -119,10 +119,10 @@ test("popover iframe requests replay when live Owlbear selection differs from re
 
 test("transient empty player-change selection is suppressed instead of forceReplay []", () => {
   assert.ok(overlayPageSrc.includes('sendDebugEvent("selection-replay-suppressed"'));
-  assert.ok(overlayPageSrc.includes('reason === "player-change"'));
   assert.ok(overlayPageSrc.includes("normalizedSelectionIds.length === 0"));
   assert.ok(overlayPageSrc.includes("payloadStatus === \"ready\""));
   assert.ok(overlayPageSrc.includes("payloadSelectedItemId"));
+  assert.ok(overlayPageSrc.includes('reason: "empty-live-selection-with-ready-payload"'));
 });
 
 test("combat runtime pending is safely published, auto-cleared, and never blocks forever", () => {

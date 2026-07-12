@@ -261,14 +261,13 @@ function start() {
       lastReplayRequestKey = requestKey;
 
       if (
-        reason === "player-change"
-        && normalizedSelectionIds.length === 0
+        normalizedSelectionIds.length === 0
         && payloadStatus === "ready"
         && payloadSelectedItemId
       ) {
         sendDebugEvent("selection-replay-suppressed", {
           moduleId: moduleParam,
-          reason: "transient-empty-selection",
+          reason: "empty-live-selection-with-ready-payload",
           payloadSelectedItemId,
           payloadStatus,
         });

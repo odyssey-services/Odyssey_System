@@ -154,8 +154,10 @@ test("duplicate requested token replays are deduped before async live-selection 
 test("empty and same-selection request noise is ignored instead of creating pending chains", () => {
   assert.ok(sceneControllerSrc.includes("selection-request-ignored"));
   assert.ok(sceneControllerSrc.includes("reason: \"empty-live-selection\""));
+  assert.ok(sceneControllerSrc.includes("reason: \"empty-request-while-ready-sticky\""));
   assert.ok(sceneControllerSrc.includes("reason: \"same-current-selection\""));
   assert.ok(sceneControllerSrc.includes("reason: \"same-pending-selection\""));
+  assert.ok(sceneControllerSrc.includes("broadcast(lastPayload);"));
 });
 
 test("native selection-changed path remains primary and is logged", () => {
