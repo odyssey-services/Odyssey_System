@@ -252,6 +252,7 @@ function start() {
       const normalizedSelectionIds = Array.isArray(selectionIds)
         ? selectionIds.map((value) => String(value ?? "").trim()).filter(Boolean)
         : [];
+      const targetingMode = String(payload?.ui?.targeting?.mode ?? "").trim();
       const payloadStatus = String(payload?.status ?? "").trim();
       const payloadSelectedItemId = String(payload?.selectedItemId ?? "").trim();
       const liveSignature = normalizedSelectionIds.join("|");
@@ -259,6 +260,17 @@ function start() {
       const requestKey = `${reason}:${liveSignature}:${payloadSignature}:${String(payload?.status ?? "")}`;
       if (lastReplayRequestKey === requestKey) return;
       lastReplayRequestKey = requestKey;
+
+      if (targetingMode === "picking") {
+        sendDebugEvent("selection-replay-suppressed", {
+          moduleId: moduleParam,
+          reason: "targeting-picking-active",
+          liveSelectionIds: normalizedSelectionIds,
+          payloadSelectedItemId: payload?.selectedItemId ?? null,
+          payloadStatus: payload?.status ?? null,
+        });
+        return;
+      }
 
       if (
         normalizedSelectionIds.length === 0
@@ -332,6 +344,19 @@ function start() {
     // opened after a selection change still shows the current state.
     if (available) {
       try {
+        document.addEventListener("keydown", (event) => {
+          if (event.key !== "Escape") return;
+          if (lastSelectionPayload?.ui?.targeting?.mode !== "picking") return;
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          send(BC_HUD_COMMAND, { type: "cancel-target" });
+          sendDebugEvent("targeting-escape-cancel", {
+            moduleId: moduleParam,
+            reason: "iframe-keydown",
+          });
+        });
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           lastSelectionPayload = event?.data ?? null;
           logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");
@@ -349,6 +374,34 @@ function start() {
           }
           scheduleHydrationRetry(lastSelectionPayload);
         });
+        if (moduleParam === "skills") {
+          OBR.broadcast.onMessage(BC_HUD_ABILITIES, (event) => {
+            const runtimeCharacterId = String(event?.data?.characterId ?? "").trim();
+            const currentCharacterId = String(lastSelectionPayload?.characterId ?? "").trim();
+
+            if (!runtimeCharacterId || runtimeCharacterId !== currentCharacterId) {
+              sendDebugEvent("abilities-replay-skipped", {
+                moduleId: moduleParam,
+                reason: "character-mismatch",
+                runtimeCharacterId,
+                currentCharacterId,
+              });
+              return;
+            }
+
+            sendDebugEvent("abilities-selection-replay-requested", {
+              moduleId: moduleParam,
+              characterId: currentCharacterId,
+              runtimeOk: event?.data?.runtime?.ok !== false,
+            }, "pending");
+
+            send(BC_HUD_SELECTION_REQUEST, {
+              moduleId: moduleParam,
+              reason: "abilities-runtime-updated",
+              forceReplay: true,
+            });
+          });
+        }
         send(BC_HUD_SELECTION_REQUEST, {});
         if (isReplayDriverModule) {
           OBR.player.onChange(() => {

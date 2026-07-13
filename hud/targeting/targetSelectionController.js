@@ -71,6 +71,17 @@ export function setupTargetSelection(options = {}) {
   /** @type {Array<() => void>} */
   const cleanups = [];
 
+  function handleEscapeKeyDown(event) {
+    if (disposed) return;
+    if (event.key !== "Escape") return;
+    if (state.mode !== TARGETING_MODE.picking) return;
+
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    logDebugEvent("targeting", "escape-cancel", { source: "targeting-tool" }, true);
+    void onCancel();
+  }
+
   function broadcast() {
     const payload = buildTargetingBroadcast(state);
     try {
@@ -236,6 +247,10 @@ export function setupTargetSelection(options = {}) {
 
   OBR.onReady(() => {
     if (disposed) return;
+    document.addEventListener("keydown", handleEscapeKeyDown);
+    cleanups.push(() => {
+      document.removeEventListener("keydown", handleEscapeKeyDown);
+    });
     // Register targeting commands before async init so Pick Target cannot be
     // missed during the setup window.
     cleanups.push(OBR.broadcast.onMessage(BC_HUD_TARGETING_COMMAND, (event) => {

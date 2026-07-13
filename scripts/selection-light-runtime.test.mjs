@@ -160,6 +160,21 @@ test("empty and same-selection request noise is ignored instead of creating pend
   assert.ok(sceneControllerSrc.includes("broadcast(lastPayload);"));
 });
 
+test("selection replay is blocked while targeting is actively deferring source selection", () => {
+  assert.ok(sceneControllerSrc.includes("if (shouldDeferSelection()) {"));
+  assert.ok(sceneControllerSrc.includes('reason: "selection-deferred-targeting-active"'));
+  assert.ok(sceneControllerSrc.includes("lastPayloadSelectedItemId: lastPayload?.selectedItemId ?? null"));
+  assert.ok(sceneControllerSrc.includes("lastPayloadStatus: lastPayload?.status ?? null"));
+  assert.ok(sceneControllerSrc.includes("requestReason: event?.data?.reason ?? null"));
+  assert.ok(sceneControllerSrc.includes("if (lastPayload) broadcast(lastPayload);"));
+});
+
+test("abilities runtime selection replay reuses the current payload without resolving a new source", () => {
+  assert.ok(sceneControllerSrc.includes('event?.data?.reason === "abilities-runtime-updated"'));
+  assert.ok(sceneControllerSrc.includes('reason: "abilities-runtime-updated"'));
+  assert.ok(sceneControllerSrc.includes("if (lastPayload) broadcast(lastPayload);"));
+});
+
 test("native selection-changed path remains primary and is logged", () => {
   assert.ok(sceneControllerSrc.includes("selection-change-observed"));
   assert.ok(sceneControllerSrc.includes("previousSelectionIds: currentSelectionIds"));

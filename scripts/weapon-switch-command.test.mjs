@@ -125,6 +125,37 @@ test("transient empty player-change selection is suppressed instead of forceRepl
   assert.ok(overlayPageSrc.includes('reason: "empty-live-selection-with-ready-payload"'));
 });
 
+test("popover replay is suppressed while targeting pick mode is active", () => {
+  assert.ok(overlayPageSrc.includes('const targetingMode = String(payload?.ui?.targeting?.mode ?? "").trim();'));
+  assert.ok(overlayPageSrc.includes('if (targetingMode === "picking") {'));
+  assert.ok(overlayPageSrc.includes('reason: "targeting-picking-active"'));
+});
+
+test("skills popover requests a fresh selection replay after abilities runtime loads", () => {
+  assert.ok(overlayPageSrc.includes('if (moduleParam === "skills") {'));
+  assert.ok(overlayPageSrc.includes('OBR.broadcast.onMessage(BC_HUD_ABILITIES, (event) => {'));
+  assert.ok(overlayPageSrc.includes('reason: "abilities-runtime-updated"'));
+  assert.ok(overlayPageSrc.includes('sendDebugEvent("abilities-selection-replay-requested"'));
+});
+
+test("escape inside the HUD iframe cancels target picking without changing the source character", () => {
+  assert.ok(overlayPageSrc.includes('document.addEventListener("keydown", (event) => {'));
+  assert.ok(overlayPageSrc.includes('if (event.key !== "Escape") return;'));
+  assert.ok(overlayPageSrc.includes('if (lastSelectionPayload?.ui?.targeting?.mode !== "picking") return;'));
+  assert.ok(overlayPageSrc.includes('send(BC_HUD_COMMAND, { type: "cancel-target" });'));
+  assert.ok(overlayPageSrc.includes('sendDebugEvent("targeting-escape-cancel"'));
+});
+
+test("targeting tool escape also cancels picking at the map layer", () => {
+  const targetingControllerSrc = fs.readFileSync(path.join(repoRoot, "hud", "targeting", "targetSelectionController.js"), "utf8");
+  assert.ok(targetingControllerSrc.includes("function handleEscapeKeyDown(event) {"));
+  assert.ok(targetingControllerSrc.includes('if (event.key !== "Escape") return;'));
+  assert.ok(targetingControllerSrc.includes("if (state.mode !== TARGETING_MODE.picking) return;"));
+  assert.ok(targetingControllerSrc.includes("document.addEventListener(\"keydown\", handleEscapeKeyDown);"));
+  assert.ok(targetingControllerSrc.includes('logDebugEvent("targeting", "escape-cancel", { source: "targeting-tool" }, true);'));
+  assert.ok(targetingControllerSrc.includes("void onCancel();"));
+});
+
 test("combat runtime pending is safely published, auto-cleared, and never blocks forever", () => {
   assert.ok(sceneControllerSrc.includes("const COMBAT_RUNTIME_PENDING_MAX_MS = 5000;"));
   assert.ok(sceneControllerSrc.includes("let combatRuntimePendingTimer = null;"));

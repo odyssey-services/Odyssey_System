@@ -11686,6 +11686,31 @@ function setupSceneSelection(hooks = {}) {
         moduleId: event?.data?.moduleId ?? null,
         reason: requestReason
       });
+      if (event?.data?.reason === "abilities-runtime-updated") {
+        logDebugEvent("selection", "selection-replayed", {
+          status: lastPayload?.status ?? null,
+          characterId: lastPayload?.characterId ?? null,
+          selectedItemId: lastPayload?.selectedItemId ?? null,
+          reason: "abilities-runtime-updated",
+          moduleId: event?.data?.moduleId ?? null
+        });
+        if (lastPayload) broadcast(lastPayload);
+        return;
+      }
+      if (shouldDeferSelection()) {
+        logDebugEvent("selection", "selection-request-ignored", {
+          reason: "selection-deferred-targeting-active",
+          requestedSelectionIds,
+          currentSelectionIds,
+          pendingSelectionIds,
+          lastPayloadSelectedItemId: lastPayload?.selectedItemId ?? null,
+          lastPayloadStatus: lastPayload?.status ?? null,
+          requestReason: event?.data?.reason ?? null,
+          moduleId: event?.data?.moduleId ?? null
+        });
+        if (lastPayload) broadcast(lastPayload);
+        return;
+      }
       if (requestedSelectionIds.length === 0 && lastPayload?.status === "ready" && lastPayload?.selectedItemId) {
         logDebugEvent("selection", "selection-request-ignored", {
           reason: "empty-request-while-ready-sticky",
@@ -12219,6 +12244,15 @@ function setupTargetSelection(options = {}) {
   let restoreInProgress = false;
   let fetchTargetBodyZonesFn = null;
   const cleanups3 = [];
+  function handleEscapeKeyDown(event) {
+    if (disposed) return;
+    if (event.key !== "Escape") return;
+    if (state.mode !== TARGETING_MODE.picking) return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    logDebugEvent("targeting", "escape-cancel", { source: "targeting-tool" }, true);
+    void onCancel();
+  }
   function broadcast() {
     const payload = buildTargetingBroadcast(state);
     try {
@@ -12358,6 +12392,10 @@ function setupTargetSelection(options = {}) {
   }
   lib_default.onReady(() => {
     if (disposed) return;
+    document.addEventListener("keydown", handleEscapeKeyDown);
+    cleanups3.push(() => {
+      document.removeEventListener("keydown", handleEscapeKeyDown);
+    });
     cleanups3.push(lib_default.broadcast.onMessage(BC_HUD_TARGETING_COMMAND, (event) => {
       handleTargetingCommand(event?.data ?? {});
     }));
