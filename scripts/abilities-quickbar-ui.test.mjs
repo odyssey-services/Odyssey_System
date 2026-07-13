@@ -305,7 +305,9 @@ test("SkillBlock renders the quickbar when snapshot.quickbar is present", () => 
 });
 
 test("sceneSelectionController refreshes runtime + quickbar after weapon switch", () => {
-  assert.ok(sceneControllerSrc.includes('refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true })'));
+  assert.ok(sceneControllerSrc.includes('await refreshCurrentReadyRuntimeOnly("weapon-runtime-loaded");'));
+  assert.ok(sceneControllerSrc.includes("await quickbarController.refresh();"));
+  assert.ok(!sceneControllerSrc.includes('refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true })'));
   assert.ok(sceneControllerSrc.includes('getCharacterArmory(normalizedCharacterId, settings, encounterId)'));
   assert.ok(sceneControllerSrc.includes('refreshHeavyCharacterData(ephemeral.characterId, {'));
   assert.ok(!sceneControllerSrc.includes('const switchGate = sessionReloadGate(session, selectedOption?.switchCost ?? "full_move");'));

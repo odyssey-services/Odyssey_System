@@ -10,6 +10,7 @@ import { fixtureSet } from "./unit/_fixtures.mjs";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const sceneControllerSrc = fs.readFileSync(path.join(repoRoot, "hud", "scene", "sceneSelectionController.js"), "utf8");
+const selectionStateSrc = fs.readFileSync(path.join(repoRoot, "hud", "scene", "selectionState.js"), "utf8");
 const overlayPageSrc = fs.readFileSync(path.join(repoRoot, "hud", "overlay", "combatHudOverlayPage.js"), "utf8");
 const sqlSrc = fs.readFileSync(path.join(repoRoot, "supabase", "odyssey_supabase.sql"), "utf8");
 const fx = fixtureSet();
@@ -62,7 +63,9 @@ test("out-of-combat payload omits encounter fields", () => {
 
 test("successful switch flow refreshes combat session and runtime quickbar", () => {
   assert.ok(sceneControllerSrc.includes('await refreshCombatSessionSafe(sessionController, "weapon-switched");'));
-  assert.ok(sceneControllerSrc.includes('await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });'));
+  assert.ok(sceneControllerSrc.includes('await refreshCurrentReadyRuntimeOnly("weapon-runtime-loaded");'));
+  assert.ok(sceneControllerSrc.includes("await quickbarController.refresh();"));
+  assert.ok(!sceneControllerSrc.includes('await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });'));
 });
 
 test("successful switch flow does not regress to publishState ReferenceError", () => {
@@ -72,6 +75,8 @@ test("successful switch flow does not regress to publishState ReferenceError", (
   assert.ok(sceneControllerSrc.includes("function publishCurrentState("));
   assert.ok(sceneControllerSrc.includes("function replayLastVisibleState("));
   assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-started");'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("selection", "runtime-only-refresh-start"'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("selection", "runtime-only-refresh-result"'));
   assert.ok(sceneControllerSrc.includes('finalPublishReason = "weapon-switch-finished";'));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:finished"'));
 });
@@ -105,6 +110,14 @@ test("final weapon publish happens after busy flags are cleared", () => {
   assert.ok(clearIndex >= 0);
   assert.ok(finalPublishIndex > clearIndex);
   assert.ok(sceneControllerSrc.includes("combatRuntimePending"));
+  assert.ok(selectionStateSrc.includes("weaponSwitchInFlight: !!ephemeral.weaponSwitchInFlight"));
+});
+
+test("weapon switch refresh path does not re-enter token selection resolution", () => {
+  assert.ok(sceneControllerSrc.includes("async function refreshCurrentReadyRuntimeOnly("));
+  assert.ok(!sceneControllerSrc.includes('refreshSelectedCharacterRuntime("weapon-switched"'));
+  assert.ok(!sceneControllerSrc.includes('selection-resolve-start", {\n            reason: "weapon-switched"'));
+  assert.ok(!sceneControllerSrc.includes('publishSelectionTransientState(SELECTION_STATUS.loading'));
 });
 
 test("popover modules log payload receipt instead of relying on remounts", () => {

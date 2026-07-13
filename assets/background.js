@@ -9117,6 +9117,7 @@ function buildBroadcastPayload(state, ephemeral = {}) {
       selectedWeaponId: ephemeral.selectedWeaponId ?? null,
       selectedReloadMagazineId: ephemeral.selectedReloadMagazineId ?? null,
       weaponSelectorOpen: !!ephemeral.weaponSelectorOpen,
+      weaponSwitchInFlight: !!ephemeral.weaponSwitchInFlight,
       fireModeSelectorOpen: !!ephemeral.fireModeSelectorOpen,
       combatRuntimePending: !!ephemeral.combatRuntimePending,
       preparedAction: ephemeral.preparedAction ?? null,
@@ -9716,6 +9717,9 @@ function setupSceneSelection(hooks = {}) {
       getSelectedCharacterId: () => ephemeral.characterId ?? null,
       onRuntime: (runtime) => {
         abilitiesRuntime = runtime;
+        if (ephemeral.weaponSwitchInFlight) {
+          return;
+        }
         if (lastState?.status === "ready" && lastState?.access?.canView === true) {
           publishCurrentState("abilities-runtime-loaded");
         } else if (lastState) {
@@ -10506,6 +10510,59 @@ function setupSceneSelection(hooks = {}) {
         return;
       }
       await runCharacterActionQueue(characterId, performRefresh, { queueKey });
+    }
+    async function refreshCurrentReadyRuntimeOnly(reason = "runtime-refresh") {
+      const characterId = String(ephemeral.characterId ?? "").trim() || null;
+      logDebugEvent("selection", "runtime-only-refresh-start", {
+        reason,
+        characterId,
+        lastStateStatus: lastState?.status ?? null,
+        lastStateCharacterId: lastState?.characterId ?? null
+      }, true, "pending");
+      if (!characterId || lastState?.status !== "ready" || lastState?.access?.canView !== true || String(lastState?.characterId ?? "").trim() !== characterId) {
+        logDebugEvent("selection", "runtime-only-refresh-skipped", {
+          reason,
+          characterId,
+          lastStateStatus: lastState?.status ?? null,
+          lastStateCharacterId: lastState?.characterId ?? null
+        }, false);
+        return null;
+      }
+      try {
+        const runtimeBundle = await fetchLightRuntimeBundle(characterId, reason);
+        if (String(ephemeral.characterId ?? "").trim() !== characterId || lastState?.status !== "ready" || String(lastState?.characterId ?? "").trim() !== characterId) {
+          logDebugEvent("selection", "runtime-only-refresh-stale", {
+            reason,
+            characterId,
+            currentCharacterId: ephemeral.characterId ?? null,
+            lastStateCharacterId: lastState?.characterId ?? null
+          }, true);
+          return null;
+        }
+        lastState = {
+          ...lastState,
+          runtimeBundle,
+          view: buildReadySelectionView(runtimeBundle),
+          error: { code: null, message: null }
+        };
+        logDebugEvent("selection", "runtime-only-refresh-result", {
+          reason,
+          characterId,
+          ok: runtimeBundle?.ok !== false
+        }, runtimeBundle?.ok !== false);
+        return lastState;
+      } catch (error) {
+        const normalized = normalizeRpcError(error);
+        logDebugEvent("selection", "runtime-only-refresh-result", {
+          reason,
+          characterId,
+          ok: false,
+          error: normalized.error,
+          retryable: normalized.retryable,
+          message: normalized.message
+        }, false);
+        throw error;
+      }
     }
     function applyTargetingPayload(payload) {
       const target = payload?.target && typeof payload.target === "object" ? payload.target : null;
@@ -11521,7 +11578,10 @@ function setupSceneSelection(hooks = {}) {
             shouldPublishAfterFinally = false;
             return;
           }
-          await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });
+          await refreshCurrentReadyRuntimeOnly("weapon-runtime-loaded");
+          if (quickbarController && characterIdAtRequest) {
+            await quickbarController.refresh();
+          }
           if (isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
             finalPublishReason = "weapon-switch-finished";
             shouldPublishAfterFinally = true;

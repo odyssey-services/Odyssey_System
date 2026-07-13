@@ -155,6 +155,7 @@ function buildSyntheticState(payload) {
       selectedReloadMagazineId: payload.ui?.selectedReloadMagazineId ?? null,
       selectedModifierIds: [],
       weaponSelectorOpen: !!payload.ui?.weaponSelectorOpen,
+      weaponSwitchInFlight: !!payload.ui?.weaponSwitchInFlight,
       fireModeSelectorOpen: !!payload.ui?.fireModeSelectorOpen,
       combatRuntimePending: !!payload.ui?.combatRuntimePending,
       activeIntent: payload.ui?.activeIntent ?? { kind: "weapon-attack", weaponId: null },
