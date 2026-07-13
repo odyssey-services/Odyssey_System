@@ -9176,6 +9176,7 @@ function setupSceneSelection(hooks = {}) {
   let combatRuntimePendingTimer = null;
   let publishCurrentStateSafe = () => null;
   let payloadRevision = 0;
+  let weaponSwitchFlightToken = 0;
   let stableSelectionResolver = null;
   let movementPreviewActive = false;
   const heavyRuntimeCache = /* @__PURE__ */ new Map();
@@ -10474,6 +10475,7 @@ function setupSceneSelection(hooks = {}) {
           true
         );
         setCombatRuntimePending(true, reason);
+        let finalPublishReason = null;
         try {
           await waitForCombatActionIdle(characterId);
           const tasks = [refetchCurrent(reason)];
@@ -10483,7 +10485,7 @@ function setupSceneSelection(hooks = {}) {
           await Promise.allSettled(tasks);
           if (lastState?.status === "ready" && lastState?.access?.canView === true && String(lastState?.characterId ?? "").trim() === characterId) {
             const finalReason = reason === "weapon-switched" ? "weapon-runtime-loaded" : refreshQuickbar ? "abilities-runtime-loaded" : "runtime-refresh-loaded";
-            publishCurrentState(finalReason);
+            finalPublishReason = finalReason;
           }
         } catch (error) {
           logDebugEvent("selection", "runtime-refresh-exception", {
@@ -10494,6 +10496,9 @@ function setupSceneSelection(hooks = {}) {
           }, false);
         } finally {
           setCombatRuntimePending(false, reason);
+          if (finalPublishReason && lastState?.status === "ready" && lastState?.access?.canView === true && String(lastState?.characterId ?? "").trim() === characterId) {
+            publishCurrentState(finalPublishReason);
+          }
         }
       };
       if (insideCharacterQueue || !characterId) {
@@ -11423,6 +11428,8 @@ function setupSceneSelection(hooks = {}) {
         ephemeral.weaponSelectorOpen = false;
         ephemeral.magazineSelectorOpen = false;
         ephemeral.weaponSwitchInFlight = true;
+        const weaponSwitchOperationToken = ++weaponSwitchFlightToken;
+        publishCurrentState("weapon-switch-started");
         ephemeral.fireModeSelectorOpen = false;
         ephemeral.fireModeRpcResult = null;
         const expectedVersion = expectedVersionOf(session);
@@ -11438,6 +11445,8 @@ function setupSceneSelection(hooks = {}) {
           expectedEncounterVersion: payload.expected_encounter_version ?? null
         });
         let result;
+        let finalPublishReason = null;
+        let shouldPublishAfterFinally = false;
         try {
           result = await switchActiveWeapon(payload, settings2);
         } catch (error) {
@@ -11455,8 +11464,8 @@ function setupSceneSelection(hooks = {}) {
             code: "RPC_EXCEPTION",
             message
           }, false);
-          publishCurrentState("weapon-switch-rpc-failed");
-          ephemeral.weaponSwitchInFlight = false;
+          finalPublishReason = "weapon-switch-rpc-failed";
+          shouldPublishAfterFinally = true;
           return;
         }
         if (result?.ok === false) {
@@ -11478,8 +11487,8 @@ function setupSceneSelection(hooks = {}) {
           if (result?.error === "STATE_VERSION_CONFLICT" && sessionController) {
             await refreshCombatSessionSafe(sessionController, "weapon-switched-state-version-conflict");
           }
-          publishCurrentState("weapon-switch-server-failed");
-          ephemeral.weaponSwitchInFlight = false;
+          finalPublishReason = "weapon-switch-server-failed";
+          shouldPublishAfterFinally = true;
           return;
         }
         try {
@@ -11509,11 +11518,13 @@ function setupSceneSelection(hooks = {}) {
               currentCharacterId: ephemeral.characterId ?? null,
               currentSelectedItemId: lastPayload?.selectedItemId ?? null
             });
+            shouldPublishAfterFinally = false;
             return;
           }
           await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });
           if (isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
-            publishCurrentState("weapon-switched");
+            finalPublishReason = "weapon-switch-finished";
+            shouldPublishAfterFinally = true;
           } else {
             logDebugEvent("weapon", "switch_active_weapon:stale-result-ignored", {
               characterIdAtRequest,
@@ -11521,19 +11532,52 @@ function setupSceneSelection(hooks = {}) {
               currentCharacterId: ephemeral.characterId ?? null,
               currentSelectedItemId: lastPayload?.selectedItemId ?? null
             });
+            shouldPublishAfterFinally = false;
           }
           return;
         } catch (error) {
           const message = String(error?.message ?? error ?? "Weapon switch UI update failed.");
+          ephemeral.commandStatus = {
+            type: "error",
+            message: "Weapon switch failed.",
+            source: "weapon_overlay",
+            operation: "switch_active_weapon",
+            code: "UI_UPDATE_FAILED"
+          };
           logDebugEvent("weapon", "switch_active_weapon:ui-update-error", {
             characterId: characterIdAtRequest,
             targetWeaponId: weaponId,
             message
           }, false);
-          publishCurrentState("weapon-switch-ui-update-error");
+          finalPublishReason = "weapon-switch-ui-update-error";
+          shouldPublishAfterFinally = true;
           return;
         } finally {
-          ephemeral.weaponSwitchInFlight = false;
+          const isLatestWeaponSwitch = weaponSwitchOperationToken === weaponSwitchFlightToken;
+          if (isLatestWeaponSwitch) {
+            ephemeral.weaponSwitchInFlight = false;
+          }
+          if (shouldPublishAfterFinally && isLatestWeaponSwitch && isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
+            logDebugEvent("weapon", "switch_active_weapon:finished", {
+              characterId: characterIdAtRequest,
+              targetWeaponId: weaponId,
+              currentCharacterId: ephemeral.characterId ?? null,
+              currentSelectedItemId: lastPayload?.selectedItemId ?? null,
+              weaponSwitchInFlight: ephemeral.weaponSwitchInFlight,
+              combatRuntimePending
+            }, true);
+            if (lastState?.status !== "ready") {
+              logDebugEvent("weapon", "switch_active_weapon:final-state-not-ready", {
+                status: lastState?.status ?? null,
+                characterId: lastState?.characterId ?? null,
+                selectedItemId: lastState?.selectedItemId ?? null,
+                reason: finalPublishReason
+              }, false);
+              replayLastVisibleState2(finalPublishReason);
+            } else {
+              publishCurrentState(finalPublishReason);
+            }
+          }
         }
       }
       if (type === "toggle-weapon-selector") {

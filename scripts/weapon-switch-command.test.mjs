@@ -71,12 +71,16 @@ test("successful switch flow does not regress to publishState ReferenceError", (
   assert.ok(sceneControllerSrc.includes('await refreshHeavyCharacterData(characterIdAtRequest, {'));
   assert.ok(sceneControllerSrc.includes("function publishCurrentState("));
   assert.ok(sceneControllerSrc.includes("function replayLastVisibleState("));
-  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switched");'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-started");'));
+  assert.ok(sceneControllerSrc.includes('finalPublishReason = "weapon-switch-finished";'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:finished"'));
 });
 
 test("weapon switch and reload keep HUD interaction sticky while commands are in flight", () => {
   assert.ok(sceneControllerSrc.includes("ephemeral.weaponSwitchInFlight = true;"));
   assert.ok(sceneControllerSrc.includes("ephemeral.weaponSwitchInFlight = false;"));
+  assert.ok(sceneControllerSrc.includes("const weaponSwitchOperationToken = ++weaponSwitchFlightToken;"));
+  assert.ok(sceneControllerSrc.includes("const isLatestWeaponSwitch = weaponSwitchOperationToken === weaponSwitchFlightToken;"));
   assert.ok(sceneControllerSrc.includes("ephemeral.magazineSelectorOpen = false;"));
   assert.ok(sceneControllerSrc.includes('if (type === "toggle-magazine-selector") {'));
   assert.ok(sceneControllerSrc.includes("ephemeral.reloadInFlight = true;"));
@@ -87,11 +91,20 @@ test("weapon switch and reload keep HUD interaction sticky while commands are in
 
 test("weapon switch separates RPC failures from UI update failures and ignores stale reselection results", () => {
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:ui-update-error"'));
-  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-rpc-failed");'));
-  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-server-failed");'));
-  assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-ui-update-error");'));
+  assert.ok(sceneControllerSrc.includes('finalPublishReason = "weapon-switch-rpc-failed";'));
+  assert.ok(sceneControllerSrc.includes('finalPublishReason = "weapon-switch-server-failed";'));
+  assert.ok(sceneControllerSrc.includes('finalPublishReason = "weapon-switch-ui-update-error";'));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:stale-result-ignored"'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:final-state-not-ready"'));
   assert.ok(sceneControllerSrc.includes("function isCurrentSource(characterId, selectedItemId)"));
+});
+
+test("final weapon publish happens after busy flags are cleared", () => {
+  const clearIndex = sceneControllerSrc.indexOf("ephemeral.weaponSwitchInFlight = false;");
+  const finalPublishIndex = sceneControllerSrc.lastIndexOf("publishCurrentState(finalPublishReason);");
+  assert.ok(clearIndex >= 0);
+  assert.ok(finalPublishIndex > clearIndex);
+  assert.ok(sceneControllerSrc.includes("combatRuntimePending"));
 });
 
 test("popover modules log payload receipt instead of relying on remounts", () => {
