@@ -96,11 +96,13 @@ test("weapon switch separates RPC failures from UI update failures and ignores s
 
 test("popover modules log payload receipt instead of relying on remounts", () => {
   assert.ok(overlayPageSrc.includes("function logPayloadReceived(moduleId, payload, reason = \"broadcast\")"));
+  assert.ok(overlayPageSrc.includes("function buildPayloadReceivedLogKey(payload)"));
   assert.ok(overlayPageSrc.includes('console.info("[combatHud/popover] payload-received"'));
-  assert.ok(overlayPageSrc.includes("sendDebugEvent(\"payload-received\""));
-  assert.ok(overlayPageSrc.includes('logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");'));
-  assert.ok(overlayPageSrc.includes('logPayloadReceived(moduleParam, rawPayload, "broadcast");'));
-  assert.ok(overlayPageSrc.includes("status: payload?.status ?? null"));
+  assert.ok(overlayPageSrc.includes("let lastPayloadReceivedLogKey = \"\";"));
+  assert.ok(overlayPageSrc.includes("if (!COMPANION_DEBUG) return;"));
+  assert.ok(overlayPageSrc.includes("const logKey = buildPayloadReceivedLogKey(payload);"));
+  assert.ok(overlayPageSrc.includes("if (logKey === lastPayloadReceivedLogKey) return;"));
+  assert.ok(overlayPageSrc.includes("revision: payload?.revision ?? null"));
 });
 
 test("popover iframe requests replay when live Owlbear selection differs from ready payload", () => {

@@ -81,6 +81,19 @@ function logPayloadReceived(moduleId, payload, reason = "broadcast") {
   } catch (_e) { /* ignore */ }
 }
 
+function buildPayloadReceivedLogKey(payload) {
+  return [
+    payload?.revision ?? "",
+    payload?.status ?? "",
+    payload?.selectedItemId ?? "",
+    payload?.characterId ?? "",
+    payload?.reason ?? "",
+    payload?.ui?.targeting?.mode ?? "",
+    payload?.hudSnapshot?.quickbar?.version ?? "",
+    payload?.hudSnapshot?.weapon?.primary?.id ?? "",
+  ].join("|");
+}
+
 function sendDebugEvent(action, details = {}, status = "ok") {
   try {
     send(BC_HUD_DEBUG_EVENT, {
@@ -177,6 +190,23 @@ function start() {
     let hydrationRetryTimer = null;
     let replayRequestTimer = null;
     let lastReplayRequestKey = "";
+    let lastPayloadReceivedLogKey = "";
+
+    function maybeLogPayloadReceived(payload, reason = "broadcast") {
+      if (!COMPANION_DEBUG) return;
+      const logKey = buildPayloadReceivedLogKey(payload);
+      if (logKey === lastPayloadReceivedLogKey) return;
+      lastPayloadReceivedLogKey = logKey;
+      logPayloadReceived(moduleParam, payload, reason);
+      sendDebugEvent("payload-received", {
+        moduleId: moduleParam,
+        revision: payload?.revision ?? null,
+        status: payload?.status ?? null,
+        selectedItemId: payload?.selectedItemId ?? null,
+        characterId: payload?.characterId ?? null,
+        reason: payload?.reason ?? reason,
+      });
+    }
 
     function clearHydrationRetryTimer() {
       if (hydrationRetryTimer) {
@@ -359,14 +389,7 @@ function start() {
         });
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           lastSelectionPayload = event?.data ?? null;
-          logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");
-          sendDebugEvent("payload-received", {
-            moduleId: moduleParam,
-            status: lastSelectionPayload?.status ?? null,
-            selectedItemId: lastSelectionPayload?.selectedItemId ?? null,
-            characterId: lastSelectionPayload?.characterId ?? null,
-            reason: "broadcast",
-          });
+          maybeLogPayloadReceived(lastSelectionPayload, "broadcast");
           try { mod.applySelection(lastSelectionPayload); } catch (_e) { /* ignore */ }
           void maybeHydrateSelectionFromLocal(lastSelectionPayload);
           if (isReplayDriverModule) {
@@ -433,6 +456,23 @@ function start() {
     // the first replay is in flight `selState` is null → "Loading…" (never a
     // false empty list — the bug this fixes).
     let rawPayload = null;
+    let lastPayloadReceivedLogKey = "";
+
+    function maybeLogPayloadReceived(payload, reason = "broadcast") {
+      if (!COMPANION_DEBUG) return;
+      const logKey = buildPayloadReceivedLogKey(payload);
+      if (logKey === lastPayloadReceivedLogKey) return;
+      lastPayloadReceivedLogKey = logKey;
+      logPayloadReceived(moduleParam, payload, reason);
+      sendDebugEvent("payload-received", {
+        moduleId: moduleParam,
+        revision: payload?.revision ?? null,
+        status: payload?.status ?? null,
+        selectedItemId: payload?.selectedItemId ?? null,
+        characterId: payload?.characterId ?? null,
+        reason: payload?.reason ?? reason,
+      });
+    }
 
     function renderCompanion() {
       root.innerHTML = "";
@@ -490,14 +530,7 @@ function start() {
       try {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
-          logPayloadReceived(moduleParam, rawPayload, "broadcast");
-          sendDebugEvent("payload-received", {
-            moduleId: moduleParam,
-            status: rawPayload?.status ?? null,
-            selectedItemId: rawPayload?.selectedItemId ?? null,
-            characterId: rawPayload?.characterId ?? null,
-            reason: "broadcast",
-          });
+          maybeLogPayloadReceived(rawPayload, "broadcast");
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});
@@ -584,6 +617,23 @@ function start() {
   if (moduleParam === "ability-detail") {
     let rawPayload = null;
     let shown = null; // { characterActionId, armed } | null
+    let lastPayloadReceivedLogKey = "";
+
+    function maybeLogPayloadReceived(payload, reason = "broadcast") {
+      if (!COMPANION_DEBUG) return;
+      const logKey = buildPayloadReceivedLogKey(payload);
+      if (logKey === lastPayloadReceivedLogKey) return;
+      lastPayloadReceivedLogKey = logKey;
+      logPayloadReceived(moduleParam, payload, reason);
+      sendDebugEvent("payload-received", {
+        moduleId: moduleParam,
+        revision: payload?.revision ?? null,
+        status: payload?.status ?? null,
+        selectedItemId: payload?.selectedItemId ?? null,
+        characterId: payload?.characterId ?? null,
+        reason: payload?.reason ?? reason,
+      });
+    }
 
     function resolveShownAction() {
       if (!shown?.characterActionId) return null;
@@ -615,7 +665,7 @@ function start() {
       try {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
-          logPayloadReceived(moduleParam, rawPayload, "broadcast");
+          maybeLogPayloadReceived(rawPayload, "broadcast");
           renderCard();
         });
         OBR.broadcast.onMessage(BC_HUD_COMMAND, (event) => {

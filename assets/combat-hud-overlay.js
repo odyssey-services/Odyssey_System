@@ -7901,6 +7901,8 @@ function normalizeSelectionPayload(raw) {
   if (!raw || typeof raw !== "object" || !raw.status) return null;
   return {
     status: String(raw.status),
+    revision: Number.isFinite(Number(raw.revision)) ? Number(raw.revision) : null,
+    reason: raw.reason ?? null,
     selectedItemId: raw.selectedItemId ?? null,
     characterId: raw.characterId ?? null,
     viewer: { playerId: raw.viewer?.playerId ?? null, role: raw.viewer?.role ?? "UNKNOWN" },
@@ -9079,6 +9081,18 @@ function logPayloadReceived(moduleId, payload, reason = "broadcast") {
   } catch (_e) {
   }
 }
+function buildPayloadReceivedLogKey(payload) {
+  return [
+    payload?.revision ?? "",
+    payload?.status ?? "",
+    payload?.selectedItemId ?? "",
+    payload?.characterId ?? "",
+    payload?.reason ?? "",
+    payload?.ui?.targeting?.mode ?? "",
+    payload?.hudSnapshot?.quickbar?.version ?? "",
+    payload?.hudSnapshot?.weapon?.primary?.id ?? ""
+  ].join("|");
+}
 function sendDebugEvent(action, details2 = {}, status2 = "ok") {
   try {
     send(BC_HUD_DEBUG_EVENT, {
@@ -9159,7 +9173,21 @@ function start() {
     return;
   }
   if (HUD_MODULE_IDS.includes(moduleParam)) {
-    let clearHydrationRetryTimer = function() {
+    let maybeLogPayloadReceived = function(payload, reason = "broadcast") {
+      if (!COMPANION_DEBUG) return;
+      const logKey = buildPayloadReceivedLogKey(payload);
+      if (logKey === lastPayloadReceivedLogKey) return;
+      lastPayloadReceivedLogKey = logKey;
+      logPayloadReceived(moduleParam, payload, reason);
+      sendDebugEvent("payload-received", {
+        moduleId: moduleParam,
+        revision: payload?.revision ?? null,
+        status: payload?.status ?? null,
+        selectedItemId: payload?.selectedItemId ?? null,
+        characterId: payload?.characterId ?? null,
+        reason: payload?.reason ?? reason
+      });
+    }, clearHydrationRetryTimer = function() {
       if (hydrationRetryTimer) {
         clearTimeout(hydrationRetryTimer);
         hydrationRetryTimer = null;
@@ -9214,6 +9242,7 @@ function start() {
     let hydrationRetryTimer = null;
     let replayRequestTimer = null;
     let lastReplayRequestKey = "";
+    let lastPayloadReceivedLogKey = "";
     async function maybeHydrateSelectionFromLocal(payload) {
       if (!available || !isReplayDriverModule) return;
       const status2 = String(payload?.status ?? "").trim();
@@ -9322,14 +9351,7 @@ function start() {
         });
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           lastSelectionPayload = event?.data ?? null;
-          logPayloadReceived(moduleParam, lastSelectionPayload, "broadcast");
-          sendDebugEvent("payload-received", {
-            moduleId: moduleParam,
-            status: lastSelectionPayload?.status ?? null,
-            selectedItemId: lastSelectionPayload?.selectedItemId ?? null,
-            characterId: lastSelectionPayload?.characterId ?? null,
-            reason: "broadcast"
-          });
+          maybeLogPayloadReceived(lastSelectionPayload, "broadcast");
           try {
             mod.applySelection(lastSelectionPayload);
           } catch (_e) {
@@ -9382,7 +9404,21 @@ function start() {
     return;
   }
   if (moduleParam === "gun-weapon-selector" || moduleParam === "gun-magazine-selector" || moduleParam === "gun-fire-mode-selector") {
-    let renderCompanion = function() {
+    let maybeLogPayloadReceived = function(payload, reason = "broadcast") {
+      if (!COMPANION_DEBUG) return;
+      const logKey = buildPayloadReceivedLogKey(payload);
+      if (logKey === lastPayloadReceivedLogKey) return;
+      lastPayloadReceivedLogKey = logKey;
+      logPayloadReceived(moduleParam, payload, reason);
+      sendDebugEvent("payload-received", {
+        moduleId: moduleParam,
+        revision: payload?.revision ?? null,
+        status: payload?.status ?? null,
+        selectedItemId: payload?.selectedItemId ?? null,
+        characterId: payload?.characterId ?? null,
+        reason: payload?.reason ?? reason
+      });
+    }, renderCompanion = function() {
       root.innerHTML = "";
       const host = document.createElement("div");
       host.className = "odyssey-hud ohud-module";
@@ -9404,6 +9440,7 @@ function start() {
       }
     };
     let rawPayload = null;
+    let lastPayloadReceivedLogKey = "";
     root.addEventListener("click", (e) => {
       const target = e.target.closest("[data-action]");
       if (!target || !available) return;
@@ -9425,14 +9462,7 @@ function start() {
       try {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
-          logPayloadReceived(moduleParam, rawPayload, "broadcast");
-          sendDebugEvent("payload-received", {
-            moduleId: moduleParam,
-            status: rawPayload?.status ?? null,
-            selectedItemId: rawPayload?.selectedItemId ?? null,
-            characterId: rawPayload?.characterId ?? null,
-            reason: "broadcast"
-          });
+          maybeLogPayloadReceived(rawPayload, "broadcast");
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});
@@ -9500,7 +9530,21 @@ function start() {
     return;
   }
   if (moduleParam === "ability-detail") {
-    let resolveShownAction = function() {
+    let maybeLogPayloadReceived = function(payload, reason = "broadcast") {
+      if (!COMPANION_DEBUG) return;
+      const logKey = buildPayloadReceivedLogKey(payload);
+      if (logKey === lastPayloadReceivedLogKey) return;
+      lastPayloadReceivedLogKey = logKey;
+      logPayloadReceived(moduleParam, payload, reason);
+      sendDebugEvent("payload-received", {
+        moduleId: moduleParam,
+        revision: payload?.revision ?? null,
+        status: payload?.status ?? null,
+        selectedItemId: payload?.selectedItemId ?? null,
+        characterId: payload?.characterId ?? null,
+        reason: payload?.reason ?? reason
+      });
+    }, resolveShownAction = function() {
       if (!shown?.characterActionId) return null;
       const list = rawPayload?.hudSnapshot?.quickbar?.quickActions;
       return Array.isArray(list) ? list.find((a) => a.characterActionId === shown.characterActionId) ?? null : null;
@@ -9513,6 +9557,7 @@ function start() {
     };
     let rawPayload = null;
     let shown = null;
+    let lastPayloadReceivedLogKey = "";
     root.addEventListener("mouseenter", () => {
       if (available) send(BC_HUD_COMMAND, { scope: "combat-hud", feature: "ability-detail", type: "cancel-hide" });
     });
@@ -9523,7 +9568,7 @@ function start() {
       try {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
-          logPayloadReceived(moduleParam, rawPayload, "broadcast");
+          maybeLogPayloadReceived(rawPayload, "broadcast");
           renderCard();
         });
         lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {

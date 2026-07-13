@@ -185,6 +185,13 @@ test("14. failure clears pending state unconditionally — reset to null right a
   assert.ok(resetIdx > -1 && okBranchIdx > -1 && resetIdx < okBranchIdx);
 });
 
+test("14b. ACTION_BUSY_RETRY gets exactly one automatic retry with a short delay and explicit retry-result logging", () => {
+  assert.match(controllerSrc, /retryDelayMs = 400/);
+  assert.match(controllerSrc, /if \(normalizeOutcomeCode\(outcome\) === "ACTION_BUSY_RETRY"\)/);
+  assert.match(controllerSrc, /retryAttempt: 1/);
+  assert.match(controllerSrc, /logDebugEvent\(\s*"abilities",\s*"ability-execute-retry-result"/);
+});
+
 /* ── Payload (15-21) ──────────────────────────────────────────────────── */
 
 function fullPayload(overrides = {}) {

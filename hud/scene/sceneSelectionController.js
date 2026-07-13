@@ -118,6 +118,7 @@ export function setupSceneSelection(hooks = {}) {
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
   let publishCurrentStateSafe = () => null;
+  let payloadRevision = 0;
   let stableSelectionResolver = null;
   let movementPreviewActive = false;
   const heavyRuntimeCache = new Map();
@@ -331,15 +332,11 @@ export function setupSceneSelection(hooks = {}) {
     characterId,
     actionId,
     debugAction,
-    retryDelaysMs = [750, 1500],
+    retryDelayMs = 400,
   } = {}) {
     let outcome = await executor();
-
-    for (let index = 0; index < retryDelaysMs.length; index += 1) {
-      if (normalizeOutcomeCode(outcome) !== "ACTION_BUSY_RETRY") {
-        break;
-      }
-      const retryDelayMs = Math.max(0, Number(retryDelaysMs[index]) || 0);
+    if (normalizeOutcomeCode(outcome) === "ACTION_BUSY_RETRY") {
+      const normalizedRetryDelayMs = Math.max(0, Number(retryDelayMs) || 0);
       logDebugEvent(
         "abilities",
         debugAction || "ability-execute-retry",
@@ -347,15 +344,26 @@ export function setupSceneSelection(hooks = {}) {
           characterId: String(characterId ?? "").trim() || null,
           characterActionId: String(actionId ?? "").trim() || null,
           reason: "ACTION_BUSY_RETRY",
-          retryAttempt: index + 1,
-          retryDelayMs,
+          retryAttempt: 1,
+          retryDelayMs: normalizedRetryDelayMs,
           stage: outcome?.raw?.stage ?? outcome?.stage ?? null,
         },
         true,
         "pending",
       );
-      await waitMs(retryDelayMs);
+      await waitMs(normalizedRetryDelayMs);
       outcome = await executor();
+      logDebugEvent(
+        "abilities",
+        "ability-execute-retry-result",
+        {
+          characterId: String(characterId ?? "").trim() || null,
+          characterActionId: String(actionId ?? "").trim() || null,
+          ok: outcome?.ok !== false,
+          code: normalizeOutcomeCode(outcome),
+        },
+        outcome?.ok !== false,
+      );
     }
 
     return outcome;
@@ -770,7 +778,11 @@ export function setupSceneSelection(hooks = {}) {
           getSelectedCharacterId: () => ephemeral.characterId ?? null,
           onRuntime: (runtime) => {
             abilitiesRuntime = runtime;
-            if (lastState) publishState(lastState);
+            if (lastState?.status === "ready" && lastState?.access?.canView === true) {
+              publishCurrentState("abilities-runtime-loaded");
+            } else if (lastState) {
+              publishState(lastState, "abilities-runtime-loaded");
+            }
           },
         })
       : null;
@@ -1475,6 +1487,8 @@ export function setupSceneSelection(hooks = {}) {
         ? { kind: "skill", id: prepared.id }
         : { kind: "weapon-attack", weaponId: ephemeral.selectedWeaponId };
       return {
+        revision: payloadRevision,
+        reason: null,
         selectedWeaponId: ephemeral.selectedWeaponId,
         selectedReloadMagazineId: ephemeral.selectedReloadMagazineId,
         weaponSelectorOpen: ephemeral.weaponSelectorOpen,
@@ -1507,17 +1521,30 @@ export function setupSceneSelection(hooks = {}) {
     }
 
     function publishHudState(state, reason = "state-update") {
-      lastPayload = buildBroadcastPayload(state, buildEphemeralForPayload());
+      payloadRevision += 1;
+      const nextPayload = buildBroadcastPayload(state, {
+        ...buildEphemeralForPayload(),
+        revision: payloadRevision,
+        reason,
+      });
+      lastPayload = {
+        ...nextPayload,
+        revision: payloadRevision,
+        reason,
+      };
       if (lastPayload?.status === "ready") {
         lastResolvedCharacterId = lastPayload.characterId ?? lastResolvedCharacterId;
         lastResolvedTokenId = lastPayload.selectedItemId ?? lastResolvedTokenId;
       }
       broadcast(lastPayload);
       logDebugEvent("selection", "selection-payload-broadcast", {
+        revision: lastPayload.revision ?? null,
         status: lastPayload.status ?? null,
         selectedItemId: lastPayload.selectedItemId ?? null,
         characterId: lastPayload.characterId ?? null,
         reason,
+        hasQuickbar: !!lastPayload?.hudSnapshot?.quickbar,
+        hasWeapon: !!lastPayload?.hudSnapshot?.weapon,
       });
       return lastPayload;
     }
@@ -1612,6 +1639,18 @@ export function setupSceneSelection(hooks = {}) {
             tasks.push(quickbarController.refresh());
           }
           await Promise.allSettled(tasks);
+          if (
+            lastState?.status === "ready"
+            && lastState?.access?.canView === true
+            && String(lastState?.characterId ?? "").trim() === characterId
+          ) {
+            const finalReason = reason === "weapon-switched"
+              ? "weapon-runtime-loaded"
+              : refreshQuickbar
+                ? "abilities-runtime-loaded"
+                : "runtime-refresh-loaded";
+            publishCurrentState(finalReason);
+          }
         } catch (error) {
           logDebugEvent("selection", "runtime-refresh-exception", {
             characterId,
@@ -2156,6 +2195,7 @@ export function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
+        if (ephemeral.pendingInstantAbilityActionId) return;
 
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, abilityId: actionId };
         const ctx = {
@@ -2349,6 +2389,7 @@ export function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
+        if (ephemeral.pendingDirectedAbilityActionId) return;
 
         const requestCtx = { sourceCharacterId: evalCtx.sourceCharacterId, abilityId: actionId, targetCharacterId: evalCtx.targetCharacterId };
         const ctx = {
@@ -3103,15 +3144,19 @@ export function setupSceneSelection(hooks = {}) {
         reason: requestReason,
       });
       if (event?.data?.reason === "abilities-runtime-updated") {
-        logDebugEvent("selection", "selection-replayed", {
-          status: lastPayload?.status ?? null,
-          characterId: lastPayload?.characterId ?? null,
-          selectedItemId: lastPayload?.selectedItemId ?? null,
+        logDebugEvent("selection", "selection-replay-refresh-requested", {
           reason: "abilities-runtime-updated",
+          status: lastState?.status ?? null,
+          characterId: lastState?.characterId ?? null,
+          lastPayloadCharacterId: lastPayload?.characterId ?? null,
           moduleId: event?.data?.moduleId ?? null,
         });
 
-        if (lastPayload) broadcast(lastPayload);
+        if (lastState) {
+          publishCurrentState("abilities-runtime-updated");
+        } else if (lastPayload) {
+          broadcast(lastPayload);
+        }
         return;
       }
       if (shouldDeferSelection()) {

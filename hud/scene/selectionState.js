@@ -492,6 +492,8 @@ export function buildBroadcastPayload(state, ephemeral = {}) {
 
   return {
     status: s.status,
+    revision: Number.isFinite(Number(ephemeral.revision)) ? Number(ephemeral.revision) : null,
+    reason: ephemeral.reason ?? null,
     selectedItemId: s.selectedItemId ?? null,
     characterId: ready ? (s.characterId ?? null) : null,
     viewer: { playerId: s.viewer?.playerId ?? null, role: s.viewer?.role ?? "UNKNOWN" },
@@ -525,6 +527,8 @@ export function normalizeSelectionPayload(raw) {
   if (!raw || typeof raw !== "object" || !raw.status) return null;
   return {
     status: String(raw.status),
+    revision: Number.isFinite(Number(raw.revision)) ? Number(raw.revision) : null,
+    reason: raw.reason ?? null,
     selectedItemId: raw.selectedItemId ?? null,
     characterId: raw.characterId ?? null,
     viewer: { playerId: raw.viewer?.playerId ?? null, role: raw.viewer?.role ?? "UNKNOWN" },
