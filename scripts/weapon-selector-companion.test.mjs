@@ -14,11 +14,21 @@
 //   node scripts/weapon-selector-companion.test.mjs
 
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { buildCompanionSelectorState } from "../hud/scene/selectionView.js";
 import { renderWeaponSelectorPanel } from "../hud/components/WeaponSelectorPanel.js";
 import { renderMagazineSelectorPanel } from "../hud/components/MagazineSelectorPanel.js";
 import { mapBundleToHudSnapshot } from "../hud/runtime/runtimeBundleMapper.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+const overlaySrc = fs.readFileSync(
+  path.join(repoRoot, "hud", "overlay", "combatHudOverlayPage.js"),
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 let passed = 0;
 let failed = 0;
@@ -166,6 +176,16 @@ test("ready payload available immediately -> list, never false empty", () => {
   assert.ok(!html.includes("No weapons available"));
   assert.ok(!html.includes("Loading weapons"));
   assert.ok(html.includes("ohud-weapon-option"));
+});
+
+test("companion selector requests force replay on mount instead of empty selection request", () => {
+  assert.ok(overlaySrc.includes("reason: \"companion-mount\""));
+  assert.ok(overlaySrc.includes("forceReplay: true"));
+});
+
+test("patch before base selection requests replay instead of synthesizing fake selector state", () => {
+  assert.ok(overlaySrc.includes("cause: \"missing-base-selection\""));
+  assert.ok(overlaySrc.includes("reason: \"companion-missing-base-selection\""));
 });
 
 test("weapon selector keeps cached list visible while heavy refresh is in progress", () => {

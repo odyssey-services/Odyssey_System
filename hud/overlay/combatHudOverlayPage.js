@@ -505,6 +505,18 @@ function start() {
       host.innerHTML = html;
       root.appendChild(host);
 
+      sendDebugEvent("companion-rendered", {
+        moduleId: moduleParam,
+        hasState: !!selState,
+        hasWeapon: !!selState?.snapshot?.weapon,
+        availableCount: Array.isArray(selState?.snapshot?.weapon?.available)
+          ? selState.snapshot.weapon.available.length
+          : null,
+        reserveMagazineCount: Array.isArray(selState?.snapshot?.weapon?.primary?.reserveMagazines)
+          ? selState.snapshot.weapon.primary.reserveMagazines.length
+          : null,
+      });
+
       if (COMPANION_DEBUG) {
         const avail = selState?.snapshot?.weapon?.available;
         const commandRoute = moduleParam === "gun-weapon-selector" ? "gun-selector"
@@ -544,16 +556,41 @@ function start() {
 
     if (available) {
       try {
+        sendDebugEvent("companion-mounted", {
+          moduleId: moduleParam,
+        });
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
           maybeLogPayloadReceived(rawPayload, "broadcast");
+          sendDebugEvent("companion-selection-received", {
+            moduleId: moduleParam,
+            status: rawPayload?.status ?? null,
+            characterId: rawPayload?.characterId ?? null,
+            selectedItemId: rawPayload?.selectedItemId ?? null,
+            hasWeapon: !!rawPayload?.hudSnapshot?.weapon,
+          });
           renderCompanion();
         });
         OBR.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
           const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
-          if (!patchPayload || !isPatchForCurrentCharacter(patchPayload, rawPayload)) return;
+          if (!patchPayload) return;
+          if (rawPayload && !isPatchForCurrentCharacter(patchPayload, rawPayload)) return;
           const nextPayload = mergeModulePatchIntoSelectionPayload(rawPayload, patchPayload);
-          if (!nextPayload) return;
+          if (!nextPayload) {
+            sendDebugEvent("module-patch-ignored", {
+              moduleId: moduleParam,
+              scope: patchPayload.scope,
+              reason: patchPayload.reason,
+              revision: patchPayload.revision,
+              cause: "missing-base-selection",
+            }, "pending");
+            send(BC_HUD_SELECTION_REQUEST, {
+              moduleId: moduleParam,
+              reason: "companion-missing-base-selection",
+              forceReplay: true,
+            });
+            return;
+          }
           rawPayload = nextPayload;
           sendDebugEvent("module-patch-applied", {
             moduleId: moduleParam,
@@ -563,7 +600,11 @@ function start() {
           });
           renderCompanion();
         });
-        send(BC_HUD_SELECTION_REQUEST, {});
+        send(BC_HUD_SELECTION_REQUEST, {
+          moduleId: moduleParam,
+          reason: "companion-mount",
+          forceReplay: true,
+        });
       } catch (_e) { /* standalone */ }
     }
     renderCompanion();

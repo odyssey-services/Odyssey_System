@@ -107,6 +107,11 @@ test("heavy armory and inventory fetches are parallelized and cache-aware", () =
   assert.ok(sceneControllerSrc.includes("weapon-data-preload-skipped"));
 });
 
+test("companion force replay uses last ready payload without live selection resolve", () => {
+  assert.ok(sceneControllerSrc.includes("replayLastVisibleState(\"companion-force-replay\")"));
+  assert.ok(sceneControllerSrc.includes("forceReplay === true"));
+});
+
 test("applyHeavyCacheToLastReadyState preserves ready view without buildReadySelectionView dependency", () => {
   assert.ok(sceneControllerSrc.includes("view: lastState.view"));
   assert.ok(!sceneControllerSrc.includes("view: buildReadySelectionView(hydratedBundle)"));
@@ -115,6 +120,14 @@ test("applyHeavyCacheToLastReadyState preserves ready view without buildReadySel
 test("weapon and magazine selector cache apply is guarded from unexpected exceptions", () => {
   assert.ok(sceneControllerSrc.includes("weapon-selector-cache-apply-failed"));
   assert.ok(sceneControllerSrc.includes("magazine-selector-cache-apply-failed"));
+});
+
+test("weapon selector keeps renderable snapshot visible while stale cache refresh runs in background", () => {
+  assert.ok(sceneControllerSrc.includes("const WEAPON_HEAVY_CACHE_STALE_MS = 60000;"));
+  assert.ok(sceneControllerSrc.includes("function hasRenderableWeaponSnapshot()"));
+  assert.ok(sceneControllerSrc.includes("weapon-selector-background-refresh"));
+  assert.ok(sceneControllerSrc.includes("magazine-selector-background-refresh"));
+  assert.ok(sceneControllerSrc.includes("ephemeral.weaponDataLoading = !hasSnapshot;"));
 });
 
 test("post-ready preload failures no longer downgrade a ready selection into error", () => {

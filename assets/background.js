@@ -9153,7 +9153,7 @@ var HUD_LIGHT_RUNTIME_SECTIONS = Object.freeze(["summary", "combat", "armory", "
 var LIGHT_RUNTIME_RETRY_DELAY_MS = 350;
 var TRANSIENT_EMPTY_SELECTION_GRACE_MS = 500;
 var COMBAT_RUNTIME_PENDING_MAX_MS = 5e3;
-var WEAPON_HEAVY_CACHE_STALE_MS = 1e4;
+var WEAPON_HEAVY_CACHE_STALE_MS = 6e4;
 function setupSceneSelection(hooks = {}) {
   if (typeof lib_default === "undefined" || lib_default.isAvailable === false) return () => {
   };
@@ -9534,6 +9534,10 @@ function setupSceneSelection(hooks = {}) {
       error: { code: null, message: null }
     };
     return true;
+  }
+  function hasRenderableWeaponSnapshot() {
+    const weapon = lastPayload?.hudSnapshot?.weapon ?? null;
+    return !!weapon && (!!weapon.primary || Array.isArray(weapon.available) || Array.isArray(weapon.primary?.reserveMagazines));
   }
   function broadcast(payload) {
     try {
@@ -11911,8 +11915,16 @@ function setupSceneSelection(hooks = {}) {
             }, false);
           }
           if (isWeaponHeavyCacheStale(characterIdAtOpen, encounterIdAtOpen)) {
-            ephemeral.weaponDataLoading = true;
-            broadcastReadyStateUpdate(["weapon"], "weapon-selector-refreshing");
+            const hasSnapshot = hasRenderableWeaponSnapshot();
+            ephemeral.weaponDataLoading = !hasSnapshot;
+            if (!hasSnapshot) {
+              broadcastReadyStateUpdate(["weapon"], "weapon-selector-refreshing");
+            } else {
+              logDebugEvent("weapon", "weapon-selector-background-refresh", {
+                characterId: characterIdAtOpen,
+                reason: "stale-cache-but-renderable-snapshot"
+              });
+            }
             void refreshHeavyCharacterData(characterIdAtOpen, {
               reason: "weapon-selector-opened",
               encounterId: encounterIdAtOpen,
@@ -11959,8 +11971,16 @@ function setupSceneSelection(hooks = {}) {
             }, false);
           }
           if (isWeaponHeavyCacheStale(characterIdAtOpen, encounterIdAtOpen)) {
-            ephemeral.weaponDataLoading = true;
-            broadcastReadyStateUpdate(["weapon"], "magazine-selector-refreshing");
+            const hasSnapshot = hasRenderableWeaponSnapshot();
+            ephemeral.weaponDataLoading = !hasSnapshot;
+            if (!hasSnapshot) {
+              broadcastReadyStateUpdate(["weapon"], "magazine-selector-refreshing");
+            } else {
+              logDebugEvent("magazine", "magazine-selector-background-refresh", {
+                characterId: characterIdAtOpen,
+                reason: "stale-cache-but-renderable-snapshot"
+              });
+            }
             void refreshHeavyCharacterData(characterIdAtOpen, {
               reason: "magazine-selector-opened",
               encounterId: encounterIdAtOpen,
@@ -12156,6 +12176,10 @@ function setupSceneSelection(hooks = {}) {
           moduleId: event?.data?.moduleId ?? null
         });
         if (lastPayload) broadcast(lastPayload);
+        return;
+      }
+      if (forceReplay === true && lastPayload?.status === "ready" && lastPayload?.selectedItemId) {
+        replayLastVisibleState2("companion-force-replay");
         return;
       }
       if (requestedSelectionIds.length === 0 && lastPayload?.status === "ready" && lastPayload?.selectedItemId) {
