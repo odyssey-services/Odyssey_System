@@ -9530,7 +9530,7 @@ function setupSceneSelection(hooks = {}) {
     lastState = {
       ...lastState,
       runtimeBundle: hydratedBundle,
-      view: buildReadySelectionView(hydratedBundle),
+      view: lastState.view,
       error: { code: null, message: null }
     };
     return true;
@@ -10092,7 +10092,7 @@ function setupSceneSelection(hooks = {}) {
       lastState = state;
       return publishState(state, reason);
     }
-    function buildReadySelectionView2(bundle) {
+    function buildReadySelectionView(bundle) {
       const character = bundle?.character ?? {};
       const state = bundle?.state ?? {};
       const ownerId = String(character?.owner_player_id ?? "").trim() || null;
@@ -10121,7 +10121,7 @@ function setupSceneSelection(hooks = {}) {
           viewer,
           access: { canView: true, reason: null },
           runtimeBundle,
-          view: buildReadySelectionView2(runtimeBundle),
+          view: buildReadySelectionView(runtimeBundle),
           error: { code: null, message: null }
         };
       }
@@ -10791,7 +10791,7 @@ function setupSceneSelection(hooks = {}) {
         lastState = {
           ...lastState,
           runtimeBundle,
-          view: buildReadySelectionView2(runtimeBundle),
+          view: buildReadySelectionView(runtimeBundle),
           error: { code: null, message: null }
         };
         logDebugEvent("selection", "runtime-only-refresh-result", {
@@ -11901,8 +11901,15 @@ function setupSceneSelection(hooks = {}) {
           ephemeral.weaponSelectorOpen ? "weapon-selector-opened" : "weapon-selector-closed"
         );
         if (ephemeral.weaponSelectorOpen && characterIdAtOpen) {
-          applyHeavyCacheToLastReadyState(characterIdAtOpen);
-          broadcastReadyStateUpdate(["weapon"], "weapon-selector-cache-applied");
+          try {
+            applyHeavyCacheToLastReadyState(characterIdAtOpen);
+            broadcastReadyStateUpdate(["weapon"], "weapon-selector-cache-applied");
+          } catch (error) {
+            logDebugEvent("weapon", "weapon-selector-cache-apply-failed", {
+              characterId: characterIdAtOpen,
+              message: String(error?.message ?? error)
+            }, false);
+          }
           if (isWeaponHeavyCacheStale(characterIdAtOpen, encounterIdAtOpen)) {
             ephemeral.weaponDataLoading = true;
             broadcastReadyStateUpdate(["weapon"], "weapon-selector-refreshing");
@@ -11942,8 +11949,15 @@ function setupSceneSelection(hooks = {}) {
         logDebugEvent("magazine", "selector-toggled", { open: ephemeral.magazineSelectorOpen });
         broadcastReadyStateUpdate(["weapon"], ephemeral.magazineSelectorOpen ? "magazine-selector-opened" : "magazine-selector-closed");
         if (ephemeral.magazineSelectorOpen && characterIdAtOpen) {
-          applyHeavyCacheToLastReadyState(characterIdAtOpen);
-          broadcastReadyStateUpdate(["weapon"], "magazine-selector-cache-applied");
+          try {
+            applyHeavyCacheToLastReadyState(characterIdAtOpen);
+            broadcastReadyStateUpdate(["weapon"], "magazine-selector-cache-applied");
+          } catch (error) {
+            logDebugEvent("magazine", "magazine-selector-cache-apply-failed", {
+              characterId: characterIdAtOpen,
+              message: String(error?.message ?? error)
+            }, false);
+          }
           if (isWeaponHeavyCacheStale(characterIdAtOpen, encounterIdAtOpen)) {
             ephemeral.weaponDataLoading = true;
             broadcastReadyStateUpdate(["weapon"], "magazine-selector-refreshing");

@@ -107,6 +107,16 @@ test("heavy armory and inventory fetches are parallelized and cache-aware", () =
   assert.ok(sceneControllerSrc.includes("weapon-data-preload-skipped"));
 });
 
+test("applyHeavyCacheToLastReadyState preserves ready view without buildReadySelectionView dependency", () => {
+  assert.ok(sceneControllerSrc.includes("view: lastState.view"));
+  assert.ok(!sceneControllerSrc.includes("view: buildReadySelectionView(hydratedBundle)"));
+});
+
+test("weapon and magazine selector cache apply is guarded from unexpected exceptions", () => {
+  assert.ok(sceneControllerSrc.includes("weapon-selector-cache-apply-failed"));
+  assert.ok(sceneControllerSrc.includes("magazine-selector-cache-apply-failed"));
+});
+
 test("post-ready preload failures no longer downgrade a ready selection into error", () => {
   assert.ok(sceneControllerSrc.includes("post-ready-refresh-error-ignored"));
   assert.ok(sceneControllerSrc.includes("normalized.message?.includes(\"currentMappedSession is not defined\")"));
