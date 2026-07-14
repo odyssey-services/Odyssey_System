@@ -90,9 +90,10 @@ test("armory failure does not make selection unavailable in staged runtime flow"
 });
 
 test("weapon heavy preload is scheduled after ready selection without blocking selection resolve", () => {
-  assert.ok(sceneControllerSrc.includes("scheduleWeaponHeavyPreload(nextCharacterId, nextTokenId, \"selection-ready-preload\")"));
+  assert.ok(sceneControllerSrc.includes("safeScheduleWeaponHeavyPreload(nextCharacterId, nextTokenId, \"selection-ready-preload\")"));
   assert.ok(sceneControllerSrc.includes("weapon-data-preloaded"));
   assert.ok(sceneControllerSrc.includes("shouldPreloadWeaponData("));
+  assert.ok(sceneControllerSrc.includes("weapon-data-preload-schedule-failed"));
 });
 
 test("heavy armory and inventory fetches are parallelized and cache-aware", () => {
@@ -101,6 +102,14 @@ test("heavy armory and inventory fetches are parallelized and cache-aware", () =
   assert.ok(sceneControllerSrc.includes("item.value.panel === \"inventory\""));
   assert.ok(sceneControllerSrc.includes("isWeaponHeavyCacheStale("));
   assert.ok(sceneControllerSrc.includes("applyHeavyCacheToLastReadyState("));
+  assert.ok(sceneControllerSrc.includes("getCurrentEncounterIdSafe("));
+  assert.ok(sceneControllerSrc.includes("weapon-data-preload-start"));
+  assert.ok(sceneControllerSrc.includes("weapon-data-preload-skipped"));
+});
+
+test("post-ready preload failures no longer downgrade a ready selection into error", () => {
+  assert.ok(sceneControllerSrc.includes("post-ready-refresh-error-ignored"));
+  assert.ok(sceneControllerSrc.includes("normalized.message?.includes(\"currentMappedSession is not defined\")"));
 });
 
 test("light runtime timeout is normalized to STATEMENT_TIMEOUT", () => {
