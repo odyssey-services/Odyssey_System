@@ -98,6 +98,7 @@ function readyPayload(armory, ephemeral = {}) {
     ui: {
       selectedWeaponId: ephemeral.selectedWeaponId ?? null,
       weaponSelectorOpen: ephemeral.weaponSelectorOpen ?? false,
+      weaponDataLoading: ephemeral.weaponDataLoading ?? false,
       selectedReloadMagazineId: null,
     },
   };
@@ -167,6 +168,15 @@ test("ready payload available immediately -> list, never false empty", () => {
   assert.ok(html.includes("ohud-weapon-option"));
 });
 
+test("weapon selector keeps cached list visible while heavy refresh is in progress", () => {
+  const html = renderWeaponSelectorPanel(buildCompanionSelectorState(
+    readyPayload(mixedArmory(), { weaponDataLoading: true }),
+  ));
+  assert.ok(html.includes("Standard Rifle"));
+  assert.ok(html.includes("Refreshing..."));
+  assert.ok(!html.includes("Loading weapons"));
+});
+
 test("active_weapon_id picks a non-default primary and marks it in the list", () => {
   const def = readyPayload(mixedArmory());
   assert.equal(def.hudSnapshot.weapon.primary.id, "w-katana");
@@ -220,6 +230,22 @@ test("magazine companion: null state -> loading, ready state -> reads snapshot",
   const selState = buildCompanionSelectorState(readyPayload(armory, { selectedWeaponId: "w-rifle" }));
   const html = renderMagazineSelectorPanel(selState);
   assert.ok(!html.includes("Loading magazines"), "snapshot present -> not loading");
+});
+
+test("magazine selector shows a local refresh hint instead of full-panel loading when snapshot exists", () => {
+  const armory = mixedArmory();
+  armory.active_weapon_id = "w-rifle";
+  armory.magazines.push({
+    id: "mr-spare",
+    current_rounds: 18,
+    magazine_def: { capacity: 30, caliber: "5.56" },
+    ammo_type_name: "FMJ",
+  });
+  const html = renderMagazineSelectorPanel(buildCompanionSelectorState(
+    readyPayload(armory, { selectedWeaponId: "w-rifle", weaponDataLoading: true }),
+  ));
+  assert.ok(html.includes("Refreshing..."));
+  assert.ok(!html.includes("Loading magazines"));
 });
 
 setTimeout(() => {

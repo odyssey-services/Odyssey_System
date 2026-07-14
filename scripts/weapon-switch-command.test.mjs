@@ -206,6 +206,14 @@ test("combat runtime pending is safely published, auto-cleared, and never blocks
   assert.ok(sceneControllerSrc.includes('logDebugEvent("selection", "runtime-refresh-exception"'));
 });
 
+test("weapon selector open uses scoped patch updates and avoids extra light runtime refresh after heavy load", () => {
+  assert.ok(sceneControllerSrc.includes('broadcastReadyStateUpdate(['));
+  assert.ok(sceneControllerSrc.includes('"weapon-selector-opened"'));
+  assert.ok(sceneControllerSrc.includes('"weapon-selector-cache-applied"'));
+  assert.ok(sceneControllerSrc.includes('broadcastReadyStateUpdate(["weapon"], "weapon-data-loaded")'));
+  assert.ok(!sceneControllerSrc.includes('await refreshCurrentReadyRuntimeOnly("weapon-data-loaded");'));
+});
+
 test("weapon switch is no longer tied to move spending", () => {
   const result = buildArmoryCombatContextMock({
     characterId: fx.characters.testAttacker.id,

@@ -7632,6 +7632,7 @@ function weaponOption(option) {
   </button>`;
 }
 function renderWeaponSelectorPanel(state) {
+  const loading = state?.ui?.weaponDataLoading === true;
   if (!state || !state.snapshot || !state.snapshot.weapon) {
     return panel({
       key: "gun-weapon-selector",
@@ -7644,10 +7645,10 @@ function renderWeaponSelectorPanel(state) {
     return panel({
       key: "gun-weapon-selector",
       label: "Weapons",
-      bodyHtml: `<div class="ohud-weapon-list is-empty">No weapons available</div>`
+      bodyHtml: loading ? `<div class="ohud-weapon-list is-loading">Loading weapons...</div>` : `<div class="ohud-weapon-list is-empty">No weapons available</div>`
     });
   }
-  const body = `<div class="ohud-weapon-list">${availableWeapons.map(weaponOption).join("")}</div>`;
+  const body = `<div class="ohud-weapon-list">${availableWeapons.map(weaponOption).join("")}</div>${loading ? '<div class="ohud-weapon-list-note">Refreshing...</div>' : ""}`;
   return panel({ key: "gun-weapon-selector", label: "Weapons", bodyHtml: body });
 }
 
@@ -7665,6 +7666,7 @@ function reserveOption(mag, selected) {
   </button>`;
 }
 function renderMagazineSelectorPanel(state) {
+  const loading = state?.ui?.weaponDataLoading === true;
   if (!state || !state.snapshot || !state.snapshot.weapon) {
     return panel({
       key: "gun-magazine-selector",
@@ -7677,11 +7679,11 @@ function renderMagazineSelectorPanel(state) {
     return panel({
       key: "gun-magazine-selector",
       label: "Spare Magazines",
-      bodyHtml: `<div class="ohud-reserve-list is-empty">No compatible spare magazines</div>`
+      bodyHtml: loading ? `<div class="ohud-reserve-list is-loading">Loading spare magazines...</div>` : `<div class="ohud-reserve-list is-empty">No compatible spare magazines</div>`
     });
   }
   const selectedId = state?.ui?.selectedReloadMagazineId ?? null;
-  const body = `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, mag.id === selectedId)).join("")}</div>`;
+  const body = `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, mag.id === selectedId)).join("")}</div>${loading ? '<div class="ohud-reserve-list-note">Refreshing...</div>' : ""}`;
   return panel({ key: "gun-magazine-selector", label: "Spare Magazines", bodyHtml: body });
 }
 
@@ -7993,7 +7995,10 @@ var LIVE_RENDERERS = {
   gun: renderGunBlock,
   skills: renderSkillBlock,
   combatControl: renderCombatControlBlock,
-  log: renderBattleLogPanel
+  log: renderBattleLogPanel,
+  "gun-weapon-selector": renderWeaponSelectorPanel,
+  "gun-magazine-selector": renderMagazineSelectorPanel,
+  "gun-fire-mode-selector": renderFireModeSelectorPanel
 };
 var MODULE_LABELS = Object.freeze({
   gun: "Weapon",
@@ -8110,6 +8115,7 @@ function buildSyntheticState(payload) {
       selectedReloadMagazineId: payload.ui?.selectedReloadMagazineId ?? null,
       selectedModifierIds: [],
       weaponSelectorOpen: !!payload.ui?.weaponSelectorOpen,
+      weaponDataLoading: !!payload.ui?.weaponDataLoading,
       weaponSwitchInFlight: !!payload.ui?.weaponSwitchInFlight,
       fireModeSelectorOpen: !!payload.ui?.fireModeSelectorOpen,
       combatRuntimePending: !!payload.ui?.combatRuntimePending,

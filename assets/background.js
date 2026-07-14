@@ -9118,6 +9118,7 @@ function buildBroadcastPayload(state, ephemeral = {}) {
       selectedWeaponId: ephemeral.selectedWeaponId ?? null,
       selectedReloadMagazineId: ephemeral.selectedReloadMagazineId ?? null,
       weaponSelectorOpen: !!ephemeral.weaponSelectorOpen,
+      weaponDataLoading: !!ephemeral.weaponDataLoading,
       weaponSwitchInFlight: !!ephemeral.weaponSwitchInFlight,
       fireModeSelectorOpen: !!ephemeral.fireModeSelectorOpen,
       combatRuntimePending: !!ephemeral.combatRuntimePending,
@@ -9152,6 +9153,7 @@ var HUD_LIGHT_RUNTIME_SECTIONS = Object.freeze(["summary", "combat", "armory", "
 var LIGHT_RUNTIME_RETRY_DELAY_MS = 350;
 var TRANSIENT_EMPTY_SELECTION_GRACE_MS = 500;
 var COMBAT_RUNTIME_PENDING_MAX_MS = 5e3;
+var WEAPON_HEAVY_CACHE_STALE_MS = 1e4;
 function setupSceneSelection(hooks = {}) {
   if (typeof lib_default === "undefined" || lib_default.isAvailable === false) return () => {
   };
@@ -9177,6 +9179,7 @@ function setupSceneSelection(hooks = {}) {
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
   let publishCurrentStateSafe = () => null;
+  const weaponHeavyPreloadKeys = /* @__PURE__ */ new Map();
   let payloadRevision = 0;
   let weaponSwitchFlightToken = 0;
   let stableSelectionResolver = null;
@@ -9210,6 +9213,7 @@ function setupSceneSelection(hooks = {}) {
     fireModeSelectorOpen: false,
     fireModeRpcResult: null,
     weaponSwitchInFlight: false,
+    weaponDataLoading: false,
     reloadInFlight: false,
     fireModeInFlight: false,
     // Basic Weapon Attack v1: true only for the duration of an in-flight
@@ -9485,6 +9489,27 @@ function setupSceneSelection(hooks = {}) {
     heavyRuntimeCache.set(normalizedCharacterId, nextValue);
     return nextValue;
   }
+  function isWeaponHeavyCacheStale(characterId, encounterId = null) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return true;
+    const cacheEntry = getHeavyRuntimeCache(normalizedCharacterId);
+    if (!cacheEntry?.canonicalArmory || !cacheEntry?.inventory) return true;
+    const normalizedEncounterId = String(encounterId ?? "").trim() || null;
+    const cachedEncounterId = String(cacheEntry?.encounterId ?? "").trim() || null;
+    if (normalizedEncounterId !== cachedEncounterId) return true;
+    const updatedAt = Number(cacheEntry?.updatedAt ?? 0);
+    return !Number.isFinite(updatedAt) || Date.now() - updatedAt > WEAPON_HEAVY_CACHE_STALE_MS;
+  }
+  function shouldPreloadWeaponData(characterId, encounterId = null) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return false;
+    const key = `${normalizedCharacterId}:${String(encounterId ?? "").trim() || "no-encounter"}`;
+    const lastAt = Number(weaponHeavyPreloadKeys.get(key) ?? 0);
+    const now = Date.now();
+    if (now - lastAt < WEAPON_HEAVY_CACHE_STALE_MS) return false;
+    weaponHeavyPreloadKeys.set(key, now);
+    return true;
+  }
   function hydrateBundleWithHeavyCache(bundle, characterId) {
     if (!bundle || typeof bundle !== "object") return bundle;
     const cacheEntry = getHeavyRuntimeCache(characterId);
@@ -9495,6 +9520,42 @@ function setupSceneSelection(hooks = {}) {
       merged.sections = { ...merged.sections, armory: canonicalArmory };
     }
     return merged;
+  }
+  function applyHeavyCacheToLastReadyState(characterId) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId || lastState?.status !== "ready" || lastState?.access?.canView !== true || String(lastState?.characterId ?? "").trim() !== normalizedCharacterId || !lastState.runtimeBundle) {
+      return false;
+    }
+    const hydratedBundle = hydrateBundleWithHeavyCache(lastState.runtimeBundle, normalizedCharacterId);
+    lastState = {
+      ...lastState,
+      runtimeBundle: hydratedBundle,
+      view: buildReadySelectionView(hydratedBundle),
+      error: { code: null, message: null }
+    };
+    return true;
+  }
+  function scheduleWeaponHeavyPreload(characterId, selectedItemId, reason = "selection-ready-preload") {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    const normalizedSelectedItemId = String(selectedItemId ?? "").trim() || null;
+    const encounterId = currentMappedSession()?.id ?? null;
+    if (!normalizedCharacterId || !shouldPreloadWeaponData(normalizedCharacterId, encounterId)) return;
+    void refreshHeavyCharacterData(normalizedCharacterId, {
+      reason,
+      encounterId,
+      armory: true,
+      inventory: true
+    }).then(() => {
+      if (!isCurrentSource(normalizedCharacterId, normalizedSelectedItemId)) return;
+      if (!applyHeavyCacheToLastReadyState(normalizedCharacterId)) return;
+      broadcastReadyStateUpdate(["weapon"], "weapon-data-preloaded");
+    }).catch((error) => {
+      logDebugEvent("weapon", "weapon-data-preload-failed", {
+        characterId: normalizedCharacterId,
+        reason,
+        message: String(error?.message ?? error)
+      }, false);
+    });
   }
   function broadcast(payload) {
     try {
@@ -9683,7 +9744,7 @@ function setupSceneSelection(hooks = {}) {
         const previousWasActive = sessionRuntime?.encounter?.status === "active";
         const nextIsActive = runtime?.encounter?.status === "active";
         sessionRuntime = runtime;
-        if (lastState) broadcastReadyStateUpdate(["session"], "session-runtime-loaded");
+        if (lastState) broadcastReadyStateUpdate2(["session"], "session-runtime-loaded");
         if (previousWasActive && !nextIsActive && ephemeral.characterId) {
           scheduleLiveSelectionResolve2("combat-ended", { forceResolve: true });
           void quickbarController?.refresh?.();
@@ -9728,7 +9789,7 @@ function setupSceneSelection(hooks = {}) {
           return;
         }
         if (lastState?.status === "ready" && lastState?.access?.canView === true) {
-          broadcastReadyStateUpdate(["skills"], "abilities-runtime-loaded");
+          broadcastReadyStateUpdate2(["skills"], "abilities-runtime-loaded");
         } else if (lastState) {
           publishState(lastState, "abilities-runtime-loaded");
         }
@@ -9740,7 +9801,7 @@ function setupSceneSelection(hooks = {}) {
       if (!id) return null;
       return (abilitiesRuntime?.quickActions ?? []).find((action) => String(action?.characterActionId ?? "") === id) ?? null;
     }
-    function currentMappedSession() {
+    function currentMappedSession2() {
       return mapCombatRuntimeToSession(sessionRuntime, {
         viewerPlayerId: viewer?.playerId ?? null,
         viewerIsGm: String(viewer?.role ?? "").toUpperCase() === "GM",
@@ -9754,7 +9815,7 @@ function setupSceneSelection(hooks = {}) {
       return `${normalizedCharacterId}:light:${normalizedSections}:${normalizedEncounterId}`;
     }
     async function fetchLightRuntimeBundle(characterId, reason = "selection-runtime") {
-      const selectedSession = characterId && characterId === ephemeral.characterId ? currentMappedSession() : null;
+      const selectedSession = characterId && characterId === ephemeral.characterId ? currentMappedSession2() : null;
       const encounterId = selectedSession?.exists ? String(selectedSession.id ?? "").trim() || null : null;
       const key = buildLightRuntimeKey(characterId, encounterId);
       const startedAt = Date.now();
@@ -9831,7 +9892,7 @@ function setupSceneSelection(hooks = {}) {
         throw error;
       });
     }
-    async function refreshHeavyCharacterData(characterId, {
+    async function refreshHeavyCharacterData2(characterId, {
       reason = "heavy-runtime",
       encounterId = null,
       armory = false,
@@ -9839,88 +9900,82 @@ function setupSceneSelection(hooks = {}) {
     } = {}) {
       const normalizedCharacterId = String(characterId ?? "").trim();
       if (!normalizedCharacterId || !armory && !inventory) return getHeavyRuntimeCache(normalizedCharacterId);
-      const nextPatch = {};
+      const normalizedEncounterId = String(encounterId ?? "").trim() || null;
+      const tasks = [];
       if (armory) {
-        const armoryStartedAt = Date.now();
-        try {
-          logDebugEvent("runtime", "heavy-fetch-start", {
-            characterId: normalizedCharacterId,
-            panel: "armory",
-            reason
-          }, true, "pending");
-          const armoryResult = await singleFlightRuntimeRefresh(
-            `${normalizedCharacterId}:heavy:armory:${String(encounterId ?? "").trim() || "no-encounter"}`,
-            () => getCharacterArmory(normalizedCharacterId, settings2, encounterId)
-          );
-          nextPatch.armory = armoryResult;
-          if (armoryResult?.combat_context) {
-            logDebugEvent("weapon", "armory-combat-context", {
-              characterId: normalizedCharacterId,
-              reason,
-              encounterId: String(encounterId ?? "").trim() || null,
-              mode: armoryResult.combat_context?.mode ?? null,
-              currentTurn: armoryResult.combat_context?.is_current_turn ?? null,
-              canSwitchTo: armoryResult.combat_context?.can_switch_to ?? null,
-              switchCost: armoryResult.combat_context?.switch_cost ?? null,
-              warning: armoryResult.combat_context?.warning ?? null
-            }, armoryResult?.ok !== false);
+        tasks.push({
+          panel: "armory",
+          run: async () => {
+            const armoryResult = await singleFlightRuntimeRefresh(
+              `${normalizedCharacterId}:heavy:armory:${normalizedEncounterId || "no-encounter"}`,
+              () => getCharacterArmory(normalizedCharacterId, settings2, encounterId)
+            );
+            if (armoryResult?.combat_context) {
+              logDebugEvent("weapon", "armory-combat-context", {
+                characterId: normalizedCharacterId,
+                reason,
+                encounterId: normalizedEncounterId,
+                mode: armoryResult.combat_context?.mode ?? null,
+                currentTurn: armoryResult.combat_context?.is_current_turn ?? null,
+                canSwitchTo: armoryResult.combat_context?.can_switch_to ?? null,
+                switchCost: armoryResult.combat_context?.switch_cost ?? null,
+                warning: armoryResult.combat_context?.warning ?? null
+              }, armoryResult?.ok !== false);
+            }
+            return armoryResult;
           }
-          logDebugEvent("runtime", "heavy-fetch-result", {
-            characterId: normalizedCharacterId,
-            panel: "armory",
-            reason,
-            ok: armoryResult?.ok !== false,
-            elapsedMs: Date.now() - armoryStartedAt
-          }, armoryResult?.ok !== false);
-        } catch (error) {
-          const normalized = normalizeRpcError(error);
-          logDebugEvent("runtime", "heavy-fetch-failed", {
-            characterId: normalizedCharacterId,
-            panel: "armory",
-            reason,
-            error: normalized.error,
-            retryable: normalized.retryable,
-            elapsedMs: Date.now() - armoryStartedAt,
-            message: normalized.message
-          }, false);
-        }
+        });
       }
       if (inventory) {
-        const inventoryStartedAt = Date.now();
-        try {
-          logDebugEvent("runtime", "heavy-fetch-start", {
-            characterId: normalizedCharacterId,
-            panel: "inventory",
-            reason
-          }, true, "pending");
-          const inventoryResult = await singleFlightRuntimeRefresh(
+        tasks.push({
+          panel: "inventory",
+          run: () => singleFlightRuntimeRefresh(
             `${normalizedCharacterId}:heavy:inventory`,
             () => getCharacterInventory(normalizedCharacterId, settings2)
-          );
-          nextPatch.inventory = inventoryResult;
+          )
+        });
+      }
+      const settled = await Promise.allSettled(tasks.map(async (task) => {
+        const startedAt = Date.now();
+        logDebugEvent("runtime", "heavy-fetch-start", {
+          characterId: normalizedCharacterId,
+          panel: task.panel,
+          reason
+        }, true, "pending");
+        try {
+          const result = await task.run();
           logDebugEvent("runtime", "heavy-fetch-result", {
             characterId: normalizedCharacterId,
-            panel: "inventory",
+            panel: task.panel,
             reason,
-            ok: inventoryResult?.ok !== false,
-            elapsedMs: Date.now() - inventoryStartedAt
-          }, inventoryResult?.ok !== false);
+            ok: result?.ok !== false,
+            elapsedMs: Date.now() - startedAt
+          }, result?.ok !== false);
+          return { panel: task.panel, result };
         } catch (error) {
           const normalized = normalizeRpcError(error);
           logDebugEvent("runtime", "heavy-fetch-failed", {
             characterId: normalizedCharacterId,
-            panel: "inventory",
+            panel: task.panel,
             reason,
             error: normalized.error,
             retryable: normalized.retryable,
-            elapsedMs: Date.now() - inventoryStartedAt,
+            elapsedMs: Date.now() - startedAt,
             message: normalized.message
           }, false);
+          throw error;
         }
+      }));
+      const nextPatch = {};
+      for (const item of settled) {
+        if (item.status !== "fulfilled") continue;
+        if (item.value.panel === "armory") nextPatch.armory = item.value.result;
+        if (item.value.panel === "inventory") nextPatch.inventory = item.value.result;
       }
       if (Object.keys(nextPatch).length === 0) {
         return getHeavyRuntimeCache(normalizedCharacterId);
       }
+      nextPatch.encounterId = normalizedEncounterId;
       if (nextPatch.armory || nextPatch.inventory) {
         const previous = getHeavyRuntimeCache(normalizedCharacterId) ?? {};
         nextPatch.canonicalArmory = buildCanonicalArmory(
@@ -9969,7 +10024,7 @@ function setupSceneSelection(hooks = {}) {
       lastState = state;
       return publishState(state, reason);
     }
-    function buildReadySelectionView(bundle) {
+    function buildReadySelectionView2(bundle) {
       const character = bundle?.character ?? {};
       const state = bundle?.state ?? {};
       const ownerId = String(character?.owner_player_id ?? "").trim() || null;
@@ -9998,7 +10053,7 @@ function setupSceneSelection(hooks = {}) {
           viewer,
           access: { canView: true, reason: null },
           runtimeBundle,
-          view: buildReadySelectionView(runtimeBundle),
+          view: buildReadySelectionView2(runtimeBundle),
           error: { code: null, message: null }
         };
       }
@@ -10103,6 +10158,9 @@ function setupSceneSelection(hooks = {}) {
         });
       }
       const payload = publishState(state, reason);
+      if (state?.status === SELECTION_STATUS.ready && state?.access?.canView === true && nextCharacterId && nextTokenId) {
+        scheduleWeaponHeavyPreload(nextCharacterId, nextTokenId, "selection-ready-preload");
+      }
       if (reason === "selection-request-hydrate") {
         logDebugEvent("selection", "selection-hydrate-resolved", {
           tokenIds: currentSelectionIds,
@@ -10475,7 +10533,7 @@ function setupSceneSelection(hooks = {}) {
       return publishState(lastState, reason);
     }
     publishCurrentStateSafe = (reason = "state-update") => broadcastModulePatches(["session"], reason) ?? publishCurrentState(reason);
-    function isCurrentSource(characterId, selectedItemId) {
+    function isCurrentSource2(characterId, selectedItemId) {
       return String(ephemeral.characterId ?? "").trim() === String(characterId ?? "").trim() && String(lastPayload?.selectedItemId ?? "").trim() === String(selectedItemId ?? "").trim();
     }
     function replayLastVisibleState2(reason = "state-update") {
@@ -10488,7 +10546,7 @@ function setupSceneSelection(hooks = {}) {
       }
       return null;
     }
-    function broadcastReadyStateUpdate(scopes, reason = "module-update") {
+    function broadcastReadyStateUpdate2(scopes, reason = "module-update") {
       return broadcastModulePatches(scopes, reason) ?? replayLastVisibleState2(reason);
     }
     function scopesForRuntimeRefresh(reason = "runtime-refresh", refreshQuickbar = false) {
@@ -10575,7 +10633,7 @@ function setupSceneSelection(hooks = {}) {
     }
     async function refreshSelectedCharacterRuntime(reason = "generic", { refreshQuickbar = false, insideCharacterQueue = false } = {}) {
       const characterId = String(ephemeral.characterId ?? "").trim() || null;
-      const encounterId = currentMappedSession()?.id ?? null;
+      const encounterId = currentMappedSession2()?.id ?? null;
       const queueKey = buildCharacterQueueKey(characterId, `refresh:${reason}`, encounterId);
       const performRefresh = async () => {
         logDebugEvent(
@@ -10614,7 +10672,7 @@ function setupSceneSelection(hooks = {}) {
         } finally {
           setCombatRuntimePending(false, reason);
           if (finalPublishReason && lastState?.status === "ready" && lastState?.access?.canView === true && String(lastState?.characterId ?? "").trim() === characterId) {
-            broadcastReadyStateUpdate(scopesForRuntimeRefresh(reason, refreshQuickbar), finalPublishReason);
+            broadcastReadyStateUpdate2(scopesForRuntimeRefresh(reason, refreshQuickbar), finalPublishReason);
           }
         }
       };
@@ -10655,7 +10713,7 @@ function setupSceneSelection(hooks = {}) {
         lastState = {
           ...lastState,
           runtimeBundle,
-          view: buildReadySelectionView(runtimeBundle),
+          view: buildReadySelectionView2(runtimeBundle),
           error: { code: null, message: null }
         };
         logDebugEvent("selection", "runtime-only-refresh-result", {
@@ -10696,7 +10754,7 @@ function setupSceneSelection(hooks = {}) {
         distance: Number.isFinite(Number(target?.distance?.value)) ? Number(target.distance.value) : null,
         error: payload?.error ?? null
       };
-      broadcastReadyStateUpdate(["targeting"], "targeting-updated");
+      broadcastReadyStateUpdate2(["targeting"], "targeting-updated");
     }
     function isCombatSyncBlockedCommand(command) {
       if (!combatRuntimePending || !command || typeof command !== "object") return false;
@@ -10714,7 +10772,7 @@ function setupSceneSelection(hooks = {}) {
       if (!lastPayload || lastPayload.status !== "ready") return;
       if (isCombatSyncBlockedCommand(command)) {
         ephemeral.commandStatus = { type: "error", message: "Synchronizing combat..." };
-        broadcastReadyStateUpdate(["session", "weapon", "skills"], "command-blocked:combat-sync");
+        broadcastReadyStateUpdate2(["session", "weapon", "skills"], "command-blocked:combat-sync");
         return;
       }
       if (command?.scope === "combat-hud" && command?.feature === "gm-skill-admin") {
@@ -10843,8 +10901,8 @@ function setupSceneSelection(hooks = {}) {
             ephemeral.commandStatus = { type: "ok", message: "Fire mode changed." };
             pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Fire mode changed." }));
             logDebugEvent("fire-mode", "result", { weaponId, fireModeId }, true);
-            const heavyEncounterId = currentMappedSession()?.id ?? null;
-            await refreshHeavyCharacterData(ephemeral.characterId, {
+            const heavyEncounterId = currentMappedSession2()?.id ?? null;
+            await refreshHeavyCharacterData2(ephemeral.characterId, {
               reason: "fire-mode-changed",
               encounterId: heavyEncounterId,
               armory: true,
@@ -10928,7 +10986,7 @@ function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
-        const sessionAtRequest = currentMappedSession();
+        const sessionAtRequest = currentMappedSession2();
         const sessionGate = sessionAttackGate(sessionAtRequest);
         if (sessionGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
@@ -11061,7 +11119,7 @@ function setupSceneSelection(hooks = {}) {
           }
           return;
         }
-        const sessionAtRequest = currentMappedSession();
+        const sessionAtRequest = currentMappedSession2();
         const evalCtx = {
           sourceCharacterId: ephemeral.characterId,
           abilityId: actionId,
@@ -11227,7 +11285,7 @@ function setupSceneSelection(hooks = {}) {
           }
           return;
         }
-        const sessionAtRequest = currentMappedSession();
+        const sessionAtRequest = currentMappedSession2();
         const targeting = ephemeral.targeting ?? {};
         const evalCtx = {
           sourceCharacterId: ephemeral.characterId,
@@ -11406,7 +11464,7 @@ function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
-        const sessionAtRequest = currentMappedSession();
+        const sessionAtRequest = currentMappedSession2();
         const sessionGate = sessionAttackGate(sessionAtRequest);
         if (sessionGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
@@ -11547,7 +11605,7 @@ function setupSceneSelection(hooks = {}) {
       ephemeral.commandStatus = null;
       if (type === "select-weapon") {
         const weaponId = String(command.weaponId ?? "").trim() || null;
-        const session = currentMappedSession();
+        const session = currentMappedSession2();
         const characterIdAtRequest = String(ephemeral.characterId ?? "").trim() || null;
         const selectedItemIdAtRequest = String(lastPayload?.selectedItemId ?? "").trim() || null;
         const activeWeaponId = String(lastPayload?.hudSnapshot?.weapon?.primary?.id ?? "").trim() || null;
@@ -11674,14 +11732,14 @@ function setupSceneSelection(hooks = {}) {
             resultActiveWeaponId: String(result?.active_weapon_id ?? "").trim() || null,
             activeWeaponIdFromArmory: String(result?.armory?.active_weapon_id ?? "").trim() || null
           }, true);
-          await refreshHeavyCharacterData(characterIdAtRequest, {
+          await refreshHeavyCharacterData2(characterIdAtRequest, {
             reason: "weapon-switched",
             encounterId: session?.exists ? session.id : null,
             armory: true,
             inventory: true
           });
           await refreshCombatSessionSafe(sessionController, "weapon-switched");
-          if (!isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
+          if (!isCurrentSource2(characterIdAtRequest, selectedItemIdAtRequest)) {
             logDebugEvent("weapon", "switch_active_weapon:stale-result-ignored", {
               characterIdAtRequest,
               selectedItemIdAtRequest,
@@ -11695,7 +11753,7 @@ function setupSceneSelection(hooks = {}) {
           if (quickbarController && characterIdAtRequest) {
             await quickbarController.refresh();
           }
-          if (isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
+          if (isCurrentSource2(characterIdAtRequest, selectedItemIdAtRequest)) {
             finalPublishReason = "weapon-switch-finished";
             shouldPublishAfterFinally = true;
           } else {
@@ -11730,7 +11788,7 @@ function setupSceneSelection(hooks = {}) {
           if (isLatestWeaponSwitch) {
             ephemeral.weaponSwitchInFlight = false;
           }
-          if (shouldPublishAfterFinally && isLatestWeaponSwitch && isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
+          if (shouldPublishAfterFinally && isLatestWeaponSwitch && isCurrentSource2(characterIdAtRequest, selectedItemIdAtRequest)) {
             logDebugEvent("weapon", "switch_active_weapon:finished", {
               characterId: characterIdAtRequest,
               targetWeaponId: weaponId,
@@ -11748,44 +11806,96 @@ function setupSceneSelection(hooks = {}) {
               }, false);
               replayLastVisibleState2(finalPublishReason);
             } else {
-              broadcastReadyStateUpdate(scopesForBroadcastReason(finalPublishReason), finalPublishReason);
+              broadcastReadyStateUpdate2(scopesForBroadcastReason(finalPublishReason), finalPublishReason);
             }
           }
         }
       }
       if (type === "toggle-weapon-selector") {
         ephemeral.weaponSelectorOpen = !ephemeral.weaponSelectorOpen;
+        ephemeral.weaponDataLoading = false;
         logDebugEvent("weapon", "selector-toggled", { open: ephemeral.weaponSelectorOpen });
-        if (ephemeral.weaponSelectorOpen && ephemeral.characterId) {
-          void refreshHeavyCharacterData(ephemeral.characterId, {
-            reason: "weapon-selector-opened",
-            encounterId: currentMappedSession()?.id ?? null,
-            armory: true,
-            inventory: true
-          }).then(async () => {
-            await refreshCurrentReadyRuntimeOnly("weapon-data-loaded");
-            broadcastReadyStateUpdate(["weapon"], "weapon-data-loaded");
-          });
+        const characterIdAtOpen = String(ephemeral.characterId ?? "").trim() || null;
+        const selectedItemIdAtOpen = String(lastPayload?.selectedItemId ?? "").trim() || null;
+        const encounterIdAtOpen = currentMappedSession2()?.id ?? null;
+        broadcastReadyStateUpdate2(
+          ["weapon"],
+          ephemeral.weaponSelectorOpen ? "weapon-selector-opened" : "weapon-selector-closed"
+        );
+        if (ephemeral.weaponSelectorOpen && characterIdAtOpen) {
+          applyHeavyCacheToLastReadyState(characterIdAtOpen);
+          broadcastReadyStateUpdate2(["weapon"], "weapon-selector-cache-applied");
+          if (isWeaponHeavyCacheStale(characterIdAtOpen, encounterIdAtOpen)) {
+            ephemeral.weaponDataLoading = true;
+            broadcastReadyStateUpdate2(["weapon"], "weapon-selector-refreshing");
+            void refreshHeavyCharacterData2(characterIdAtOpen, {
+              reason: "weapon-selector-opened",
+              encounterId: encounterIdAtOpen,
+              armory: true,
+              inventory: true
+            }).then(() => {
+              if (!isCurrentSource2(characterIdAtOpen, selectedItemIdAtOpen)) return;
+              if (!applyHeavyCacheToLastReadyState(characterIdAtOpen)) return;
+              ephemeral.weaponDataLoading = false;
+              broadcastReadyStateUpdate2(["weapon"], "weapon-data-loaded");
+            }).catch((error) => {
+              ephemeral.weaponDataLoading = false;
+              logDebugEvent("weapon", "selector-data-load-failed", {
+                characterId: characterIdAtOpen,
+                message: String(error?.message ?? error)
+              }, false);
+              broadcastReadyStateUpdate2(["weapon"], "weapon-data-load-failed");
+            });
+          }
         }
-        if (lastState) publishState(lastState);
         return;
       }
       if (type === "close-weapon-selector") {
         ephemeral.weaponSelectorOpen = false;
-        if (lastState) publishState(lastState);
+        ephemeral.weaponDataLoading = false;
+        broadcastReadyStateUpdate2(["weapon"], "weapon-selector-closed");
         return;
       }
       if (type === "toggle-magazine-selector") {
         ephemeral.magazineSelectorOpen = !ephemeral.magazineSelectorOpen;
+        const characterIdAtOpen = String(ephemeral.characterId ?? "").trim() || null;
+        const selectedItemIdAtOpen = String(lastPayload?.selectedItemId ?? "").trim() || null;
+        const encounterIdAtOpen = currentMappedSession2()?.id ?? null;
         logDebugEvent("magazine", "selector-toggled", { open: ephemeral.magazineSelectorOpen });
-        if (lastState) publishState(lastState);
+        broadcastReadyStateUpdate2(["weapon"], ephemeral.magazineSelectorOpen ? "magazine-selector-opened" : "magazine-selector-closed");
+        if (ephemeral.magazineSelectorOpen && characterIdAtOpen) {
+          applyHeavyCacheToLastReadyState(characterIdAtOpen);
+          broadcastReadyStateUpdate2(["weapon"], "magazine-selector-cache-applied");
+          if (isWeaponHeavyCacheStale(characterIdAtOpen, encounterIdAtOpen)) {
+            ephemeral.weaponDataLoading = true;
+            broadcastReadyStateUpdate2(["weapon"], "magazine-selector-refreshing");
+            void refreshHeavyCharacterData2(characterIdAtOpen, {
+              reason: "magazine-selector-opened",
+              encounterId: encounterIdAtOpen,
+              armory: true,
+              inventory: true
+            }).then(() => {
+              if (!isCurrentSource2(characterIdAtOpen, selectedItemIdAtOpen)) return;
+              if (!applyHeavyCacheToLastReadyState(characterIdAtOpen)) return;
+              ephemeral.weaponDataLoading = false;
+              broadcastReadyStateUpdate2(["weapon"], "magazine-data-loaded");
+            }).catch((error) => {
+              ephemeral.weaponDataLoading = false;
+              logDebugEvent("magazine", "selector-data-load-failed", {
+                characterId: characterIdAtOpen,
+                message: String(error?.message ?? error)
+              }, false);
+              broadcastReadyStateUpdate2(["weapon"], "magazine-data-load-failed");
+            });
+          }
+        }
         return;
       }
       if (type === "select-reload-mag") {
         ephemeral.selectedReloadMagazineId = String(command.magazineId ?? "").trim() || null;
         ephemeral.magazineSelectorOpen = false;
         logDebugEvent("magazine", "selected", { magazineId: ephemeral.selectedReloadMagazineId });
-        if (lastState) publishState(lastState);
+        broadcastReadyStateUpdate2(["weapon"], "magazine-selected");
         return;
       }
       if (type === "prepare-skill") {
@@ -11804,7 +11914,7 @@ function setupSceneSelection(hooks = {}) {
         const profileId = weapon?.activeProfileId ?? weapon?.active_profile_id ?? weapon?.profileId ?? null;
         logDebugEvent("magazine", "reload-requested", { weaponId, magazineId });
         ephemeral.reloadInFlight = true;
-        const reloadSession = currentMappedSession();
+        const reloadSession = currentMappedSession2();
         const reloadGate = sessionReloadGate(reloadSession, weapon?.reloadCost ?? "full_move");
         if (reloadGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: reloadGate.reason };
@@ -11854,7 +11964,7 @@ function setupSceneSelection(hooks = {}) {
               });
               if (sessionController) void sessionController.refresh();
             }
-            await refreshHeavyCharacterData(ephemeral.characterId, {
+            await refreshHeavyCharacterData2(ephemeral.characterId, {
               reason: "reload-success",
               encounterId: reloadSession?.id ?? null,
               armory: true,

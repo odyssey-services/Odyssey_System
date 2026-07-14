@@ -89,6 +89,20 @@ test("armory failure does not make selection unavailable in staged runtime flow"
   assert.ok(sceneControllerSrc.includes("refreshHeavyCharacterData("));
 });
 
+test("weapon heavy preload is scheduled after ready selection without blocking selection resolve", () => {
+  assert.ok(sceneControllerSrc.includes("scheduleWeaponHeavyPreload(nextCharacterId, nextTokenId, \"selection-ready-preload\")"));
+  assert.ok(sceneControllerSrc.includes("weapon-data-preloaded"));
+  assert.ok(sceneControllerSrc.includes("shouldPreloadWeaponData("));
+});
+
+test("heavy armory and inventory fetches are parallelized and cache-aware", () => {
+  assert.ok(sceneControllerSrc.includes("const settled = await Promise.allSettled(tasks.map(async (task) => {"));
+  assert.ok(sceneControllerSrc.includes("item.value.panel === \"armory\""));
+  assert.ok(sceneControllerSrc.includes("item.value.panel === \"inventory\""));
+  assert.ok(sceneControllerSrc.includes("isWeaponHeavyCacheStale("));
+  assert.ok(sceneControllerSrc.includes("applyHeavyCacheToLastReadyState("));
+});
+
 test("light runtime timeout is normalized to STATEMENT_TIMEOUT", () => {
   const normalized = normalizeRpcError(new Error("canceling statement due to statement timeout"));
   assert.equal(normalized.error, "STATEMENT_TIMEOUT");

@@ -20,6 +20,9 @@ import { renderGunBlock } from "../components/GunBlock.js";
 import { renderSkillBlock } from "../components/SkillBlock.js";
 import { renderCombatControlBlock } from "../components/CombatControlBlock.js";
 import { renderBattleLogPanel } from "../components/BattleLogBlock.js";
+import { renderWeaponSelectorPanel } from "../components/WeaponSelectorPanel.js";
+import { renderMagazineSelectorPanel } from "../components/MagazineSelectorPanel.js";
+import { renderFireModeSelectorPanel } from "../components/FireModeSelectorPanel.js";
 
 const LIVE_RENDERERS = {
   player: renderPlayerBlock,
@@ -27,6 +30,9 @@ const LIVE_RENDERERS = {
   skills: renderSkillBlock,
   combatControl: renderCombatControlBlock,
   log: renderBattleLogPanel,
+  "gun-weapon-selector": renderWeaponSelectorPanel,
+  "gun-magazine-selector": renderMagazineSelectorPanel,
+  "gun-fire-mode-selector": renderFireModeSelectorPanel,
 };
 
 const MODULE_LABELS = Object.freeze({
@@ -155,6 +161,7 @@ function buildSyntheticState(payload) {
       selectedReloadMagazineId: payload.ui?.selectedReloadMagazineId ?? null,
       selectedModifierIds: [],
       weaponSelectorOpen: !!payload.ui?.weaponSelectorOpen,
+      weaponDataLoading: !!payload.ui?.weaponDataLoading,
       weaponSwitchInFlight: !!payload.ui?.weaponSwitchInFlight,
       fireModeSelectorOpen: !!payload.ui?.fireModeSelectorOpen,
       combatRuntimePending: !!payload.ui?.combatRuntimePending,

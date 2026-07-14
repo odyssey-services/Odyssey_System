@@ -26,6 +26,7 @@ function reserveOption(mag, selected) {
 }
 
 export function renderMagazineSelectorPanel(state) {
+  const loading = state?.ui?.weaponDataLoading === true;
   // No live snapshot yet → controlled loading state, not a false "no spares".
   if (!state || !state.snapshot || !state.snapshot.weapon) {
     return panel({
@@ -41,11 +42,13 @@ export function renderMagazineSelectorPanel(state) {
     return panel({
       key: "gun-magazine-selector",
       label: "Spare Magazines",
-      bodyHtml: `<div class="ohud-reserve-list is-empty">No compatible spare magazines</div>`,
+      bodyHtml: loading
+        ? `<div class="ohud-reserve-list is-loading">Loading spare magazines...</div>`
+        : `<div class="ohud-reserve-list is-empty">No compatible spare magazines</div>`,
     });
   }
 
   const selectedId = state?.ui?.selectedReloadMagazineId ?? null;
-  const body = `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, mag.id === selectedId)).join("")}</div>`;
+  const body = `<div class="ohud-reserve-list">${reserve.map((mag) => reserveOption(mag, mag.id === selectedId)).join("")}</div>${loading ? '<div class="ohud-reserve-list-note">Refreshing...</div>' : ""}`;
   return panel({ key: "gun-magazine-selector", label: "Spare Magazines", bodyHtml: body });
 }

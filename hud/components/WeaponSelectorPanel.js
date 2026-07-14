@@ -30,6 +30,7 @@ function weaponOption(option) {
 }
 
 export function renderWeaponSelectorPanel(state) {
+  const loading = state?.ui?.weaponDataLoading === true;
   if (!state || !state.snapshot || !state.snapshot.weapon) {
     return panel({
       key: "gun-weapon-selector",
@@ -46,10 +47,12 @@ export function renderWeaponSelectorPanel(state) {
     return panel({
       key: "gun-weapon-selector",
       label: "Weapons",
-      bodyHtml: `<div class="ohud-weapon-list is-empty">No weapons available</div>`,
+      bodyHtml: loading
+        ? `<div class="ohud-weapon-list is-loading">Loading weapons...</div>`
+        : `<div class="ohud-weapon-list is-empty">No weapons available</div>`,
     });
   }
 
-  const body = `<div class="ohud-weapon-list">${availableWeapons.map(weaponOption).join("")}</div>`;
+  const body = `<div class="ohud-weapon-list">${availableWeapons.map(weaponOption).join("")}</div>${loading ? '<div class="ohud-weapon-list-note">Refreshing...</div>' : ""}`;
   return panel({ key: "gun-weapon-selector", label: "Weapons", bodyHtml: body });
 }

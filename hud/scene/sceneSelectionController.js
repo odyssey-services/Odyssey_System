@@ -85,6 +85,7 @@ const SELECTED_RUNTIME_DEBOUNCE_MS = 200;
 const TRANSIENT_EMPTY_SELECTION_GRACE_MS = 500;
 const SELECTION_RESOLVE_TIMEOUT_MS = 5000;
 const COMBAT_RUNTIME_PENDING_MAX_MS = 5000;
+const WEAPON_HEAVY_CACHE_STALE_MS = 10000;
 
 /**
  * @param {{
@@ -118,6 +119,7 @@ export function setupSceneSelection(hooks = {}) {
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
   let publishCurrentStateSafe = () => null;
+  const weaponHeavyPreloadKeys = new Map();
   let payloadRevision = 0;
   let weaponSwitchFlightToken = 0;
   let stableSelectionResolver = null;
@@ -159,6 +161,7 @@ export function setupSceneSelection(hooks = {}) {
     fireModeSelectorOpen: false,
     fireModeRpcResult: null,
     weaponSwitchInFlight: false,
+    weaponDataLoading: false,
     reloadInFlight: false,
     fireModeInFlight: false,
     // Basic Weapon Attack v1: true only for the duration of an in-flight
@@ -455,6 +458,29 @@ export function setupSceneSelection(hooks = {}) {
     return nextValue;
   }
 
+  function isWeaponHeavyCacheStale(characterId, encounterId = null) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return true;
+    const cacheEntry = getHeavyRuntimeCache(normalizedCharacterId);
+    if (!cacheEntry?.canonicalArmory || !cacheEntry?.inventory) return true;
+    const normalizedEncounterId = String(encounterId ?? "").trim() || null;
+    const cachedEncounterId = String(cacheEntry?.encounterId ?? "").trim() || null;
+    if (normalizedEncounterId !== cachedEncounterId) return true;
+    const updatedAt = Number(cacheEntry?.updatedAt ?? 0);
+    return !Number.isFinite(updatedAt) || (Date.now() - updatedAt) > WEAPON_HEAVY_CACHE_STALE_MS;
+  }
+
+  function shouldPreloadWeaponData(characterId, encounterId = null) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId) return false;
+    const key = `${normalizedCharacterId}:${String(encounterId ?? "").trim() || "no-encounter"}`;
+    const lastAt = Number(weaponHeavyPreloadKeys.get(key) ?? 0);
+    const now = Date.now();
+    if (now - lastAt < WEAPON_HEAVY_CACHE_STALE_MS) return false;
+    weaponHeavyPreloadKeys.set(key, now);
+    return true;
+  }
+
   function hydrateBundleWithHeavyCache(bundle, characterId) {
     if (!bundle || typeof bundle !== "object") return bundle;
     const cacheEntry = getHeavyRuntimeCache(characterId);
@@ -466,6 +492,52 @@ export function setupSceneSelection(hooks = {}) {
     }
     return merged;
   }
+
+    function applyHeavyCacheToLastReadyState(characterId) {
+      const normalizedCharacterId = String(characterId ?? "").trim();
+      if (
+        !normalizedCharacterId
+        || lastState?.status !== "ready"
+        || lastState?.access?.canView !== true
+        || String(lastState?.characterId ?? "").trim() !== normalizedCharacterId
+        || !lastState.runtimeBundle
+      ) {
+        return false;
+      }
+
+      const hydratedBundle = hydrateBundleWithHeavyCache(lastState.runtimeBundle, normalizedCharacterId);
+      lastState = {
+        ...lastState,
+        runtimeBundle: hydratedBundle,
+        view: buildReadySelectionView(hydratedBundle),
+        error: { code: null, message: null },
+      };
+      return true;
+    }
+
+    function scheduleWeaponHeavyPreload(characterId, selectedItemId, reason = "selection-ready-preload") {
+      const normalizedCharacterId = String(characterId ?? "").trim();
+      const normalizedSelectedItemId = String(selectedItemId ?? "").trim() || null;
+      const encounterId = currentMappedSession()?.id ?? null;
+      if (!normalizedCharacterId || !shouldPreloadWeaponData(normalizedCharacterId, encounterId)) return;
+
+      void refreshHeavyCharacterData(normalizedCharacterId, {
+        reason,
+        encounterId,
+        armory: true,
+        inventory: true,
+      }).then(() => {
+        if (!isCurrentSource(normalizedCharacterId, normalizedSelectedItemId)) return;
+        if (!applyHeavyCacheToLastReadyState(normalizedCharacterId)) return;
+        broadcastReadyStateUpdate(["weapon"], "weapon-data-preloaded");
+      }).catch((error) => {
+        logDebugEvent("weapon", "weapon-data-preload-failed", {
+          characterId: normalizedCharacterId,
+          reason,
+          message: String(error?.message ?? error),
+        }, false);
+      });
+    }
 
   function broadcast(payload) {
     try { OBR.broadcast.sendMessage(BC_HUD_SELECTION, payload, { destination: "LOCAL" }); } catch (_e) { /* ignore */ }
@@ -923,92 +995,86 @@ export function setupSceneSelection(hooks = {}) {
       const normalizedCharacterId = String(characterId ?? "").trim();
       if (!normalizedCharacterId || (!armory && !inventory)) return getHeavyRuntimeCache(normalizedCharacterId);
 
-      const nextPatch = {};
-
+      const normalizedEncounterId = String(encounterId ?? "").trim() || null;
+      const tasks = [];
       if (armory) {
-        const armoryStartedAt = Date.now();
-        try {
-          logDebugEvent("runtime", "heavy-fetch-start", {
-            characterId: normalizedCharacterId,
-            panel: "armory",
-            reason,
-          }, true, "pending");
-          const armoryResult = await singleFlightRuntimeRefresh(
-            `${normalizedCharacterId}:heavy:armory:${String(encounterId ?? "").trim() || "no-encounter"}`,
-            () => getCharacterArmory(normalizedCharacterId, settings, encounterId),
-          );
-          nextPatch.armory = armoryResult;
-          if (armoryResult?.combat_context) {
-            logDebugEvent("weapon", "armory-combat-context", {
-              characterId: normalizedCharacterId,
-              reason,
-              encounterId: String(encounterId ?? "").trim() || null,
-              mode: armoryResult.combat_context?.mode ?? null,
-              currentTurn: armoryResult.combat_context?.is_current_turn ?? null,
-              canSwitchTo: armoryResult.combat_context?.can_switch_to ?? null,
-              switchCost: armoryResult.combat_context?.switch_cost ?? null,
-              warning: armoryResult.combat_context?.warning ?? null,
-            }, armoryResult?.ok !== false);
-          }
-          logDebugEvent("runtime", "heavy-fetch-result", {
-            characterId: normalizedCharacterId,
-            panel: "armory",
-            reason,
-            ok: armoryResult?.ok !== false,
-            elapsedMs: Date.now() - armoryStartedAt,
-          }, armoryResult?.ok !== false);
-        } catch (error) {
-          const normalized = normalizeRpcError(error);
-          logDebugEvent("runtime", "heavy-fetch-failed", {
-            characterId: normalizedCharacterId,
-            panel: "armory",
-            reason,
-            error: normalized.error,
-            retryable: normalized.retryable,
-            elapsedMs: Date.now() - armoryStartedAt,
-            message: normalized.message,
-          }, false);
-        }
+        tasks.push({
+          panel: "armory",
+          run: async () => {
+            const armoryResult = await singleFlightRuntimeRefresh(
+              `${normalizedCharacterId}:heavy:armory:${normalizedEncounterId || "no-encounter"}`,
+              () => getCharacterArmory(normalizedCharacterId, settings, encounterId),
+            );
+            if (armoryResult?.combat_context) {
+              logDebugEvent("weapon", "armory-combat-context", {
+                characterId: normalizedCharacterId,
+                reason,
+                encounterId: normalizedEncounterId,
+                mode: armoryResult.combat_context?.mode ?? null,
+                currentTurn: armoryResult.combat_context?.is_current_turn ?? null,
+                canSwitchTo: armoryResult.combat_context?.can_switch_to ?? null,
+                switchCost: armoryResult.combat_context?.switch_cost ?? null,
+                warning: armoryResult.combat_context?.warning ?? null,
+              }, armoryResult?.ok !== false);
+            }
+            return armoryResult;
+          },
+        });
       }
-
       if (inventory) {
-        const inventoryStartedAt = Date.now();
-        try {
-          logDebugEvent("runtime", "heavy-fetch-start", {
-            characterId: normalizedCharacterId,
-            panel: "inventory",
-            reason,
-          }, true, "pending");
-          const inventoryResult = await singleFlightRuntimeRefresh(
+        tasks.push({
+          panel: "inventory",
+          run: () => singleFlightRuntimeRefresh(
             `${normalizedCharacterId}:heavy:inventory`,
             () => getCharacterInventory(normalizedCharacterId, settings),
-          );
-          nextPatch.inventory = inventoryResult;
+          ),
+        });
+      }
+
+      const settled = await Promise.allSettled(tasks.map(async (task) => {
+        const startedAt = Date.now();
+        logDebugEvent("runtime", "heavy-fetch-start", {
+          characterId: normalizedCharacterId,
+          panel: task.panel,
+          reason,
+        }, true, "pending");
+        try {
+          const result = await task.run();
           logDebugEvent("runtime", "heavy-fetch-result", {
             characterId: normalizedCharacterId,
-            panel: "inventory",
+            panel: task.panel,
             reason,
-            ok: inventoryResult?.ok !== false,
-            elapsedMs: Date.now() - inventoryStartedAt,
-          }, inventoryResult?.ok !== false);
+            ok: result?.ok !== false,
+            elapsedMs: Date.now() - startedAt,
+          }, result?.ok !== false);
+          return { panel: task.panel, result };
         } catch (error) {
           const normalized = normalizeRpcError(error);
           logDebugEvent("runtime", "heavy-fetch-failed", {
             characterId: normalizedCharacterId,
-            panel: "inventory",
+            panel: task.panel,
             reason,
             error: normalized.error,
             retryable: normalized.retryable,
-            elapsedMs: Date.now() - inventoryStartedAt,
+            elapsedMs: Date.now() - startedAt,
             message: normalized.message,
           }, false);
+          throw error;
         }
+      }));
+
+      const nextPatch = {};
+      for (const item of settled) {
+        if (item.status !== "fulfilled") continue;
+        if (item.value.panel === "armory") nextPatch.armory = item.value.result;
+        if (item.value.panel === "inventory") nextPatch.inventory = item.value.result;
       }
 
       if (Object.keys(nextPatch).length === 0) {
         return getHeavyRuntimeCache(normalizedCharacterId);
       }
 
+      nextPatch.encounterId = normalizedEncounterId;
       if (nextPatch.armory || nextPatch.inventory) {
         const previous = getHeavyRuntimeCache(normalizedCharacterId) ?? {};
         nextPatch.canonicalArmory = buildCanonicalArmory(
@@ -1212,6 +1278,9 @@ export function setupSceneSelection(hooks = {}) {
       }
 
       const payload = publishState(state, reason);
+      if (state?.status === SELECTION_STATUS.ready && state?.access?.canView === true && nextCharacterId && nextTokenId) {
+        scheduleWeaponHeavyPreload(nextCharacterId, nextTokenId, "selection-ready-preload");
+      }
       if (reason === "selection-request-hydrate") {
         logDebugEvent("selection", "selection-hydrate-resolved", {
           tokenIds: currentSelectionIds,
@@ -3202,37 +3271,89 @@ export function setupSceneSelection(hooks = {}) {
       }
       if (type === "toggle-weapon-selector") {
         ephemeral.weaponSelectorOpen = !ephemeral.weaponSelectorOpen;
+        ephemeral.weaponDataLoading = false;
         logDebugEvent("weapon", "selector-toggled", { open: ephemeral.weaponSelectorOpen });
-        if (ephemeral.weaponSelectorOpen && ephemeral.characterId) {
-          void refreshHeavyCharacterData(ephemeral.characterId, {
-            reason: "weapon-selector-opened",
-            encounterId: currentMappedSession()?.id ?? null,
-            armory: true,
-            inventory: true,
-          }).then(async () => {
-            await refreshCurrentReadyRuntimeOnly("weapon-data-loaded");
-            broadcastReadyStateUpdate(["weapon"], "weapon-data-loaded");
-          });
+        const characterIdAtOpen = String(ephemeral.characterId ?? "").trim() || null;
+        const selectedItemIdAtOpen = String(lastPayload?.selectedItemId ?? "").trim() || null;
+        const encounterIdAtOpen = currentMappedSession()?.id ?? null;
+        broadcastReadyStateUpdate(
+          ["weapon"],
+          ephemeral.weaponSelectorOpen ? "weapon-selector-opened" : "weapon-selector-closed",
+        );
+        if (ephemeral.weaponSelectorOpen && characterIdAtOpen) {
+          applyHeavyCacheToLastReadyState(characterIdAtOpen);
+          broadcastReadyStateUpdate(["weapon"], "weapon-selector-cache-applied");
+          if (isWeaponHeavyCacheStale(characterIdAtOpen, encounterIdAtOpen)) {
+            ephemeral.weaponDataLoading = true;
+            broadcastReadyStateUpdate(["weapon"], "weapon-selector-refreshing");
+            void refreshHeavyCharacterData(characterIdAtOpen, {
+              reason: "weapon-selector-opened",
+              encounterId: encounterIdAtOpen,
+              armory: true,
+              inventory: true,
+            }).then(() => {
+              if (!isCurrentSource(characterIdAtOpen, selectedItemIdAtOpen)) return;
+              if (!applyHeavyCacheToLastReadyState(characterIdAtOpen)) return;
+              ephemeral.weaponDataLoading = false;
+              broadcastReadyStateUpdate(["weapon"], "weapon-data-loaded");
+            }).catch((error) => {
+              ephemeral.weaponDataLoading = false;
+              logDebugEvent("weapon", "selector-data-load-failed", {
+                characterId: characterIdAtOpen,
+                message: String(error?.message ?? error),
+              }, false);
+              broadcastReadyStateUpdate(["weapon"], "weapon-data-load-failed");
+            });
+          }
         }
-        if (lastState) publishState(lastState);
         return;
       }
       if (type === "close-weapon-selector") {
         ephemeral.weaponSelectorOpen = false;
-        if (lastState) publishState(lastState);
+        ephemeral.weaponDataLoading = false;
+        broadcastReadyStateUpdate(["weapon"], "weapon-selector-closed");
         return;
       }
       if (type === "toggle-magazine-selector") {
         ephemeral.magazineSelectorOpen = !ephemeral.magazineSelectorOpen;
+        const characterIdAtOpen = String(ephemeral.characterId ?? "").trim() || null;
+        const selectedItemIdAtOpen = String(lastPayload?.selectedItemId ?? "").trim() || null;
+        const encounterIdAtOpen = currentMappedSession()?.id ?? null;
         logDebugEvent("magazine", "selector-toggled", { open: ephemeral.magazineSelectorOpen });
-        if (lastState) publishState(lastState);
+        broadcastReadyStateUpdate(["weapon"], ephemeral.magazineSelectorOpen ? "magazine-selector-opened" : "magazine-selector-closed");
+        if (ephemeral.magazineSelectorOpen && characterIdAtOpen) {
+          applyHeavyCacheToLastReadyState(characterIdAtOpen);
+          broadcastReadyStateUpdate(["weapon"], "magazine-selector-cache-applied");
+          if (isWeaponHeavyCacheStale(characterIdAtOpen, encounterIdAtOpen)) {
+            ephemeral.weaponDataLoading = true;
+            broadcastReadyStateUpdate(["weapon"], "magazine-selector-refreshing");
+            void refreshHeavyCharacterData(characterIdAtOpen, {
+              reason: "magazine-selector-opened",
+              encounterId: encounterIdAtOpen,
+              armory: true,
+              inventory: true,
+            }).then(() => {
+              if (!isCurrentSource(characterIdAtOpen, selectedItemIdAtOpen)) return;
+              if (!applyHeavyCacheToLastReadyState(characterIdAtOpen)) return;
+              ephemeral.weaponDataLoading = false;
+              broadcastReadyStateUpdate(["weapon"], "magazine-data-loaded");
+            }).catch((error) => {
+              ephemeral.weaponDataLoading = false;
+              logDebugEvent("magazine", "selector-data-load-failed", {
+                characterId: characterIdAtOpen,
+                message: String(error?.message ?? error),
+              }, false);
+              broadcastReadyStateUpdate(["weapon"], "magazine-data-load-failed");
+            });
+          }
+        }
         return;
       }
       if (type === "select-reload-mag") {
         ephemeral.selectedReloadMagazineId = String(command.magazineId ?? "").trim() || null;
         ephemeral.magazineSelectorOpen = false;
         logDebugEvent("magazine", "selected", { magazineId: ephemeral.selectedReloadMagazineId });
-        if (lastState) publishState(lastState);
+        broadcastReadyStateUpdate(["weapon"], "magazine-selected");
         return;
       }
       if (type === "prepare-skill") {
