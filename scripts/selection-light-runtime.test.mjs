@@ -107,7 +107,6 @@ test("startup resolve prefers live OBR selection over the initial player snapsho
 });
 
 test("selection request with existing payload replays only lastPayload", () => {
-  assert.ok(sceneControllerSrc.includes("logDebugEvent(\"selection\", \"selection-replay-refresh-requested\""));
   assert.ok(sceneControllerSrc.includes("scheduleLiveSelectionResolve(\"selection-request-initial\", { forceResolve: true })"));
   assert.ok(sceneControllerSrc.includes("selection-request-hydrate"));
   assert.ok(sceneControllerSrc.includes("event?.data?.hydrateIfStale === true"));
@@ -169,11 +168,10 @@ test("selection replay is blocked while targeting is actively deferring source s
   assert.ok(sceneControllerSrc.includes("if (lastPayload) broadcast(lastPayload);"));
 });
 
-test("abilities runtime selection replay reuses the current payload without resolving a new source", () => {
-  assert.ok(sceneControllerSrc.includes('event?.data?.reason === "abilities-runtime-updated"'));
-  assert.ok(sceneControllerSrc.includes('reason: "abilities-runtime-updated"'));
-  assert.ok(sceneControllerSrc.includes('publishCurrentState("abilities-runtime-updated");'));
-  assert.ok(sceneControllerSrc.includes("lastPayloadCharacterId: lastPayload?.characterId ?? null"));
+test("abilities runtime now updates the selected HUD via module patch instead of selection replay", () => {
+  assert.ok(!sceneControllerSrc.includes('event?.data?.reason === "abilities-runtime-updated"'));
+  assert.ok(sceneControllerSrc.includes('broadcastReadyStateUpdate(["skills"], "abilities-runtime-loaded");'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("patch", "module-patch-broadcast"'));
 });
 
 test("native selection-changed path remains primary and is logged", () => {
@@ -216,6 +214,7 @@ test("selection noise from unlinked and non-character items is classified and ig
 test("selected character change and payload broadcast are explicitly logged", () => {
   assert.ok(sceneControllerSrc.includes("selected-character-changed"));
   assert.ok(sceneControllerSrc.includes("selection-payload-broadcast"));
+  assert.ok(sceneControllerSrc.includes("module-patch-broadcast"));
   assert.ok(sceneControllerSrc.includes("let payloadRevision = 0;"));
   assert.ok(sceneControllerSrc.includes("payloadRevision += 1;"));
   assert.ok(sceneControllerSrc.includes("revision: payloadRevision"));

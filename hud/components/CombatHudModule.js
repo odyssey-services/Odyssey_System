@@ -25,7 +25,7 @@ import { renderMagazineSelectorPanel } from "./MagazineSelectorPanel.js";
 import { renderFireModeSelectorPanel } from "./FireModeSelectorPanel.js";
 import { renderEmptyState, renderErrorState, renderLoadingState } from "./EmptyHudState.js";
 import { renderSelectionModule } from "../scene/selectionView.js";
-import { normalizeSelectionPayload } from "../scene/selectionState.js";
+import { normalizeSelectionPayload, mergeModulePatchIntoSelectionPayload } from "../scene/selectionState.js";
 import { createTooltip } from "./Tooltip.js";
 import { createQuickbarDetailCardController } from "../abilities/quickbarDetailCardController.js";
 import { ICON_GRID, ICON_CARET_DOWN } from "./hudIcons.js";
@@ -47,6 +47,25 @@ const BLOCK_RENDERERS = {
   "gun-magazine-selector": renderMagazineSelectorPanel,
   "gun-fire-mode-selector": renderFireModeSelectorPanel,
 };
+
+function shouldRenderModuleForPatch(moduleId, scope) {
+  if (moduleId === "gun") {
+    return scope === "weapon" || scope === "targeting" || scope === "session";
+  }
+  if (moduleId === "skills") {
+    return scope === "skills" || scope === "targeting" || scope === "session";
+  }
+  if (moduleId === "combatControl") {
+    return scope === "weapon" || scope === "skills" || scope === "targeting" || scope === "session";
+  }
+  if (moduleId === "player") {
+    return scope === "session" || scope === "ui";
+  }
+  if (moduleId === "log") {
+    return scope === "log";
+  }
+  return true;
+}
 
 /**
  * @param {{
@@ -267,6 +286,30 @@ export function mountCombatHudModule(options) {
     logLiveDebug(liveSelection);
     render();
     maybeShowCommandStatusToast();
+  }
+
+  function applyPatch(patchPayload) {
+    if (!liveSelection) {
+      return { applied: false, rendered: false, ignoredReason: "no-live-selection", nextSelection: liveSelection };
+    }
+    const nextSelection = mergeModulePatchIntoSelectionPayload(liveSelection, patchPayload);
+    if (!nextSelection) {
+      return { applied: false, rendered: false, ignoredReason: "invalid-patch", nextSelection: liveSelection };
+    }
+    liveSelection = nextSelection;
+    logLiveDebug(liveSelection);
+    const scope = String(patchPayload?.scope ?? "").trim();
+    const shouldRender = shouldRenderModuleForPatch(moduleId, scope);
+    if (shouldRender) {
+      render();
+      maybeShowCommandStatusToast();
+    }
+    return {
+      applied: true,
+      rendered: shouldRender,
+      ignoredReason: shouldRender ? null : "module-scope-filtered",
+      nextSelection: liveSelection,
+    };
   }
 
   function showToast(text) {
@@ -529,6 +572,7 @@ export function mountCombatHudModule(options) {
   return {
     store,
     applySelection,
+    applyPatch,
     unmount() {
       unsubscribe();
       tooltip.destroy();

@@ -36,6 +36,11 @@ export const BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
  *  view). Drives every module's content on real token selection. */
 export const BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
 
+/** LOCAL broadcast: scene-selection controller (background) -> HUD module
+ *  iframes, carrying same-character module-scoped updates without re-sending a
+ *  source-selection lifecycle event. */
+export const BC_HUD_MODULE_PATCH = "com.odyssey.combat-hud/module-patch";
+
 /** LOCAL broadcast: a freshly-mounted module iframe → scene-selection controller,
  *  asking it to replay the latest selection payload (so a module opened after a
  *  selection change still renders the current state). */

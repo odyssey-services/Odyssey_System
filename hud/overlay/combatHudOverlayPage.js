@@ -20,7 +20,7 @@ import moduleStyles from "../components/combatHudModule.css";
 
 import { mountCombatHudModule } from "../components/CombatHudModule.js";
 import { mountCombatHudLayoutEditor } from "../components/CombatHudLayoutEditor.js";
-import { BC_HUD_COMMAND, BC_HUD_UI_STATE, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_SESSION, BC_HUD_SESSION_REQUEST, BC_HUD_ABILITIES, BC_HUD_ABILITIES_REQUEST, BC_HUD_DEBUG_EVENT, parseHudUiState } from "./overlayConstants.js";
+import { BC_HUD_COMMAND, BC_HUD_UI_STATE, BC_HUD_SELECTION, BC_HUD_SELECTION_REQUEST, BC_HUD_SESSION, BC_HUD_SESSION_REQUEST, BC_HUD_ABILITIES, BC_HUD_ABILITIES_REQUEST, BC_HUD_DEBUG_EVENT, BC_HUD_MODULE_PATCH, parseHudUiState } from "./overlayConstants.js";
 import {
   HUD_MODULE_IDS,
   BC_HUD_LAYOUT,
@@ -45,6 +45,7 @@ import {
   isDraftDirty,
 } from "../abilities/quickbarLayoutPolicy.js";
 import { buildCompanionSelectorState } from "../scene/selectionView.js";
+import { mergeModulePatchIntoSelectionPayload, normalizeModulePatchPayload } from "../scene/selectionState.js";
 
 const COMPANION_DEBUG = (() => {
   try { return new URLSearchParams(window.location.search).get("debug") === "1"; } catch { return false; }
@@ -103,6 +104,13 @@ function sendDebugEvent(action, details = {}, status = "ok") {
       details,
     });
   } catch (_e) { /* ignore */ }
+}
+
+function isPatchForCurrentCharacter(patchPayload, lastSelectionPayload) {
+  const patchCharacterId = String(patchPayload?.characterId ?? "").trim();
+  const currentCharacterId = String(lastSelectionPayload?.characterId ?? "").trim();
+  if (!patchCharacterId || !currentCharacterId) return true;
+  return patchCharacterId === currentCharacterId;
 }
 
 function getModuleParam() {
@@ -397,34 +405,42 @@ function start() {
           }
           scheduleHydrationRetry(lastSelectionPayload);
         });
-        if (moduleParam === "skills") {
-          OBR.broadcast.onMessage(BC_HUD_ABILITIES, (event) => {
-            const runtimeCharacterId = String(event?.data?.characterId ?? "").trim();
-            const currentCharacterId = String(lastSelectionPayload?.characterId ?? "").trim();
-
-            if (!runtimeCharacterId || runtimeCharacterId !== currentCharacterId) {
-              sendDebugEvent("abilities-replay-skipped", {
-                moduleId: moduleParam,
-                reason: "character-mismatch",
-                runtimeCharacterId,
-                currentCharacterId,
-              });
-              return;
-            }
-
-            sendDebugEvent("abilities-selection-replay-requested", {
+        OBR.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
+          const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
+          if (!patchPayload) return;
+          if (!isPatchForCurrentCharacter(patchPayload, lastSelectionPayload)) {
+            sendDebugEvent("module-patch-ignored", {
               moduleId: moduleParam,
-              characterId: currentCharacterId,
-              runtimeOk: event?.data?.runtime?.ok !== false,
-            }, "pending");
-
-            send(BC_HUD_SELECTION_REQUEST, {
-              moduleId: moduleParam,
-              reason: "abilities-runtime-updated",
-              forceReplay: true,
+              scope: patchPayload.scope,
+              reason: patchPayload.reason,
+              revision: patchPayload.revision,
+              cause: "character-mismatch",
             });
+            return;
+          }
+          sendDebugEvent("module-patch-received", {
+            moduleId: moduleParam,
+            scope: patchPayload.scope,
+            reason: patchPayload.reason,
+            revision: patchPayload.revision,
           });
-        }
+          const outcome = mod.applyPatch?.(patchPayload);
+          if (outcome?.nextSelection) {
+            lastSelectionPayload = outcome.nextSelection;
+          }
+          sendDebugEvent(
+            outcome?.applied ? "module-patch-applied" : "module-patch-ignored",
+            {
+              moduleId: moduleParam,
+              scope: patchPayload.scope,
+              reason: patchPayload.reason,
+              revision: patchPayload.revision,
+              cause: outcome?.ignoredReason ?? null,
+              rendered: outcome?.rendered === true,
+            },
+            outcome?.applied ? "ok" : "pending",
+          );
+        });
         send(BC_HUD_SELECTION_REQUEST, {});
         if (isReplayDriverModule) {
           OBR.player.onChange(() => {
@@ -531,6 +547,20 @@ function start() {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
           maybeLogPayloadReceived(rawPayload, "broadcast");
+          renderCompanion();
+        });
+        OBR.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
+          const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
+          if (!patchPayload || !isPatchForCurrentCharacter(patchPayload, rawPayload)) return;
+          const nextPayload = mergeModulePatchIntoSelectionPayload(rawPayload, patchPayload);
+          if (!nextPayload) return;
+          rawPayload = nextPayload;
+          sendDebugEvent("module-patch-applied", {
+            moduleId: moduleParam,
+            scope: patchPayload.scope,
+            reason: patchPayload.reason,
+            revision: patchPayload.revision,
+          });
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});
@@ -666,6 +696,20 @@ function start() {
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
           maybeLogPayloadReceived(rawPayload, "broadcast");
+          renderCard();
+        });
+        OBR.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
+          const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
+          if (!patchPayload || !isPatchForCurrentCharacter(patchPayload, rawPayload)) return;
+          const nextPayload = mergeModulePatchIntoSelectionPayload(rawPayload, patchPayload);
+          if (!nextPayload) return;
+          rawPayload = nextPayload;
+          sendDebugEvent("module-patch-applied", {
+            moduleId: moduleParam,
+            scope: patchPayload.scope,
+            reason: patchPayload.reason,
+            revision: patchPayload.revision,
+          });
           renderCard();
         });
         OBR.broadcast.onMessage(BC_HUD_COMMAND, (event) => {

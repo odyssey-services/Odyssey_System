@@ -73,6 +73,7 @@ test("successful switch flow does not regress to publishState ReferenceError", (
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:success"'));
   assert.ok(sceneControllerSrc.includes('await refreshHeavyCharacterData(characterIdAtRequest, {'));
   assert.ok(sceneControllerSrc.includes("function publishCurrentState("));
+  assert.ok(sceneControllerSrc.includes("function broadcastModulePatches(scopes, reason = \"module-update\")"));
   assert.ok(sceneControllerSrc.includes("function replayLastVisibleState("));
   assert.ok(sceneControllerSrc.includes('publishCurrentState("weapon-switch-started");'));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("selection", "runtime-only-refresh-start"'));
@@ -106,7 +107,7 @@ test("weapon switch separates RPC failures from UI update failures and ignores s
 
 test("final weapon publish happens after busy flags are cleared", () => {
   const clearIndex = sceneControllerSrc.indexOf("ephemeral.weaponSwitchInFlight = false;");
-  const finalPublishIndex = sceneControllerSrc.lastIndexOf("publishCurrentState(finalPublishReason);");
+  const finalPublishIndex = sceneControllerSrc.lastIndexOf("broadcastReadyStateUpdate(scopesForBroadcastReason(finalPublishReason), finalPublishReason);");
   assert.ok(clearIndex >= 0);
   assert.ok(finalPublishIndex > clearIndex);
   assert.ok(sceneControllerSrc.includes("combatRuntimePending"));
@@ -129,6 +130,16 @@ test("popover modules log payload receipt instead of relying on remounts", () =>
   assert.ok(overlayPageSrc.includes("const logKey = buildPayloadReceivedLogKey(payload);"));
   assert.ok(overlayPageSrc.includes("if (logKey === lastPayloadReceivedLogKey) return;"));
   assert.ok(overlayPageSrc.includes("revision: payload?.revision ?? null"));
+});
+
+test("module-scoped patch channel updates popovers without replaying full selection", () => {
+  assert.ok(sceneControllerSrc.includes("BC_HUD_MODULE_PATCH"));
+  assert.ok(sceneControllerSrc.includes('type: "module-patch"'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("patch", "module-patch-broadcast"'));
+  assert.ok(overlayPageSrc.includes("OBR.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {"));
+  assert.ok(overlayPageSrc.includes('sendDebugEvent("module-patch-received"'));
+  assert.ok(overlayPageSrc.includes('sendDebugEvent("module-patch-applied"'));
+  assert.ok(overlayPageSrc.includes("mod.applyPatch?.(patchPayload)"));
 });
 
 test("popover iframe requests replay when live Owlbear selection differs from ready payload", () => {
@@ -159,11 +170,9 @@ test("popover replay is suppressed while targeting pick mode is active", () => {
   assert.ok(overlayPageSrc.includes('reason: "targeting-picking-active"'));
 });
 
-test("skills popover requests a fresh selection replay after abilities runtime loads", () => {
-  assert.ok(overlayPageSrc.includes('if (moduleParam === "skills") {'));
-  assert.ok(overlayPageSrc.includes('OBR.broadcast.onMessage(BC_HUD_ABILITIES, (event) => {'));
-  assert.ok(overlayPageSrc.includes('reason: "abilities-runtime-updated"'));
-  assert.ok(overlayPageSrc.includes('sendDebugEvent("abilities-selection-replay-requested"'));
+test("skills runtime no longer replays full selection after abilities refresh", () => {
+  assert.ok(!overlayPageSrc.includes('sendDebugEvent("abilities-selection-replay-requested"'));
+  assert.ok(sceneControllerSrc.includes('broadcastReadyStateUpdate(["skills"], "abilities-runtime-loaded");'));
 });
 
 test("escape inside the HUD iframe cancels target picking without changing the source character", () => {
@@ -192,8 +201,8 @@ test("combat runtime pending is safely published, auto-cleared, and never blocks
   assert.ok(sceneControllerSrc.includes('logDebugEvent("session", "runtime-sync-publish-error"'));
   assert.ok(sceneControllerSrc.includes('publishCurrentStateSafe(normalized ? "runtime-sync-pending" : "runtime-sync-ready")'));
   assert.ok(sceneControllerSrc.includes('publishCurrentStateSafe("runtime-sync-force-cleared")'));
-  assert.ok(sceneControllerSrc.includes("publishCurrentStateSafe = publishCurrentState;"));
-  assert.ok(sceneControllerSrc.includes('publishCurrentState("command-blocked:combat-sync")'));
+  assert.ok(sceneControllerSrc.includes('publishCurrentStateSafe = (reason = "state-update") => broadcastModulePatches(["session"], reason) ?? publishCurrentState(reason);'));
+  assert.ok(sceneControllerSrc.includes('broadcastReadyStateUpdate(["session", "weapon", "skills"], "command-blocked:combat-sync");'));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("selection", "runtime-refresh-exception"'));
 });
 

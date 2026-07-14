@@ -4148,6 +4148,7 @@ function serializePlacement(placement) {
 var OVERLAY_HTML = "combat-hud-overlay.html";
 var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 var BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
+var BC_HUD_MODULE_PATCH = "com.odyssey.combat-hud/module-patch";
 var BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
 var BC_HUD_DEBUG_EVENT = "com.odyssey.combat-hud/debug-event";
 var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
@@ -9501,6 +9502,12 @@ function setupSceneSelection(hooks = {}) {
     } catch (_e) {
     }
   }
+  function broadcastModulePatchMessage(payload) {
+    try {
+      lib_default.broadcast.sendMessage(BC_HUD_MODULE_PATCH, payload, { destination: "LOCAL" });
+    } catch (_e) {
+    }
+  }
   function normalizeSceneItemType(item) {
     return String(item?.type ?? "").trim().toUpperCase();
   }
@@ -9676,7 +9683,7 @@ function setupSceneSelection(hooks = {}) {
         const previousWasActive = sessionRuntime?.encounter?.status === "active";
         const nextIsActive = runtime?.encounter?.status === "active";
         sessionRuntime = runtime;
-        if (lastState) publishState(lastState);
+        if (lastState) broadcastReadyStateUpdate(["session"], "session-runtime-loaded");
         if (previousWasActive && !nextIsActive && ephemeral.characterId) {
           scheduleLiveSelectionResolve2("combat-ended", { forceResolve: true });
           void quickbarController?.refresh?.();
@@ -9721,7 +9728,7 @@ function setupSceneSelection(hooks = {}) {
           return;
         }
         if (lastState?.status === "ready" && lastState?.access?.canView === true) {
-          publishCurrentState("abilities-runtime-loaded");
+          broadcastReadyStateUpdate(["skills"], "abilities-runtime-loaded");
         } else if (lastState) {
           publishState(lastState, "abilities-runtime-loaded");
         }
@@ -10382,22 +10389,29 @@ function setupSceneSelection(hooks = {}) {
         combatRuntimePending
       };
     }
-    function publishHudState(state, reason = "state-update") {
+    function buildPayloadSnapshot(state, reason = "state-update") {
       payloadRevision += 1;
-      const nextPayload = buildBroadcastPayload(state, {
+      return buildBroadcastPayload(state, {
         ...buildEphemeralForPayload(),
         revision: payloadRevision,
         reason
       });
+    }
+    function commitLastPayload(nextPayload, reason = "state-update") {
       lastPayload = {
         ...nextPayload,
-        revision: payloadRevision,
+        revision: nextPayload?.revision ?? payloadRevision,
         reason
       };
       if (lastPayload?.status === "ready") {
         lastResolvedCharacterId = lastPayload.characterId ?? lastResolvedCharacterId;
         lastResolvedTokenId = lastPayload.selectedItemId ?? lastResolvedTokenId;
       }
+      return lastPayload;
+    }
+    function publishHudState(state, reason = "state-update") {
+      const nextPayload = buildPayloadSnapshot(state, reason);
+      commitLastPayload(nextPayload, reason);
       broadcast(lastPayload);
       logDebugEvent("selection", "selection-payload-broadcast", {
         revision: lastPayload.revision ?? null,
@@ -10410,14 +10424,57 @@ function setupSceneSelection(hooks = {}) {
       });
       return lastPayload;
     }
+    function buildModulePatchPayload(scope, reason, fullPayload) {
+      return {
+        type: "module-patch",
+        scope,
+        reason,
+        revision: fullPayload?.revision ?? payloadRevision,
+        characterId: fullPayload?.characterId ?? null,
+        selectedItemId: fullPayload?.selectedItemId ?? null,
+        patch: {
+          view: fullPayload?.view ?? null,
+          hudSnapshot: fullPayload?.hudSnapshot ?? null,
+          ui: fullPayload?.ui ?? null,
+          debug: fullPayload?.debug ?? null,
+          error: fullPayload?.error ?? null
+        }
+      };
+    }
+    function broadcastModulePatches(scopes, reason = "module-update") {
+      const normalizedScopes = Array.isArray(scopes) ? [...new Set(scopes.map((scope) => String(scope ?? "").trim()).filter(Boolean))] : [];
+      if (normalizedScopes.length === 0) return null;
+      if (!lastState) return null;
+      if (lastState?.status !== "ready" || lastState?.access?.canView !== true) {
+        return publishCurrentState(reason);
+      }
+      const nextPayload = buildPayloadSnapshot(lastState, reason);
+      commitLastPayload(nextPayload, reason);
+      for (const scope of normalizedScopes) {
+        const patchPayload = buildModulePatchPayload(scope, reason, lastPayload);
+        broadcastModulePatchMessage(patchPayload);
+        logDebugEvent("patch", "module-patch-broadcast", {
+          scope,
+          reason,
+          revision: patchPayload.revision ?? null,
+          characterId: patchPayload.characterId ?? null,
+          selectedItemId: patchPayload.selectedItemId ?? null,
+          keys: Object.keys(patchPayload.patch ?? {})
+        });
+      }
+      return lastPayload;
+    }
     function publishState(state, reason = "state-update") {
+      if (state?.status === "ready" && state?.access?.canView === true && !isSelectionLifecycleReason(reason)) {
+        return broadcastModulePatches(scopesForBroadcastReason(reason), reason);
+      }
       return publishHudState(state, reason);
     }
     function publishCurrentState(reason = "state-update") {
       if (!lastState) return null;
       return publishState(lastState, reason);
     }
-    publishCurrentStateSafe = publishCurrentState;
+    publishCurrentStateSafe = (reason = "state-update") => broadcastModulePatches(["session"], reason) ?? publishCurrentState(reason);
     function isCurrentSource(characterId, selectedItemId) {
       return String(ephemeral.characterId ?? "").trim() === String(characterId ?? "").trim() && String(lastPayload?.selectedItemId ?? "").trim() === String(selectedItemId ?? "").trim();
     }
@@ -10430,6 +10487,62 @@ function setupSceneSelection(hooks = {}) {
         return lastPayload;
       }
       return null;
+    }
+    function broadcastReadyStateUpdate(scopes, reason = "module-update") {
+      return broadcastModulePatches(scopes, reason) ?? replayLastVisibleState2(reason);
+    }
+    function scopesForRuntimeRefresh(reason = "runtime-refresh", refreshQuickbar = false) {
+      const scopes = /* @__PURE__ */ new Set(["session"]);
+      if (refreshQuickbar) scopes.add("skills");
+      if (reason.includes("weapon") || reason.includes("reload") || reason.includes("attack")) {
+        scopes.add("weapon");
+      }
+      if (reason.includes("ability")) {
+        scopes.add("skills");
+      }
+      if (reason.includes("attack") || reason.includes("ability") || reason.includes("reload") || reason.includes("fire-mode")) {
+        scopes.add("log");
+      }
+      if (reason.includes("target") || reason.includes("attack") || reason.includes("ability")) {
+        scopes.add("targeting");
+      }
+      return [...scopes];
+    }
+    function isSelectionLifecycleReason(reason = "state-update") {
+      const normalizedReason = String(reason ?? "").trim();
+      if (!normalizedReason) return true;
+      if (normalizedReason.startsWith("startup")) return true;
+      if (normalizedReason.includes("selection")) return true;
+      if (normalizedReason.startsWith("scene-items-changed")) return true;
+      if (normalizedReason.startsWith("combat-ended")) return true;
+      if (normalizedReason.includes("sticky-last-selection")) return true;
+      if (normalizedReason.includes("hud-interaction-active")) return true;
+      return normalizedReason.endsWith(":loading");
+    }
+    function scopesForBroadcastReason(reason = "module-update") {
+      const normalizedReason = String(reason ?? "").trim().toLowerCase();
+      const scopes = /* @__PURE__ */ new Set();
+      if (normalizedReason.includes("weapon") || normalizedReason.includes("reload") || normalizedReason.includes("fire-mode")) {
+        scopes.add("weapon");
+      }
+      if (normalizedReason.includes("skill") || normalizedReason.includes("ability") || normalizedReason.includes("quickbar")) {
+        scopes.add("skills");
+      }
+      if (normalizedReason.includes("target")) {
+        scopes.add("targeting");
+      }
+      if (normalizedReason.includes("session") || normalizedReason.includes("combat") || normalizedReason.includes("turn") || normalizedReason.includes("move") || normalizedReason.includes("attack") || normalizedReason.includes("reload") || normalizedReason.includes("weapon") || normalizedReason.includes("ability") || normalizedReason.includes("runtime-sync")) {
+        scopes.add("session");
+      }
+      if (normalizedReason.includes("attack") || normalizedReason.includes("reload") || normalizedReason.includes("fire-mode") || normalizedReason.includes("ability") || normalizedReason.includes("log")) {
+        scopes.add("log");
+      }
+      if (scopes.size === 0) {
+        for (const scope of ["weapon", "skills", "targeting", "session", "log", "ui"]) {
+          scopes.add(scope);
+        }
+      }
+      return [...scopes];
     }
     async function refetchCurrent(reason = "generic") {
       if (refetchCurrentPromise) {
@@ -10482,7 +10595,7 @@ function setupSceneSelection(hooks = {}) {
         let finalPublishReason = null;
         try {
           await waitForCombatActionIdle(characterId);
-          const tasks = [refetchCurrent(reason)];
+          const tasks = [refreshCurrentReadyRuntimeOnly(reason)];
           if (refreshQuickbar && quickbarController && characterId) {
             tasks.push(quickbarController.refresh());
           }
@@ -10501,7 +10614,7 @@ function setupSceneSelection(hooks = {}) {
         } finally {
           setCombatRuntimePending(false, reason);
           if (finalPublishReason && lastState?.status === "ready" && lastState?.access?.canView === true && String(lastState?.characterId ?? "").trim() === characterId) {
-            publishCurrentState(finalPublishReason);
+            broadcastReadyStateUpdate(scopesForRuntimeRefresh(reason, refreshQuickbar), finalPublishReason);
           }
         }
       };
@@ -10583,7 +10696,7 @@ function setupSceneSelection(hooks = {}) {
         distance: Number.isFinite(Number(target?.distance?.value)) ? Number(target.distance.value) : null,
         error: payload?.error ?? null
       };
-      publishCurrentState("targeting-updated");
+      broadcastReadyStateUpdate(["targeting"], "targeting-updated");
     }
     function isCombatSyncBlockedCommand(command) {
       if (!combatRuntimePending || !command || typeof command !== "object") return false;
@@ -10601,7 +10714,7 @@ function setupSceneSelection(hooks = {}) {
       if (!lastPayload || lastPayload.status !== "ready") return;
       if (isCombatSyncBlockedCommand(command)) {
         ephemeral.commandStatus = { type: "error", message: "Synchronizing combat..." };
-        publishCurrentState("command-blocked:combat-sync");
+        broadcastReadyStateUpdate(["session", "weapon", "skills"], "command-blocked:combat-sync");
         return;
       }
       if (command?.scope === "combat-hud" && command?.feature === "gm-skill-admin") {
@@ -10676,7 +10789,7 @@ function setupSceneSelection(hooks = {}) {
           logDebugEvent("skills", "gm-delete-result", { ok: true, type: deleteType, deleteKey }, true);
           await Promise.allSettled([
             quickbarController?.refresh?.(),
-            refetchCurrent()
+            refreshCurrentReadyRuntimeOnly("gm-delete")
           ]);
         } catch (error) {
           const message = String(error?.message ?? error ?? "Delete failed.");
@@ -11635,7 +11748,7 @@ function setupSceneSelection(hooks = {}) {
               }, false);
               replayLastVisibleState2(finalPublishReason);
             } else {
-              publishCurrentState(finalPublishReason);
+              broadcastReadyStateUpdate(scopesForBroadcastReason(finalPublishReason), finalPublishReason);
             }
           }
         }
@@ -11649,7 +11762,10 @@ function setupSceneSelection(hooks = {}) {
             encounterId: currentMappedSession()?.id ?? null,
             armory: true,
             inventory: true
-          }).then(() => refetchCurrent("weapon-selector-opened"));
+          }).then(async () => {
+            await refreshCurrentReadyRuntimeOnly("weapon-data-loaded");
+            broadcastReadyStateUpdate(["weapon"], "weapon-data-loaded");
+          });
         }
         if (lastState) publishState(lastState);
         return;
@@ -11826,21 +11942,6 @@ function setupSceneSelection(hooks = {}) {
         moduleId: event?.data?.moduleId ?? null,
         reason: requestReason
       });
-      if (event?.data?.reason === "abilities-runtime-updated") {
-        logDebugEvent("selection", "selection-replay-refresh-requested", {
-          reason: "abilities-runtime-updated",
-          status: lastState?.status ?? null,
-          characterId: lastState?.characterId ?? null,
-          lastPayloadCharacterId: lastPayload?.characterId ?? null,
-          moduleId: event?.data?.moduleId ?? null
-        });
-        if (lastState) {
-          publishCurrentState("abilities-runtime-updated");
-        } else if (lastPayload) {
-          broadcast(lastPayload);
-        }
-        return;
-      }
       if (shouldDeferSelection()) {
         logDebugEvent("selection", "selection-request-ignored", {
           reason: "selection-deferred-targeting-active",

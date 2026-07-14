@@ -6049,6 +6049,7 @@ function parsePlacement(rawJson) {
 // hud/overlay/overlayConstants.js
 var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 var BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
+var BC_HUD_MODULE_PATCH = "com.odyssey.combat-hud/module-patch";
 var BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
 var BC_HUD_DEBUG_EVENT = "com.odyssey.combat-hud/debug-event";
 var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
@@ -7915,6 +7916,76 @@ function normalizeSelectionPayload(raw) {
     error: { code: raw.error?.code ?? null, message: raw.error?.message ?? null }
   };
 }
+function mergeObject(baseValue, patchValue) {
+  if (!patchValue || typeof patchValue !== "object" || Array.isArray(patchValue)) {
+    return patchValue === void 0 ? baseValue : patchValue;
+  }
+  return {
+    ...baseValue && typeof baseValue === "object" && !Array.isArray(baseValue) ? baseValue : {},
+    ...patchValue
+  };
+}
+function mergeUiState(baseUi, patchUi) {
+  if (!patchUi || typeof patchUi !== "object") return baseUi ?? null;
+  const nextUi = mergeObject(baseUi, patchUi);
+  if (!nextUi || typeof nextUi !== "object") return nextUi;
+  if (patchUi.targeting && typeof patchUi.targeting === "object") {
+    nextUi.targeting = mergeObject(baseUi?.targeting, patchUi.targeting);
+  }
+  if (patchUi.basicAttack && typeof patchUi.basicAttack === "object") {
+    nextUi.basicAttack = mergeObject(baseUi?.basicAttack, patchUi.basicAttack);
+  }
+  return nextUi;
+}
+function mergeHudSnapshot(baseSnapshot, patchSnapshot) {
+  if (!patchSnapshot || typeof patchSnapshot !== "object") {
+    return patchSnapshot === void 0 ? baseSnapshot : patchSnapshot;
+  }
+  const nextSnapshot = mergeObject(baseSnapshot, patchSnapshot);
+  if (!nextSnapshot || typeof nextSnapshot !== "object") return nextSnapshot;
+  for (const key of ["entity", "weapon", "skills", "quickbar", "modifiers", "battleLog", "combatSession"]) {
+    if (patchSnapshot[key] && typeof patchSnapshot[key] === "object") {
+      nextSnapshot[key] = mergeObject(baseSnapshot?.[key], patchSnapshot[key]);
+    }
+  }
+  return nextSnapshot;
+}
+function normalizeModulePatchPayload(raw) {
+  if (!raw || typeof raw !== "object" || raw.type !== "module-patch") return null;
+  const patch = raw.patch && typeof raw.patch === "object" ? raw.patch : {};
+  return {
+    type: "module-patch",
+    scope: String(raw.scope ?? "").trim(),
+    reason: raw.reason ?? null,
+    revision: Number.isFinite(Number(raw.revision)) ? Number(raw.revision) : null,
+    characterId: raw.characterId ?? null,
+    selectedItemId: raw.selectedItemId ?? null,
+    patch: {
+      ui: patch.ui ?? null,
+      hudSnapshot: patch.hudSnapshot ?? null,
+      view: patch.view ?? null,
+      debug: patch.debug ?? null,
+      error: patch.error ?? null
+    }
+  };
+}
+function mergeModulePatchIntoSelectionPayload(selectionPayload, rawPatchPayload) {
+  const basePayload = normalizeSelectionPayload(selectionPayload);
+  const patchPayload = normalizeModulePatchPayload(rawPatchPayload);
+  if (!basePayload || !patchPayload) return basePayload;
+  return {
+    ...basePayload,
+    revision: patchPayload.revision ?? basePayload.revision,
+    reason: patchPayload.reason ?? basePayload.reason,
+    selectedItemId: patchPayload.selectedItemId ?? basePayload.selectedItemId,
+    characterId: patchPayload.characterId ?? basePayload.characterId,
+    view: patchPayload.patch.view && typeof patchPayload.patch.view === "object" ? mergeObject(basePayload.view, patchPayload.patch.view) : basePayload.view,
+    hudSnapshot: mergeHudSnapshot(basePayload.hudSnapshot, patchPayload.patch.hudSnapshot),
+    ui: mergeUiState(basePayload.ui, patchPayload.patch.ui),
+    debug: patchPayload.patch.debug ?? basePayload.debug,
+    error: patchPayload.patch.error && typeof patchPayload.patch.error === "object" ? mergeObject(basePayload.error, patchPayload.patch.error) : basePayload.error
+  };
+}
 
 // hud/scene/selectionView.js
 var LIVE_RENDERERS = {
@@ -8243,6 +8314,24 @@ var BLOCK_RENDERERS = {
   "gun-magazine-selector": renderMagazineSelectorPanel,
   "gun-fire-mode-selector": renderFireModeSelectorPanel
 };
+function shouldRenderModuleForPatch(moduleId, scope) {
+  if (moduleId === "gun") {
+    return scope === "weapon" || scope === "targeting" || scope === "session";
+  }
+  if (moduleId === "skills") {
+    return scope === "skills" || scope === "targeting" || scope === "session";
+  }
+  if (moduleId === "combatControl") {
+    return scope === "weapon" || scope === "skills" || scope === "targeting" || scope === "session";
+  }
+  if (moduleId === "player") {
+    return scope === "session" || scope === "ui";
+  }
+  if (moduleId === "log") {
+    return scope === "log";
+  }
+  return true;
+}
 function mountCombatHudModule(options) {
   const { root, moduleId } = options;
   const integration = options.integration ?? {};
@@ -8380,6 +8469,29 @@ function mountCombatHudModule(options) {
     logLiveDebug(liveSelection);
     render();
     maybeShowCommandStatusToast();
+  }
+  function applyPatch(patchPayload) {
+    if (!liveSelection) {
+      return { applied: false, rendered: false, ignoredReason: "no-live-selection", nextSelection: liveSelection };
+    }
+    const nextSelection = mergeModulePatchIntoSelectionPayload(liveSelection, patchPayload);
+    if (!nextSelection) {
+      return { applied: false, rendered: false, ignoredReason: "invalid-patch", nextSelection: liveSelection };
+    }
+    liveSelection = nextSelection;
+    logLiveDebug(liveSelection);
+    const scope = String(patchPayload?.scope ?? "").trim();
+    const shouldRender = shouldRenderModuleForPatch(moduleId, scope);
+    if (shouldRender) {
+      render();
+      maybeShowCommandStatusToast();
+    }
+    return {
+      applied: true,
+      rendered: shouldRender,
+      ignoredReason: shouldRender ? null : "module-scope-filtered",
+      nextSelection: liveSelection
+    };
   }
   function showToast(text) {
     const toast = el.querySelector(".ohud-toast");
@@ -8581,6 +8693,7 @@ function mountCombatHudModule(options) {
   return {
     store,
     applySelection,
+    applyPatch,
     unmount() {
       unsubscribe();
       tooltip.destroy();
@@ -9105,6 +9218,12 @@ function sendDebugEvent(action, details2 = {}, status2 = "ok") {
   } catch (_e) {
   }
 }
+function isPatchForCurrentCharacter(patchPayload, lastSelectionPayload) {
+  const patchCharacterId = String(patchPayload?.characterId ?? "").trim();
+  const currentCharacterId = String(lastSelectionPayload?.characterId ?? "").trim();
+  if (!patchCharacterId || !currentCharacterId) return true;
+  return patchCharacterId === currentCharacterId;
+}
 function getModuleParam() {
   try {
     return new URLSearchParams(window.location.search).get("module") || "";
@@ -9363,31 +9482,42 @@ function start() {
           }
           scheduleHydrationRetry(lastSelectionPayload);
         });
-        if (moduleParam === "skills") {
-          lib_default.broadcast.onMessage(BC_HUD_ABILITIES, (event) => {
-            const runtimeCharacterId = String(event?.data?.characterId ?? "").trim();
-            const currentCharacterId = String(lastSelectionPayload?.characterId ?? "").trim();
-            if (!runtimeCharacterId || runtimeCharacterId !== currentCharacterId) {
-              sendDebugEvent("abilities-replay-skipped", {
-                moduleId: moduleParam,
-                reason: "character-mismatch",
-                runtimeCharacterId,
-                currentCharacterId
-              });
-              return;
-            }
-            sendDebugEvent("abilities-selection-replay-requested", {
+        lib_default.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
+          const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
+          if (!patchPayload) return;
+          if (!isPatchForCurrentCharacter(patchPayload, lastSelectionPayload)) {
+            sendDebugEvent("module-patch-ignored", {
               moduleId: moduleParam,
-              characterId: currentCharacterId,
-              runtimeOk: event?.data?.runtime?.ok !== false
-            }, "pending");
-            send(BC_HUD_SELECTION_REQUEST, {
-              moduleId: moduleParam,
-              reason: "abilities-runtime-updated",
-              forceReplay: true
+              scope: patchPayload.scope,
+              reason: patchPayload.reason,
+              revision: patchPayload.revision,
+              cause: "character-mismatch"
             });
+            return;
+          }
+          sendDebugEvent("module-patch-received", {
+            moduleId: moduleParam,
+            scope: patchPayload.scope,
+            reason: patchPayload.reason,
+            revision: patchPayload.revision
           });
-        }
+          const outcome = mod.applyPatch?.(patchPayload);
+          if (outcome?.nextSelection) {
+            lastSelectionPayload = outcome.nextSelection;
+          }
+          sendDebugEvent(
+            outcome?.applied ? "module-patch-applied" : "module-patch-ignored",
+            {
+              moduleId: moduleParam,
+              scope: patchPayload.scope,
+              reason: patchPayload.reason,
+              revision: patchPayload.revision,
+              cause: outcome?.ignoredReason ?? null,
+              rendered: outcome?.rendered === true
+            },
+            outcome?.applied ? "ok" : "pending"
+          );
+        });
         send(BC_HUD_SELECTION_REQUEST, {});
         if (isReplayDriverModule) {
           lib_default.player.onChange(() => {
@@ -9464,6 +9594,20 @@ function start() {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
           maybeLogPayloadReceived(rawPayload, "broadcast");
+          renderCompanion();
+        });
+        lib_default.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
+          const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
+          if (!patchPayload || !isPatchForCurrentCharacter(patchPayload, rawPayload)) return;
+          const nextPayload = mergeModulePatchIntoSelectionPayload(rawPayload, patchPayload);
+          if (!nextPayload) return;
+          rawPayload = nextPayload;
+          sendDebugEvent("module-patch-applied", {
+            moduleId: moduleParam,
+            scope: patchPayload.scope,
+            reason: patchPayload.reason,
+            revision: patchPayload.revision
+          });
           renderCompanion();
         });
         send(BC_HUD_SELECTION_REQUEST, {});
@@ -9570,6 +9714,20 @@ function start() {
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;
           maybeLogPayloadReceived(rawPayload, "broadcast");
+          renderCard();
+        });
+        lib_default.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
+          const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
+          if (!patchPayload || !isPatchForCurrentCharacter(patchPayload, rawPayload)) return;
+          const nextPayload = mergeModulePatchIntoSelectionPayload(rawPayload, patchPayload);
+          if (!nextPayload) return;
+          rawPayload = nextPayload;
+          sendDebugEvent("module-patch-applied", {
+            moduleId: moduleParam,
+            scope: patchPayload.scope,
+            reason: patchPayload.reason,
+            revision: patchPayload.revision
+          });
           renderCard();
         });
         lib_default.broadcast.onMessage(BC_HUD_COMMAND, (event) => {

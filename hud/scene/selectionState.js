@@ -543,6 +543,86 @@ export function normalizeSelectionPayload(raw) {
   };
 }
 
+function mergeObject(baseValue, patchValue) {
+  if (!patchValue || typeof patchValue !== "object" || Array.isArray(patchValue)) {
+    return patchValue === undefined ? baseValue : patchValue;
+  }
+  return {
+    ...(baseValue && typeof baseValue === "object" && !Array.isArray(baseValue) ? baseValue : {}),
+    ...patchValue,
+  };
+}
+
+function mergeUiState(baseUi, patchUi) {
+  if (!patchUi || typeof patchUi !== "object") return baseUi ?? null;
+  const nextUi = mergeObject(baseUi, patchUi);
+  if (!nextUi || typeof nextUi !== "object") return nextUi;
+  if (patchUi.targeting && typeof patchUi.targeting === "object") {
+    nextUi.targeting = mergeObject(baseUi?.targeting, patchUi.targeting);
+  }
+  if (patchUi.basicAttack && typeof patchUi.basicAttack === "object") {
+    nextUi.basicAttack = mergeObject(baseUi?.basicAttack, patchUi.basicAttack);
+  }
+  return nextUi;
+}
+
+function mergeHudSnapshot(baseSnapshot, patchSnapshot) {
+  if (!patchSnapshot || typeof patchSnapshot !== "object") {
+    return patchSnapshot === undefined ? baseSnapshot : patchSnapshot;
+  }
+  const nextSnapshot = mergeObject(baseSnapshot, patchSnapshot);
+  if (!nextSnapshot || typeof nextSnapshot !== "object") return nextSnapshot;
+  for (const key of ["entity", "weapon", "skills", "quickbar", "modifiers", "battleLog", "combatSession"]) {
+    if (patchSnapshot[key] && typeof patchSnapshot[key] === "object") {
+      nextSnapshot[key] = mergeObject(baseSnapshot?.[key], patchSnapshot[key]);
+    }
+  }
+  return nextSnapshot;
+}
+
+export function normalizeModulePatchPayload(raw) {
+  if (!raw || typeof raw !== "object" || raw.type !== "module-patch") return null;
+  const patch = raw.patch && typeof raw.patch === "object" ? raw.patch : {};
+  return {
+    type: "module-patch",
+    scope: String(raw.scope ?? "").trim(),
+    reason: raw.reason ?? null,
+    revision: Number.isFinite(Number(raw.revision)) ? Number(raw.revision) : null,
+    characterId: raw.characterId ?? null,
+    selectedItemId: raw.selectedItemId ?? null,
+    patch: {
+      ui: patch.ui ?? null,
+      hudSnapshot: patch.hudSnapshot ?? null,
+      view: patch.view ?? null,
+      debug: patch.debug ?? null,
+      error: patch.error ?? null,
+    },
+  };
+}
+
+export function mergeModulePatchIntoSelectionPayload(selectionPayload, rawPatchPayload) {
+  const basePayload = normalizeSelectionPayload(selectionPayload);
+  const patchPayload = normalizeModulePatchPayload(rawPatchPayload);
+  if (!basePayload || !patchPayload) return basePayload;
+
+  return {
+    ...basePayload,
+    revision: patchPayload.revision ?? basePayload.revision,
+    reason: patchPayload.reason ?? basePayload.reason,
+    selectedItemId: patchPayload.selectedItemId ?? basePayload.selectedItemId,
+    characterId: patchPayload.characterId ?? basePayload.characterId,
+    view: patchPayload.patch.view && typeof patchPayload.patch.view === "object"
+      ? mergeObject(basePayload.view, patchPayload.patch.view)
+      : basePayload.view,
+    hudSnapshot: mergeHudSnapshot(basePayload.hudSnapshot, patchPayload.patch.hudSnapshot),
+    ui: mergeUiState(basePayload.ui, patchPayload.patch.ui),
+    debug: patchPayload.patch.debug ?? basePayload.debug,
+    error: patchPayload.patch.error && typeof patchPayload.patch.error === "object"
+      ? mergeObject(basePayload.error, patchPayload.patch.error)
+      : basePayload.error,
+  };
+}
+
 /**
  * Stale-request protection. Every resolve takes a monotonically increasing
  * token; only the latest token may commit its result. If selection A starts,
