@@ -39940,6 +39940,9 @@ declare
   v_item_cost_per_reload integer := 1;
   v_charges_before integer := 0;
   v_charges_after integer := 0;
+  v_started_at timestamptz := clock_timestamp();
+  v_stage_started_at timestamptz := clock_timestamp();
+  v_timings_ms jsonb := '{}'::jsonb;
 begin
   select
     ability.id,
@@ -39966,20 +39969,44 @@ begin
     return jsonb_build_object(
       'ok', false,
       'error', 'ABILITY_NOT_FOUND',
-      'character_ability_id', p_character_ability_id
+      'character_ability_id', p_character_ability_id,
+      'timings_ms', jsonb_build_object(
+        'lock_character_ability',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+        'total',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+      )
     );
   end if;
+
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'lock_character_ability',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
 
   if coalesce(v_ability.current_cooldown_rounds, 0) > 0 then
     return jsonb_build_object(
       'ok', false,
       'error', 'ABILITY_ON_COOLDOWN',
       'character_ability_id', p_character_ability_id,
-      'cooldown_rounds_left', v_ability.current_cooldown_rounds
+      'cooldown_rounds_left', v_ability.current_cooldown_rounds,
+      'timings_ms',
+        v_timings_ms || jsonb_build_object(
+          'cooldown_check',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+          'total',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+        )
     );
   end if;
 
   v_effective_level := public.odyssey_get_character_ability_effective_level(p_character_ability_id);
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'effective_level_lookup',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
 
   select *
   into v_level
@@ -39994,9 +40021,22 @@ begin
       'ok', false,
       'error', 'ABILITY_LEVEL_NOT_AVAILABLE',
       'character_ability_id', p_character_ability_id,
-      'effective_level', v_effective_level
+      'effective_level', v_effective_level,
+      'timings_ms',
+        v_timings_ms || jsonb_build_object(
+          'load_ability_level',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+          'total',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+        )
     );
   end if;
+
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'load_ability_level',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
 
   v_runtime_data := public.odyssey_merge_runtime_data(
     public.odyssey_merge_runtime_data(
@@ -40005,6 +40045,11 @@ begin
     ),
     coalesce(v_level.data, '{}'::jsonb)
   );
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'merge_runtime_data',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
 
   if jsonb_typeof(v_runtime_data->'reload') = 'object' then
     v_reload_config := v_runtime_data->'reload';
@@ -40027,7 +40072,14 @@ begin
       return jsonb_build_object(
         'ok', false,
         'error', 'ABILITY_CHARGE_STATE_NOT_CONFIGURED',
-        'character_ability_id', p_character_ability_id
+        'character_ability_id', p_character_ability_id,
+        'timings_ms',
+          v_timings_ms || jsonb_build_object(
+            'internal_charge_validation',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+            'total',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+          )
       );
     end if;
 
@@ -40042,6 +40094,13 @@ begin
             'before', coalesce(v_ability.current_charges, 0),
             'after', coalesce(v_ability.current_charges, 0),
             'max', coalesce(v_ability.max_charges, 0)
+          ),
+        'timings_ms',
+          v_timings_ms || jsonb_build_object(
+            'internal_charge_validation',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+            'total',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
           )
       );
     end if;
@@ -40072,6 +40131,13 @@ begin
           'reload_mode', v_reload_mode,
           'item_code', nullif(v_reload_item_code, ''),
           'item_cost_per_reload', v_item_cost_per_reload
+        ),
+      'timings_ms',
+        v_timings_ms || jsonb_build_object(
+          'consume_internal_charge',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+          'total',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
         )
     );
   end if;
@@ -40082,12 +40148,24 @@ begin
       'character_ability_id', p_character_ability_id,
       'resource_mode', v_ability.resource_mode,
       'resource_cost', coalesce(v_level.resource_cost, 0),
-      'resource_consumed', false
+      'resource_consumed', false,
+      'timings_ms',
+        v_timings_ms || jsonb_build_object(
+          'resource_mode_short_circuit',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+          'total',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+        )
     );
   end if;
 
   if v_ability.resource_mode = 'pool' then
     v_sync := public.odyssey_sync_character_resource_pools(v_ability.character_id);
+    v_timings_ms := v_timings_ms || jsonb_build_object(
+      'sync_resource_pools',
+      greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+    );
+    v_stage_started_at := clock_timestamp();
 
     select
       p.id,
@@ -40108,9 +40186,22 @@ begin
         'error', 'RESOURCE_POOL_NOT_FOUND',
         'character_ability_id', p_character_ability_id,
         'resource_pool_code', v_ability.resource_pool_code,
-        'sync', v_sync
+        'sync', v_sync,
+        'timings_ms',
+          v_timings_ms || jsonb_build_object(
+            'lock_resource_pool',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+            'total',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+          )
       );
     end if;
+
+    v_timings_ms := v_timings_ms || jsonb_build_object(
+      'lock_resource_pool',
+      greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+    );
+    v_stage_started_at := clock_timestamp();
 
     if coalesce(v_pool.current_value, 0) < coalesce(v_level.resource_cost, 0) then
       return jsonb_build_object(
@@ -40119,9 +40210,22 @@ begin
         'character_ability_id', p_character_ability_id,
         'resource_pool_code', v_pool.code,
         'required', v_level.resource_cost,
-        'available', coalesce(v_pool.current_value, 0)
+        'available', coalesce(v_pool.current_value, 0),
+        'timings_ms',
+          v_timings_ms || jsonb_build_object(
+            'validate_pool_balance',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+            'total',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+          )
       );
     end if;
+
+    v_timings_ms := v_timings_ms || jsonb_build_object(
+      'validate_pool_balance',
+      greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+    );
+    v_stage_started_at := clock_timestamp();
 
     update public.odyssey_character_resource_pools
     set current_value = greatest(current_value - coalesce(v_level.resource_cost, 0), 0)
@@ -40141,6 +40245,13 @@ begin
           'before', coalesce(v_pool.current_value, 0),
           'after', greatest(coalesce(v_pool.current_value, 0) - coalesce(v_level.resource_cost, 0), 0),
           'max', coalesce(v_pool.max_value, 0)
+        ),
+      'timings_ms',
+        v_timings_ms || jsonb_build_object(
+          'update_resource_pool',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+          'total',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
         )
     );
   end if;
@@ -40150,7 +40261,14 @@ begin
       return jsonb_build_object(
         'ok', false,
         'error', 'RESOURCE_ITEM_CODE_REQUIRED',
-        'character_ability_id', p_character_ability_id
+        'character_ability_id', p_character_ability_id,
+        'timings_ms',
+          v_timings_ms || jsonb_build_object(
+            'item_resource_validation',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+            'total',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+          )
       );
     end if;
 
@@ -40166,7 +40284,14 @@ begin
         'error', 'RESOURCE_ITEM_NOT_AVAILABLE',
         'character_ability_id', p_character_ability_id,
         'resource_item_code', v_ability.resource_item_code,
-        'details', v_item_result
+        'details', v_item_result,
+        'timings_ms',
+          v_timings_ms || jsonb_build_object(
+            'consume_resource_item',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+            'total',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+          )
       );
     end if;
 
@@ -40176,7 +40301,14 @@ begin
       'resource_mode', v_ability.resource_mode,
       'resource_consumed', true,
       'resource_cost', coalesce(v_level.resource_cost, 0),
-      'item', v_item_result
+      'item', v_item_result,
+      'timings_ms',
+        v_timings_ms || jsonb_build_object(
+          'consume_resource_item',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+          'total',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+        )
     );
   end if;
 
@@ -40185,7 +40317,14 @@ begin
     'character_ability_id', p_character_ability_id,
     'resource_mode', v_ability.resource_mode,
     'resource_cost', coalesce(v_level.resource_cost, 0),
-    'resource_consumed', false
+    'resource_consumed', false,
+    'timings_ms',
+      v_timings_ms || jsonb_build_object(
+        'resource_mode_fallback',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+        'total',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+      )
   );
 end;
 $$;
@@ -59559,6 +59698,11 @@ begin
   );
   v_stage_started_at := clock_timestamp();
   v_effective_level := public.odyssey_get_character_ability_effective_level(v_character_ability_id);
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'effective_level_lookup',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
 
   select *
   into v_level
@@ -59634,6 +59778,7 @@ begin
     return v_resource_result || jsonb_build_object(
       'timings_ms',
       v_timings_ms || jsonb_build_object(
+        'resource', coalesce(v_resource_result->'timings_ms', '{}'::jsonb),
         'total',
         greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
       )
@@ -59745,6 +59890,8 @@ begin
           return v_effect_result || jsonb_build_object(
             'timings_ms',
             v_timings_ms || jsonb_build_object(
+              'resource', coalesce(v_resource_result->'timings_ms', '{}'::jsonb),
+              'effect', coalesce(v_effect_result->'timings_ms', '{}'::jsonb),
               'total',
               greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
             )
@@ -59817,6 +59964,8 @@ begin
         return v_effect_result || jsonb_build_object(
           'timings_ms',
           v_timings_ms || jsonb_build_object(
+            'resource', coalesce(v_resource_result->'timings_ms', '{}'::jsonb),
+            'effect', coalesce(v_effect_result->'timings_ms', '{}'::jsonb),
             'total',
             greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
           )
@@ -60000,6 +60149,8 @@ begin
     'log_id', v_log_id,
     'timings_ms',
       v_timings_ms || jsonb_build_object(
+        'resource', coalesce(v_resource_result->'timings_ms', '{}'::jsonb),
+        'effect', coalesce(v_effect_result->'timings_ms', '{}'::jsonb),
         'total',
         greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
       )
@@ -67123,6 +67274,11 @@ begin
 
   v_stage := 'load_ability_level';
   v_effective_level := public.odyssey_get_character_ability_effective_level(v_character_ability_id);
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'effective_level_lookup',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
   select *
   into v_level
   from public.odyssey_ability_level_defs level_data
@@ -67179,6 +67335,7 @@ begin
     return v_resource_result || jsonb_build_object(
       'timings_ms',
       v_timings_ms || jsonb_build_object(
+        'resource', coalesce(v_resource_result->'timings_ms', '{}'::jsonb),
         'total',
         greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
       )
@@ -67252,6 +67409,7 @@ begin
     'message', format('%s activated.', v_ability.ability_name),
     'timings_ms',
       v_timings_ms || jsonb_build_object(
+        'resource', coalesce(v_resource_result->'timings_ms', '{}'::jsonb),
         'total',
         greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
       )

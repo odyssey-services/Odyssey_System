@@ -27,6 +27,7 @@ import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/charact
 import { loadWeaponProfileMagazine, getCharacterArmory, switchWeaponFireMode, switchActiveWeapon } from "../../api/weaponApi.js";
 import { performAttack, executeAction, getActiveRuntime } from "../../api/combatApi.js";
 import { useAbility } from "../../api/abilityApi.js";
+import { removeCharacterEffect } from "../../api/effectsApi.js";
 import { getCharacterInventory } from "../../api/inventoryApi.js";
 import { resolveReloadMagazineId, normalizeReloadRpcResult } from "./reloadPolicy.js";
 import { normalizeFireModeRpcResult } from "./fireModePolicy.js";
@@ -116,6 +117,7 @@ export function setupSceneSelection(hooks = {}) {
   let lastResolvedCharacterId = null;
   let lastResolvedTokenId = null;
   let skillAdminDeleteInFlight = null;
+  let activeEffectDeleteInFlight = null;
   let refetchCurrentPromise = null;
   let refetchCurrentQueued = false;
   let lastRefetchAt = 0;
@@ -2351,6 +2353,58 @@ export function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
         } finally {
           skillAdminDeleteInFlight = null;
+        }
+        return;
+      }
+
+      if (command?.scope === "combat-hud" && command?.feature === "active-effect-admin") {
+        const viewerIsGm = String(viewer?.role ?? "").toUpperCase() === "GM";
+        const effectId = String(command.effectId ?? "").trim() || null;
+        const effectName = String(command.effectName ?? "").trim() || null;
+
+        logDebugEvent("effects", "gm-remove-click", {
+          type: String(command.type ?? ""),
+          effectId,
+          effectName,
+        });
+
+        if (!viewerIsGm) {
+          logDebugEvent("effects", "gm-remove-result", {
+            ok: false,
+            effectId,
+            error: "GM_ONLY",
+          }, false);
+          return;
+        }
+
+        if (String(command.type ?? "") !== "remove-effect" || !effectId) return;
+        if (activeEffectDeleteInFlight === effectId) return;
+
+        activeEffectDeleteInFlight = effectId;
+        try {
+          const result = await removeCharacterEffect(effectId, settings);
+          if (result?.ok === false) {
+            throw new Error(String(result?.message ?? result?.error ?? "Unable to remove active effect."));
+          }
+
+          logDebugEvent("effects", "gm-remove-result", {
+            ok: true,
+            effectId,
+            effectName,
+          }, true);
+
+          await refreshSelectedCharacterRuntime("active-effect-removed", { refreshQuickbar: false });
+        } catch (error) {
+          const message = String(error?.message ?? error ?? "Remove effect failed.");
+          logDebugEvent("effects", "gm-remove-result", {
+            ok: false,
+            effectId,
+            effectName,
+            error: message,
+          }, false);
+          if (lastState) publishState(lastState);
+        } finally {
+          activeEffectDeleteInFlight = null;
         }
         return;
       }

@@ -489,6 +489,15 @@ export function mountCombatHudModule(options) {
       case "toggle-gm-tracker":
         integration.onCommand && integration.onCommand({ scope: "combat-hud", feature: "combat-session", type: "toggle-tracker" });
         break;
+      case "remove-active-effect":
+        integration.onCommand && integration.onCommand({
+          scope: "combat-hud",
+          feature: "active-effect-admin",
+          type: "remove-effect",
+          effectId: t.getAttribute("data-effect-id"),
+          effectName: t.getAttribute("data-effect-name"),
+        });
+        break;
       default: break;
     }
   }

@@ -8,7 +8,6 @@ import {
   selectCurrentEntity,
   selectControlledCharacter,
   selectPlayerStatusLabel,
-  selectVisibleStatuses,
 } from "../core/combatHudSelectors.js";
 import { entitySilhouetteSvg } from "./hudIcons.js";
 import { statusChip, overflowChip } from "./StatusChip.js";
@@ -88,6 +87,25 @@ function pilotStrip(pilot) {
   </div>`;
 }
 
+function activeModifierChip(effect, { removable = false } = {}) {
+  if (!effect) return "";
+  const dur = effect.durationTurns == null ? "Ongoing" : `${effect.durationTurns}t`;
+  const tip = tipAttr(effect.name, [
+    effect.description || "",
+    `Duration: ${dur}`,
+    removable ? "GM: remove active effect" : "",
+  ].filter(Boolean));
+  const initial = esc((effect.name || "?").trim().charAt(0).toUpperCase());
+  const removeButton = removable
+    ? `<button type="button" class="ohud-chip-remove" data-action="remove-active-effect" data-effect-id="${esc(effect.id)}" data-effect-name="${esc(effect.name)}" aria-label="Remove ${esc(effect.name)}">×</button>`
+    : "";
+  return `<span class="ohud-chip-status ohud-chip-status--${effect.polarity === "positive" ? "positive" : effect.polarity === "negative" ? "negative" : "neutral"} ohud-chip-status--active"${tip}>
+    <span class="ohud-chip-dot" aria-hidden="true">${initial}</span>
+    <span class="ohud-chip-name">${esc(effect.name)}</span>
+    ${removeButton}
+  </span>`;
+}
+
 export function renderPlayerBlock(state) {
   const entity = selectCurrentEntity(state);
   if (!entity) {
@@ -95,9 +113,16 @@ export function renderPlayerBlock(state) {
   }
   const turn = selectPlayerStatusLabel(state);
   const turnClass = turn === "YOUR TURN" ? "active" : turn === "WAITING" ? "waiting" : turn === "GM VIEW" ? "gm" : "idle";
-  const { shown, overflow } = selectVisibleStatuses(state, 5);
+  const statuses = Array.isArray(entity.statuses) ? entity.statuses : [];
+  const shown = statuses.slice(0, 5);
+  const overflow = Math.max(0, statuses.length - shown.length);
+  const activeEffects = Array.isArray(entity.effects) ? entity.effects : [];
+  const activeShown = activeEffects.slice(0, 5);
+  const activeOverflow = Math.max(0, activeEffects.length - activeShown.length);
   const isMech = entity.summary?.svgRef === "mech";
   const authorized = !!selectControlledCharacter(state);
+  const viewerRole = String(state?.viewer?.role ?? "").toLowerCase();
+  const isGm = viewerRole === "gm";
 
   // Phase 3E.0: while a real combat session is active the header shows the
   // server round number next to YOUR TURN / WAITING (both server-derived).
@@ -120,6 +145,13 @@ export function renderPlayerBlock(state) {
       </div>
     </div>
     ${isMech ? pilotStrip(entity.pilot) : ""}
+    ${activeShown.length > 0 ? `<div class="ohud-player-effects">
+      <div class="ohud-player-effects-head">ACTIVE</div>
+      <div class="ohud-statuses">
+        ${activeShown.map((effect) => activeModifierChip(effect, { removable: isGm && effect?.removable === true })).join("")}
+        ${overflowChip(activeOverflow)}
+      </div>
+    </div>` : ""}
     <div class="ohud-statuses">
       ${shown.map(statusChip).join("")}
       ${overflowChip(overflow)}

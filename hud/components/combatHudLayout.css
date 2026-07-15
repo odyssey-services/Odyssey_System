@@ -230,6 +230,13 @@
 .ohud-pilot-name { font-size: var(--ohud-font-10); color: var(--odyssey-hud-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ohud-pilot-psi { margin-left: auto; font-size: var(--ohud-font-9); color: var(--odyssey-purple); }
 
+.ohud-player-effects { display: flex; flex-direction: column; gap: 3px; }
+.ohud-player-effects-head {
+  font-size: var(--ohud-font-7-5);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--odyssey-hud-dim);
+}
 .ohud-statuses { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
 .ohud-chip-status {
   display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
@@ -242,6 +249,18 @@
 .ohud-chip-status--neutral .ohud-chip-dot { background: var(--odyssey-hud-neutral); }
 .ohud-chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ohud-chip-status--more { color: var(--odyssey-hud-dim); padding: 1px 6px; font-weight: 700; }
+.ohud-chip-status--active { padding-right: 2px; }
+.ohud-chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--odyssey-hud-dim);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.ohud-chip-remove:hover { color: var(--odyssey-hud-text); }
 
 /* ===================== Gun block ===================== */
 .ohud-gun { display: grid; grid-template-columns: 1fr 70px; gap: 7px; flex: 1; min-height: 0; }

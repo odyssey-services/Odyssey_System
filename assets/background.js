@@ -5134,6 +5134,51 @@ function advanceCharacterAbilityStates(characterId, settings) {
   );
 }
 
+// api/effectsApi.js
+var effectsApi_exports = {};
+__export(effectsApi_exports, {
+  addCharacterEffect: () => addCharacterEffect,
+  advanceCharacterEffects: () => advanceCharacterEffects,
+  getCharacterEffectSummary: () => getCharacterEffectSummary,
+  getEffectiveCharacterStats: () => getEffectiveCharacterStats,
+  removeCharacterEffect: () => removeCharacterEffect
+});
+function getCharacterEffectSummary(characterId, settings) {
+  return callSupabaseRpc(
+    EFFECT_RPC_NAMES.getCharacterEffectSummary,
+    { p_character_id: characterId },
+    settings
+  );
+}
+function getEffectiveCharacterStats(characterId, settings) {
+  return callSupabaseRpc(
+    EFFECT_RPC_NAMES.getEffectiveCharacterStats,
+    { p_character_id: characterId },
+    settings
+  );
+}
+function addCharacterEffect(payload, settings) {
+  return callSupabaseRpc(
+    EFFECT_RPC_NAMES.addCharacterEffect,
+    { p_payload: payload },
+    settings
+  );
+}
+function removeCharacterEffect(effectId, settings) {
+  return callSupabaseRpc(
+    EFFECT_RPC_NAMES.removeCharacterEffect,
+    { p_effect_id: effectId },
+    settings
+  );
+}
+function advanceCharacterEffects(characterId, settings) {
+  return callSupabaseRpc(
+    EFFECT_RPC_NAMES.advanceCharacterEffects,
+    { p_character_id: characterId },
+    settings
+  );
+}
+
 // api/inventoryApi.js
 var inventoryApi_exports = {};
 __export(inventoryApi_exports, {
@@ -8414,13 +8459,59 @@ function normalizePolarity(p) {
   if (v === "negative") return MODIFIER_POLARITY.negative;
   return MODIFIER_POLARITY.neutral;
 }
+function titleizeToken(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return raw.replace(/^equipment:/i, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").replace(/\b\w/g, (match) => match.toUpperCase());
+}
 function mapEffect(ef) {
+  const effectKey = str3(ef?.effect_key) ?? "";
+  const sourceType = str3(ef?.source_type) ?? "";
   return {
     id: str3(ef?.id) ?? `ef-${Math.random().toString(36).slice(2)}`,
-    name: str3(ef?.effect_name) ?? str3(ef?.name) ?? "Unknown effect",
-    polarity: normalizePolarity(ef?.polarity),
-    durationTurns: ef?.remaining_turns != null ? num5(ef.remaining_turns) : null,
-    description: str3(ef?.description) ?? ""
+    name: str3(ef?.effect_name) ?? str3(ef?.name) ?? titleizeToken(ef?.code) ?? "Unknown effect",
+    polarity: normalizePolarity(
+      ef?.polarity ?? (ef?.is_negative === true ? "negative" : "positive")
+    ),
+    durationTurns: ef?.remaining_turns != null ? num5(ef.remaining_turns) : ef?.rounds_left != null ? num5(ef.rounds_left) : null,
+    description: str3(ef?.description) ?? "",
+    sourceType,
+    effectKey,
+    removable: !effectKey.toLowerCase().startsWith("equipment:") && sourceType !== "implant" && sourceType !== "prosthetic" && sourceType !== "armor" && sourceType !== "shield" && sourceType !== "special_protection"
+  };
+}
+function readEffectsRuntime(bundle) {
+  const payload = section2(bundle, "effects");
+  const effectSummary = payload && typeof payload === "object" && !Array.isArray(payload) ? payload.effect_summary ?? null : null;
+  const activeEffects = Array.isArray(payload) ? payload : arr(
+    payload?.active_effects ?? effectSummary?.active_effects ?? section2(bundle, "combat")?.active_effects ?? section2(bundle, "state")?.active_effects ?? section2(bundle, "summary")?.active_effects
+  );
+  const modifierRows = arr(
+    payload?.modifier_rows ?? payload?.active_penalties ?? effectSummary?.modifier_rows ?? section2(bundle, "combat")?.active_penalties ?? section2(bundle, "state")?.active_penalties ?? section2(bundle, "summary")?.active_penalties
+  );
+  return { activeEffects, modifierRows };
+}
+function mapModifierRow(mod, index = 0) {
+  const effectCodes = arr(mod?.effect_codes).map((entry) => titleizeToken(entry)).filter(Boolean);
+  const effectKeys = arr(mod?.effect_keys).map((entry) => titleizeToken(entry)).filter(Boolean);
+  const target = str3(mod?.target) ?? "";
+  const attribute = str3(mod?.attribute) ?? "";
+  const skillCode = str3(mod?.skill_code) ?? "";
+  const name = effectCodes[0] ?? effectKeys[0] ?? titleizeToken(skillCode || attribute || target) ?? `Modifier ${index + 1}`;
+  const targetLabel = titleizeToken(skillCode || attribute || target);
+  const value = num5(mod?.value, 0);
+  return {
+    id: str3(mod?.id) ?? `${name.toLowerCase().replace(/\s+/g, "-")}-${index}`,
+    name,
+    value,
+    source: "effect",
+    polarity: value > 0 ? "positive" : value < 0 ? "negative" : "neutral",
+    selected: false,
+    alwaysActive: true,
+    requiresGMApproval: false,
+    consumesOnAction: false,
+    kind: "passive",
+    description: targetLabel ? `${targetLabel}${str3(mod?.aggregation) ? ` (${mod.aggregation})` : ""}` : str3(mod?.aggregation) ?? ""
   };
 }
 function mapEntity(bundle) {
@@ -8442,8 +8533,8 @@ function mapEntity(bundle) {
   const psiCur = hasValue(psiCurrentRaw) ? num5(psiCurrentRaw, 0) : null;
   const psiMax = hasValue(psiMaxRaw) ? num5(psiMaxRaw, 0) : null;
   const zones = mapZones(combat.body_parts ?? []);
-  const effectsSection = section2(bundle, "effects");
-  const effects = Array.isArray(effectsSection) ? effectsSection.map(mapEffect) : [];
+  const { activeEffects } = readEffectsRuntime(bundle);
+  const effects = activeEffects.map(mapEffect);
   return {
     summary: {
       id: str3(char.id) ?? str3(char.character_key) ?? "unknown",
@@ -8461,9 +8552,11 @@ function mapEntity(bundle) {
       main: !bool2(flags?.main_action_spent, false),
       move: !bool2(flags?.move_action_spent, false)
     },
-    // All DB effects shown as status chips in the Player block.
-    statuses: effects,
-    effects: [],
+    // Runtime bundle effects are treated as active runtime modifiers/effects.
+    // Keep `statuses` free so the Player block can render active effects in a
+    // dedicated row without duplicating them in the legacy status strip.
+    statuses: [],
+    effects,
     flags: {
       alive: bool2(state.is_alive ?? combat.is_alive, true),
       conscious: bool2(state.is_conscious ?? combat.is_conscious, true)
@@ -8750,8 +8843,13 @@ function mapSkills(abilitiesSection) {
   }).sort((a, b) => a.index - b.index);
   return { library, quickSlots };
 }
-function mapModifiers(_bundle) {
-  return { passive: [], active: [], narrative: [] };
+function mapModifiers(bundle) {
+  const { modifierRows } = readEffectsRuntime(bundle);
+  return {
+    passive: modifierRows.map(mapModifierRow),
+    active: [],
+    narrative: []
+  };
 }
 function mapCombatSession() {
   return createInactiveCombatSession();
@@ -8863,6 +8961,7 @@ function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {}) {
   const abilities = section2(bundle, "abilities");
   const effects = section2(bundle, "effects");
   const combat = section2(bundle, "combat");
+  const effectsRuntime = readEffectsRuntime(bundle);
   const weaponCount = arr(armory?.weapons).length + (armory?.equipped_weapon ? 1 : 0);
   const quickActionCount = Array.isArray(abilities?.quick_actions) ? abilities.quick_actions.length : arr(abilities?.abilities).filter((ability) => {
     const kind = String(ability?.ability_kind ?? "").toLowerCase();
@@ -8890,14 +8989,14 @@ function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {}) {
       combat: !!combat,
       armory: !!armory,
       abilities: !!abilities,
-      effects: Array.isArray(effects)
+      effects: Array.isArray(effects) || !!effects && typeof effects === "object"
     },
     mapper: {
       player: hudSnapshot?.entity ? "populated" : "empty",
       weaponCount,
       activeWeaponFound: !!hudSnapshot?.weapon?.primary,
       quickActionCount,
-      effectCount: Array.isArray(effects) ? effects.length : 0
+      effectCount: effectsRuntime.activeEffects.length
     },
     broadcast: {
       hudSnapshotPresent: !!hudSnapshot,
@@ -9362,6 +9461,7 @@ function setupSceneSelection(hooks = {}) {
   let lastResolvedCharacterId = null;
   let lastResolvedTokenId = null;
   let skillAdminDeleteInFlight = null;
+  let activeEffectDeleteInFlight = null;
   let refetchCurrentPromise = null;
   let refetchCurrentQueued = false;
   let lastRefetchAt = 0;
@@ -11255,6 +11355,51 @@ function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
         } finally {
           skillAdminDeleteInFlight = null;
+        }
+        return;
+      }
+      if (command?.scope === "combat-hud" && command?.feature === "active-effect-admin") {
+        const viewerIsGm = String(viewer?.role ?? "").toUpperCase() === "GM";
+        const effectId = String(command.effectId ?? "").trim() || null;
+        const effectName = String(command.effectName ?? "").trim() || null;
+        logDebugEvent("effects", "gm-remove-click", {
+          type: String(command.type ?? ""),
+          effectId,
+          effectName
+        });
+        if (!viewerIsGm) {
+          logDebugEvent("effects", "gm-remove-result", {
+            ok: false,
+            effectId,
+            error: "GM_ONLY"
+          }, false);
+          return;
+        }
+        if (String(command.type ?? "") !== "remove-effect" || !effectId) return;
+        if (activeEffectDeleteInFlight === effectId) return;
+        activeEffectDeleteInFlight = effectId;
+        try {
+          const result = await removeCharacterEffect(effectId, settings);
+          if (result?.ok === false) {
+            throw new Error(String(result?.message ?? result?.error ?? "Unable to remove active effect."));
+          }
+          logDebugEvent("effects", "gm-remove-result", {
+            ok: true,
+            effectId,
+            effectName
+          }, true);
+          await refreshSelectedCharacterRuntime("active-effect-removed", { refreshQuickbar: false });
+        } catch (error) {
+          const message = String(error?.message ?? error ?? "Remove effect failed.");
+          logDebugEvent("effects", "gm-remove-result", {
+            ok: false,
+            effectId,
+            effectName,
+            error: message
+          }, false);
+          if (lastState) publishState(lastState);
+        } finally {
+          activeEffectDeleteInFlight = null;
         }
         return;
       }
@@ -15030,51 +15175,6 @@ function gmUpdateCharacterAttribute(payload, settings) {
   return callSupabaseRpc(
     GM_RPC_NAMES.updateCharacterAttribute,
     { p_payload: payload },
-    settings
-  );
-}
-
-// api/effectsApi.js
-var effectsApi_exports = {};
-__export(effectsApi_exports, {
-  addCharacterEffect: () => addCharacterEffect,
-  advanceCharacterEffects: () => advanceCharacterEffects,
-  getCharacterEffectSummary: () => getCharacterEffectSummary,
-  getEffectiveCharacterStats: () => getEffectiveCharacterStats,
-  removeCharacterEffect: () => removeCharacterEffect
-});
-function getCharacterEffectSummary(characterId, settings) {
-  return callSupabaseRpc(
-    EFFECT_RPC_NAMES.getCharacterEffectSummary,
-    { p_character_id: characterId },
-    settings
-  );
-}
-function getEffectiveCharacterStats(characterId, settings) {
-  return callSupabaseRpc(
-    EFFECT_RPC_NAMES.getEffectiveCharacterStats,
-    { p_character_id: characterId },
-    settings
-  );
-}
-function addCharacterEffect(payload, settings) {
-  return callSupabaseRpc(
-    EFFECT_RPC_NAMES.addCharacterEffect,
-    { p_payload: payload },
-    settings
-  );
-}
-function removeCharacterEffect(effectId, settings) {
-  return callSupabaseRpc(
-    EFFECT_RPC_NAMES.removeCharacterEffect,
-    { p_effect_id: effectId },
-    settings
-  );
-}
-function advanceCharacterEffects(characterId, settings) {
-  return callSupabaseRpc(
-    EFFECT_RPC_NAMES.advanceCharacterEffects,
-    { p_character_id: characterId },
     settings
   );
 }

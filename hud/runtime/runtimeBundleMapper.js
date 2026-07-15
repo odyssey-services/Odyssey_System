@@ -58,8 +58,9 @@
 //                       }],
 //                       quickbar_slots: [{ slot_index, ability_id }] }
 //
-//  bundle.effects     [{ id, effect_name, polarity,
-//                        remaining_turns, description }]
+//  bundle.effects     either:
+//                     - [{ id, effect_name, polarity, remaining_turns, description }]
+//                     - { active_effects: [...], effect_summary: { modifier_rows: [...] } }
 //
 // IMPORTANT: These field names are inferred from DB/RPC conventions and the
 // characterPlacementApi.js section list. Verify against the actual RPC
@@ -180,13 +181,96 @@ function normalizePolarity(p) {
   return MODIFIER_POLARITY.neutral;
 }
 
+function titleizeToken(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  return raw
+    .replace(/^equipment:/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
 function mapEffect(ef) {
+  const effectKey = str(ef?.effect_key) ?? "";
+  const sourceType = str(ef?.source_type) ?? "";
   return {
     id: str(ef?.id) ?? `ef-${Math.random().toString(36).slice(2)}`,
-    name: str(ef?.effect_name) ?? str(ef?.name) ?? "Unknown effect",
-    polarity: normalizePolarity(ef?.polarity),
-    durationTurns: ef?.remaining_turns != null ? num(ef.remaining_turns) : null,
+    name: str(ef?.effect_name) ?? str(ef?.name) ?? titleizeToken(ef?.code) ?? "Unknown effect",
+    polarity: normalizePolarity(
+      ef?.polarity
+      ?? (ef?.is_negative === true ? "negative" : "positive")
+    ),
+    durationTurns: ef?.remaining_turns != null
+      ? num(ef.remaining_turns)
+      : (ef?.rounds_left != null ? num(ef.rounds_left) : null),
     description: str(ef?.description) ?? "",
+    sourceType,
+    effectKey,
+    removable: !effectKey.toLowerCase().startsWith("equipment:")
+      && sourceType !== "implant"
+      && sourceType !== "prosthetic"
+      && sourceType !== "armor"
+      && sourceType !== "shield"
+      && sourceType !== "special_protection",
+  };
+}
+
+function readEffectsRuntime(bundle) {
+  const payload = section(bundle, "effects");
+  const effectSummary = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? (payload.effect_summary ?? null)
+    : null;
+
+  const activeEffects = Array.isArray(payload)
+    ? payload
+    : arr(
+      payload?.active_effects
+      ?? effectSummary?.active_effects
+      ?? section(bundle, "combat")?.active_effects
+      ?? section(bundle, "state")?.active_effects
+      ?? section(bundle, "summary")?.active_effects
+    );
+
+  const modifierRows = arr(
+    payload?.modifier_rows
+    ?? payload?.active_penalties
+    ?? effectSummary?.modifier_rows
+    ?? section(bundle, "combat")?.active_penalties
+    ?? section(bundle, "state")?.active_penalties
+    ?? section(bundle, "summary")?.active_penalties
+  );
+
+  return { activeEffects, modifierRows };
+}
+
+function mapModifierRow(mod, index = 0) {
+  const effectCodes = arr(mod?.effect_codes).map((entry) => titleizeToken(entry)).filter(Boolean);
+  const effectKeys = arr(mod?.effect_keys).map((entry) => titleizeToken(entry)).filter(Boolean);
+  const target = str(mod?.target) ?? "";
+  const attribute = str(mod?.attribute) ?? "";
+  const skillCode = str(mod?.skill_code) ?? "";
+  const name = effectCodes[0]
+    ?? effectKeys[0]
+    ?? titleizeToken(skillCode || attribute || target)
+    ?? `Modifier ${index + 1}`;
+  const targetLabel = titleizeToken(skillCode || attribute || target);
+  const value = num(mod?.value, 0);
+
+  return {
+    id: str(mod?.id) ?? `${name.toLowerCase().replace(/\s+/g, "-")}-${index}`,
+    name,
+    value,
+    source: "effect",
+    polarity: value > 0 ? "positive" : value < 0 ? "negative" : "neutral",
+    selected: false,
+    alwaysActive: true,
+    requiresGMApproval: false,
+    consumesOnAction: false,
+    kind: "passive",
+    description: targetLabel
+      ? `${targetLabel}${str(mod?.aggregation) ? ` (${mod.aggregation})` : ""}`
+      : (str(mod?.aggregation) ?? ""),
   };
 }
 
@@ -216,9 +300,9 @@ export function mapEntity(bundle) {
   const psiCur = hasValue(psiCurrentRaw) ? num(psiCurrentRaw, 0) : null;
   const psiMax = hasValue(psiMaxRaw) ? num(psiMaxRaw, 0) : null;
 
-  const zones    = mapZones(combat.body_parts ?? []);
-  const effectsSection = section(bundle, "effects");
-  const effects = Array.isArray(effectsSection) ? effectsSection.map(mapEffect) : [];
+  const zones = mapZones(combat.body_parts ?? []);
+  const { activeEffects } = readEffectsRuntime(bundle);
+  const effects = activeEffects.map(mapEffect);
 
   return {
     summary: {
@@ -237,9 +321,11 @@ export function mapEntity(bundle) {
       main: !bool(flags?.main_action_spent, false),
       move: !bool(flags?.move_action_spent, false),
     },
-    // All DB effects shown as status chips in the Player block.
-    statuses: effects,
-    effects:  [],
+    // Runtime bundle effects are treated as active runtime modifiers/effects.
+    // Keep `statuses` free so the Player block can render active effects in a
+    // dedicated row without duplicating them in the legacy status strip.
+    statuses: [],
+    effects,
     flags: {
       alive:     bool(state.is_alive ?? combat.is_alive, true),
       conscious: bool(state.is_conscious ?? combat.is_conscious, true),
@@ -711,12 +797,13 @@ export function mapSkills(abilitiesSection) {
 }
 
 // ─── Modifiers ───────────────────────────────────────────────────────────────
-// The runtime bundle currently has no dedicated "modifiers" section (it is not
-// listed in the characterPlacementApi.js sections). If the backend adds
-// bundle.modifiers in the future, wire it here. For now: empty groups → neutral
-// "no active modifiers" display in the Combat Control block.
-export function mapModifiers(_bundle) {
-  return { passive: [], active: [], narrative: [] };
+export function mapModifiers(bundle) {
+  const { modifierRows } = readEffectsRuntime(bundle);
+  return {
+    passive: modifierRows.map(mapModifierRow),
+    active: [],
+    narrative: [],
+  };
 }
 
 // ─── Combat session ──────────────────────────────────────────────────────────
@@ -848,6 +935,7 @@ export function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {
   const abilities = section(bundle, "abilities");
   const effects = section(bundle, "effects");
   const combat = section(bundle, "combat");
+  const effectsRuntime = readEffectsRuntime(bundle);
   const weaponCount = arr(armory?.weapons).length + (armory?.equipped_weapon ? 1 : 0);
   const quickActionCount = Array.isArray(abilities?.quick_actions)
     ? abilities.quick_actions.length
@@ -879,14 +967,14 @@ export function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {
       combat: !!combat,
       armory: !!armory,
       abilities: !!abilities,
-      effects: Array.isArray(effects),
+      effects: Array.isArray(effects) || (!!effects && typeof effects === "object"),
     },
     mapper: {
       player: hudSnapshot?.entity ? "populated" : "empty",
       weaponCount,
       activeWeaponFound: !!hudSnapshot?.weapon?.primary,
       quickActionCount,
-      effectCount: Array.isArray(effects) ? effects.length : 0,
+      effectCount: effectsRuntime.activeEffects.length,
     },
     broadcast: {
       hudSnapshotPresent: !!hudSnapshot,

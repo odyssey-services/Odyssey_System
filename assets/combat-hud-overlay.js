@@ -3753,6 +3753,13 @@ var combatHudLayout_default = `/*
 .ohud-pilot-name { font-size: var(--ohud-font-10); color: var(--odyssey-hud-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ohud-pilot-psi { margin-left: auto; font-size: var(--ohud-font-9); color: var(--odyssey-purple); }
 
+.ohud-player-effects { display: flex; flex-direction: column; gap: 3px; }
+.ohud-player-effects-head {
+  font-size: var(--ohud-font-7-5);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--odyssey-hud-dim);
+}
 .ohud-statuses { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
 .ohud-chip-status {
   display: inline-flex; align-items: center; gap: 3px; max-width: 100%;
@@ -3765,6 +3772,18 @@ var combatHudLayout_default = `/*
 .ohud-chip-status--neutral .ohud-chip-dot { background: var(--odyssey-hud-neutral); }
 .ohud-chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ohud-chip-status--more { color: var(--odyssey-hud-dim); padding: 1px 6px; font-weight: 700; }
+.ohud-chip-status--active { padding-right: 2px; }
+.ohud-chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--odyssey-hud-dim);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.ohud-chip-remove:hover { color: var(--odyssey-hud-text); }
 
 /* ===================== Gun block ===================== */
 .ohud-gun { display: grid; grid-template-columns: 1fr 70px; gap: 7px; flex: 1; min-height: 0; }
@@ -6529,16 +6548,6 @@ function selectPlayerStatusLabel(state) {
   }
   return "READY";
 }
-function selectVisibleStatuses(state, limit = 5) {
-  const entity = selectCurrentEntity(state);
-  if (!entity) return { shown: [], overflow: 0 };
-  const all = [
-    ...Array.isArray(entity.statuses) ? entity.statuses : [],
-    ...Array.isArray(entity.effects) ? entity.effects : []
-  ];
-  if (all.length <= limit) return { shown: all, overflow: 0 };
-  return { shown: all.slice(0, limit), overflow: all.length - limit };
-}
 function selectTargetView(state) {
   const bodyPartId = selectSelectedBodyPart(state);
   const targeting = state?.ui?.targeting ?? {};
@@ -6818,6 +6827,22 @@ function pilotStrip(pilot) {
     ${psi ? `<span class="ohud-pilot-psi">\u03A8 ${esc(psi)}</span>` : ""}
   </div>`;
 }
+function activeModifierChip(effect, { removable = false } = {}) {
+  if (!effect) return "";
+  const dur = effect.durationTurns == null ? "Ongoing" : `${effect.durationTurns}t`;
+  const tip = tipAttr(effect.name, [
+    effect.description || "",
+    `Duration: ${dur}`,
+    removable ? "GM: remove active effect" : ""
+  ].filter(Boolean));
+  const initial = esc((effect.name || "?").trim().charAt(0).toUpperCase());
+  const removeButton = removable ? `<button type="button" class="ohud-chip-remove" data-action="remove-active-effect" data-effect-id="${esc(effect.id)}" data-effect-name="${esc(effect.name)}" aria-label="Remove ${esc(effect.name)}">\xD7</button>` : "";
+  return `<span class="ohud-chip-status ohud-chip-status--${effect.polarity === "positive" ? "positive" : effect.polarity === "negative" ? "negative" : "neutral"} ohud-chip-status--active"${tip}>
+    <span class="ohud-chip-dot" aria-hidden="true">${initial}</span>
+    <span class="ohud-chip-name">${esc(effect.name)}</span>
+    ${removeButton}
+  </span>`;
+}
 function renderPlayerBlock(state) {
   const entity = selectCurrentEntity(state);
   if (!entity) {
@@ -6825,9 +6850,16 @@ function renderPlayerBlock(state) {
   }
   const turn = selectPlayerStatusLabel(state);
   const turnClass = turn === "YOUR TURN" ? "active" : turn === "WAITING" ? "waiting" : turn === "GM VIEW" ? "gm" : "idle";
-  const { shown, overflow } = selectVisibleStatuses(state, 5);
+  const statuses = Array.isArray(entity.statuses) ? entity.statuses : [];
+  const shown = statuses.slice(0, 5);
+  const overflow = Math.max(0, statuses.length - shown.length);
+  const activeEffects = Array.isArray(entity.effects) ? entity.effects : [];
+  const activeShown = activeEffects.slice(0, 5);
+  const activeOverflow = Math.max(0, activeEffects.length - activeShown.length);
   const isMech = entity.summary?.svgRef === "mech";
   const authorized = !!selectControlledCharacter(state);
+  const viewerRole = String(state?.viewer?.role ?? "").toLowerCase();
+  const isGm = viewerRole === "gm";
   const session = state?.snapshot?.combatSession ?? null;
   const roundTag = session && session.status === "active" ? `<span class="ohud-turn-round"${tipAttr("Combat round", [`Round ${session.roundNumber ?? session.round ?? 0}`])}>R${esc(session.roundNumber ?? session.round ?? 0)}</span>` : "";
   const headerRight = `${roundTag}<span class="ohud-turn ohud-turn--${turnClass}">${esc(turn)}</span>`;
@@ -6844,6 +6876,13 @@ function renderPlayerBlock(state) {
       </div>
     </div>
     ${isMech ? pilotStrip(entity.pilot) : ""}
+    ${activeShown.length > 0 ? `<div class="ohud-player-effects">
+      <div class="ohud-player-effects-head">ACTIVE</div>
+      <div class="ohud-statuses">
+        ${activeShown.map((effect) => activeModifierChip(effect, { removable: isGm && effect?.removable === true })).join("")}
+        ${overflowChip(activeOverflow)}
+      </div>
+    </div>` : ""}
     <div class="ohud-statuses">
       ${shown.map(statusChip).join("")}
       ${overflowChip(overflow)}
@@ -8683,6 +8722,15 @@ function mountCombatHudModule(options) {
         break;
       case "toggle-gm-tracker":
         integration.onCommand && integration.onCommand({ scope: "combat-hud", feature: "combat-session", type: "toggle-tracker" });
+        break;
+      case "remove-active-effect":
+        integration.onCommand && integration.onCommand({
+          scope: "combat-hud",
+          feature: "active-effect-admin",
+          type: "remove-effect",
+          effectId: t.getAttribute("data-effect-id"),
+          effectName: t.getAttribute("data-effect-name")
+        });
         break;
       default:
         break;
