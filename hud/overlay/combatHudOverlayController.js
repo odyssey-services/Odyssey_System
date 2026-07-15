@@ -113,6 +113,7 @@ const lastOpenedRects = new Map();
 const openedModuleIds = new Set();
 /** @type {Array<() => void>} */
 const cleanups = [];
+const COMPANION_SELECTION_SEED_KEY = "odyssey.combat-hud.companion-selection";
 
 /** Whether a module popover should currently be open (modules mode only). */
 function moduleShouldBeOpen(id) {
@@ -164,6 +165,16 @@ function pageUrl(moduleId) {
   } catch {
     return `${OVERLAY_HTML}?${params.toString()}`;
   }
+}
+
+function writeCompanionSelectionSeed(moduleId) {
+  if (!moduleId || !lastSelectionPayload) return;
+  try {
+    localStorage.setItem(
+      `${COMPANION_SELECTION_SEED_KEY}:${moduleId}`,
+      JSON.stringify(lastSelectionPayload),
+    );
+  } catch (_e) { /* best effort */ }
 }
 
 function paramsForRect(rect) {
@@ -295,6 +306,7 @@ async function setGunWeaponSelectorOpen(open) {
     const rect = companionPopoverRectAboveGun();
     if (rect) {
       try {
+        writeCompanionSelectionSeed("gun-weapon-selector");
         await OBR.popover.open({
           id: GUN_WEAPON_SELECTOR_POPOVER_ID,
           url: pageUrl("gun-weapon-selector"),
@@ -317,6 +329,7 @@ async function setGunMagazineSelectorOpen(open) {
     const rect = magazineSelectorRect();
     if (rect) {
       try {
+        writeCompanionSelectionSeed("gun-magazine-selector");
         await OBR.popover.open({
           id: GUN_MAGAZINE_SELECTOR_POPOVER_ID,
           url: pageUrl("gun-magazine-selector"),
@@ -339,6 +352,7 @@ async function setGunFireModeSelectorOpen(open) {
     const rect = fireModeSelectorRect();
     if (rect) {
       try {
+        writeCompanionSelectionSeed("gun-fire-mode-selector");
         await OBR.popover.open({
           id: GUN_FIRE_MODE_SELECTOR_POPOVER_ID,
           url: pageUrl("gun-fire-mode-selector"),

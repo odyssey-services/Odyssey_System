@@ -9169,6 +9169,7 @@ var COMPANION_DEBUG = (() => {
     return false;
   }
 })();
+var COMPANION_SELECTION_SEED_KEY = "odyssey.combat-hud.companion-selection";
 function injectStyles() {
   for (const [id, css] of [
     ["ohud-tokens", combatHudTokens_default],
@@ -9235,6 +9236,15 @@ function getModuleParam() {
     return new URLSearchParams(window.location.search).get("module") || "";
   } catch {
     return "";
+  }
+}
+function readCompanionSelectionSeed(moduleId) {
+  if (!moduleId) return null;
+  try {
+    const raw = localStorage.getItem(`${COMPANION_SELECTION_SEED_KEY}:${moduleId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
   }
 }
 function getScaleParam() {
@@ -9583,7 +9593,7 @@ function start() {
         });
       }
     };
-    let rawPayload = null;
+    let rawPayload = readCompanionSelectionSeed(moduleParam);
     let lastPayloadReceivedLogKey = "";
     root.addEventListener("click", (e) => {
       const target = e.target.closest("[data-action]");
@@ -9604,8 +9614,10 @@ function start() {
     });
     if (available) {
       try {
+        maybeLogPayloadReceived(rawPayload, "seed");
         sendDebugEvent("companion-mounted", {
-          moduleId: moduleParam
+          moduleId: moduleParam,
+          seeded: !!rawPayload
         });
         lib_default.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;

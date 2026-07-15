@@ -50,6 +50,7 @@ import { mergeModulePatchIntoSelectionPayload, normalizeModulePatchPayload } fro
 const COMPANION_DEBUG = (() => {
   try { return new URLSearchParams(window.location.search).get("debug") === "1"; } catch { return false; }
 })();
+const COMPANION_SELECTION_SEED_KEY = "odyssey.combat-hud.companion-selection";
 
 function injectStyles() {
   for (const [id, css] of [
@@ -115,6 +116,16 @@ function isPatchForCurrentCharacter(patchPayload, lastSelectionPayload) {
 
 function getModuleParam() {
   try { return new URLSearchParams(window.location.search).get("module") || ""; } catch { return ""; }
+}
+
+function readCompanionSelectionSeed(moduleId) {
+  if (!moduleId) return null;
+  try {
+    const raw = localStorage.getItem(`${COMPANION_SELECTION_SEED_KEY}:${moduleId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Priority UI Fix — Universal Responsive HUD Scaling: the uniform scale the
@@ -471,7 +482,7 @@ function start() {
     // renders an identical weapon view model (`snapshot.weapon.available`). While
     // the first replay is in flight `selState` is null → "Loading…" (never a
     // false empty list — the bug this fixes).
-    let rawPayload = null;
+    let rawPayload = readCompanionSelectionSeed(moduleParam);
     let lastPayloadReceivedLogKey = "";
 
     function maybeLogPayloadReceived(payload, reason = "broadcast") {
@@ -556,8 +567,10 @@ function start() {
 
     if (available) {
       try {
+        maybeLogPayloadReceived(rawPayload, "seed");
         sendDebugEvent("companion-mounted", {
           moduleId: moduleParam,
+          seeded: !!rawPayload,
         });
         OBR.broadcast.onMessage(BC_HUD_SELECTION, (event) => {
           rawPayload = event?.data ?? null;

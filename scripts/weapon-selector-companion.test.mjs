@@ -195,6 +195,14 @@ test("controller fast-replays the last ready payload when a companion selector o
   assert.ok(controllerSrc.includes("BC_HUD_SELECTION"));
 });
 
+test("controller seeds companion selection through localStorage before opening the selector", () => {
+  assert.ok(controllerSrc.includes("COMPANION_SELECTION_SEED_KEY"));
+  assert.ok(controllerSrc.includes("writeCompanionSelectionSeed(\"gun-weapon-selector\")"));
+  assert.ok(controllerSrc.includes("writeCompanionSelectionSeed(\"gun-magazine-selector\")"));
+  assert.ok(controllerSrc.includes("writeCompanionSelectionSeed(\"gun-fire-mode-selector\")"));
+  assert.ok(overlaySrc.includes("readCompanionSelectionSeed(moduleParam)"));
+});
+
 test("patch before base selection requests replay instead of synthesizing fake selector state", () => {
   assert.ok(overlaySrc.includes("cause: \"missing-base-selection\""));
   assert.ok(overlaySrc.includes("reason: \"companion-missing-base-selection\""));
