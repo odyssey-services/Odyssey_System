@@ -89,6 +89,12 @@ test("armory failure does not make selection unavailable in staged runtime flow"
   assert.ok(sceneControllerSrc.includes("refreshHeavyCharacterData("));
 });
 
+test("runtime-only refresh rehydrates heavy armory cache before replacing the ready bundle", () => {
+  assert.ok(sceneControllerSrc.includes("const hydratedRuntimeBundle = hydrateBundleWithHeavyCache(runtimeBundle, characterId);"));
+  assert.ok(sceneControllerSrc.includes("runtimeBundle: hydratedRuntimeBundle"));
+  assert.ok(sceneControllerSrc.includes("view: buildReadySelectionView(hydratedRuntimeBundle)"));
+});
+
 test("weapon heavy preload is scheduled after ready selection without blocking selection resolve", () => {
   assert.ok(sceneControllerSrc.includes("safeScheduleWeaponHeavyPreload(nextCharacterId, nextTokenId, \"selection-ready-preload\")"));
   assert.ok(sceneControllerSrc.includes("weapon-data-preloaded"));

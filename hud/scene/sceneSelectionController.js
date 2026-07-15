@@ -2065,10 +2065,11 @@ export function setupSceneSelection(hooks = {}) {
           return null;
         }
 
+        const hydratedRuntimeBundle = hydrateBundleWithHeavyCache(runtimeBundle, characterId);
         lastState = {
           ...lastState,
-          runtimeBundle,
-          view: buildReadySelectionView(runtimeBundle),
+          runtimeBundle: hydratedRuntimeBundle,
+          view: buildReadySelectionView(hydratedRuntimeBundle),
           error: { code: null, message: null },
         };
         logDebugEvent("selection", "runtime-only-refresh-result", {
@@ -3561,7 +3562,7 @@ export function setupSceneSelection(hooks = {}) {
         const reloadSession = currentMappedSession();
         const reloadGate = sessionReloadGate(reloadSession, weapon?.reloadCost ?? "full_move");
         if (reloadGate.blocked) {
-          ephemeral.commandStatus = { type: "error", message: reloadGate.reason };
+          ephemeral.commandStatus = { type: "error", message: reloadGate.reason, source: "weapon_overlay", operation: "reload" };
           ephemeral.reloadRpcResult = { ok: false, error: "SESSION_GATE", message: reloadGate.reason };
           logDebugEvent("reload", "session-gate-blocked", { reason: reloadGate.reason, sessionId: reloadSession.id, round: reloadSession.roundNumber }, false);
           ephemeral.reloadInFlight = false;
@@ -3570,7 +3571,7 @@ export function setupSceneSelection(hooks = {}) {
         }
 
         if (!weaponId || !magazineId || !profileId) {
-          ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine." };
+          ephemeral.commandStatus = { type: "error", message: "Reload unavailable: missing weapon profile or magazine.", source: "weapon_overlay", operation: "reload" };
           ephemeral.reloadRpcResult = { ok: false, error: "MISSING_FIELDS", message: "weaponId/profileId/magazineId missing before RPC call." };
           pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
           logDebugEvent("magazine", "reload-result", { error: "MISSING_FIELDS" }, false);
@@ -3596,7 +3597,7 @@ export function setupSceneSelection(hooks = {}) {
           const normalized = normalizeReloadRpcResult(result);
           ephemeral.reloadRpcResult = normalized;
           if (normalized.ok) {
-            ephemeral.commandStatus = { type: "ok", message: "Reloaded." };
+            ephemeral.commandStatus = { type: "ok", message: "Reloaded.", source: "weapon_overlay", operation: "reload" };
             ephemeral.selectedReloadMagazineId = null;
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Reloaded." }));
             logDebugEvent("magazine", "reload-result", { weaponId, magazineId }, true);
@@ -3623,7 +3624,7 @@ export function setupSceneSelection(hooks = {}) {
             });
             await refreshSelectedCharacterRuntime("reload-success", { refreshQuickbar: true });
           } else {
-            ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed." };
+            ephemeral.commandStatus = { type: "error", message: normalized.message || normalized.error || "Reload failed.", source: "weapon_overlay", operation: "reload" };
             pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
             logDebugEvent("magazine", "reload-result", { weaponId, magazineId, error: normalized.error }, false);
             if (normalized.error === "STATE_VERSION_CONFLICT") {
@@ -3634,7 +3635,7 @@ export function setupSceneSelection(hooks = {}) {
           }
         } catch (error) {
           ephemeral.reloadRpcResult = { ok: false, error: "RPC_EXCEPTION", message: String(error?.message ?? error ?? "Reload failed.") };
-          ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed.") };
+          ephemeral.commandStatus = { type: "error", message: String(error?.message ?? error ?? "Reload failed."), source: "weapon_overlay", operation: "reload" };
           pushLog(buildReloadLogEntry({ sourceCharacterId: ephemeral.characterId, ok: false, message: ephemeral.commandStatus.message }));
           logDebugEvent("magazine", "reload-result", { error: "RPC_EXCEPTION", message: ephemeral.commandStatus.message }, false);
           if (lastState) publishState(lastState);

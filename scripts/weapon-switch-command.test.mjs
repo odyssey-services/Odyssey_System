@@ -139,6 +139,11 @@ test("weapon switch toast is scoped to the Weapon module instead of every popove
   assert.ok(combatHudModuleSrc.includes('if (isWeaponOnlyStatus && moduleId !== "gun") return;'));
 });
 
+test("reload status is also marked as weapon-local so its toast stays inside the Weapon module", () => {
+  assert.ok(sceneControllerSrc.includes('operation: "reload"'));
+  assert.ok(sceneControllerSrc.includes('source: "weapon_overlay"'));
+});
+
 test("older armory refreshes cannot overwrite a newer switched weapon snapshot", () => {
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "heavy-armory-stale-ignored"'));
   assert.ok(sceneControllerSrc.includes("const refreshStartedAt = Date.now();"));
