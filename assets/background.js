@@ -5662,7 +5662,8 @@ function buildInstantAbilityExecutionPayload(input = {}) {
     return {
       character_id: String(input.sourceCharacterId ?? "").trim(),
       character_ability_id: String(input.abilityId ?? "").trim(),
-      selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim()
+      selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim(),
+      include_combat_state: false
     };
   }
   const payload = {
@@ -5783,7 +5784,8 @@ function buildDirectedAbilityExecutionPayload(input = {}) {
       character_id: String(input.sourceCharacterId ?? "").trim(),
       character_ability_id: String(input.abilityId ?? "").trim(),
       selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim(),
-      target_character_id: String(input.targetCharacterId ?? "").trim()
+      target_character_id: String(input.targetCharacterId ?? "").trim(),
+      include_combat_state: false
     };
   }
   const payload = {

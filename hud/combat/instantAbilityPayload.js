@@ -35,6 +35,7 @@ export function buildInstantAbilityExecutionPayload(input = {}) {
       character_id: String(input.sourceCharacterId ?? "").trim(),
       character_ability_id: String(input.abilityId ?? "").trim(),
       selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim(),
+      include_combat_state: false,
     };
   }
   const payload = {

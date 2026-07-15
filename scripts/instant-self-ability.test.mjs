@@ -290,6 +290,7 @@ test("21b. out-of-combat instant payload falls back to direct use_ability shape 
   assert.equal(payload.character_id, "char-1");
   assert.equal(payload.character_ability_id, "ability-1");
   assert.equal(payload.selected_character_weapon_id, "weapon-1");
+  assert.equal(payload.include_combat_state, false);
   assert.ok(!("kind" in payload));
   assert.ok(!("encounter_id" in payload));
   assert.ok(!("intent" in payload));

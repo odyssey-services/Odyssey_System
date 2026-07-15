@@ -10930,6 +10930,7 @@ declare
   v_payload_data jsonb := case when jsonb_typeof(p_payload->'data') = 'object' then p_payload->'data' else '{}'::jsonb end;
   v_payload_category text := lower(trim(coalesce(p_payload->>'category', '')));
   v_stacks integer := greatest(coalesce(nullif(trim(coalesce(p_payload->>'stacks', '')), '')::integer, 1), 1);
+  v_include_combat_state boolean := coalesce(nullif(trim(coalesce(p_payload->>'include_combat_state', '')), '')::boolean, true);
   v_effect_def public.odyssey_effect_defs%rowtype;
   v_stacking_mode text := 'stack';
   v_merged_data jsonb := '{}'::jsonb;
@@ -11046,7 +11047,9 @@ begin
     limit 1;
 
     if v_existing_effect_id is not null then
-      v_effective_stats := public.get_effective_character_stats(v_character_id);
+      if v_include_combat_state then
+        v_effective_stats := public.get_effective_character_stats(v_character_id);
+      end if;
       select jsonb_build_object(
         'id', e.id,
         'effect_def_id', e.effect_def_id,
@@ -11079,32 +11082,36 @@ begin
         'effect', v_effect_json,
         'effective_stats', v_effective_stats,
         'combat_state',
-          coalesce(
-            (
-              select jsonb_build_object(
-                'character_id', s.character_id,
-                'campaign_id', s.campaign_id,
-                'room_id', s.room_id,
-                'body_summary', s.body_summary,
-                'armor_summary', s.armor_summary,
-                'active_effects', s.active_effects,
-                'active_penalties', s.active_penalties,
-                'effective_stats', s.effective_stats,
-                'combat_flags', s.combat_flags,
-                'overlay_text', s.overlay_text,
-                'overlay_data', s.overlay_data,
-                'tracker_minor', s.tracker_minor,
-                'tracker_serious', s.tracker_serious,
-                'is_alive', s.is_alive,
-                'is_conscious', s.is_conscious,
-                'state_version', s.state_version,
-                'updated_at', s.updated_at
+          case
+            when v_include_combat_state then
+              coalesce(
+                (
+                  select jsonb_build_object(
+                    'character_id', s.character_id,
+                    'campaign_id', s.campaign_id,
+                    'room_id', s.room_id,
+                    'body_summary', s.body_summary,
+                    'armor_summary', s.armor_summary,
+                    'active_effects', s.active_effects,
+                    'active_penalties', s.active_penalties,
+                    'effective_stats', s.effective_stats,
+                    'combat_flags', s.combat_flags,
+                    'overlay_text', s.overlay_text,
+                    'overlay_data', s.overlay_data,
+                    'tracker_minor', s.tracker_minor,
+                    'tracker_serious', s.tracker_serious,
+                    'is_alive', s.is_alive,
+                    'is_conscious', s.is_conscious,
+                    'state_version', s.state_version,
+                    'updated_at', s.updated_at
+                  )
+                  from public.odyssey_character_combat_state s
+                  where s.character_id = v_character_id
+                ),
+                '{}'::jsonb
               )
-              from public.odyssey_character_combat_state s
-              where s.character_id = v_character_id
-            ),
-            '{}'::jsonb
-          )
+            else '{}'::jsonb
+          end
       );
     end if;
   end if;
@@ -11145,8 +11152,10 @@ begin
   )
   returning id into v_inserted_id;
 
-  v_refresh := public.odyssey_refresh_character_combat_state(v_character_id);
-  v_effective_stats := public.get_effective_character_stats(v_character_id);
+  if v_include_combat_state then
+    v_refresh := public.odyssey_refresh_character_combat_state(v_character_id);
+    v_effective_stats := public.get_effective_character_stats(v_character_id);
+  end if;
 
   select jsonb_build_object(
     'id', e.id,
@@ -59167,6 +59176,7 @@ declare
   v_payload_data jsonb := case when jsonb_typeof(p_payload->'data') = 'object' then p_payload->'data' else '{}'::jsonb end;
   v_payload_category text := lower(trim(coalesce(p_payload->>'category', '')));
   v_stacks integer := greatest(coalesce(nullif(trim(coalesce(p_payload->>'stacks', '')), '')::integer, 1), 1);
+  v_include_combat_state boolean := coalesce(nullif(trim(coalesce(p_payload->>'include_combat_state', '')), '')::boolean, true);
   v_effect_def public.odyssey_effect_defs%rowtype;
   v_stacking_mode text := 'stack';
   v_merged_data jsonb := '{}'::jsonb;
@@ -59297,7 +59307,9 @@ begin
     limit 1;
 
     if v_existing_effect_id is not null then
-      v_effective_stats := public.get_effective_character_stats(v_character_id);
+      if v_include_combat_state then
+        v_effective_stats := public.get_effective_character_stats(v_character_id);
+      end if;
       select jsonb_build_object(
         'id', e.id,
         'effect_def_id', e.effect_def_id,
@@ -59331,32 +59343,36 @@ begin
         'effect', v_effect_json,
         'effective_stats', v_effective_stats,
         'combat_state',
-          coalesce(
-            (
-              select jsonb_build_object(
-                'character_id', s.character_id,
-                'campaign_id', s.campaign_id,
-                'room_id', s.room_id,
-                'body_summary', s.body_summary,
-                'armor_summary', s.armor_summary,
-                'active_effects', s.active_effects,
-                'active_penalties', s.active_penalties,
-                'effective_stats', s.effective_stats,
-                'combat_flags', s.combat_flags,
-                'overlay_text', s.overlay_text,
-                'overlay_data', s.overlay_data,
-                'tracker_minor', s.tracker_minor,
-                'tracker_serious', s.tracker_serious,
-                'is_alive', s.is_alive,
-                'is_conscious', s.is_conscious,
-                'state_version', s.state_version,
-                'updated_at', s.updated_at
+          case
+            when v_include_combat_state then
+              coalesce(
+                (
+                  select jsonb_build_object(
+                    'character_id', s.character_id,
+                    'campaign_id', s.campaign_id,
+                    'room_id', s.room_id,
+                    'body_summary', s.body_summary,
+                    'armor_summary', s.armor_summary,
+                    'active_effects', s.active_effects,
+                    'active_penalties', s.active_penalties,
+                    'effective_stats', s.effective_stats,
+                    'combat_flags', s.combat_flags,
+                    'overlay_text', s.overlay_text,
+                    'overlay_data', s.overlay_data,
+                    'tracker_minor', s.tracker_minor,
+                    'tracker_serious', s.tracker_serious,
+                    'is_alive', s.is_alive,
+                    'is_conscious', s.is_conscious,
+                    'state_version', s.state_version,
+                    'updated_at', s.updated_at
+                  )
+                  from public.odyssey_character_combat_state s
+                  where s.character_id = v_character_id
+                ),
+                '{}'::jsonb
               )
-              from public.odyssey_character_combat_state s
-              where s.character_id = v_character_id
-            ),
-            '{}'::jsonb
-          )
+            else '{}'::jsonb
+          end
       );
     end if;
   end if;
@@ -59399,8 +59415,10 @@ begin
   )
   returning id into v_inserted_id;
 
-  v_refresh := public.odyssey_refresh_character_combat_state(v_character_id);
-  v_effective_stats := public.get_effective_character_stats(v_character_id);
+  if v_include_combat_state then
+    v_refresh := public.odyssey_refresh_character_combat_state(v_character_id);
+    v_effective_stats := public.get_effective_character_stats(v_character_id);
+  end if;
 
   select jsonb_build_object(
     'id', e.id,
@@ -59477,6 +59495,7 @@ declare
   v_log_data jsonb := '{}'::jsonb;
   v_message text := '';
   v_source_character_weapon_id uuid := null;
+  v_include_combat_state boolean := coalesce(nullif(trim(coalesce(p_payload->>'include_combat_state', '')), '')::boolean, true);
 begin
   if v_character_ability_id is null then
     if v_character_id is null or v_ability_code = '' then
@@ -59673,6 +59692,7 @@ begin
             'source_id', v_character_ability_id::text,
             'source_character_id', v_character_id::text,
             'source_character_weapon_id', case when v_source_character_weapon_id is not null then v_source_character_weapon_id::text else null end,
+            'include_combat_state', v_include_combat_state,
             'data',
               public.odyssey_merge_effect_data(
                 v_effect_instance_data,
@@ -59734,6 +59754,7 @@ begin
           'source_id', v_character_ability_id::text,
           'source_character_id', v_character_id::text,
           'source_character_weapon_id', case when v_source_character_weapon_id is not null then v_source_character_weapon_id::text else null end,
+          'include_combat_state', v_include_combat_state,
           'data',
             public.odyssey_merge_effect_data(
               v_effect_instance_data,
@@ -59753,7 +59774,9 @@ begin
 
       v_refresh := coalesce(v_effect_result->'combat_state', '{}'::jsonb);
     else
-      v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_target_character_id)->'combat_state', '{}'::jsonb);
+      if v_include_combat_state then
+        v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_target_character_id)->'combat_state', '{}'::jsonb);
+      end if;
       v_effect_result := jsonb_build_object(
         'ok', true,
         'narrative_only', true,
@@ -59795,14 +59818,18 @@ begin
     where id = v_target_part.id;
 
     perform public.recompute_character_armor(v_target_character_id);
-    v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_target_character_id)->'combat_state', '{}'::jsonb);
+    if v_include_combat_state then
+      v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_target_character_id)->'combat_state', '{}'::jsonb);
+    end if;
     v_effect_result := jsonb_build_object(
       'ok', true,
       'special', public.odyssey_get_character_body_part_state(v_target_part.id),
       'combat_state', v_refresh
     );
   else
-    v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_target_character_id)->'combat_state', '{}'::jsonb);
+    if v_include_combat_state then
+      v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_target_character_id)->'combat_state', '{}'::jsonb);
+    end if;
     v_effect_result := jsonb_build_object(
       'ok', true,
       'narrative_only', true,
@@ -66921,6 +66948,7 @@ declare
   v_refresh jsonb := '{}'::jsonb;
   v_feature_code text := '';
   v_stage text := 'resolve_character_ability';
+  v_include_combat_state boolean := coalesce(nullif(trim(coalesce(v_payload->>'include_combat_state', '')), '')::boolean, true);
 begin
   perform set_config('lock_timeout', '1500ms', true);
 
@@ -67051,8 +67079,10 @@ begin
     return v_activation_result;
   end if;
 
-  v_stage := 'refresh_character_combat_state';
-  v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_ability.character_id)->'combat_state', '{}'::jsonb);
+  if v_include_combat_state then
+    v_stage := 'refresh_character_combat_state';
+    v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_ability.character_id)->'combat_state', '{}'::jsonb);
+  end if;
 
   return jsonb_build_object(
     'ok', true,
