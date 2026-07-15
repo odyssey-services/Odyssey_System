@@ -8495,6 +8495,10 @@ function mountCombatHudModule(options) {
   let lastCommandStatusKey = null;
   function maybeShowCommandStatusToast() {
     const status2 = liveSelection?.ui?.commandStatus ?? null;
+    const source = String(status2?.source ?? "").trim();
+    const operation = String(status2?.operation ?? "").trim();
+    const isWeaponOnlyStatus = source === "weapon_overlay" || operation === "switch_active_weapon";
+    if (isWeaponOnlyStatus && moduleId !== "gun") return;
     const key = status2 ? `${status2.type}:${status2.message}` : null;
     if (key === lastCommandStatusKey) return;
     lastCommandStatusKey = key;

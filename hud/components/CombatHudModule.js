@@ -272,6 +272,10 @@ export function mountCombatHudModule(options) {
    *  looked like "Reload did nothing" instead of showing the real reason. */
   function maybeShowCommandStatusToast() {
     const status = liveSelection?.ui?.commandStatus ?? null;
+    const source = String(status?.source ?? "").trim();
+    const operation = String(status?.operation ?? "").trim();
+    const isWeaponOnlyStatus = source === "weapon_overlay" || operation === "switch_active_weapon";
+    if (isWeaponOnlyStatus && moduleId !== "gun") return;
     const key = status ? `${status.type}:${status.message}` : null;
     if (key === lastCommandStatusKey) return;
     lastCommandStatusKey = key;

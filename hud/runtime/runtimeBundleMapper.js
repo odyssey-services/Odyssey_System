@@ -269,21 +269,26 @@ function hasEquippedFlag(w) {
  * Pick the active weapon from an armory section. Returns the RAW weapon object
  * (canonical getCharacterArmory shape) or null. PURE.
  *
- * Priority: explicit equipped/active flag → first weapon in weapons[] (mirrors
- * screens/resolveAttack/resolveAttackScreen.js `weapons[0]`). A single-object
- * `armory.equipped_weapon` projection is tolerated as a fallback.
+ * Priority: explicit HUD-selected weapon id → armory.active_weapon_id →
+ * explicit equipped/active flag → first weapon in weapons[] (mirrors
+ * screens/resolveAttack/resolveAttackScreen.js `weapons[0]`). The HUD-selected
+ * id must win here because weapon companion popovers and scoped module patches
+ * can be fresher than the last full runtime replay; without this, opening the
+ * selector can visibly snap back to a stale armory-default weapon.
+ * A single-object `armory.equipped_weapon` projection is tolerated as a
+ * fallback.
  */
 export function pickActiveWeapon(armory, preferredWeaponId = null) {
   if (!armory || typeof armory !== "object") return null;
   const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
+  if (preferredWeaponId) {
+    const preferred = weapons.find((w) => str(w?.id) === str(preferredWeaponId));
+    if (preferred) return preferred;
+  }
   const activeWeaponId = str(armory.active_weapon_id);
   if (activeWeaponId) {
     const active = weapons.find((w) => str(w?.id) === activeWeaponId);
     if (active) return active;
-  }
-  if (preferredWeaponId) {
-    const preferred = weapons.find((w) => str(w?.id) === str(preferredWeaponId));
-    if (preferred) return preferred;
   }
   if (armory.equipped_weapon && typeof armory.equipped_weapon === "object") {
     return armory.equipped_weapon;
@@ -812,7 +817,8 @@ export function mapBundleToHudSnapshot(bundle, options = {}) {
 
   let weaponPrimary = null;
   const armory = section(bundle, "armory");
-  try { weaponPrimary = armory ? mapWeapon(armory) : null; } catch (_e) { weaponPrimary = null; }
+  const preferredWeaponId = str(options?.selectedWeaponId);
+  try { weaponPrimary = armory ? mapWeapon(armory, preferredWeaponId) : null; } catch (_e) { weaponPrimary = null; }
 
   let skills = { library: [], quickSlots: [] };
   try { skills = mapSkills(section(bundle, "abilities")); } catch (_e) { skills = { library: [], quickSlots: [] }; }
@@ -827,7 +833,7 @@ export function mapBundleToHudSnapshot(bundle, options = {}) {
     weapon:       {
       primary: weaponPrimary,
       secondary: null,
-      available: armory ? mapWeaponInventory(armory, weaponPrimary?.id ?? str(armory?.active_weapon_id)) : [],
+      available: armory ? mapWeaponInventory(armory, weaponPrimary?.id ?? preferredWeaponId ?? str(armory?.active_weapon_id)) : [],
     },
     skills,
     combatSession: mapCombatSession(),

@@ -133,6 +133,12 @@ test("weapon switch applies authoritative RPC armory before background inventory
   assert.ok(!sceneControllerSrc.includes('reason: "weapon-switched",\n            encounterId: session?.exists ? session.id : null,\n            armory: true,'));
 });
 
+test("weapon switch toast is scoped to the Weapon module instead of every popover", () => {
+  const combatHudModuleSrc = fs.readFileSync(path.join(repoRoot, "hud", "components", "CombatHudModule.js"), "utf8");
+  assert.ok(combatHudModuleSrc.includes('const isWeaponOnlyStatus = source === "weapon_overlay" || operation === "switch_active_weapon";'));
+  assert.ok(combatHudModuleSrc.includes('if (isWeaponOnlyStatus && moduleId !== "gun") return;'));
+});
+
 test("older armory refreshes cannot overwrite a newer switched weapon snapshot", () => {
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "heavy-armory-stale-ignored"'));
   assert.ok(sceneControllerSrc.includes("const refreshStartedAt = Date.now();"));

@@ -244,6 +244,16 @@ test("active_weapon_id picks a non-default primary and marks it in the list", ()
   assert.ok(html.includes("is-selected"));
 });
 
+test("selectedWeaponId stays authoritative for HUD display when armory active_weapon_id is stale", () => {
+  const armory = mixedArmory();
+  armory.active_weapon_id = "w-rifle";
+  const payload = readyPayload(armory, { selectedWeaponId: "w-pistol" });
+  assert.equal(payload.hudSnapshot.weapon.primary.id, "w-pistol", "Gun block must stay on the locally selected weapon");
+  const selState = buildCompanionSelectorState(payload);
+  const marked = selState.snapshot.weapon.available.find((weapon) => weapon.selected);
+  assert.equal(marked?.id, "w-pistol", "selector highlight must follow selectedWeaponId");
+});
+
 test("weaponSelectorOpen flag does not change the available weapon list", () => {
   const open = buildCompanionSelectorState(readyPayload(mixedArmory(), { weaponSelectorOpen: true }));
   const closed = buildCompanionSelectorState(readyPayload(mixedArmory(), { weaponSelectorOpen: false }));

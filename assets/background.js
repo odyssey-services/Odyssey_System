@@ -8409,14 +8409,14 @@ function hasEquippedFlag(w) {
 function pickActiveWeapon(armory, preferredWeaponId = null) {
   if (!armory || typeof armory !== "object") return null;
   const weapons = Array.isArray(armory.weapons) ? armory.weapons.filter(Boolean) : [];
+  if (preferredWeaponId) {
+    const preferred = weapons.find((w) => str3(w?.id) === str3(preferredWeaponId));
+    if (preferred) return preferred;
+  }
   const activeWeaponId = str3(armory.active_weapon_id);
   if (activeWeaponId) {
     const active = weapons.find((w) => str3(w?.id) === activeWeaponId);
     if (active) return active;
-  }
-  if (preferredWeaponId) {
-    const preferred = weapons.find((w) => str3(w?.id) === str3(preferredWeaponId));
-    if (preferred) return preferred;
   }
   if (armory.equipped_weapon && typeof armory.equipped_weapon === "object") {
     return armory.equipped_weapon;
