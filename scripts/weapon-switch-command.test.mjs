@@ -12,6 +12,7 @@ const repoRoot = path.resolve(__dirname, "..");
 const sceneControllerSrc = fs.readFileSync(path.join(repoRoot, "hud", "scene", "sceneSelectionController.js"), "utf8");
 const selectionStateSrc = fs.readFileSync(path.join(repoRoot, "hud", "scene", "selectionState.js"), "utf8");
 const overlayPageSrc = fs.readFileSync(path.join(repoRoot, "hud", "overlay", "combatHudOverlayPage.js"), "utf8");
+const overlayControllerSrc = fs.readFileSync(path.join(repoRoot, "hud", "overlay", "combatHudOverlayController.js"), "utf8");
 const sqlSrc = fs.readFileSync(path.join(repoRoot, "supabase", "odyssey_supabase.sql"), "utf8");
 const fx = fixtureSet();
 
@@ -170,6 +171,13 @@ test("module-scoped patch channel updates popovers without replaying full select
   assert.ok(overlayPageSrc.includes('sendDebugEvent("module-patch-received"'));
   assert.ok(overlayPageSrc.includes('sendDebugEvent("module-patch-applied"'));
   assert.ok(overlayPageSrc.includes("mod.applyPatch?.(patchPayload)"));
+});
+
+test("overlay controller also merges module patches into lastSelectionPayload for fresh companion seeds", () => {
+  assert.ok(overlayControllerSrc.includes("OBR.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {"));
+  assert.ok(overlayControllerSrc.includes("const patchPayload = normalizeModulePatchPayload(event?.data ?? null);"));
+  assert.ok(overlayControllerSrc.includes("const nextPayload = mergeModulePatchIntoSelectionPayload(lastSelectionPayload, patchPayload);"));
+  assert.ok(overlayControllerSrc.includes("lastSelectionPayload = nextPayload;"));
 });
 
 test("popover iframe requests replay when live Owlbear selection differs from ready payload", () => {
