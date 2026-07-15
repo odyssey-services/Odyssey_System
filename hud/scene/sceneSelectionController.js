@@ -53,6 +53,8 @@ import { logDebugEvent } from "../debug/debugLogStore.js";
 import { setupCombatSessionController } from "../session/combatSessionController.js";
 import { subscribeMoveToolMessages, MOVE_TOOL_EVENTS } from "../../movement/moveToolBridge.js";
 import { setupQuickbarController } from "../abilities/quickbarController.js";
+import { fetchQuickActionsRuntime } from "../abilities/abilityApi.js";
+import { mapQuickActionsRuntime } from "../abilities/abilityRuntimeMapper.js";
 import { mapCombatRuntimeToSession } from "../session/combatSessionMapper.js";
 import { sessionAttackGate, sessionReloadGate, expectedVersionOf } from "../session/combatSessionPolicy.js";
 import { buildSwitchActiveWeaponPayload, resolveWeaponSwitchErrorMessage } from "../session/weaponSwitchPayload.js";
@@ -490,6 +492,32 @@ export function setupSceneSelection(hooks = {}) {
     if (now - lastAt < WEAPON_HEAVY_CACHE_STALE_MS) return false;
     weaponHeavyPreloadKeys.set(key, now);
     return true;
+  }
+
+  async function fetchReadyQuickbarRuntime(characterId) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId || !quickbarController) return null;
+    try {
+      const raw = await singleFlightRuntimeRefresh(
+        `quickbar:${normalizedCharacterId}`,
+        async () => {
+          try {
+            return await fetchQuickActionsRuntime(normalizedCharacterId, settings);
+          } catch (error) {
+            const normalized = normalizeRpcError(error);
+            if (normalized.error === "STATEMENT_TIMEOUT" && normalized.retryable) {
+              await waitMs(350);
+              return fetchQuickActionsRuntime(normalizedCharacterId, settings);
+            }
+            throw error;
+          }
+        },
+      );
+      const mapped = mapQuickActionsRuntime(raw);
+      return mapped?.ok !== false ? mapped : null;
+    } catch {
+      return null;
+    }
   }
 
   function hydrateBundleWithHeavyCache(bundle, characterId) {
@@ -1451,10 +1479,14 @@ export function setupSceneSelection(hooks = {}) {
       }
 
       try {
-        const runtimeBundle = await fetchLightRuntimeBundle(resolvedState.characterId, reason);
+        const [runtimeBundle, readyQuickbarRuntime] = await Promise.all([
+          fetchLightRuntimeBundle(resolvedState.characterId, reason),
+          fetchReadyQuickbarRuntime(resolvedState.characterId),
+        ]);
         if (disposed || !stableSelectionResolver || stableSelectionResolver.getCurrentRequestId() !== requestId) {
           return;
         }
+        abilitiesRuntime = readyQuickbarRuntime;
         await commitResolvedSelectionState(
           buildSelectionStateFromResolver(resolvedState, runtimeBundle),
           reason,
@@ -1671,7 +1703,9 @@ export function setupSceneSelection(hooks = {}) {
       ephemeral.basicAttackResult = null;
       // Phase 4.0b: load the new character's quickbar runtime. Cleared first so
       // the Skills block doesn't briefly show the previous character's quickbar.
-      abilitiesRuntime = null;
+      if (String(abilitiesRuntime?.characterId ?? "").trim() !== String(characterId ?? "").trim()) {
+        abilitiesRuntime = null;
+      }
       if (quickbarController) quickbarController.onSelectionChanged(characterId ?? null);
       return true;
     }

@@ -76,7 +76,8 @@ await asyncTest("selection ready uses light runtime success", async () => {
 });
 
 test("inventory failure does not make selection unavailable in staged runtime flow", () => {
-  assert.ok(sceneControllerSrc.includes("const runtimeBundle = await fetchLightRuntimeBundle(resolvedState.characterId, reason);"));
+  assert.ok(sceneControllerSrc.includes("const [runtimeBundle, readyQuickbarRuntime] = await Promise.all(["));
+  assert.ok(sceneControllerSrc.includes("fetchLightRuntimeBundle(resolvedState.characterId, reason)"));
   assert.ok(!sceneControllerSrc.includes("Promise.all([\n          getCharacterRuntimeBundle("));
   assert.ok(sceneControllerSrc.includes("panel: \"inventory\""));
   assert.ok(sceneControllerSrc.includes("heavy-fetch-failed"));
@@ -94,6 +95,18 @@ test("light runtime hydrates heavy weapon data before the first ready payload wh
   assert.ok(sceneControllerSrc.includes("reason: `${reason}:hydrate-heavy-before-ready`"));
   assert.ok(sceneControllerSrc.includes("armory: true"));
   assert.ok(sceneControllerSrc.includes("inventory: true"));
+});
+
+test("ready selection preloads quickbar runtime before the first ready payload instead of waiting for a later interaction", () => {
+  assert.ok(sceneControllerSrc.includes("async function fetchReadyQuickbarRuntime(characterId)"));
+  assert.ok(sceneControllerSrc.includes("fetchQuickActionsRuntime(normalizedCharacterId, settings)"));
+  assert.ok(sceneControllerSrc.includes("const [runtimeBundle, readyQuickbarRuntime] = await Promise.all(["));
+  assert.ok(sceneControllerSrc.includes("fetchReadyQuickbarRuntime(resolvedState.characterId)"));
+  assert.ok(sceneControllerSrc.includes("abilitiesRuntime = readyQuickbarRuntime;"));
+});
+
+test("resetEphemeralForCharacter preserves a freshly preloaded quickbar runtime for the same character", () => {
+  assert.ok(sceneControllerSrc.includes("if (String(abilitiesRuntime?.characterId ?? \"\").trim() !== String(characterId ?? \"\").trim()) {"));
 });
 
 test("runtime-only refresh rehydrates heavy armory cache before replacing the ready bundle", () => {
