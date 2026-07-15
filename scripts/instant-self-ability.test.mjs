@@ -216,6 +216,21 @@ test("14d. ACTION_BUSY_RETRY does not trigger the generic failure refresh churn 
   assert.match(controllerSrc, /if \(shouldSkipAbilityFailureRefresh\(outcome\)\) \{\s*if \(lastState\) publishState\(lastState\);\s*return;\s*\}/);
 });
 
+test("14e. out-of-combat instant abilities do not wait on combat runtime pending and do not refresh combat session", () => {
+  const helperIdx = controllerSrc.indexOf("async function executeCombatAbilityWithRetry");
+  const helperBlock = controllerSrc.slice(
+    helperIdx,
+    controllerSrc.indexOf("async function refreshCombatSessionSafe", helperIdx),
+  );
+  assert.match(helperBlock, /blockOnRuntimePending = true/);
+  assert.match(helperBlock, /\|\| \(blockOnRuntimePending && combatRuntimePending\)/);
+
+  const idx = controllerSrc.indexOf('command?.type === "execute-instant-ability"');
+  const block = controllerSrc.slice(idx, controllerSrc.indexOf("// Phase 4.1B.2: Directed Target Ability Execution", idx));
+  assert.match(block, /blockOnRuntimePending: sessionAtRequest\.exists === true/);
+  assert.match(block, /if \(sessionAtRequest\.exists === true\) \{\s*await refreshCombatSessionSafe\(sessionController, "instant-ability"\);\s*\}/);
+});
+
 /* ── Payload (15-21) ──────────────────────────────────────────────────── */
 
 function fullPayload(overrides = {}) {

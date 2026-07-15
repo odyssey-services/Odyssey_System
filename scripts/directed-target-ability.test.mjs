@@ -257,6 +257,21 @@ function fullPayload(overrides = {}) {
   });
 }
 
+test("17c. out-of-combat directed abilities do not wait on combat runtime pending and do not refresh combat session", () => {
+  const helperIdx = controllerSrc.indexOf("async function executeCombatAbilityWithRetry");
+  const helperBlock = controllerSrc.slice(
+    helperIdx,
+    controllerSrc.indexOf("async function refreshCombatSessionSafe", helperIdx),
+  );
+  assert.match(helperBlock, /blockOnRuntimePending = true/);
+  assert.match(helperBlock, /\|\| \(blockOnRuntimePending && combatRuntimePending\)/);
+
+  const idx = controllerSrc.indexOf('command?.type === "execute-directed-ability"');
+  const block = controllerSrc.slice(idx, controllerSrc.indexOf("// Basic Weapon Attack v1", idx));
+  assert.match(block, /blockOnRuntimePending: sessionAtRequest\.exists === true/);
+  assert.match(block, /if \(sessionAtRequest\.exists === true\) \{\s*await refreshCombatSessionSafe\(sessionController, "directed-ability"\);\s*\}/);
+});
+
 test("18. execution payload includes the source character (character_id)", () => {
   assert.equal(fullPayload().character_id, "char-1");
 });

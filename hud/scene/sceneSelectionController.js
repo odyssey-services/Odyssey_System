@@ -384,6 +384,7 @@ export function setupSceneSelection(hooks = {}) {
     debugAction,
     retryDelayMs = 400,
     retryLimit = 3,
+    blockOnRuntimePending = true,
   } = {}) {
     const normalizedCharacterId = String(characterId ?? "").trim() || null;
     const normalizedActionId = String(actionId ?? "").trim() || null;
@@ -396,7 +397,7 @@ export function setupSceneSelection(hooks = {}) {
         const locallyBusy = ephemeral.weaponSwitchInFlight
           || ephemeral.reloadInFlight
           || ephemeral.fireModeInFlight
-          || combatRuntimePending;
+          || (blockOnRuntimePending && combatRuntimePending);
         if (!locallyBusy) return;
         await waitMs(50);
       }
@@ -2077,6 +2078,7 @@ export function setupSceneSelection(hooks = {}) {
     ) {
       const characterId = String(ephemeral.characterId ?? "").trim() || null;
       const encounterId = getCurrentEncounterIdSafe(characterId);
+      const trackCombatRuntimePending = Boolean(encounterId);
       const queueKey = buildCharacterQueueKey(characterId, `refresh:${reason}`, encounterId);
       const performRefresh = async () => {
         logDebugEvent(
@@ -2092,7 +2094,9 @@ export function setupSceneSelection(hooks = {}) {
           },
           true,
         );
-        setCombatRuntimePending(true, reason);
+        if (trackCombatRuntimePending) {
+          setCombatRuntimePending(true, reason);
+        }
         let finalPublishReason = null;
         try {
           await waitForCombatActionIdle(characterId);
@@ -2121,7 +2125,9 @@ export function setupSceneSelection(hooks = {}) {
             message: String(error?.message ?? error),
           }, false);
         } finally {
-          setCombatRuntimePending(false, reason);
+          if (trackCombatRuntimePending) {
+            setCombatRuntimePending(false, reason);
+          }
           if (
             finalPublishReason
             && lastState?.status === "ready"
@@ -2801,12 +2807,13 @@ export function setupSceneSelection(hooks = {}) {
                     executeAction: (payload) => executeAction(payload, settings),
                     useAbility: (payload) => useAbility(payload, settings),
                   }),
-                  {
-                    characterId: ctx.sourceCharacterId,
-                    actionId,
-                    debugAction: "ability-execute-retry",
-                  },
-                );
+                {
+                  characterId: ctx.sourceCharacterId,
+                  actionId,
+                  debugAction: "ability-execute-retry",
+                  blockOnRuntimePending: sessionAtRequest.exists === true,
+                },
+              );
               } catch (error) {
                 outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability execution failed.") };
               }
@@ -2858,7 +2865,9 @@ export function setupSceneSelection(hooks = {}) {
                 return;
               }
 
-              await refreshCombatSessionSafe(sessionController, "instant-ability");
+              if (sessionAtRequest.exists === true) {
+                await refreshCombatSessionSafe(sessionController, "instant-ability");
+              }
 
               if (outcome.ok) {
                 ephemeral.commandStatus = { type: "ok", message: "Ability used." };
@@ -3028,6 +3037,7 @@ export function setupSceneSelection(hooks = {}) {
                   characterId: ctx.sourceCharacterId,
                   actionId,
                   debugAction: "directed-ability-retry",
+                  blockOnRuntimePending: sessionAtRequest.exists === true,
                 },
               );
             } catch (error) {
@@ -3090,7 +3100,9 @@ export function setupSceneSelection(hooks = {}) {
           return;
         }
 
-        await refreshCombatSessionSafe(sessionController, "directed-ability");
+        if (sessionAtRequest.exists === true) {
+          await refreshCombatSessionSafe(sessionController, "directed-ability");
+        }
 
         if (outcome.ok) {
           ephemeral.commandStatus = { type: "ok", message: "Ability used." };

@@ -9583,7 +9583,8 @@ function setupSceneSelection(hooks = {}) {
     actionId,
     debugAction,
     retryDelayMs = 400,
-    retryLimit = 3
+    retryLimit = 3,
+    blockOnRuntimePending = true
   } = {}) {
     const normalizedCharacterId = String(characterId ?? "").trim() || null;
     const normalizedActionId = String(actionId ?? "").trim() || null;
@@ -9592,7 +9593,7 @@ function setupSceneSelection(hooks = {}) {
     async function waitForAbilityExecutionReady(timeoutMs = 3e3) {
       const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
       while (Date.now() < deadline) {
-        const locallyBusy = ephemeral.weaponSwitchInFlight || ephemeral.reloadInFlight || ephemeral.fireModeInFlight || combatRuntimePending;
+        const locallyBusy = ephemeral.weaponSwitchInFlight || ephemeral.reloadInFlight || ephemeral.fireModeInFlight || blockOnRuntimePending && combatRuntimePending;
         if (!locallyBusy) return;
         await waitMs(50);
       }
@@ -11011,6 +11012,7 @@ function setupSceneSelection(hooks = {}) {
     async function refreshSelectedCharacterRuntime(reason = "generic", { refreshQuickbar = false, insideCharacterQueue = false } = {}) {
       const characterId = String(ephemeral.characterId ?? "").trim() || null;
       const encounterId = getCurrentEncounterIdSafe(characterId);
+      const trackCombatRuntimePending = Boolean(encounterId);
       const queueKey = buildCharacterQueueKey(characterId, `refresh:${reason}`, encounterId);
       const performRefresh = async () => {
         logDebugEvent(
@@ -11026,7 +11028,9 @@ function setupSceneSelection(hooks = {}) {
           },
           true
         );
-        setCombatRuntimePending(true, reason);
+        if (trackCombatRuntimePending) {
+          setCombatRuntimePending(true, reason);
+        }
         let finalPublishReason = null;
         try {
           await waitForCombatActionIdle(characterId);
@@ -11047,7 +11051,9 @@ function setupSceneSelection(hooks = {}) {
             message: String(error?.message ?? error)
           }, false);
         } finally {
-          setCombatRuntimePending(false, reason);
+          if (trackCombatRuntimePending) {
+            setCombatRuntimePending(false, reason);
+          }
           if (finalPublishReason && lastState?.status === "ready" && lastState?.access?.canView === true && String(lastState?.characterId ?? "").trim() === characterId) {
             broadcastReadyStateUpdate(scopesForRuntimeRefresh(reason, refreshQuickbar), finalPublishReason);
           }
@@ -11589,7 +11595,8 @@ function setupSceneSelection(hooks = {}) {
                   {
                     characterId: ctx.sourceCharacterId,
                     actionId,
-                    debugAction: "ability-execute-retry"
+                    debugAction: "ability-execute-retry",
+                    blockOnRuntimePending: sessionAtRequest.exists === true
                   }
                 );
               } catch (error) {
@@ -11639,7 +11646,9 @@ function setupSceneSelection(hooks = {}) {
                 if (lastState) publishState(lastState);
                 return;
               }
-              await refreshCombatSessionSafe(sessionController, "instant-ability");
+              if (sessionAtRequest.exists === true) {
+                await refreshCombatSessionSafe(sessionController, "instant-ability");
+              }
               if (outcome.ok) {
                 ephemeral.commandStatus = { type: "ok", message: "Ability used." };
                 await refreshSelectedCharacterRuntime("instant-ability-success", { refreshQuickbar: true, insideCharacterQueue: true });
@@ -11786,7 +11795,8 @@ function setupSceneSelection(hooks = {}) {
                 {
                   characterId: ctx.sourceCharacterId,
                   actionId,
-                  debugAction: "directed-ability-retry"
+                  debugAction: "directed-ability-retry",
+                  blockOnRuntimePending: sessionAtRequest.exists === true
                 }
               );
             } catch (error) {
@@ -11845,7 +11855,9 @@ function setupSceneSelection(hooks = {}) {
               if (lastState) publishState(lastState);
               return;
             }
-            await refreshCombatSessionSafe(sessionController, "directed-ability");
+            if (sessionAtRequest.exists === true) {
+              await refreshCombatSessionSafe(sessionController, "directed-ability");
+            }
             if (outcome.ok) {
               ephemeral.commandStatus = { type: "ok", message: "Ability used." };
               try {
