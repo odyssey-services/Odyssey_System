@@ -211,6 +211,11 @@ test("14c. instant ability execution uses the displayed active weapon context an
   assert.match(block, /selectedWeaponId: selectedWeaponIdAtRequest,/);
 });
 
+test("14d. ACTION_BUSY_RETRY does not trigger the generic failure refresh churn for instant/direct/directed abilities", () => {
+  assert.match(controllerSrc, /function shouldSkipAbilityFailureRefresh\(result\)/);
+  assert.match(controllerSrc, /if \(shouldSkipAbilityFailureRefresh\(outcome\)\) \{\s*if \(lastState\) publishState\(lastState\);\s*return;\s*\}/);
+});
+
 /* ── Payload (15-21) ──────────────────────────────────────────────────── */
 
 function fullPayload(overrides = {}) {
@@ -335,6 +340,14 @@ test("combat_execute_action remains the single instant/self ability execution pa
   const payloadSrc = read("hud", "combat", "instantAbilityPayload.js");
   assert.match(payloadSrc, /kind:\s*"ability"/);
   assert.match(controllerSrc, /resolveInstantAbilityExecution\(ctx, \{ executeAction: \(payload\) => executeAction\(payload, settings\) \}\)/);
+});
+
+test("server busy retries keep stage information at the shared combat/ability boundary", () => {
+  const sql = read("supabase", "odyssey_supabase.sql");
+  assert.match(sql, /if coalesce\(v_result->>'error', ''\) = 'ACTION_BUSY_RETRY'/);
+  assert.match(sql, /return v_result \|\| jsonb_build_object\('stage', v_lock_stage\)/);
+  assert.match(sql, /v_stage text := 'resolve_character_ability';/);
+  assert.match(sql, /'stage', v_stage/);
 });
 
 setTimeout(() => {

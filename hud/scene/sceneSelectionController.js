@@ -224,6 +224,10 @@ export function setupSceneSelection(hooks = {}) {
     return String(result?.code ?? result?.error ?? "").trim() || null;
   }
 
+  function shouldSkipAbilityFailureRefresh(result) {
+    return normalizeOutcomeCode(result) === "ACTION_BUSY_RETRY";
+  }
+
   function getDisplayedActiveWeaponId() {
     return String(
       lastPayload?.hudSnapshot?.weapon?.primary?.id
@@ -2642,6 +2646,10 @@ export function setupSceneSelection(hooks = {}) {
           logDebugEvent("refresh", "source-refresh-result", { reason: "direct-ability-attack-success" }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability attack failed." };
+          if (shouldSkipAbilityFailureRefresh(outcome)) {
+            if (lastState) publishState(lastState);
+            return;
+          }
           await refreshCombatSessionSafe(sessionController, "direct-ability-attack-failure");
           await refreshSelectedCharacterRuntime("direct-ability-attack-failure", { refreshQuickbar: true });
           logDebugEvent("refresh", "source-refresh-result", { reason: "direct-ability-attack-failure" }, true);
@@ -2854,6 +2862,10 @@ export function setupSceneSelection(hooks = {}) {
                 logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-success", queueKey }, true);
               } else {
                 ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
+                if (shouldSkipAbilityFailureRefresh(outcome)) {
+                  if (lastState) publishState(lastState);
+                  return;
+                }
                 await refreshSelectedCharacterRuntime("instant-ability-failure", { refreshQuickbar: true, insideCharacterQueue: true });
                 logDebugEvent("refresh", "source-refresh-result", { reason: "instant-ability-failure", queueKey }, true);
               }
@@ -3087,6 +3099,10 @@ export function setupSceneSelection(hooks = {}) {
           logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-success", queueKey }, true);
         } else {
           ephemeral.commandStatus = { type: "error", message: outcome.error || "Ability failed." };
+          if (shouldSkipAbilityFailureRefresh(outcome)) {
+            if (lastState) publishState(lastState);
+            return;
+          }
           await refreshSelectedCharacterRuntime("directed-ability-failure", { refreshQuickbar: true, insideCharacterQueue: true });
           logDebugEvent("refresh", "source-refresh-result", { reason: "directed-ability-failure", queueKey }, true);
         }

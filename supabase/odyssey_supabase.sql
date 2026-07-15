@@ -20974,6 +20974,10 @@ begin
   );
 
   if coalesce((v_result->>'ok')::boolean, false) = false then
+    if coalesce(v_result->>'error', '') = 'ACTION_BUSY_RETRY'
+       and nullif(trim(coalesce(v_result->>'stage', '')), '') is null then
+      return v_result || jsonb_build_object('stage', v_lock_stage);
+    end if;
     return v_result;
   end if;
 
@@ -53346,6 +53350,10 @@ begin
   end case;
 
   if coalesce((v_result->>'ok')::boolean, false) = false then
+    if coalesce(v_result->>'error', '') = 'ACTION_BUSY_RETRY'
+       and nullif(trim(coalesce(v_result->>'stage', '')), '') is null then
+      return v_result || jsonb_build_object('stage', v_lock_stage);
+    end if;
     return v_result;
   end if;
 
@@ -66912,7 +66920,10 @@ declare
   v_activation_result jsonb := '{}'::jsonb;
   v_refresh jsonb := '{}'::jsonb;
   v_feature_code text := '';
+  v_stage text := 'resolve_character_ability';
 begin
+  perform set_config('lock_timeout', '1500ms', true);
+
   if v_character_ability_id is null then
     if v_character_id is null or v_ability_code = '' then
       return jsonb_build_object(
@@ -66941,6 +66952,7 @@ begin
     return v_source_validation;
   end if;
 
+  v_stage := 'lock_character_ability';
   select
     ability.*,
     def.code as ability_code,
@@ -66969,9 +66981,11 @@ begin
   end if;
 
   if v_ability.effect_mode <> 'activate_weapon_feature' then
+    v_stage := 'delegate_legacy';
     return public.odyssey_use_ability_with_weapon_support_legacy(v_payload);
   end if;
 
+  v_stage := 'load_ability_level';
   v_effective_level := public.odyssey_get_character_ability_effective_level(v_character_ability_id);
   select *
   into v_level
@@ -67012,17 +67026,20 @@ begin
     );
   end if;
 
+  v_stage := 'consume_ability_cost';
   v_resource_result := public.odyssey_consume_character_ability_cost(v_character_ability_id);
   if coalesce((v_resource_result->>'ok')::boolean, false) = false then
     return v_resource_result;
   end if;
 
   if coalesce(v_level.cooldown_rounds, 0) > 0 then
+    v_stage := 'set_cooldown';
     update public.odyssey_character_abilities
     set current_cooldown_rounds = v_level.cooldown_rounds
     where id = v_character_ability_id;
   end if;
 
+  v_stage := 'activate_weapon_feature';
   v_activation_result := public.activate_weapon_feature(
     jsonb_build_object(
       'character_weapon_id', v_ability.source_character_weapon_id::text,
@@ -67034,6 +67051,7 @@ begin
     return v_activation_result;
   end if;
 
+  v_stage := 'refresh_character_combat_state';
   v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_ability.character_id)->'combat_state', '{}'::jsonb);
 
   return jsonb_build_object(
@@ -67055,6 +67073,24 @@ begin
     'combat_state', v_refresh,
     'message', format('%s activated.', v_ability.ability_name)
   );
+exception
+  when lock_not_available then
+    return jsonb_build_object(
+      'ok', false,
+      'error', 'ACTION_BUSY_RETRY',
+      'message', 'Character state is busy. Please retry.',
+      'stage', v_stage
+    );
+  when query_canceled then
+    if SQLERRM ilike '%statement timeout%' or SQLERRM ilike '%lock timeout%' then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'ACTION_BUSY_RETRY',
+        'message', 'Character state is busy. Please retry.',
+        'stage', v_stage
+      );
+    end if;
+    raise;
 end;
 $$;
 
