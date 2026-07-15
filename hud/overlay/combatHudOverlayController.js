@@ -33,11 +33,7 @@ import { logDebugEvent } from "../debug/debugLogStore.js";
 import { setupSceneSelection } from "../scene/sceneSelectionController.js";
 import { setupTargetSelection } from "../targeting/targetSelectionController.js";
 import { setupTargetingVisuals } from "../targeting/visuals/targetingVisualController.js";
-import {
-  SELECTION_STATUS,
-  normalizeModulePatchPayload,
-  mergeModulePatchIntoSelectionPayload,
-} from "../scene/selectionState.js";
+import { SELECTION_STATUS } from "../scene/selectionState.js";
 import { selectVisibleReserveMagazines } from "../core/combatHudSelectors.js";
 import {
   moduleShouldBeOpen as computeModuleShouldBeOpen,
@@ -717,14 +713,6 @@ export function setupCombatHudOverlay() {
           await reconcileSecondaryModules(prev, lastSelectionStatus);
         },
       });
-
-      cleanups.push(OBR.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
-        const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
-        if (!patchPayload || !lastSelectionPayload) return;
-        const nextPayload = mergeModulePatchIntoSelectionPayload(lastSelectionPayload, patchPayload);
-        if (!nextPayload) return;
-        lastSelectionPayload = nextPayload;
-      }));
 
       // Collapse / reopen coordination (Player module → controller).
       cleanups.push(OBR.broadcast.onMessage(BC_HUD_UI_STATE, async (event) => {

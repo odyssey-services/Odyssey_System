@@ -4148,7 +4148,7 @@ function serializePlacement(placement) {
 var OVERLAY_HTML = "combat-hud-overlay.html";
 var BC_HUD_UI_STATE = "com.odyssey.combat-hud/ui-state";
 var BC_HUD_SELECTION = "com.odyssey.combat-hud/selection";
-var BC_HUD_MODULE_PATCH2 = "com.odyssey.combat-hud/module-patch";
+var BC_HUD_MODULE_PATCH = "com.odyssey.combat-hud/module-patch";
 var BC_HUD_SELECTION_REQUEST = "com.odyssey.combat-hud/selection-request";
 var BC_HUD_DEBUG_EVENT = "com.odyssey.combat-hud/debug-event";
 var BC_HUD_COMMAND = "com.odyssey.combat-hud/command";
@@ -9137,124 +9137,6 @@ function buildBroadcastPayload(state, ephemeral = {}) {
     error: { code: s.error?.code ?? null, message: s.error?.message ?? null }
   };
 }
-function normalizeSelectionPayload(raw) {
-  if (!raw || typeof raw !== "object" || !raw.status) return null;
-  return {
-    status: String(raw.status),
-    revision: Number.isFinite(Number(raw.revision)) ? Number(raw.revision) : null,
-    reason: raw.reason ?? null,
-    selectedItemId: raw.selectedItemId ?? null,
-    characterId: raw.characterId ?? null,
-    viewer: { playerId: raw.viewer?.playerId ?? null, role: raw.viewer?.role ?? "UNKNOWN" },
-    access: { canView: !!raw.access?.canView, reason: raw.access?.reason ?? null },
-    view: raw.view ?? null,
-    // Phase 3A.1: normalized HUD snapshot (block renderers use this).
-    hudSnapshot: raw.hudSnapshot ?? null,
-    ui: raw.ui ?? null,
-    debug: raw.debug ?? null,
-    error: { code: raw.error?.code ?? null, message: raw.error?.message ?? null }
-  };
-}
-function mergeObject(baseValue, patchValue) {
-  if (!patchValue || typeof patchValue !== "object" || Array.isArray(patchValue)) {
-    return patchValue === void 0 ? baseValue : patchValue;
-  }
-  return {
-    ...baseValue && typeof baseValue === "object" && !Array.isArray(baseValue) ? baseValue : {},
-    ...patchValue
-  };
-}
-function mergeUiState(baseUi, patchUi) {
-  if (!patchUi || typeof patchUi !== "object") return baseUi ?? null;
-  const nextUi = mergeObject(baseUi, patchUi);
-  if (!nextUi || typeof nextUi !== "object") return nextUi;
-  if (patchUi.targeting && typeof patchUi.targeting === "object") {
-    nextUi.targeting = mergeObject(baseUi?.targeting, patchUi.targeting);
-  }
-  if (patchUi.basicAttack && typeof patchUi.basicAttack === "object") {
-    nextUi.basicAttack = mergeObject(baseUi?.basicAttack, patchUi.basicAttack);
-  }
-  return nextUi;
-}
-function mergeWeaponEntry(baseEntry, patchEntry) {
-  if (!patchEntry || typeof patchEntry !== "object") {
-    return patchEntry === void 0 ? baseEntry : patchEntry;
-  }
-  const baseId = String(baseEntry?.id ?? "").trim();
-  const patchId = String(patchEntry?.id ?? "").trim();
-  if (!baseId || !patchId || baseId !== patchId) {
-    return patchEntry;
-  }
-  const nextEntry = mergeObject(baseEntry, patchEntry);
-  for (const key of ["ammo", "loadedMagazine", "fireMode"]) {
-    if (patchEntry[key] && typeof patchEntry[key] === "object") {
-      nextEntry[key] = mergeObject(baseEntry?.[key], patchEntry[key]);
-    } else if (patchEntry[key] === void 0 && baseEntry?.[key] !== void 0) {
-      nextEntry[key] = baseEntry[key];
-    }
-  }
-  if (patchEntry.reserveMagazines === void 0 && baseEntry?.reserveMagazines !== void 0) {
-    nextEntry.reserveMagazines = baseEntry.reserveMagazines;
-  }
-  return nextEntry;
-}
-function mergeHudSnapshot(baseSnapshot, patchSnapshot) {
-  if (!patchSnapshot || typeof patchSnapshot !== "object") {
-    return patchSnapshot === void 0 ? baseSnapshot : patchSnapshot;
-  }
-  const nextSnapshot = mergeObject(baseSnapshot, patchSnapshot);
-  if (!nextSnapshot || typeof nextSnapshot !== "object") return nextSnapshot;
-  for (const key of ["entity", "weapon", "skills", "quickbar", "modifiers", "battleLog", "combatSession"]) {
-    if (patchSnapshot[key] && typeof patchSnapshot[key] === "object") {
-      nextSnapshot[key] = mergeObject(baseSnapshot?.[key], patchSnapshot[key]);
-    }
-  }
-  if (patchSnapshot.weapon && typeof patchSnapshot.weapon === "object") {
-    nextSnapshot.weapon = {
-      ...baseSnapshot?.weapon && typeof baseSnapshot.weapon === "object" ? baseSnapshot.weapon : {},
-      ...nextSnapshot.weapon,
-      primary: mergeWeaponEntry(baseSnapshot?.weapon?.primary, patchSnapshot.weapon.primary),
-      secondary: mergeWeaponEntry(baseSnapshot?.weapon?.secondary, patchSnapshot.weapon.secondary)
-    };
-  }
-  return nextSnapshot;
-}
-function normalizeModulePatchPayload(raw) {
-  if (!raw || typeof raw !== "object" || raw.type !== "module-patch") return null;
-  const patch = raw.patch && typeof raw.patch === "object" ? raw.patch : {};
-  return {
-    type: "module-patch",
-    scope: String(raw.scope ?? "").trim(),
-    reason: raw.reason ?? null,
-    revision: Number.isFinite(Number(raw.revision)) ? Number(raw.revision) : null,
-    characterId: raw.characterId ?? null,
-    selectedItemId: raw.selectedItemId ?? null,
-    patch: {
-      ui: patch.ui ?? null,
-      hudSnapshot: patch.hudSnapshot ?? null,
-      view: patch.view ?? null,
-      debug: patch.debug ?? null,
-      error: patch.error ?? null
-    }
-  };
-}
-function mergeModulePatchIntoSelectionPayload(selectionPayload, rawPatchPayload) {
-  const basePayload = normalizeSelectionPayload(selectionPayload);
-  const patchPayload = normalizeModulePatchPayload(rawPatchPayload);
-  if (!basePayload || !patchPayload) return basePayload;
-  return {
-    ...basePayload,
-    revision: patchPayload.revision ?? basePayload.revision,
-    reason: patchPayload.reason ?? basePayload.reason,
-    selectedItemId: patchPayload.selectedItemId ?? basePayload.selectedItemId,
-    characterId: patchPayload.characterId ?? basePayload.characterId,
-    view: patchPayload.patch.view && typeof patchPayload.patch.view === "object" ? mergeObject(basePayload.view, patchPayload.patch.view) : basePayload.view,
-    hudSnapshot: mergeHudSnapshot(basePayload.hudSnapshot, patchPayload.patch.hudSnapshot),
-    ui: mergeUiState(basePayload.ui, patchPayload.patch.ui),
-    debug: patchPayload.patch.debug ?? basePayload.debug,
-    error: patchPayload.patch.error && typeof patchPayload.patch.error === "object" ? mergeObject(basePayload.error, patchPayload.patch.error) : basePayload.error
-  };
-}
 
 // hud/scene/sceneSelectionController.js
 var ARMED_TECHNIQUE_ERROR_CODES = /* @__PURE__ */ new Set([
@@ -9676,7 +9558,7 @@ function setupSceneSelection(hooks = {}) {
   }
   function broadcastModulePatchMessage(payload) {
     try {
-      lib_default.broadcast.sendMessage(BC_HUD_MODULE_PATCH2, payload, { destination: "LOCAL" });
+      lib_default.broadcast.sendMessage(BC_HUD_MODULE_PATCH, payload, { destination: "LOCAL" });
     } catch (_e) {
     }
   }
@@ -14460,13 +14342,6 @@ function setupCombatHudOverlay() {
           await reconcileSecondaryModules(prev, lastSelectionStatus);
         }
       });
-      cleanups.push(lib_default.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
-        const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
-        if (!patchPayload || !lastSelectionPayload) return;
-        const nextPayload = mergeModulePatchIntoSelectionPayload(lastSelectionPayload, patchPayload);
-        if (!nextPayload) return;
-        lastSelectionPayload = nextPayload;
-      }));
       cleanups.push(lib_default.broadcast.onMessage(BC_HUD_UI_STATE, async (event) => {
         const next = normalizeHudUiState(event?.data);
         const collapseChanged = next.isHudCollapsed !== lastUiState.isHudCollapsed;
