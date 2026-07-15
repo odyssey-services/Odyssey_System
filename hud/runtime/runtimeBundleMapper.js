@@ -601,7 +601,7 @@ function mapSkillSource(v) {
 }
 
 function mapWeaponOption(armory, weapon, activeWeaponId) {
-  const vm = mapWeapon({ ...armory, weapons: [weapon], active_weapon_id: str(weapon?.id) });
+  const vm = mapWeapon({ ...armory, weapons: [weapon] }, str(weapon?.id));
   const cls = str(weapon?.model?.weapon_class_name) ?? str(weapon?.model?.weapon_class);
   const mag = vm?.loadedMagazine ?? null;
   const combatMode = str(armory?.combat_context?.mode) ?? "out_of_combat";

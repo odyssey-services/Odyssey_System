@@ -254,6 +254,19 @@ test("selectedWeaponId stays authoritative for HUD display when armory active_we
   assert.equal(marked?.id, "w-pistol", "selector highlight must follow selectedWeaponId");
 });
 
+test("non-active weapon options stay switchable when backend did not explicitly send can_switch_to", () => {
+  const armory = mixedArmory();
+  armory.active_weapon_id = "w-katana";
+  const payload = readyPayload(armory);
+  const options = buildCompanionSelectorState(payload).snapshot.weapon.available;
+  const katana = options.find((weapon) => weapon.id === "w-katana");
+  const rifle = options.find((weapon) => weapon.id === "w-rifle");
+  const pistol = options.find((weapon) => weapon.id === "w-pistol");
+  assert.equal(katana?.switchAllowed, false, "active weapon stays non-switch target");
+  assert.equal(rifle?.switchAllowed, true, "non-active rifle remains switchable");
+  assert.equal(pistol?.switchAllowed, true, "non-active pistol remains switchable");
+});
+
 test("weaponSelectorOpen flag does not change the available weapon list", () => {
   const open = buildCompanionSelectorState(readyPayload(mixedArmory(), { weaponSelectorOpen: true }));
   const closed = buildCompanionSelectorState(readyPayload(mixedArmory(), { weaponSelectorOpen: false }));

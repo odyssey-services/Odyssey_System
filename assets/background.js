@@ -8597,7 +8597,7 @@ function mapSkillSource(v) {
   return SKILL_SOURCES.perk;
 }
 function mapWeaponOption(armory, weapon, activeWeaponId) {
-  const vm = mapWeapon({ ...armory, weapons: [weapon], active_weapon_id: str3(weapon?.id) });
+  const vm = mapWeapon({ ...armory, weapons: [weapon] }, str3(weapon?.id));
   const cls = str3(weapon?.model?.weapon_class_name) ?? str3(weapon?.model?.weapon_class);
   const mag = vm?.loadedMagazine ?? null;
   const combatMode = str3(armory?.combat_context?.mode) ?? "out_of_combat";
@@ -11948,6 +11948,10 @@ function setupSceneSelection(hooks = {}) {
         const characterIdAtOpen = String(ephemeral.characterId ?? "").trim() || null;
         const selectedItemIdAtOpen = String(lastPayload?.selectedItemId ?? "").trim() || null;
         const encounterIdAtOpen = getCurrentEncounterIdSafe(characterIdAtOpen);
+        const currentlyDisplayedWeaponId = String(lastPayload?.hudSnapshot?.weapon?.primary?.id ?? "").trim() || null;
+        if (ephemeral.weaponSelectorOpen && !String(ephemeral.selectedWeaponId ?? "").trim() && currentlyDisplayedWeaponId) {
+          ephemeral.selectedWeaponId = currentlyDisplayedWeaponId;
+        }
         broadcastReadyStateUpdate(
           ["weapon"],
           ephemeral.weaponSelectorOpen ? "weapon-selector-opened" : "weapon-selector-closed"

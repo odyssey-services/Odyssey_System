@@ -3427,6 +3427,10 @@ export function setupSceneSelection(hooks = {}) {
         const characterIdAtOpen = String(ephemeral.characterId ?? "").trim() || null;
         const selectedItemIdAtOpen = String(lastPayload?.selectedItemId ?? "").trim() || null;
         const encounterIdAtOpen = getCurrentEncounterIdSafe(characterIdAtOpen);
+        const currentlyDisplayedWeaponId = String(lastPayload?.hudSnapshot?.weapon?.primary?.id ?? "").trim() || null;
+        if (ephemeral.weaponSelectorOpen && !String(ephemeral.selectedWeaponId ?? "").trim() && currentlyDisplayedWeaponId) {
+          ephemeral.selectedWeaponId = currentlyDisplayedWeaponId;
+        }
         broadcastReadyStateUpdate(
           ["weapon"],
           ephemeral.weaponSelectorOpen ? "weapon-selector-opened" : "weapon-selector-closed",
