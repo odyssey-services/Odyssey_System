@@ -192,6 +192,17 @@ test("14b. ACTION_BUSY_RETRY gets exactly one automatic retry with a short delay
   assert.match(controllerSrc, /logDebugEvent\(\s*"abilities",\s*"ability-execute-retry-result"/);
 });
 
+test("14c. instant ability execution uses the displayed active weapon context and locally blocks stale source-weapon mismatches before RPC", () => {
+  assert.match(controllerSrc, /function getDisplayedActiveWeaponId\(\)/);
+  assert.match(controllerSrc, /function getAbilityWeaponRequirementReason\(action, selectedWeaponId = getDisplayedActiveWeaponId\(\)\)/);
+  const idx = controllerSrc.indexOf('command?.type === "execute-instant-ability"');
+  const block = controllerSrc.slice(idx, controllerSrc.indexOf("// Phase 4.1B.2: Directed Target Ability Execution", idx));
+  assert.match(block, /const selectedWeaponIdAtRequest = getDisplayedActiveWeaponId\(\);/);
+  assert.match(block, /const weaponRequirementReason = getAbilityWeaponRequirementReason\(action, selectedWeaponIdAtRequest\);/);
+  assert.match(block, /error: "WEAPON_REQUIREMENT_NOT_MET"/);
+  assert.match(block, /selectedWeaponId: selectedWeaponIdAtRequest,/);
+});
+
 /* ── Payload (15-21) ──────────────────────────────────────────────────── */
 
 function fullPayload(overrides = {}) {
@@ -243,13 +254,13 @@ test("21. execution payload never includes ammo/magazine/fire-mode fields, and n
 
 /* ── Success handling (22-28) ─────────────────────────────────────────── */
 
-test("22/23/24. a successful result applies the authoritative runtime via refetchCurrent() (Skills Block cooldown/PSI) AND sessionController.refresh() (Player Block MAIN) — the SAME two calls the weapon-attack/direct-ability-attack handlers already make", () => {
+test("22/23/24. a successful result refreshes combat session + selected runtime through the current shared helpers", () => {
   const idx = controllerSrc.indexOf('command?.type === "execute-instant-ability"');
   const block = controllerSrc.slice(idx, controllerSrc.indexOf("// Phase 4.1B.2: Directed Target Ability Execution", idx));
   const okIdx = block.indexOf("if (outcome.ok) {");
-  const refetchIdx = block.indexOf("await refetchCurrent();", okIdx);
-  assert.ok(okIdx > -1 && refetchIdx > okIdx);
-  assert.match(block, /if \(sessionController\) void sessionController\.refresh\(\);/);
+  const runtimeRefreshIdx = block.indexOf('await refreshSelectedCharacterRuntime("instant-ability-success"', okIdx);
+  assert.ok(okIdx > -1 && runtimeRefreshIdx > okIdx);
+  assert.match(block, /await refreshCombatSessionSafe\(sessionController, "instant-ability"\);/);
 });
 
 test("25. Combat Log receives a readable non-attack summary via buildAbilityExecutionLogEntry — never raw JSON", () => {
@@ -312,10 +323,10 @@ test("33. a stale version response never overwrites newer runtime — isInstantA
 
 /* ── use_ability/combat_execute_action server-side sanity (supporting §5-9) ── */
 
-test("no migration file was created for this phase — combat_execute_action/use_ability were audited as already correct", () => {
-  const migrationsDir = path.join(repoRoot, "supabase");
-  const files = fs.readdirSync(migrationsDir).filter((f) => /^10[3-9]_|^1[1-9][0-9]_/.test(f));
-  assert.equal(files.length, 0, `expected no new migration 103+ file, found: ${files.join(", ")}`);
+test("combat_execute_action remains the single instant/self ability execution path", () => {
+  const payloadSrc = read("hud", "combat", "instantAbilityPayload.js");
+  assert.match(payloadSrc, /kind:\s*"ability"/);
+  assert.match(controllerSrc, /resolveInstantAbilityExecution\(ctx, \{ executeAction: \(payload\) => executeAction\(payload, settings\) \}\)/);
 });
 
 setTimeout(() => {

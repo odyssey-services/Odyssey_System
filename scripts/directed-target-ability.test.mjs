@@ -235,6 +235,15 @@ test("17. failure clears pending state unconditionally — reset to null right a
 
 /* ── Payload (18-25) ──────────────────────────────────────────────────── */
 
+test("17b. directed ability execution uses the displayed active weapon context and locally blocks stale source-weapon mismatches before RPC", () => {
+  const idx = controllerSrc.indexOf('command?.type === "execute-directed-ability"');
+  const block = controllerSrc.slice(idx, controllerSrc.indexOf("// Basic Weapon Attack v1", idx));
+  assert.match(block, /const selectedWeaponIdAtRequest = getDisplayedActiveWeaponId\(\);/);
+  assert.match(block, /const weaponRequirementReason = getAbilityWeaponRequirementReason\(action, selectedWeaponIdAtRequest\);/);
+  assert.match(block, /error: "WEAPON_REQUIREMENT_NOT_MET"/);
+  assert.match(block, /selectedWeaponId: selectedWeaponIdAtRequest,/);
+});
+
 function fullPayload(overrides = {}) {
   return buildDirectedAbilityExecutionPayload({
     sourceCharacterId: "char-1",
@@ -291,13 +300,13 @@ test("25. execution payload never includes ammo/magazine/fire-mode fields", () =
 
 /* ── Success handling (26-32) ─────────────────────────────────────────── */
 
-test("26/27/28. a successful result applies the authoritative runtime via refetchCurrent() (Skills Block cooldown/PSI) AND sessionController.refresh() (Player Block MAIN) — the SAME two calls the other execution classes already make", () => {
+test("26/27/28. a successful result refreshes combat session + selected runtime through the current shared helpers", () => {
   const idx = controllerSrc.indexOf('command?.type === "execute-directed-ability"');
   const block = controllerSrc.slice(idx, controllerSrc.indexOf("// Basic Weapon Attack v1", idx));
   const okIdx = block.indexOf("if (outcome.ok) {");
-  const refetchIdx = block.indexOf("await refetchCurrent();", okIdx);
-  assert.ok(okIdx > -1 && refetchIdx > okIdx);
-  assert.match(block, /if \(sessionController\) void sessionController\.refresh\(\);/);
+  const runtimeRefreshIdx = block.indexOf('await refreshSelectedCharacterRuntime("directed-ability-success"', okIdx);
+  assert.ok(okIdx > -1 && runtimeRefreshIdx > okIdx);
+  assert.match(block, /await refreshCombatSessionSafe\(sessionController, "directed-ability"\);/);
 });
 
 test("29. Combat Log receives a readable directed-ability summary via buildDirectedAbilityLogEntry — never raw JSON, includes the target's name", () => {
@@ -367,10 +376,10 @@ test("38. a stale version response never overwrites newer runtime — isDirected
 
 /* ── no migration for this phase ──────────────────────────────────────── */
 
-test("no migration file was created for this phase — combat_execute_action/use_ability already support intent.target_character_id", () => {
-  const migrationsDir = path.join(repoRoot, "supabase");
-  const files = fs.readdirSync(migrationsDir).filter((f) => /^10[3-9]_|^1[1-9][0-9]_/.test(f));
-  assert.equal(files.length, 0, `expected no new migration 103+ file, found: ${files.join(", ")}`);
+test("combat_execute_action remains the single directed ability execution path", () => {
+  const payloadSrc = read("hud", "combat", "directedAbilityPayload.js");
+  assert.match(payloadSrc, /kind:\s*"ability"/);
+  assert.match(controllerSrc, /resolveDirectedAbilityExecution\(ctx, \{ executeAction: \(payload\) => executeAction\(payload, settings\) \}\)/);
 });
 
 setTimeout(() => {

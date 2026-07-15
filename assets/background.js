@@ -9390,6 +9390,25 @@ function setupSceneSelection(hooks = {}) {
   function normalizeOutcomeCode(result) {
     return String(result?.code ?? result?.error ?? "").trim() || null;
   }
+  function getDisplayedActiveWeaponId() {
+    return String(
+      lastPayload?.hudSnapshot?.weapon?.primary?.id ?? ephemeral.selectedWeaponId ?? ""
+    ).trim() || null;
+  }
+  function getAbilityWeaponRequirementReason(action, selectedWeaponId = getDisplayedActiveWeaponId()) {
+    const requirements = action?.requirements && typeof action.requirements === "object" ? action.requirements : {};
+    const sourceWeaponId = String(
+      action?.sourceCharacterWeaponId ?? requirements.weaponId ?? ""
+    ).trim() || null;
+    if (!sourceWeaponId || requirements.requiresSelectedSource !== true) {
+      return null;
+    }
+    const currentWeaponId = String(selectedWeaponId ?? "").trim() || null;
+    if (currentWeaponId === sourceWeaponId) {
+      return null;
+    }
+    return action?.state?.disabledReason || requirements.conditionSummary || (action?.sourceLabel ? `Select ${action.sourceLabel}.` : "Select the required weapon.");
+  }
   function buildCombatActionKey(characterId, actionId, fallbackType = "ability") {
     const normalizedCharacterId = String(characterId ?? "").trim();
     if (!normalizedCharacterId) return null;
@@ -11408,6 +11427,24 @@ function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
+        const selectedWeaponIdAtRequest = getDisplayedActiveWeaponId();
+        const weaponRequirementReason = getAbilityWeaponRequirementReason(action, selectedWeaponIdAtRequest);
+        if (weaponRequirementReason) {
+          ephemeral.commandStatus = { type: "error", message: weaponRequirementReason };
+          ephemeral.instantAbilityExecutionResult = {
+            ok: false,
+            error: "WEAPON_REQUIREMENT_NOT_MET",
+            message: weaponRequirementReason
+          };
+          logDebugEvent("abilities", "ability-execute-blocked", {
+            characterActionId: actionId,
+            reason: weaponRequirementReason,
+            selectedCharacterWeaponId: selectedWeaponIdAtRequest,
+            requiredCharacterWeaponId: action.sourceCharacterWeaponId ?? action.requirements?.weaponId ?? null
+          }, false);
+          if (lastState) publishState(lastState);
+          return;
+        }
         const sessionGate = sessionAttackGate(sessionAtRequest);
         if (sessionGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
@@ -11421,7 +11458,7 @@ function setupSceneSelection(hooks = {}) {
         const ctx = {
           sourceCharacterId: evalCtx.sourceCharacterId,
           abilityId: actionId,
-          selectedWeaponId: ephemeral.selectedWeaponId ?? null,
+          selectedWeaponId: selectedWeaponIdAtRequest,
           encounterId: sessionAtRequest.id ?? "",
           actorPlayerId: viewer?.playerId ?? null,
           actorIsGm: String(viewer?.role ?? "").toUpperCase() === "GM",
@@ -11577,6 +11614,24 @@ function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
+        const selectedWeaponIdAtRequest = getDisplayedActiveWeaponId();
+        const weaponRequirementReason = getAbilityWeaponRequirementReason(action, selectedWeaponIdAtRequest);
+        if (weaponRequirementReason) {
+          ephemeral.commandStatus = { type: "error", message: weaponRequirementReason };
+          ephemeral.directedAbilityExecutionResult = {
+            ok: false,
+            error: "WEAPON_REQUIREMENT_NOT_MET",
+            message: weaponRequirementReason
+          };
+          logDebugEvent("abilities", "directed-ability-blocked", {
+            characterActionId: actionId,
+            reason: weaponRequirementReason,
+            selectedCharacterWeaponId: selectedWeaponIdAtRequest,
+            requiredCharacterWeaponId: action.sourceCharacterWeaponId ?? action.requirements?.weaponId ?? null
+          }, false);
+          if (lastState) publishState(lastState);
+          return;
+        }
         const sessionGate = sessionAttackGate(sessionAtRequest);
         if (sessionGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
@@ -11590,7 +11645,7 @@ function setupSceneSelection(hooks = {}) {
         const ctx = {
           sourceCharacterId: evalCtx.sourceCharacterId,
           abilityId: actionId,
-          selectedWeaponId: ephemeral.selectedWeaponId ?? null,
+          selectedWeaponId: selectedWeaponIdAtRequest,
           targetCharacterId: evalCtx.targetCharacterId,
           encounterId: sessionAtRequest.id ?? "",
           actorPlayerId: viewer?.playerId ?? null,
