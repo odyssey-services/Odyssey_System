@@ -1018,6 +1018,14 @@ export function setupSceneSelection(hooks = {}) {
                 { character_id: characterId, sections: HUD_LIGHT_RUNTIME_SECTIONS },
                 settings,
               );
+              if (isWeaponHeavyCacheStale(characterId, encounterId)) {
+                await refreshHeavyCharacterData(characterId, {
+                  reason: `${reason}:hydrate-heavy-before-ready`,
+                  encounterId,
+                  armory: true,
+                  inventory: true,
+                });
+              }
               return hydrateBundleWithHeavyCache(bundle, characterId);
             } catch (error) {
               const normalized = normalizeRpcError(error);

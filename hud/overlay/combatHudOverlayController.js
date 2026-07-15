@@ -21,6 +21,7 @@ import {
   BC_HUD_COMMAND,
   BC_HUD_UI_STATE,
   BC_HUD_SELECTION,
+  BC_HUD_MODULE_PATCH,
   BC_HUD_TARGETING_COMMAND,
   DEFAULT_HUD_UI_STATE,
   normalizeHudUiState,
@@ -34,6 +35,7 @@ import { setupSceneSelection } from "../scene/sceneSelectionController.js";
 import { setupTargetSelection } from "../targeting/targetSelectionController.js";
 import { setupTargetingVisuals } from "../targeting/visuals/targetingVisualController.js";
 import { SELECTION_STATUS } from "../scene/selectionState.js";
+import { mergeModulePatchIntoSelectionPayload, normalizeModulePatchPayload } from "../scene/selectionState.js";
 import { selectVisibleReserveMagazines } from "../core/combatHudSelectors.js";
 import {
   moduleShouldBeOpen as computeModuleShouldBeOpen,
@@ -175,6 +177,13 @@ function writeCompanionSelectionSeed(moduleId) {
       JSON.stringify(lastSelectionPayload),
     );
   } catch (_e) { /* best effort */ }
+}
+
+function isPatchForCurrentSelection(patchPayload, selectionPayload) {
+  const patchCharacterId = String(patchPayload?.characterId ?? "").trim();
+  const currentCharacterId = String(selectionPayload?.characterId ?? "").trim();
+  if (!patchCharacterId || !currentCharacterId) return true;
+  return patchCharacterId === currentCharacterId;
 }
 
 function paramsForRect(rect) {
@@ -727,6 +736,13 @@ export function setupCombatHudOverlay() {
           }
           await applyMode(isCollapsed() ? "collapsed" : "controlled-reopen");
         }
+      }));
+
+      cleanups.push(OBR.broadcast.onMessage(BC_HUD_MODULE_PATCH, (event) => {
+        const patchPayload = normalizeModulePatchPayload(event?.data ?? null);
+        if (!patchPayload || !lastSelectionPayload) return;
+        if (!isPatchForCurrentSelection(patchPayload, lastSelectionPayload)) return;
+        lastSelectionPayload = mergeModulePatchIntoSelectionPayload(lastSelectionPayload, patchPayload);
       }));
 
       // Transient module commands that affect companion-popover lifecycle.

@@ -219,6 +219,12 @@ test("weapon companion selector can render from a fresh open-time seed before li
   assert.ok(overlaySrc.includes("readCompanionSelectionSeed(moduleParam)"));
 });
 
+test("overlay controller keeps lastSelectionPayload fresh from module patches", () => {
+  assert.ok(controllerSrc.includes("BC_HUD_MODULE_PATCH"));
+  assert.ok(controllerSrc.includes("normalizeModulePatchPayload(event?.data ?? null)"));
+  assert.ok(controllerSrc.includes("mergeModulePatchIntoSelectionPayload(lastSelectionPayload, patchPayload)"));
+});
+
 test("patch before base selection requests replay instead of synthesizing fake selector state", () => {
   assert.ok(overlaySrc.includes("cause: \"missing-base-selection\""));
   assert.ok(overlaySrc.includes("reason: \"companion-missing-base-selection\""));

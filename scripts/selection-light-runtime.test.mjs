@@ -89,6 +89,13 @@ test("armory failure does not make selection unavailable in staged runtime flow"
   assert.ok(sceneControllerSrc.includes("refreshHeavyCharacterData("));
 });
 
+test("light runtime hydrates heavy weapon data before the first ready payload when cache is stale", () => {
+  assert.ok(sceneControllerSrc.includes("if (isWeaponHeavyCacheStale(characterId, encounterId)) {"));
+  assert.ok(sceneControllerSrc.includes("reason: `${reason}:hydrate-heavy-before-ready`"));
+  assert.ok(sceneControllerSrc.includes("armory: true"));
+  assert.ok(sceneControllerSrc.includes("inventory: true"));
+});
+
 test("runtime-only refresh rehydrates heavy armory cache before replacing the ready bundle", () => {
   assert.ok(sceneControllerSrc.includes("const hydratedRuntimeBundle = hydrateBundleWithHeavyCache(runtimeBundle, characterId);"));
   assert.ok(sceneControllerSrc.includes("runtimeBundle: hydratedRuntimeBundle"));
