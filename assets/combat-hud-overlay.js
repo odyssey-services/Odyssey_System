@@ -8514,14 +8514,25 @@ function mountCombatHudModule(options) {
     if (!liveSelection) {
       return { applied: false, rendered: false, ignoredReason: "no-live-selection", nextSelection: liveSelection };
     }
+    const previousSelection = liveSelection;
     const nextSelection = mergeModulePatchIntoSelectionPayload(liveSelection, patchPayload);
     if (!nextSelection) {
       return { applied: false, rendered: false, ignoredReason: "invalid-patch", nextSelection: liveSelection };
     }
-    liveSelection = nextSelection;
-    logLiveDebug(liveSelection);
     const scope = String(patchPayload?.scope ?? "").trim();
     const shouldRender = shouldRenderModuleForPatch(moduleId, scope);
+    if (!shouldRender) {
+      const nextStatus = nextSelection?.ui?.commandStatus ?? null;
+      const nextSource = String(nextStatus?.source ?? "").trim();
+      if (nextSource === "weapon_overlay") {
+        nextSelection.ui = {
+          ...nextSelection.ui && typeof nextSelection.ui === "object" ? nextSelection.ui : {},
+          commandStatus: previousSelection?.ui?.commandStatus ?? null
+        };
+      }
+    }
+    liveSelection = nextSelection;
+    logLiveDebug(liveSelection);
     if (shouldRender) {
       render();
       maybeShowCommandStatusToast();

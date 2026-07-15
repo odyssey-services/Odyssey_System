@@ -199,19 +199,23 @@ test("companion selector requests force replay on mount instead of empty selecti
   assert.ok(overlaySrc.includes("forceReplay: true"));
 });
 
-test("controller fast-replays the last ready payload when a companion selector opens", () => {
+test("controller fast-replays the last ready payload only for non-weapon companion selectors", () => {
   assert.ok(controllerSrc.includes("companion-fast-replay"));
-  assert.ok(controllerSrc.includes("weapon-selector-opened"));
   assert.ok(controllerSrc.includes("magazine-selector-opened"));
   assert.ok(controllerSrc.includes("fire-mode-selector-opened"));
   assert.ok(controllerSrc.includes("BC_HUD_SELECTION"));
 });
 
-test("controller seeds companion selection through localStorage before opening the selector", () => {
+test("controller seeds companion selection through localStorage for weapon open but without fast replay", () => {
   assert.ok(controllerSrc.includes("COMPANION_SELECTION_SEED_KEY"));
   assert.ok(controllerSrc.includes("writeCompanionSelectionSeed(\"gun-weapon-selector\")"));
   assert.ok(controllerSrc.includes("writeCompanionSelectionSeed(\"gun-magazine-selector\")"));
   assert.ok(controllerSrc.includes("writeCompanionSelectionSeed(\"gun-fire-mode-selector\")"));
+  assert.ok(overlaySrc.includes("readCompanionSelectionSeed(moduleParam)"));
+  assert.ok(!controllerSrc.includes('replaySelectionToCompanion("gun-weapon-selector", "weapon-selector-opened")'));
+});
+
+test("weapon companion selector can render from a fresh open-time seed before live replay arrives", () => {
   assert.ok(overlaySrc.includes("readCompanionSelectionSeed(moduleParam)"));
 });
 

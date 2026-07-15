@@ -281,9 +281,9 @@ test("ready selection preserves an already-restored selectedWeaponId instead of 
   assert.ok(sceneControllerSrc.includes("if (ephemeral.selectedWeaponId) selectedWeaponMemory.set(nextCharacterId, ephemeral.selectedWeaponId);"));
 });
 
-test("opening the weapon selector preserves the currently displayed weapon when no explicit selectedWeaponId exists yet", () => {
+test("opening the weapon selector always re-syncs selectedWeaponId to the currently displayed weapon", () => {
   assert.ok(sceneControllerSrc.includes('const currentlyDisplayedWeaponId = String(lastPayload?.hudSnapshot?.weapon?.primary?.id ?? "").trim() || null;'));
-  assert.ok(sceneControllerSrc.includes('if (ephemeral.weaponSelectorOpen && !String(ephemeral.selectedWeaponId ?? "").trim() && currentlyDisplayedWeaponId) {'));
+  assert.ok(sceneControllerSrc.includes('if (ephemeral.weaponSelectorOpen && currentlyDisplayedWeaponId) {'));
   assert.ok(sceneControllerSrc.includes("ephemeral.selectedWeaponId = currentlyDisplayedWeaponId;"));
 });
 

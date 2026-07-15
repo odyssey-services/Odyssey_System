@@ -312,7 +312,6 @@ async function setGunWeaponSelectorOpen(open) {
           url: pageUrl("gun-weapon-selector"),
           ...paramsForRect(rect),
         });
-        await replaySelectionToCompanion("gun-weapon-selector", "weapon-selector-opened");
       } catch (_e) { /* best effort */ }
     }
   } else {
