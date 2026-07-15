@@ -331,6 +331,24 @@ test("25b. out-of-combat directed payload falls back to direct use_ability shape
   assert.ok(!("intent" in payload));
 });
 
+test("25c. normalized directed ability results preserve server timings from nested or direct RPC payloads", () => {
+  const nested = normalizeDirectedAbilityResult({
+    ok: true,
+    result: {
+      timings_ms: { apply_effect: 21, total: 101 },
+      resource: { spent: 2 },
+    },
+  });
+  assert.deepEqual(nested.timingsMs, { apply_effect: 21, total: 101 });
+
+  const direct = normalizeDirectedAbilityResult({
+    ok: true,
+    timings_ms: { total: 64 },
+    resource: { spent: 2 },
+  });
+  assert.deepEqual(direct.timingsMs, { total: 64 });
+});
+
 /* ── Success handling (26-32) ─────────────────────────────────────────── */
 
 test("26/27/28. a successful result refreshes combat session + selected runtime through the current shared helpers", () => {
@@ -370,6 +388,8 @@ test("30. Debug Console receives structured directed-ability trace events, inclu
   const idx = controllerSrc.indexOf('command?.type === "execute-directed-ability"');
   const block = controllerSrc.slice(idx, controllerSrc.indexOf("// Basic Weapon Attack v1", idx));
   assert.match(block, /targetCharacterId: requestCtx\.targetCharacterId,\s*\n\s*targetTokenId: evalCtx\.targetTokenId,/);
+  assert.match(block, /timingsMs: outcome\?\.normalized\?\.timingsMs \?\? outcome\?\.raw\?\.timings_ms \?\? null,/);
+  assert.match(block, /totalMs: outcome\?\.normalized\?\.timingsMs\?\.total \?\? outcome\?\.raw\?\.timings_ms\?\.total \?\? null,/);
 });
 
 test("31/32. the selected target and static target ring are never cleared/reassigned by this handler — no ephemeral.targeting reassignment, no clear-target command, anywhere in the block; only a best-effort refreshBodyZones broadcast is sent on success", () => {

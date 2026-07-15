@@ -59496,6 +59496,9 @@ declare
   v_message text := '';
   v_source_character_weapon_id uuid := null;
   v_include_combat_state boolean := coalesce(nullif(trim(coalesce(p_payload->>'include_combat_state', '')), '')::boolean, true);
+  v_started_at timestamptz := clock_timestamp();
+  v_stage_started_at timestamptz := clock_timestamp();
+  v_timings_ms jsonb := '{}'::jsonb;
 begin
   if v_character_ability_id is null then
     if v_character_id is null or v_ability_code = '' then
@@ -59550,6 +59553,11 @@ begin
 
   v_character_id := v_ability.character_id;
   v_source_character_weapon_id := v_ability.source_character_weapon_id;
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'resolve_character_ability',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
   v_effective_level := public.odyssey_get_character_ability_effective_level(v_character_ability_id);
 
   select *
@@ -59568,6 +59576,12 @@ begin
       'effective_level', v_effective_level
     );
   end if;
+
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'load_ability_level',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
 
   v_merged_ability_data :=
     coalesce(v_ability.def_data, '{}'::jsonb)
@@ -59611,8 +59625,19 @@ begin
   end if;
 
   v_resource_result := public.odyssey_consume_character_ability_cost(v_character_ability_id);
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'consume_ability_cost',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
   if coalesce((v_resource_result->>'ok')::boolean, false) = false then
-    return v_resource_result;
+    return v_resource_result || jsonb_build_object(
+      'timings_ms',
+      v_timings_ms || jsonb_build_object(
+        'total',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+      )
+    );
   end if;
 
   if coalesce(v_level.cooldown_rounds, 0) > 0 then
@@ -59620,6 +59645,12 @@ begin
     set current_cooldown_rounds = v_level.cooldown_rounds
     where id = v_character_ability_id;
   end if;
+
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'set_cooldown',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
 
   v_effect_context := jsonb_strip_nulls(
     jsonb_build_object(
@@ -59707,7 +59738,17 @@ begin
         );
 
         if coalesce((v_effect_result->>'ok')::boolean, false) = false then
-          return v_effect_result;
+          v_timings_ms := v_timings_ms || jsonb_build_object(
+            'apply_effect',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+          );
+          return v_effect_result || jsonb_build_object(
+            'timings_ms',
+            v_timings_ms || jsonb_build_object(
+              'total',
+              greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+            )
+          );
         end if;
 
         v_refresh := coalesce(v_effect_result->'combat_state', v_refresh);
@@ -59769,7 +59810,17 @@ begin
       );
 
       if coalesce((v_effect_result->>'ok')::boolean, false) = false then
-        return v_effect_result;
+        v_timings_ms := v_timings_ms || jsonb_build_object(
+          'apply_effect',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+        );
+        return v_effect_result || jsonb_build_object(
+          'timings_ms',
+          v_timings_ms || jsonb_build_object(
+            'total',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+          )
+        );
       end if;
 
       v_refresh := coalesce(v_effect_result->'combat_state', '{}'::jsonb);
@@ -59783,6 +59834,11 @@ begin
         'combat_state', v_refresh
       );
     end if;
+    v_timings_ms := v_timings_ms || jsonb_build_object(
+      'apply_effect',
+      greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+    );
+    v_stage_started_at := clock_timestamp();
   elsif v_ability.effect_mode = 'grant_special' then
     select
       b.id,
@@ -59826,6 +59882,11 @@ begin
       'special', public.odyssey_get_character_body_part_state(v_target_part.id),
       'combat_state', v_refresh
     );
+    v_timings_ms := v_timings_ms || jsonb_build_object(
+      'grant_special',
+      greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+    );
+    v_stage_started_at := clock_timestamp();
   else
     if v_include_combat_state then
       v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_target_character_id)->'combat_state', '{}'::jsonb);
@@ -59835,6 +59896,11 @@ begin
       'narrative_only', true,
       'combat_state', v_refresh
     );
+    v_timings_ms := v_timings_ms || jsonb_build_object(
+      'narrative_refresh',
+      greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+    );
+    v_stage_started_at := clock_timestamp();
   end if;
 
   v_message := format(
@@ -59898,7 +59964,18 @@ begin
   )
   returning id into v_log_id;
 
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'combat_log_insert',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
+
   perform public.odyssey_trim_combat_log(v_encounter_id, coalesce((select c.room_id from public.odyssey_characters c where c.id = v_character_id), ''));
+
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'combat_log_trim',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
 
   return jsonb_build_object(
     'ok', true,
@@ -59920,7 +59997,12 @@ begin
     'resource', v_resource_result,
     'result', v_effect_result,
     'combat_state', v_refresh,
-    'log_id', v_log_id
+    'log_id', v_log_id,
+    'timings_ms',
+      v_timings_ms || jsonb_build_object(
+        'total',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+      )
   );
 end;
 $$;
@@ -66949,6 +67031,9 @@ declare
   v_feature_code text := '';
   v_stage text := 'resolve_character_ability';
   v_include_combat_state boolean := coalesce(nullif(trim(coalesce(v_payload->>'include_combat_state', '')), '')::boolean, true);
+  v_started_at timestamptz := clock_timestamp();
+  v_stage_started_at timestamptz := clock_timestamp();
+  v_timings_ms jsonb := '{}'::jsonb;
 begin
   perform set_config('lock_timeout', '1500ms', true);
 
@@ -66972,12 +67057,29 @@ begin
     limit 1;
   end if;
 
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'resolve_character_ability',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
+
   v_source_validation := public.odyssey_validate_character_ability_source(
     v_character_ability_id,
     v_selected_character_weapon_id
   );
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'validate_ability_source',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
   if coalesce((v_source_validation->>'ok')::boolean, false) = false then
-    return v_source_validation;
+    return v_source_validation || jsonb_build_object(
+      'timings_ms',
+      v_timings_ms || jsonb_build_object(
+        'total',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+      )
+    );
   end if;
 
   v_stage := 'lock_character_ability';
@@ -67008,6 +67110,12 @@ begin
     );
   end if;
 
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'lock_character_ability',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
+
   if v_ability.effect_mode <> 'activate_weapon_feature' then
     v_stage := 'delegate_legacy';
     return public.odyssey_use_ability_with_weapon_support_legacy(v_payload);
@@ -67031,6 +67139,12 @@ begin
       'effective_level', v_effective_level
     );
   end if;
+
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'load_ability_level',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
 
   v_merged_ability_data := public.odyssey_merge_runtime_data(
     public.odyssey_merge_runtime_data(
@@ -67056,8 +67170,19 @@ begin
 
   v_stage := 'consume_ability_cost';
   v_resource_result := public.odyssey_consume_character_ability_cost(v_character_ability_id);
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'consume_ability_cost',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
   if coalesce((v_resource_result->>'ok')::boolean, false) = false then
-    return v_resource_result;
+    return v_resource_result || jsonb_build_object(
+      'timings_ms',
+      v_timings_ms || jsonb_build_object(
+        'total',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+      )
+    );
   end if;
 
   if coalesce(v_level.cooldown_rounds, 0) > 0 then
@@ -67067,6 +67192,12 @@ begin
     where id = v_character_ability_id;
   end if;
 
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'set_cooldown',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
+
   v_stage := 'activate_weapon_feature';
   v_activation_result := public.activate_weapon_feature(
     jsonb_build_object(
@@ -67075,14 +67206,31 @@ begin
     )
   );
 
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'activate_weapon_feature',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
+  v_stage_started_at := clock_timestamp();
+
   if coalesce((v_activation_result->>'ok')::boolean, false) = false then
-    return v_activation_result;
+    return v_activation_result || jsonb_build_object(
+      'timings_ms',
+      v_timings_ms || jsonb_build_object(
+        'total',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+      )
+    );
   end if;
 
   if v_include_combat_state then
     v_stage := 'refresh_character_combat_state';
     v_refresh := coalesce(public.odyssey_refresh_character_combat_state(v_ability.character_id)->'combat_state', '{}'::jsonb);
   end if;
+
+  v_timings_ms := v_timings_ms || jsonb_build_object(
+    'refresh_character_combat_state',
+    greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer)
+  );
 
   return jsonb_build_object(
     'ok', true,
@@ -67101,7 +67249,12 @@ begin
     'resource', v_resource_result,
     'result', jsonb_build_object('weapon_feature', v_activation_result),
     'combat_state', v_refresh,
-    'message', format('%s activated.', v_ability.ability_name)
+    'message', format('%s activated.', v_ability.ability_name),
+    'timings_ms',
+      v_timings_ms || jsonb_build_object(
+        'total',
+        greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+      )
   );
 exception
   when lock_not_available then
@@ -67109,7 +67262,14 @@ exception
       'ok', false,
       'error', 'ACTION_BUSY_RETRY',
       'message', 'Character state is busy. Please retry.',
-      'stage', v_stage
+      'stage', v_stage,
+      'timings_ms',
+        v_timings_ms || jsonb_build_object(
+          v_stage,
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+          'total',
+          greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+        )
     );
   when query_canceled then
     if SQLERRM ilike '%statement timeout%' or SQLERRM ilike '%lock timeout%' then
@@ -67117,7 +67277,14 @@ exception
         'ok', false,
         'error', 'ACTION_BUSY_RETRY',
         'message', 'Character state is busy. Please retry.',
-        'stage', v_stage
+        'stage', v_stage,
+        'timings_ms',
+          v_timings_ms || jsonb_build_object(
+            v_stage,
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_stage_started_at) * 1000)::integer),
+            'total',
+            greatest(0, floor(extract(epoch from clock_timestamp() - v_started_at) * 1000)::integer)
+          )
       );
     end if;
     raise;

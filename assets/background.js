@@ -5693,6 +5693,9 @@ function normalizeInstantAbilityResult(raw) {
   const result = nestedResult && Object.keys(nestedResult).length > 0 ? nestedResult : r;
   const ability = asObject(result.ability);
   const resource = asObject(result.resource);
+  const resultTimings = asObject(result.timings_ms);
+  const rawTimings = asObject(r.timings_ms);
+  const timingsMs = Object.keys(resultTimings).length > 0 ? resultTimings : Object.keys(rawTimings).length > 0 ? rawTimings : null;
   return {
     ok: r.ok !== false,
     actionCost: spent.action_cost ?? null,
@@ -5705,7 +5708,8 @@ function normalizeInstantAbilityResult(raw) {
     resourceRemaining: resource.remaining ?? resource.current_value ?? null,
     narrativeOnly: result.result?.narrative_only === true,
     encounterStateVersion: r.encounter_state_version ?? null,
-    characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null
+    characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null,
+    timingsMs
   };
 }
 async function resolveInstantAbilityExecution(ctx, deps) {
@@ -5816,6 +5820,9 @@ function normalizeDirectedAbilityResult(raw) {
   const result = nestedResult && Object.keys(nestedResult).length > 0 ? nestedResult : r;
   const ability = asObject2(result.ability);
   const resource = asObject2(result.resource);
+  const resultTimings = asObject2(result.timings_ms);
+  const rawTimings = asObject2(r.timings_ms);
+  const timingsMs = Object.keys(resultTimings).length > 0 ? resultTimings : Object.keys(rawTimings).length > 0 ? rawTimings : null;
   return {
     ok: r.ok !== false,
     actionCost: spent.action_cost ?? null,
@@ -5829,7 +5836,8 @@ function normalizeDirectedAbilityResult(raw) {
     resourceRemaining: resource.remaining ?? resource.current_value ?? null,
     narrativeOnly: result.result?.narrative_only === true,
     encounterStateVersion: r.encounter_state_version ?? null,
-    characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null
+    characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null,
+    timingsMs
   };
 }
 async function resolveDirectedAbilityExecution(ctx, deps) {
@@ -11627,6 +11635,8 @@ function setupSceneSelection(hooks = {}) {
                 code: outcomeCode,
                 message: outcome.error ?? null,
                 stage: outcome?.raw?.stage ?? null,
+                timingsMs: outcome?.normalized?.timingsMs ?? outcome?.raw?.timings_ms ?? null,
+                totalMs: outcome?.normalized?.timingsMs?.total ?? outcome?.raw?.timings_ms?.total ?? null,
                 stale,
                 queueKey
               }, outcome.ok);
@@ -11836,6 +11846,8 @@ function setupSceneSelection(hooks = {}) {
               code: outcomeCode,
               message: outcome.error ?? null,
               stage: outcome?.raw?.stage ?? null,
+              timingsMs: outcome?.normalized?.timingsMs ?? outcome?.raw?.timings_ms ?? null,
+              totalMs: outcome?.normalized?.timingsMs?.total ?? outcome?.raw?.timings_ms?.total ?? null,
               stale,
               queueKey
             }, outcome.ok);

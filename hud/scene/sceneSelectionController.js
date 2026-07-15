@@ -2842,6 +2842,8 @@ export function setupSceneSelection(hooks = {}) {
                 code: outcomeCode,
                 message: outcome.error ?? null,
                 stage: outcome?.raw?.stage ?? null,
+                timingsMs: outcome?.normalized?.timingsMs ?? outcome?.raw?.timings_ms ?? null,
+                totalMs: outcome?.normalized?.timingsMs?.total ?? outcome?.raw?.timings_ms?.total ?? null,
                 stale,
                 queueKey,
               }, outcome.ok);
@@ -3077,6 +3079,8 @@ export function setupSceneSelection(hooks = {}) {
           code: outcomeCode,
           message: outcome.error ?? null,
           stage: outcome?.raw?.stage ?? null,
+          timingsMs: outcome?.normalized?.timingsMs ?? outcome?.raw?.timings_ms ?? null,
+          totalMs: outcome?.normalized?.timingsMs?.total ?? outcome?.raw?.timings_ms?.total ?? null,
           stale,
           queueKey,
         }, outcome.ok);

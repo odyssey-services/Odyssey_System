@@ -296,6 +296,24 @@ test("21b. out-of-combat instant payload falls back to direct use_ability shape 
   assert.ok(!("intent" in payload));
 });
 
+test("21c. normalized instant ability results preserve server timings from nested or direct RPC payloads", () => {
+  const nested = normalizeInstantAbilityResult({
+    ok: true,
+    result: {
+      timings_ms: { resolve_character_ability: 12, total: 84 },
+      resource: { spent: 1 },
+    },
+  });
+  assert.deepEqual(nested.timingsMs, { resolve_character_ability: 12, total: 84 });
+
+  const direct = normalizeInstantAbilityResult({
+    ok: true,
+    timings_ms: { total: 55 },
+    resource: { spent: 1 },
+  });
+  assert.deepEqual(direct.timingsMs, { total: 55 });
+});
+
 /* ── Success handling (22-28) ─────────────────────────────────────────── */
 
 test("22/23/24. a successful result refreshes combat session + selected runtime through the current shared helpers", () => {
@@ -330,6 +348,8 @@ test("26. Debug Console receives structured non-attack trace events: ability-exe
   ]) {
     assert.ok(controllerSrc.includes(evt), `missing Debug Console event ${evt}`);
   }
+  assert.match(controllerSrc, /timingsMs: outcome\?\.normalized\?\.timingsMs \?\? outcome\?\.raw\?\.timings_ms \?\? null,/);
+  assert.match(controllerSrc, /totalMs: outcome\?\.normalized\?\.timingsMs\?\.total \?\? outcome\?\.raw\?\.timings_ms\?\.total \?\? null,/);
 });
 
 test("27/28. the selected target and static target ring are never touched by this handler — no ephemeral.targeting reassignment, no clear-target command, anywhere in the block (this ability class has no target concept at all)", () => {

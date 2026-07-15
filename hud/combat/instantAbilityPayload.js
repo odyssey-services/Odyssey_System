@@ -79,6 +79,11 @@ export function normalizeInstantAbilityResult(raw) {
   const result = nestedResult && Object.keys(nestedResult).length > 0 ? nestedResult : r;
   const ability = asObject(result.ability);
   const resource = asObject(result.resource);
+  const resultTimings = asObject(result.timings_ms);
+  const rawTimings = asObject(r.timings_ms);
+  const timingsMs = Object.keys(resultTimings).length > 0
+    ? resultTimings
+    : (Object.keys(rawTimings).length > 0 ? rawTimings : null);
   return {
     ok: r.ok !== false,
     actionCost: spent.action_cost ?? null,
@@ -92,6 +97,7 @@ export function normalizeInstantAbilityResult(raw) {
     narrativeOnly: result.result?.narrative_only === true,
     encounterStateVersion: r.encounter_state_version ?? null,
     characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null,
+    timingsMs,
   };
 }
 
