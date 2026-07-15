@@ -121,6 +121,13 @@ export function setupSceneSelection(hooks = {}) {
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
   let publishCurrentStateSafe = () => null;
+  let context = null;
+  let settings = null;
+  let configured = false;
+  let viewer = null;
+  let sessionRuntime = null;
+  let abilitiesRuntime = null;
+  let quickbarController = null;
   const weaponHeavyPreloadKeys = new Map();
   let payloadRevision = 0;
   let weaponSwitchFlightToken = 0;
@@ -799,21 +806,22 @@ export function setupSceneSelection(hooks = {}) {
   }
 
   async function init() {
-    const [player, context, settings] = await Promise.all([
+    const [player, nextContext, nextSettings] = await Promise.all([
       getPlayerInfo(),
       getRoomSceneContext(),
       loadRoomSupabaseSettings(),
     ]);
     if (disposed) return;
 
-    let viewer = normalizeViewer({ playerId: player.id, role: player.role });
-    const configured = hasSupabaseSettings(settings);
+    context = nextContext;
+    settings = nextSettings;
+    viewer = normalizeViewer({ playerId: player.id, role: player.role });
+    configured = hasSupabaseSettings(settings);
 
     // Phase 3E.0: live combat-session layer. The session controller owns ALL
     // session fetching/commands; this controller only keeps the latest raw
     // runtime so buildBroadcastPayload can map it (via the single shared
     // mapper) into snapshot.combatSession on every publish.
-    let sessionRuntime = null;
     const sessionController = configured
       ? setupCombatSessionController({
           context,
@@ -871,8 +879,7 @@ export function setupSceneSelection(hooks = {}) {
     // controller only keeps the latest SAFE mapped runtime so buildBroadcastPayload
     // folds it into snapshot.quickbar for the Skills block. The editor iframe gets
     // the same runtime via the controller's own BC_HUD_ABILITIES broadcast.
-    let abilitiesRuntime = null;
-    const quickbarController = configured
+    quickbarController = configured
       ? setupQuickbarController({
           settings,
           getViewer: () => viewer,

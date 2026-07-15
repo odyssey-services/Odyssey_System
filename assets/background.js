@@ -4096,8 +4096,8 @@ function normalizeSupabaseSettings(raw) {
     apiKey: String(raw?.apiKey ?? raw?.anonKey ?? "").trim()
   };
 }
-function hasSupabaseSettings(settings2) {
-  const normalized = normalizeSupabaseSettings(settings2);
+function hasSupabaseSettings(settings) {
+  const normalized = normalizeSupabaseSettings(settings);
   return Boolean(normalized.url && normalized.apiKey);
 }
 function maskSupabaseApiKey(value) {
@@ -4111,8 +4111,8 @@ async function loadRoomSupabaseSettings() {
   const metadata = await getRoomMetadata();
   return normalizeSupabaseSettings(metadata?.[ROOM_SUPABASE_SETTINGS_KEY]);
 }
-async function saveRoomSupabaseSettings(settings2) {
-  const normalized = normalizeSupabaseSettings(settings2);
+async function saveRoomSupabaseSettings(settings) {
+  const normalized = normalizeSupabaseSettings(settings);
   await setRoomMetadata({
     [ROOM_SUPABASE_SETTINGS_KEY]: normalized
   });
@@ -4555,8 +4555,8 @@ function toRpcException(normalizedError) {
 }
 
 // bridge/supabaseBridge.js
-function getSupabaseSettingsOrThrow(settings2) {
-  const normalized = normalizeSupabaseSettings(settings2);
+function getSupabaseSettingsOrThrow(settings) {
+  const normalized = normalizeSupabaseSettings(settings);
   if (!normalized.url) {
     throw new Error("Supabase URL is not configured.");
   }
@@ -4618,12 +4618,12 @@ async function requestSupabase(path, options = {}) {
   const {
     method = "GET",
     body,
-    settings: settings2,
+    settings,
     headers = {},
     prefer = "return=representation",
     fallbackMessage = "Supabase request failed."
   } = options;
-  const { url, apiKey } = getSupabaseSettingsOrThrow(settings2);
+  const { url, apiKey } = getSupabaseSettingsOrThrow(settings);
   const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const requestInit = {
     method,
@@ -4665,35 +4665,35 @@ async function requestSupabase(path, options = {}) {
     throw toRpcException(normalized);
   }
 }
-async function callSupabaseRpc(functionName, payload, settings2) {
+async function callSupabaseRpc(functionName, payload, settings) {
   return requestSupabase(`rpc/${functionName}`, {
     method: "POST",
     body: payload ?? {},
-    settings: settings2,
+    settings,
     fallbackMessage: `Supabase RPC ${functionName} failed.`
   });
 }
-async function fetchSupabaseRows(path, settings2, fallbackMessage = "Supabase query failed.") {
+async function fetchSupabaseRows(path, settings, fallbackMessage = "Supabase query failed.") {
   return requestSupabase(path, {
     method: "GET",
-    settings: settings2,
+    settings,
     fallbackMessage
   });
 }
-async function mutateSupabaseRows(path, body, settings2, options = {}) {
+async function mutateSupabaseRows(path, body, settings, options = {}) {
   return requestSupabase(path, {
     method: options.method ?? "POST",
     body,
-    settings: settings2,
+    settings,
     prefer: options.prefer ?? "return=representation",
     fallbackMessage: options.fallbackMessage ?? "Supabase mutation failed.",
     headers: options.headers ?? {}
   });
 }
-async function testSupabaseConnection(settings2) {
+async function testSupabaseConnection(settings) {
   const rows = await fetchSupabaseRows(
     "odyssey_characters?select=id&limit=1",
-    settings2,
+    settings,
     "Unable to query Supabase connection test."
   );
   return {
@@ -4701,7 +4701,7 @@ async function testSupabaseConnection(settings2) {
     sampleRowCount: Array.isArray(rows) ? rows.length : 0
   };
 }
-async function fetchTokenLinks(roomIdOrPayload, sceneId = "", settings2) {
+async function fetchTokenLinks(roomIdOrPayload, sceneId = "", settings) {
   const payload = roomIdOrPayload && typeof roomIdOrPayload === "object" ? roomIdOrPayload : {
     room_id: String(roomIdOrPayload ?? "").trim(),
     scene_id: String(sceneId ?? "").trim()
@@ -4709,11 +4709,11 @@ async function fetchTokenLinks(roomIdOrPayload, sceneId = "", settings2) {
   const result = await callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.getSceneTokenLinks,
     payload,
-    settings2
+    settings
   );
   return Array.isArray(result?.links) ? result.links : [];
 }
-async function upsertTokenLinkRecord(payload, settings2) {
+async function upsertTokenLinkRecord(payload, settings) {
   const row = {
     campaign_id: String(payload?.campaign_id ?? "").trim(),
     room_id: String(payload?.room_id ?? "").trim(),
@@ -4729,7 +4729,7 @@ async function upsertTokenLinkRecord(payload, settings2) {
   const rows = await mutateSupabaseRows(
     "odyssey_token_links?on_conflict=room_id,scene_id,token_id",
     [row],
-    settings2,
+    settings,
     {
       prefer: "resolution=merge-duplicates,return=representation",
       fallbackMessage: "Unable to upsert token link in Supabase."
@@ -4737,7 +4737,7 @@ async function upsertTokenLinkRecord(payload, settings2) {
   );
   return Array.isArray(rows) ? rows[0] ?? null : rows;
 }
-async function deactivateTokenLinkRecord(roomId, sceneId, tokenId, settings2) {
+async function deactivateTokenLinkRecord(roomId, sceneId, tokenId, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.unbindTokenCharacter,
     {
@@ -4745,79 +4745,79 @@ async function deactivateTokenLinkRecord(roomId, sceneId, tokenId, settings2) {
       scene_id: String(sceneId ?? "").trim(),
       token_id: String(tokenId ?? "").trim()
     },
-    settings2
+    settings
   );
 }
 
 // api/characterPlacementApi.js
-function getCharacterSpawnCatalog(payload, settings2) {
+function getCharacterSpawnCatalog(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.getCharacterSpawnCatalog,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function getCharacterRuntimeBundle(payload, settings2) {
+function getCharacterRuntimeBundle(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.getCharacterRuntimeBundle,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function getSceneTokenLinks(payload, settings2) {
+function getSceneTokenLinks(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.getSceneTokenLinks,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function assignCharacterOwner(payload, settings2) {
+function assignCharacterOwner(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.assignCharacterOwner,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function clearCharacterOwner(payload, settings2) {
+function clearCharacterOwner(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.clearCharacterOwner,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function getCharacterQuickbar(payload, settings2) {
+function getCharacterQuickbar(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.getCharacterQuickbar,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function saveCharacterQuickbar(payload, settings2) {
+function saveCharacterQuickbar(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.saveCharacterQuickbar,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function loadCharacterToToken(payload, settings2) {
+function loadCharacterToToken(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.loadCharacterToToken,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function unbindTokenCharacter(payload, settings2) {
+function unbindTokenCharacter(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.unbindTokenCharacter,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function purgeActiveNpcs(payload, settings2) {
+function purgeActiveNpcs(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.purgeActiveNpcs,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
 
@@ -4836,7 +4836,7 @@ __export(weaponApi_exports, {
   unloadWeaponInternalRounds: () => unloadWeaponInternalRounds,
   unloadWeaponMagazine: () => unloadWeaponMagazine
 });
-function getCharacterArmory(characterId, settings2, encounterId = null) {
+function getCharacterArmory(characterId, settings, encounterId = null) {
   const normalizedEncounterId = String(encounterId ?? "").trim();
   if (normalizedEncounterId) {
     return callSupabaseRpc(
@@ -4845,33 +4845,33 @@ function getCharacterArmory(characterId, settings2, encounterId = null) {
         p_character_id: characterId,
         p_encounter_id: normalizedEncounterId
       },
-      settings2
+      settings
     );
   }
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterArmory,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function switchActiveWeapon(payload, settings2) {
+function switchActiveWeapon(payload, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.switchActiveWeapon,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function switchWeaponProfile(characterWeaponId, profileId, settings2) {
+function switchWeaponProfile(characterWeaponId, profileId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.switchWeaponProfile,
     {
       p_character_weapon_id: characterWeaponId,
       p_profile_id: profileId
     },
-    settings2
+    settings
   );
 }
-function switchWeaponFireMode(characterId, weaponId, fireModeId, settings2) {
+function switchWeaponFireMode(characterId, weaponId, fireModeId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.switchWeaponFireMode,
     {
@@ -4879,56 +4879,56 @@ function switchWeaponFireMode(characterId, weaponId, fireModeId, settings2) {
       p_weapon_id: weaponId,
       p_fire_mode_id: fireModeId
     },
-    settings2
+    settings
   );
 }
-function loadWeaponProfileMagazine(payload, settings2) {
+function loadWeaponProfileMagazine(payload, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.loadWeaponProfileMagazine,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function unloadWeaponMagazine(payload, settings2) {
+function unloadWeaponMagazine(payload, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.unloadWeaponMagazine,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function loadWeaponInternalRounds(payload, settings2) {
+function loadWeaponInternalRounds(payload, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.loadWeaponInternalRounds,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function unloadWeaponInternalRounds(payload, settings2) {
+function unloadWeaponInternalRounds(payload, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.unloadWeaponInternalRounds,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function activateWeaponFeature(payload, settings2) {
+function activateWeaponFeature(payload, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.activateWeaponFeature,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deactivateWeaponFeature(featureStateId, settings2) {
+function deactivateWeaponFeature(featureStateId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.deactivateWeaponFeature,
     { p_state_id: featureStateId },
-    settings2
+    settings
   );
 }
-function getCharacterWeaponFeatures(characterWeaponId, settings2) {
+function getCharacterWeaponFeatures(characterWeaponId, settings) {
   return callSupabaseRpc(
     WEAPON_RPC_NAMES.getCharacterWeaponFeatures,
     { p_character_weapon_id: characterWeaponId },
-    settings2
+    settings
   );
 }
 
@@ -4955,137 +4955,137 @@ __export(combatApi_exports, {
   startEncounter: () => startEncounter,
   syncPositionsFromOwlbear: () => syncPositionsFromOwlbear
 });
-function performAttack(payload, settings2) {
+function performAttack(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.performAttack,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function moveCharacter(payload, settings2) {
+function moveCharacter(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.moveCharacter,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function gmRepositionCharacter(payload, settings2) {
+function gmRepositionCharacter(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.gmRepositionCharacter,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function syncPositionsFromOwlbear(payload, settings2) {
+function syncPositionsFromOwlbear(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.syncPositionsFromOwlbear,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function startEncounter(payload, settings2) {
+function startEncounter(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.startEncounter,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function addParticipant(payload, settings2) {
+function addParticipant(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.addParticipant,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function removeParticipant(payload, settings2) {
+function removeParticipant(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.removeParticipant,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function reorderInitiative(payload, settings2) {
+function reorderInitiative(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.reorderInitiative,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function endTurn(payload, settings2) {
+function endTurn(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.endTurn,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function skipTurn(payload, settings2) {
+function skipTurn(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.skipTurn,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function forceNextTurn(payload, settings2) {
+function forceNextTurn(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.forceNextTurn,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function endEncounter(payload, settings2) {
+function endEncounter(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.endEncounter,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function getActiveRuntime(payload, settings2) {
+function getActiveRuntime(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.getActiveRuntime,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function markCharacterDead(payload, settings2) {
+function markCharacterDead(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.markCharacterDead,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function convertActionToMove(payload, settings2) {
+function convertActionToMove(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.convertActionToMove,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function spendMove(payload, settings2) {
+function spendMove(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.spendMove,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function executeAction(payload, settings2) {
+function executeAction(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.executeAction,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function getCombatLog(payload, settings2) {
+function getCombatLog(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.getCombatLog,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
-function grantReactionAction(payload, settings2) {
+function grantReactionAction(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.grantReactionAction,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
 
@@ -5103,21 +5103,21 @@ __export(inventoryApi_exports, {
   unloadRoundsFromMagazine: () => unloadRoundsFromMagazine,
   useCharacterItem: () => useCharacterItem
 });
-function getCharacterInventory(characterId, settings2) {
+function getCharacterInventory(characterId, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.getCharacterInventory,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function addCharacterItem(payload, settings2) {
+function addCharacterItem(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.addCharacterItem,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function removeCharacterItemQuantity(characterId, itemCode, quantity, settings2) {
+function removeCharacterItemQuantity(characterId, itemCode, quantity, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.removeCharacterItemQuantity,
     {
@@ -5125,62 +5125,62 @@ function removeCharacterItemQuantity(characterId, itemCode, quantity, settings2)
       p_item_code: itemCode,
       p_quantity: quantity
     },
-    settings2
+    settings
   );
 }
-function getCharacterItemQuantity(characterId, itemCode, settings2) {
+function getCharacterItemQuantity(characterId, itemCode, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.getCharacterItemQuantity,
     {
       p_character_id: characterId,
       p_item_code: itemCode
     },
-    settings2
+    settings
   );
 }
-function addCharacterAmmoStock(payload, settings2) {
+function addCharacterAmmoStock(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.addCharacterAmmoStock,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function removeCharacterAmmoStock(ammoStockId, quantity, settings2) {
+function removeCharacterAmmoStock(ammoStockId, quantity, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.removeCharacterAmmoStock,
     {
       p_ammo_stock_id: ammoStockId,
       p_quantity: quantity
     },
-    settings2
+    settings
   );
 }
-function loadRoundsToMagazine(payload, settings2) {
+function loadRoundsToMagazine(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.loadRoundsToMagazine,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function unloadRoundsFromMagazine(payload, settings2) {
+function unloadRoundsFromMagazine(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.unloadRoundsFromMagazine,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function useCharacterItem(payload, settings2) {
+function useCharacterItem(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.useCharacterItem,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function reloadInventoryResource(payload, settings2) {
+function reloadInventoryResource(payload, settings) {
   return callSupabaseRpc(
     INVENTORY_RPC_NAMES.reloadInventoryResource,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
 
@@ -6615,57 +6615,57 @@ function axialRound(q, r) {
   const cube = cubeRound({ x: q, y: -q - r, z: r });
   return { q: cube.x, r: cube.z };
 }
-function getSquareCellCenterAnchor(settings2) {
-  const gridDpi = Number(settings2?.gridDpi ?? 0) || 0;
+function getSquareCellCenterAnchor(settings) {
+  const gridDpi = Number(settings?.gridDpi ?? 0) || 0;
   return {
-    x: (Number(settings2.anchor?.x ?? 0) || 0) + gridDpi / 2,
-    y: (Number(settings2.anchor?.y ?? 0) || 0) + gridDpi / 2
+    x: (Number(settings.anchor?.x ?? 0) || 0) + gridDpi / 2,
+    y: (Number(settings.anchor?.y ?? 0) || 0) + gridDpi / 2
   };
 }
 function getSquareCellScenePosition(grid, cell) {
-  const settings2 = normalizeTacticalGridSettings(grid);
-  if (!settings2 || settings2.gridType !== "square" || !cell) {
+  const settings = normalizeTacticalGridSettings(grid);
+  if (!settings || settings.gridType !== "square" || !cell) {
     return null;
   }
   const q = Number(cell.q ?? cell.cell_q ?? 0) || 0;
   const r = Number(cell.r ?? cell.cell_r ?? 0) || 0;
-  const anchor = getSquareCellCenterAnchor(settings2);
+  const anchor = getSquareCellCenterAnchor(settings);
   return {
-    x: anchor.x + q * settings2.gridDpi,
-    y: anchor.y + r * settings2.gridDpi
+    x: anchor.x + q * settings.gridDpi,
+    y: anchor.y + r * settings.gridDpi
   };
 }
 function getSquareCellFromScenePosition(grid, position) {
-  const settings2 = normalizeTacticalGridSettings(grid);
-  if (!settings2 || settings2.gridType !== "square" || !position) {
+  const settings = normalizeTacticalGridSettings(grid);
+  if (!settings || settings.gridType !== "square" || !position) {
     return null;
   }
-  const anchor = getSquareCellCenterAnchor(settings2);
+  const anchor = getSquareCellCenterAnchor(settings);
   return {
     q: Math.round(
-      ((Number(position.x) || 0) - anchor.x) / settings2.gridDpi
+      ((Number(position.x) || 0) - anchor.x) / settings.gridDpi
     ),
     r: Math.round(
-      ((Number(position.y) || 0) - anchor.y) / settings2.gridDpi
+      ((Number(position.y) || 0) - anchor.y) / settings.gridDpi
     )
   };
 }
 function sceneToCell(grid, position) {
-  const settings2 = normalizeTacticalGridSettings(grid);
-  if (!settings2 || !position) return null;
-  if (settings2.gridType === "square") {
-    return getSquareCellFromScenePosition(settings2, position);
+  const settings = normalizeTacticalGridSettings(grid);
+  if (!settings || !position) return null;
+  if (settings.gridType === "square") {
+    return getSquareCellFromScenePosition(settings, position);
   }
-  const x = (Number(position.x) || 0) - settings2.anchor.x;
-  const y = (Number(position.y) || 0) - settings2.anchor.y;
-  if (settings2.gridType === "hex_vertical") {
-    const size = settings2.gridDpi / SQRT3;
+  const x = (Number(position.x) || 0) - settings.anchor.x;
+  const y = (Number(position.y) || 0) - settings.anchor.y;
+  if (settings.gridType === "hex_vertical") {
+    const size = settings.gridDpi / SQRT3;
     const q = (SQRT3 / 3 * x - 1 / 3 * y) / size;
     const r = 2 / 3 * y / size;
     return axialRound(q, r);
   }
-  if (settings2.gridType === "hex_horizontal") {
-    const size = settings2.gridDpi / SQRT3;
+  if (settings.gridType === "hex_horizontal") {
+    const size = settings.gridDpi / SQRT3;
     const q = 2 / 3 * x / size;
     const r = (-1 / 3 * x + SQRT3 / 3 * y) / size;
     return axialRound(q, r);
@@ -6673,25 +6673,25 @@ function sceneToCell(grid, position) {
   return null;
 }
 function cellToScene(grid, cell) {
-  const settings2 = normalizeTacticalGridSettings(grid);
-  if (!settings2 || !cell) return null;
+  const settings = normalizeTacticalGridSettings(grid);
+  if (!settings || !cell) return null;
   const q = Number(cell.q ?? cell.cell_q ?? 0) || 0;
   const r = Number(cell.r ?? cell.cell_r ?? 0) || 0;
-  if (settings2.gridType === "square") {
-    return getSquareCellScenePosition(settings2, { q, r });
+  if (settings.gridType === "square") {
+    return getSquareCellScenePosition(settings, { q, r });
   }
-  if (settings2.gridType === "hex_vertical") {
-    const size = settings2.gridDpi / SQRT3;
+  if (settings.gridType === "hex_vertical") {
+    const size = settings.gridDpi / SQRT3;
     return {
-      x: settings2.anchor.x + size * SQRT3 * (q + r / 2),
-      y: settings2.anchor.y + size * 1.5 * r
+      x: settings.anchor.x + size * SQRT3 * (q + r / 2),
+      y: settings.anchor.y + size * 1.5 * r
     };
   }
-  if (settings2.gridType === "hex_horizontal") {
-    const size = settings2.gridDpi / SQRT3;
+  if (settings.gridType === "hex_horizontal") {
+    const size = settings.gridDpi / SQRT3;
     return {
-      x: settings2.anchor.x + size * 1.5 * q,
-      y: settings2.anchor.y + size * SQRT3 * (r + q / 2)
+      x: settings.anchor.x + size * 1.5 * q,
+      y: settings.anchor.y + size * SQRT3 * (r + q / 2)
     };
   }
   return null;
@@ -6713,16 +6713,16 @@ function buildStraightSquarePath(fromCell, toCell) {
   return path;
 }
 function computeDistanceCells(grid, fromCell, toCell) {
-  const settings2 = normalizeTacticalGridSettings(grid);
-  if (!settings2 || !fromCell || !toCell) return 0;
+  const settings = normalizeTacticalGridSettings(grid);
+  if (!settings || !fromCell || !toCell) return 0;
   const fromQ = Number(fromCell.q ?? fromCell.cell_q ?? 0) || 0;
   const fromR = Number(fromCell.r ?? fromCell.cell_r ?? 0) || 0;
   const toQ = Number(toCell.q ?? toCell.cell_q ?? 0) || 0;
   const toR = Number(toCell.r ?? toCell.cell_r ?? 0) || 0;
   const dx = Math.abs(toQ - fromQ);
   const dy = Math.abs(toR - fromR);
-  if (settings2.gridType === "square") {
-    return settings2.distanceMode === "manhattan" ? dx + dy : Math.max(dx, dy);
+  if (settings.gridType === "square") {
+    return settings.distanceMode === "manhattan" ? dx + dy : Math.max(dx, dy);
   }
   return (dx + dy + Math.abs(toQ + toR - (fromQ + fromR))) / 2;
 }
@@ -6757,33 +6757,33 @@ async function buildOwlbearTacticalGridPayload() {
 }
 async function syncCombatScenePositions({
   combatApi,
-  settings: settings2,
+  settings,
   runtimeResponse = null,
   onlyCharacterId = ""
 }) {
   if (!combatApi?.syncPositionsFromOwlbear) {
     throw new Error("Combat sync API is unavailable.");
   }
-  const [context2, player] = await Promise.all([
+  const [context, player] = await Promise.all([
     getRoomSceneContext(),
     getPlayerInfo()
   ]);
   if (String(player?.role ?? "").toUpperCase() !== "GM") {
     throw new Error("Only the GM can sync tactical positions.");
   }
-  if (!context2?.campaignId || !context2?.roomId || !context2?.sceneId) {
+  if (!context?.campaignId || !context?.roomId || !context?.sceneId) {
     throw new Error("Unable to resolve Owlbear room or scene context.");
   }
   const runtimeRes = runtimeResponse ?? await combatApi.getActiveRuntime(
     {
-      campaign_id: context2.campaignId,
-      room_id: context2.roomId,
-      scene_id: context2.sceneId,
+      campaign_id: context.campaignId,
+      room_id: context.roomId,
+      scene_id: context.sceneId,
       actor_player_id: player?.id ?? "",
       actor_is_gm: true,
       include_hidden: true
     },
-    settings2
+    settings
   );
   if (!runtimeRes?.encounter?.id) {
     throw new Error("Unable to resolve the active encounter context.");
@@ -6824,15 +6824,15 @@ async function syncCombatScenePositions({
   const result = await combatApi.syncPositionsFromOwlbear(
     {
       encounter_id: runtimeRes.encounter.id,
-      campaign_id: context2.campaignId,
-      room_id: context2.roomId,
-      scene_id: context2.sceneId,
+      campaign_id: context.campaignId,
+      room_id: context.roomId,
+      scene_id: context.sceneId,
       actor_player_id: player?.id ?? "",
       actor_is_gm: true,
       ...gridPayload,
       positions
     },
-    settings2
+    settings
   );
   if (!result || result.ok === false) {
     throw new Error(result?.message || result?.error || "Unable to sync tactical positions.");
@@ -6846,37 +6846,37 @@ async function syncCombatScenePositions({
 }
 
 // hud/session/combatSessionApi.js
-function actorFields(context2, viewer) {
+function actorFields(context, viewer) {
   return {
-    campaign_id: context2?.campaignId ?? "",
-    room_id: context2?.roomId ?? "",
-    scene_id: context2?.sceneId ?? "",
+    campaign_id: context?.campaignId ?? "",
+    room_id: context?.roomId ?? "",
+    scene_id: context?.sceneId ?? "",
     actor_player_id: viewer?.playerId ?? "",
     actor_is_gm: String(viewer?.role ?? "").toUpperCase() === "GM"
   };
 }
-function fetchActiveSessionRuntime({ context: context2, viewer, settings: settings2 }) {
-  return getActiveRuntime(actorFields(context2, viewer), settings2);
+function fetchActiveSessionRuntime({ context, viewer, settings }) {
+  return getActiveRuntime(actorFields(context, viewer), settings);
 }
-function fetchSceneLinkCandidates({ context: context2, viewer, settings: settings2 }) {
+function fetchSceneLinkCandidates({ context, viewer, settings }) {
   return getSceneTokenLinks(
-    { ...actorFields(context2, viewer), include_inactive: false },
-    settings2
+    { ...actorFields(context, viewer), include_inactive: false },
+    settings
   );
 }
-function startSession({ context: context2, viewer, settings: settings2, excludedCharacterIds = [], hiddenTokenIds = [] }) {
+function startSession({ context, viewer, settings, excludedCharacterIds = [], hiddenTokenIds = [] }) {
   return startEncounter(
     {
-      ...actorFields(context2, viewer),
+      ...actorFields(context, viewer),
       excluded_character_ids: excludedCharacterIds,
       hidden_token_ids: hiddenTokenIds
     },
-    settings2
+    settings
   );
 }
-function mutationFields({ context: context2, viewer, sessionId, expectedVersion }) {
+function mutationFields({ context, viewer, sessionId, expectedVersion }) {
   return {
-    ...actorFields(context2, viewer),
+    ...actorFields(context, viewer),
     encounter_id: sessionId,
     ...Number.isFinite(Number(expectedVersion)) ? { expected_encounter_version: Number(expectedVersion) } : {}
   };
@@ -6895,7 +6895,7 @@ function endSession(args) {
 }
 
 // hud/session/combatSessionController.js
-function setupCombatSessionController({ context: context2, settings: settings2, getViewer, onSessionRuntime }) {
+function setupCombatSessionController({ context, settings, getViewer, onSessionRuntime }) {
   let disposed = false;
   let lastRuntime = null;
   let lastCandidates = [];
@@ -6986,10 +6986,10 @@ function setupCombatSessionController({ context: context2, settings: settings2, 
           getActiveRuntime,
           syncPositionsFromOwlbear
         },
-        settings: settings2,
+        settings,
         runtimeResponse: lastRuntime
       });
-      const runtime = syncResult?.result?.runtime ?? await fetchActiveSessionRuntime({ context: context2, viewer: viewer(), settings: settings2 });
+      const runtime = syncResult?.result?.runtime ?? await fetchActiveSessionRuntime({ context, viewer: viewer(), settings });
       if (runtime) {
         applyRuntime(runtime, { origin: `${origin}-tactical-sync` });
       }
@@ -7010,7 +7010,7 @@ function setupCombatSessionController({ context: context2, settings: settings2, 
   }
   async function refresh(origin = "refresh") {
     try {
-      const runtime = await fetchActiveSessionRuntime({ context: context2, viewer: viewer(), settings: settings2 });
+      const runtime = await fetchActiveSessionRuntime({ context, viewer: viewer(), settings });
       if (disposed) return;
       logDebugEvent("session", "refresh-result", { ok: runtime?.ok !== false, origin }, runtime?.ok !== false);
       applyRuntime(runtime, { origin });
@@ -7079,7 +7079,7 @@ function setupCombatSessionController({ context: context2, settings: settings2, 
     if (type === "load-start-candidates") {
       if (!canSeeGmTracker(viewer()?.role)) return;
       try {
-        const links = await fetchSceneLinkCandidates({ context: context2, viewer: viewer(), settings: settings2 });
+        const links = await fetchSceneLinkCandidates({ context, viewer: viewer(), settings });
         lastCandidates = buildStartCandidates(links?.links ?? links?.rows ?? (Array.isArray(links) ? links : []));
       } catch (_e) {
         lastCandidates = [];
@@ -7090,7 +7090,7 @@ function setupCombatSessionController({ context: context2, settings: settings2, 
     if (type === "end-turn") {
       const ref = currentSessionRef();
       if (!ref) return;
-      await runMutation("turn-ended", () => endSessionTurn({ context: context2, viewer: viewer(), settings: settings2, ...ref }), { sessionId: ref.sessionId });
+      await runMutation("turn-ended", () => endSessionTurn({ context, viewer: viewer(), settings, ...ref }), { sessionId: ref.sessionId });
       return;
     }
     if (type === "gm-skip-turn" || type === "gm-force-next") {
@@ -7098,7 +7098,7 @@ function setupCombatSessionController({ context: context2, settings: settings2, 
       const ref = currentSessionRef();
       if (!ref) return;
       const kind = type === "gm-skip-turn" ? "turn-skipped" : "turn-forced-next";
-      const call = type === "gm-skip-turn" ? () => gmSkipTurn({ context: context2, viewer: viewer(), settings: settings2, ...ref }) : () => gmForceNextTurn({ context: context2, viewer: viewer(), settings: settings2, ...ref });
+      const call = type === "gm-skip-turn" ? () => gmSkipTurn({ context, viewer: viewer(), settings, ...ref }) : () => gmForceNextTurn({ context, viewer: viewer(), settings, ...ref });
       await runMutation(kind, call, { sessionId: ref.sessionId });
       return;
     }
@@ -7108,7 +7108,7 @@ function setupCombatSessionController({ context: context2, settings: settings2, 
       logDebugEvent("session", "start-requested", { excludedCount: excluded.length });
       await runMutation(
         "start-result",
-        () => startSession({ context: context2, viewer: viewer(), settings: settings2, excludedCharacterIds: excluded })
+        () => startSession({ context, viewer: viewer(), settings, excludedCharacterIds: excluded })
       );
       await ensureTacticalRuntime("start-result");
       const session = mapCombatRuntimeToSession(lastRuntime, { viewerIsGm: true });
@@ -7125,7 +7125,7 @@ function setupCombatSessionController({ context: context2, settings: settings2, 
       if (!isGm2()) return;
       const ref = currentSessionRef();
       if (!ref) return;
-      await runMutation("ended", () => endSession({ context: context2, viewer: viewer(), settings: settings2, ...ref }), { sessionId: ref.sessionId });
+      await runMutation("ended", () => endSession({ context, viewer: viewer(), settings, ...ref }), { sessionId: ref.sessionId });
       return;
     }
   }
@@ -7435,14 +7435,14 @@ function buildSlotPayload(slots) {
 }
 
 // hud/abilities/abilityApi.js
-function fetchQuickActionsRuntime(characterId, settings2) {
+function fetchQuickActionsRuntime(characterId, settings) {
   return callSupabaseRpc(
     ABILITY_RPC_NAMES.getQuickActionsRuntime,
     { p_character_id: characterId ?? "" },
-    settings2
+    settings
   );
 }
-function saveQuickbarLayout(characterId, expectedVersion, slots, settings2) {
+function saveQuickbarLayout(characterId, expectedVersion, slots, settings) {
   return callSupabaseRpc(
     ABILITY_RPC_NAMES.saveQuickbarLayout,
     {
@@ -7450,7 +7450,7 @@ function saveQuickbarLayout(characterId, expectedVersion, slots, settings2) {
       p_expected_version: Number.isFinite(Number(expectedVersion)) ? Number(expectedVersion) : null,
       p_slots: Array.isArray(slots) ? slots : []
     },
-    settings2
+    settings
   );
 }
 
@@ -7513,7 +7513,7 @@ function shortId(id) {
   if (s.length <= 12) return s || null;
   return `${s.slice(0, 8)}\u2026${s.slice(-4)}`;
 }
-function setupQuickbarController({ settings: settings2, getViewer, getSelectedCharacterId, onRuntime }) {
+function setupQuickbarController({ settings, getViewer, getSelectedCharacterId, onRuntime }) {
   let disposed = false;
   let lastRuntime = null;
   let lastCharacterId = null;
@@ -7562,12 +7562,12 @@ function setupQuickbarController({ settings: settings2, getViewer, getSelectedCh
         `quickbar:${cid}`,
         async () => {
           try {
-            return await fetchQuickActionsRuntime(cid, settings2);
+            return await fetchQuickActionsRuntime(cid, settings);
           } catch (error) {
             const normalized = normalizeRpcError(error);
             if (normalized.error === "STATEMENT_TIMEOUT" && normalized.retryable) {
               await new Promise((resolve) => setTimeout(resolve, 350));
-              return fetchQuickActionsRuntime(cid, settings2);
+              return fetchQuickActionsRuntime(cid, settings);
             }
             throw error;
           }
@@ -7626,7 +7626,7 @@ function setupQuickbarController({ settings: settings2, getViewer, getSelectedCh
       versionBefore: expectedVersion
     });
     try {
-      const result = await saveQuickbarLayout(cid, expectedVersion, slots, settings2);
+      const result = await saveQuickbarLayout(cid, expectedVersion, slots, settings);
       const ok = result?.ok !== false;
       if (result?.error === "QUICKBAR_VERSION_CONFLICT") {
         logDebugEvent("quickbar", "version-conflict", {
@@ -7920,7 +7920,7 @@ function createStableOwlbearSelectionResolver({
         finish(selectedTokens);
         return;
       }
-      const [context2, player] = await Promise.all([
+      const [context, player] = await Promise.all([
         getRoomSceneContext2?.(),
         getPlayerInfo2?.()
       ]);
@@ -7928,8 +7928,8 @@ function createStableOwlbearSelectionResolver({
         finish(selectedTokens);
         return;
       }
-      const settings2 = typeof getSettings === "function" ? getSettings() : null;
-      if (!context2?.campaignId || !context2?.roomId || !context2?.sceneId || typeof hasUsableSettings === "function" && !hasUsableSettings(settings2)) {
+      const settings = typeof getSettings === "function" ? getSettings() : null;
+      if (!context?.campaignId || !context?.roomId || !context?.sceneId || typeof hasUsableSettings === "function" && !hasUsableSettings(settings)) {
         const state2 = {
           status: "error",
           tokenId,
@@ -7960,10 +7960,10 @@ function createStableOwlbearSelectionResolver({
       let runtime = null;
       try {
         runtime = await getActiveCombatRuntime?.({
-          context: context2,
+          context,
           player,
           viewerIsGm,
-          settings: settings2
+          settings
         });
       } catch (_error) {
         runtime = null;
@@ -8024,13 +8024,13 @@ function createStableOwlbearSelectionResolver({
       let linkResult = null;
       try {
         linkResult = await getSceneTokenLinks2?.({
-          campaign_id: context2.campaignId,
-          room_id: context2.roomId,
-          scene_id: context2.sceneId,
+          campaign_id: context.campaignId,
+          room_id: context.roomId,
+          scene_id: context.sceneId,
           token_id: tokenId,
           actor_player_id: player?.id ?? "",
           actor_is_gm: viewerIsGm
-        }, settings2);
+        }, settings);
       } catch (error) {
         const state2 = {
           status: "error",
@@ -8787,7 +8787,7 @@ function mapBundleToHudSnapshot(bundle, options = {}) {
     battleLog: mapBattleLog(bundle)
   };
 }
-function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context2 = {}) {
+function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context = {}) {
   const sections = sectionsOf(bundle);
   const armory = section2(bundle, "armory");
   const abilities = section2(bundle, "abilities");
@@ -8810,10 +8810,10 @@ function buildRuntimeDebugSummary(bundle, hudSnapshot = null, context2 = {}) {
     missing.push("psi resource path missing");
   }
   return {
-    selectionStatus: context2.selectionStatus ?? null,
-    selectedTokenId: context2.selectedTokenId ?? null,
-    characterId: context2.characterId ?? bundle?.character?.id ?? null,
-    requestedSections: arr(bundle?.__hudDebug?.requestedSections ?? context2.requestedSections),
+    selectionStatus: context.selectionStatus ?? null,
+    selectedTokenId: context.selectedTokenId ?? null,
+    characterId: context.characterId ?? bundle?.character?.id ?? null,
+    requestedSections: arr(bundle?.__hudDebug?.requestedSections ?? context.requestedSections),
     returnedTopLevelKeys: topLevelKeys,
     returnedSections: {
       summary: !!bundle?.character || !!sections.summary,
@@ -9298,6 +9298,13 @@ function setupSceneSelection(hooks = {}) {
   let combatRuntimePending = false;
   let combatRuntimePendingTimer = null;
   let publishCurrentStateSafe = () => null;
+  let context = null;
+  let settings = null;
+  let configured = false;
+  let viewer = null;
+  let sessionRuntime = null;
+  let abilitiesRuntime = null;
+  let quickbarController = null;
   const weaponHeavyPreloadKeys = /* @__PURE__ */ new Map();
   let payloadRevision = 0;
   let weaponSwitchFlightToken = 0;
@@ -9863,18 +9870,19 @@ function setupSceneSelection(hooks = {}) {
     return Array.isArray(fallbackSelection) ? fallbackSelection.map((value) => String(value ?? "").trim()).filter(Boolean) : [];
   }
   async function init() {
-    const [player, context2, settings2] = await Promise.all([
+    const [player, nextContext, nextSettings] = await Promise.all([
       getPlayerInfo(),
       getRoomSceneContext(),
       loadRoomSupabaseSettings()
     ]);
     if (disposed) return;
-    let viewer = normalizeViewer({ playerId: player.id, role: player.role });
-    const configured = hasSupabaseSettings(settings2);
-    let sessionRuntime = null;
+    context = nextContext;
+    settings = nextSettings;
+    viewer = normalizeViewer({ playerId: player.id, role: player.role });
+    configured = hasSupabaseSettings(settings);
     const sessionController = configured ? setupCombatSessionController({
-      context: context2,
-      settings: settings2,
+      context,
+      settings,
       getViewer: () => viewer,
       onSessionRuntime: (runtime) => {
         const previousWasActive = sessionRuntime?.encounter?.status === "active";
@@ -9914,9 +9922,8 @@ function setupSceneSelection(hooks = {}) {
         cleanups3.push(unsubscribeMoveTool);
       }
     }
-    let abilitiesRuntime = null;
-    const quickbarController = configured ? setupQuickbarController({
-      settings: settings2,
+    quickbarController = configured ? setupQuickbarController({
+      settings,
       getViewer: () => viewer,
       getSelectedCharacterId: () => ephemeral.characterId ?? null,
       onRuntime: (runtime) => {
@@ -10060,7 +10067,7 @@ function setupSceneSelection(hooks = {}) {
             try {
               const bundle = await getCharacterRuntimeBundle(
                 { character_id: characterId, sections: HUD_LIGHT_RUNTIME_SECTIONS },
-                settings2
+                settings
               );
               if (isWeaponHeavyCacheStale(characterId, encounterId)) {
                 await refreshHeavyCharacterData(characterId, {
@@ -10143,7 +10150,7 @@ function setupSceneSelection(hooks = {}) {
           run: async () => {
             const armoryResult = await singleFlightRuntimeRefresh(
               `${normalizedCharacterId}:heavy:armory:${normalizedEncounterId || "no-encounter"}`,
-              () => getCharacterArmory(normalizedCharacterId, settings2, encounterId)
+              () => getCharacterArmory(normalizedCharacterId, settings, encounterId)
             );
             if (armoryResult?.combat_context) {
               logDebugEvent("weapon", "armory-combat-context", {
@@ -10166,7 +10173,7 @@ function setupSceneSelection(hooks = {}) {
           panel: "inventory",
           run: () => singleFlightRuntimeRefresh(
             `${normalizedCharacterId}:heavy:inventory`,
-            () => getCharacterInventory(normalizedCharacterId, settings2)
+            () => getCharacterInventory(normalizedCharacterId, settings)
           )
         });
       }
@@ -10630,17 +10637,17 @@ function setupSceneSelection(hooks = {}) {
         if (sessionRuntime?.encounter?.id) return sessionRuntime;
         if (!configured) return null;
         return getActiveRuntime({
-          campaign_id: liveContext?.campaignId ?? context2.campaignId,
-          room_id: liveContext?.roomId ?? context2.roomId,
-          scene_id: liveContext?.sceneId ?? context2.sceneId,
+          campaign_id: liveContext?.campaignId ?? context.campaignId,
+          room_id: liveContext?.roomId ?? context.roomId,
+          scene_id: liveContext?.sceneId ?? context.sceneId,
           actor_player_id: player2?.id ?? "",
           actor_is_gm: viewerIsGm,
           include_hidden: viewerIsGm
-        }, settings2).catch(() => null);
+        }, settings).catch(() => null);
       },
       getSceneTokenLinks,
       hasUsableSettings: hasSupabaseSettings,
-      getSettings: () => settings2,
+      getSettings: () => settings,
       isGm: (playerInfo) => String(playerInfo?.role ?? "").toUpperCase() === "GM",
       logDebugEvent,
       debounceMs: 100,
@@ -11090,14 +11097,14 @@ function setupSceneSelection(hooks = {}) {
             await mutateSupabaseRows(
               `odyssey_character_skills?id=eq.${encodeURIComponent(characterSkillId)}&character_id=eq.${encodeURIComponent(ephemeral.characterId)}`,
               null,
-              settings2,
+              settings,
               { method: "DELETE", prefer: "return=minimal", fallbackMessage: "Unable to delete character skill." }
             );
           } else {
             await mutateSupabaseRows(
               `odyssey_character_abilities?id=eq.${encodeURIComponent(characterActionId)}&character_id=eq.${encodeURIComponent(ephemeral.characterId)}`,
               null,
-              settings2,
+              settings,
               { method: "DELETE", prefer: "return=minimal", fallbackMessage: "Unable to delete character ability." }
             );
             if (armedTechniqueMemory.get(ephemeral.characterId) === characterActionId) {
@@ -11162,7 +11169,7 @@ function setupSceneSelection(hooks = {}) {
             return;
           }
           try {
-            await switchWeaponFireMode(ephemeral.characterId, weaponId, fireModeId, settings2);
+            await switchWeaponFireMode(ephemeral.characterId, weaponId, fireModeId, settings);
             ephemeral.fireModeRpcResult = normalizeFireModeRpcResult(null);
             ephemeral.commandStatus = { type: "ok", message: "Fire mode changed." };
             pushLog(buildFireModeLogEntry({ sourceCharacterId: ephemeral.characterId, ok: true, message: "Fire mode changed." }));
@@ -11287,7 +11294,7 @@ function setupSceneSelection(hooks = {}) {
         if (lastState) publishState(lastState);
         let outcome;
         try {
-          outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings2) });
+          outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings) });
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Ability attack failed.") };
         }
@@ -11448,7 +11455,7 @@ function setupSceneSelection(hooks = {}) {
               let outcome;
               try {
                 outcome = await executeCombatAbilityWithRetry(
-                  () => resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings2) }),
+                  () => resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
                   {
                     characterId: ctx.sourceCharacterId,
                     actionId,
@@ -11620,7 +11627,7 @@ function setupSceneSelection(hooks = {}) {
             let outcome;
             try {
               outcome = await executeCombatAbilityWithRetry(
-                () => resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings2) }),
+                () => resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
                 {
                   characterId: ctx.sourceCharacterId,
                   actionId,
@@ -11771,7 +11778,7 @@ function setupSceneSelection(hooks = {}) {
         if (lastState) publishState(lastState);
         let outcome;
         try {
-          outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings2) });
+          outcome = await resolveAttack(ctx, { performAttack: (payload) => performAttack(payload, settings) });
         } catch (error) {
           outcome = { ok: false, payload: null, raw: null, normalized: null, code: null, error: String(error?.message ?? error ?? "Attack failed.") };
         }
@@ -11942,7 +11949,7 @@ function setupSceneSelection(hooks = {}) {
         let finalPublishReason = null;
         let shouldPublishAfterFinally = false;
         try {
-          result = await switchActiveWeapon(payload, settings2);
+          result = await switchActiveWeapon(payload, settings);
         } catch (error) {
           const message = String(error?.message ?? error ?? "Weapon switch failed.");
           ephemeral.commandStatus = {
@@ -12263,7 +12270,7 @@ function setupSceneSelection(hooks = {}) {
               character_magazine_id: magazineId,
               ...expectedVersion != null ? { expected_encounter_version: expectedVersion } : {}
             },
-            settings2
+            settings
           );
           const normalized = normalizeReloadRpcResult(result);
           ephemeral.reloadRpcResult = normalized;
@@ -12837,7 +12844,7 @@ function computeTargetDistance(grid, fromPos, toPos) {
   if (!gridType || !distanceMode || !(dpi > 0)) return null;
   const scale = parseGridScale(grid.scale);
   if (!scale) return null;
-  const settings2 = {
+  const settings = {
     grid_type: gridType,
     distance_mode: distanceMode,
     grid_dpi: dpi,
@@ -12845,10 +12852,10 @@ function computeTargetDistance(grid, fromPos, toPos) {
     anchor_scene_x: 0,
     anchor_scene_y: 0
   };
-  const fromCell = sceneToCell(settings2, fromPos);
-  const toCell = sceneToCell(settings2, toPos);
+  const fromCell = sceneToCell(settings, fromPos);
+  const toCell = sceneToCell(settings, toPos);
   if (!fromCell || !toCell) return null;
-  const cells = computeDistanceCells(settings2, fromCell, toCell);
+  const cells = computeDistanceCells(settings, fromCell, toCell);
   const value = Math.round(cells * scale.multiplier * 100) / 100;
   return { value, unit: scale.unit };
 }
@@ -13048,19 +13055,19 @@ function setupTargetSelection(options = {}) {
     commit(applySource(state, source));
   }
   async function init() {
-    const [context2, settings2] = await Promise.all([
+    const [context, settings] = await Promise.all([
       getRoomSceneContext(),
       loadRoomSupabaseSettings()
     ]);
     if (disposed) return;
     fetchTargetBodyZonesFn = async (characterId) => {
-      const bundle = await getCharacterRuntimeBundle({ character_id: characterId, sections: ["combat"] }, settings2);
+      const bundle = await getCharacterRuntimeBundle({ character_id: characterId, sections: ["combat"] }, settings);
       return mapTargetBodyZones(bundle);
     };
     adapter = createTargetSelectionAdapter({
       fetchSceneTokenLink: (tokenId) => getSceneTokenLinks(
-        { room_id: context2.roomId, scene_id: context2.sceneId, campaign_id: context2.campaignId, token_id: tokenId },
-        settings2
+        { room_id: context.roomId, scene_id: context.sceneId, campaign_id: context.campaignId, token_id: tokenId },
+        settings
       ),
       getTokenSummary: async (tokenId) => {
         const items = await getSceneItems();
@@ -13397,7 +13404,7 @@ function setupTargetingVisuals() {
     }
   }
   function logRingFailure(phase, operation, error) {
-    const context2 = {
+    const context = {
       phase,
       operation,
       tokenId: targetTokenId,
@@ -13406,11 +13413,11 @@ function setupTargetingVisuals() {
       sceneId
     };
     try {
-      logDebugEvent("targeting", "target-ring-failed", { ...context2, ...serializeError(error) }, false);
+      logDebugEvent("targeting", "target-ring-failed", { ...context, ...serializeError(error) }, false);
     } catch (_e) {
     }
     try {
-      console.error("[Odyssey HUD] target ring failed", error, context2);
+      console.error("[Odyssey HUD] target ring failed", error, context);
     } catch (_e) {
     }
   }
@@ -14707,39 +14714,39 @@ __export(abilityApi_exports, {
   syncCharacterResourcePools: () => syncCharacterResourcePools,
   useAbility: () => useAbility
 });
-function getCharacterAbilities(characterId, settings2) {
+function getCharacterAbilities(characterId, settings) {
   return callSupabaseRpc(
     ABILITY_RPC_NAMES.getCharacterAbilities,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function syncCharacterResourcePools(characterId, settings2) {
+function syncCharacterResourcePools(characterId, settings) {
   return callSupabaseRpc(
     ABILITY_RPC_NAMES.syncCharacterResourcePools,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function useAbility(payload, settings2) {
+function useAbility(payload, settings) {
   return callSupabaseRpc(
     ABILITY_RPC_NAMES.useAbility,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function reloadCharacterAbility(payload, settings2) {
+function reloadCharacterAbility(payload, settings) {
   return callSupabaseRpc(
     ABILITY_RPC_NAMES.reloadCharacterAbility,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function advanceCharacterAbilityStates(characterId, settings2) {
+function advanceCharacterAbilityStates(characterId, settings) {
   return callSupabaseRpc(
     ABILITY_RPC_NAMES.advanceCharacterAbilityStates,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
 
@@ -14754,28 +14761,28 @@ __export(characterApi_exports, {
   listCharacters: () => listCharacters,
   loadCharacterToToken: () => loadCharacterToToken2
 });
-function getCharacterRuleSheet(characterId, settings2) {
+function getCharacterRuleSheet(characterId, settings) {
   return callSupabaseRpc(
     CHARACTER_RPC_NAMES.getCharacterRuleSheet,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function initializeCharacterRuleDefaults(characterId, settings2) {
+function initializeCharacterRuleDefaults(characterId, settings) {
   return callSupabaseRpc(
     CHARACTER_RPC_NAMES.initializeCharacterRuleDefaults,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function initializeCharacterCombatDefaults(characterId, settings2) {
+function initializeCharacterCombatDefaults(characterId, settings) {
   return callSupabaseRpc(
     CHARACTER_RPC_NAMES.initializeCharacterCombatDefaults,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function listCharacters(settings2, { includeDeleted = false } = {}) {
+function listCharacters(settings, { includeDeleted = false } = {}) {
   const query = [
     "select=id,character_key,character_bucket,source_template_key,enabled,owner_player_id,owner_player_name,is_deleted",
     "order=character_bucket.asc,character_key.asc"
@@ -14785,29 +14792,29 @@ function listCharacters(settings2, { includeDeleted = false } = {}) {
   }
   return fetchSupabaseRows(
     `odyssey_characters?${query.join("&")}`,
-    settings2,
+    settings,
     "Unable to load character catalog."
   );
 }
-function getRoomTokenLinks(payload, settings2) {
+function getRoomTokenLinks(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_RPC_NAMES.getRoomTokenLinks,
     payload ?? {},
-    settings2
+    settings
   );
 }
-function deactivateTokenLink(payload, settings2) {
+function deactivateTokenLink(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_RPC_NAMES.deactivateTokenLink,
     payload ?? {},
-    settings2
+    settings
   );
 }
-function loadCharacterToToken2(payload, settings2) {
+function loadCharacterToToken2(payload, settings) {
   return callSupabaseRpc(
     CHARACTER_PLACEMENT_RPC_NAMES.loadCharacterToToken,
     payload ?? {},
-    settings2
+    settings
   );
 }
 
@@ -14818,21 +14825,21 @@ __export(checksApi_exports, {
   rollDice: () => rollDice,
   rollSkill: () => rollSkill
 });
-function rollCharacteristic(payload, settings2) {
+function rollCharacteristic(payload, settings) {
   return callSupabaseRpc(
     CHECK_RPC_NAMES.rollCharacteristic,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function rollSkill(payload, settings2) {
+function rollSkill(payload, settings) {
   return callSupabaseRpc(
     CHECK_RPC_NAMES.rollSkill,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function rollDice(expression, reason = null, settings2) {
+function rollDice(expression, reason = null, settings) {
   return callSupabaseRpc(
     CHECK_RPC_NAMES.rollDice,
     {
@@ -14841,7 +14848,7 @@ function rollDice(expression, reason = null, settings2) {
         reason
       }
     },
-    settings2
+    settings
   );
 }
 
@@ -14850,11 +14857,11 @@ var featureApi_exports = {};
 __export(featureApi_exports, {
   reloadFeatureResource: () => reloadFeatureResource
 });
-function reloadFeatureResource(payload, settings2) {
+function reloadFeatureResource(payload, settings) {
   return callSupabaseRpc(
     FEATURE_RPC_NAMES.reloadFeatureResource,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
 
@@ -14865,25 +14872,25 @@ __export(gmApi_exports, {
   gmRepairCharacterArmor: () => gmRepairCharacterArmor,
   gmUpdateCharacterAttribute: () => gmUpdateCharacterAttribute
 });
-function gmHealCharacter(characterId, settings2) {
+function gmHealCharacter(characterId, settings) {
   return callSupabaseRpc(
     GM_RPC_NAMES.healCharacter,
     { p_payload: { character_id: characterId } },
-    settings2
+    settings
   );
 }
-function gmRepairCharacterArmor(characterId, settings2) {
+function gmRepairCharacterArmor(characterId, settings) {
   return callSupabaseRpc(
     GM_RPC_NAMES.repairCharacterArmor,
     { p_payload: { character_id: characterId } },
-    settings2
+    settings
   );
 }
-function gmUpdateCharacterAttribute(payload, settings2) {
+function gmUpdateCharacterAttribute(payload, settings) {
   return callSupabaseRpc(
     GM_RPC_NAMES.updateCharacterAttribute,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
 
@@ -14896,39 +14903,39 @@ __export(effectsApi_exports, {
   getEffectiveCharacterStats: () => getEffectiveCharacterStats,
   removeCharacterEffect: () => removeCharacterEffect
 });
-function getCharacterEffectSummary(characterId, settings2) {
+function getCharacterEffectSummary(characterId, settings) {
   return callSupabaseRpc(
     EFFECT_RPC_NAMES.getCharacterEffectSummary,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function getEffectiveCharacterStats(characterId, settings2) {
+function getEffectiveCharacterStats(characterId, settings) {
   return callSupabaseRpc(
     EFFECT_RPC_NAMES.getEffectiveCharacterStats,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function addCharacterEffect(payload, settings2) {
+function addCharacterEffect(payload, settings) {
   return callSupabaseRpc(
     EFFECT_RPC_NAMES.addCharacterEffect,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function removeCharacterEffect(effectId, settings2) {
+function removeCharacterEffect(effectId, settings) {
   return callSupabaseRpc(
     EFFECT_RPC_NAMES.removeCharacterEffect,
     { p_effect_id: effectId },
-    settings2
+    settings
   );
 }
-function advanceCharacterEffects(characterId, settings2) {
+function advanceCharacterEffects(characterId, settings) {
   return callSupabaseRpc(
     EFFECT_RPC_NAMES.advanceCharacterEffects,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
 
@@ -14940,32 +14947,32 @@ __export(perkApi_exports, {
   grantCharacterPerk: () => grantCharacterPerk,
   useCharacterPerk: () => useCharacterPerk
 });
-function getCharacterPerks(payload, settings2) {
+function getCharacterPerks(payload, settings) {
   return callSupabaseRpc(
     PERK_RPC_NAMES.getCharacterPerks,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function getCharacterAvailablePerks(payload, settings2) {
+function getCharacterAvailablePerks(payload, settings) {
   return callSupabaseRpc(
     PERK_RPC_NAMES.getCharacterAvailablePerks,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function grantCharacterPerk(payload, settings2) {
+function grantCharacterPerk(payload, settings) {
   return callSupabaseRpc(
     PERK_RPC_NAMES.grantCharacterPerk,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function useCharacterPerk(payload, settings2) {
+function useCharacterPerk(payload, settings) {
   return callSupabaseRpc(
     PERK_RPC_NAMES.useCharacterPerk,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
 
@@ -14980,56 +14987,56 @@ __export(equipmentApi_exports, {
   unequipCharacterEquipmentItem: () => unequipCharacterEquipmentItem,
   updateCharacterEquipmentItem: () => updateCharacterEquipmentItem
 });
-function getCharacterArmorSummary(characterId, settings2) {
+function getCharacterArmorSummary(characterId, settings) {
   return callSupabaseRpc(
     EQUIPMENT_RPC_NAMES.getCharacterArmorSummary,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function getCharacterEquipment(characterId, settings2) {
+function getCharacterEquipment(characterId, settings) {
   return callSupabaseRpc(
     EQUIPMENT_RPC_NAMES.getCharacterEquipment,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function recomputeCharacterArmor(characterId, settings2) {
+function recomputeCharacterArmor(characterId, settings) {
   return callSupabaseRpc(
     EQUIPMENT_RPC_NAMES.recomputeCharacterArmor,
     { p_character_id: characterId },
-    settings2
+    settings
   );
 }
-function createCharacterEquipmentItem(payload, settings2) {
+function createCharacterEquipmentItem(payload, settings) {
   return callSupabaseRpc(
     EQUIPMENT_RPC_NAMES.createCharacterEquipmentItem,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function equipCharacterEquipmentItem(equipmentItemId, bodyPartId, settings2) {
+function equipCharacterEquipmentItem(equipmentItemId, bodyPartId, settings) {
   return callSupabaseRpc(
     EQUIPMENT_RPC_NAMES.equipCharacterEquipmentItem,
     {
       p_item_id: equipmentItemId,
       p_body_part_id: bodyPartId
     },
-    settings2
+    settings
   );
 }
-function unequipCharacterEquipmentItem(equipmentItemId, settings2) {
+function unequipCharacterEquipmentItem(equipmentItemId, settings) {
   return callSupabaseRpc(
     EQUIPMENT_RPC_NAMES.unequipCharacterEquipmentItem,
     { p_item_id: equipmentItemId },
-    settings2
+    settings
   );
 }
-function updateCharacterEquipmentItem(payload, settings2) {
+function updateCharacterEquipmentItem(payload, settings) {
   return callSupabaseRpc(
     EQUIPMENT_RPC_NAMES.updateCharacterEquipmentItem,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
 
@@ -15045,7 +15052,7 @@ function getCombatLogEntries({
   actor_player_id = "",
   actor_is_gm = false,
   limit = 50
-} = {}, settings2) {
+} = {}, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.getCombatLog,
     {
@@ -15057,14 +15064,14 @@ function getCombatLogEntries({
         limit
       }
     },
-    settings2
+    settings
   );
 }
-function getCombatLogRows(payload, settings2) {
+function getCombatLogRows(payload, settings) {
   return callSupabaseRpc(
     COMBAT_RPC_NAMES.getCombatLog,
     { p_payload: payload ?? {} },
-    settings2
+    settings
   );
 }
 
@@ -15113,253 +15120,253 @@ __export(creatorApi_exports, {
   upsertSkill: () => upsertSkill,
   upsertWeapon: () => upsertWeapon
 });
-function getCreatorReferenceData(settings2) {
+function getCreatorReferenceData(settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getCreatorReferenceData,
     {},
-    settings2
+    settings
   );
 }
-function listWeapons({ search = null } = {}, settings2) {
+function listWeapons({ search = null } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listWeapons,
     {
       p_search: search || null
     },
-    settings2
+    settings
   );
 }
-function getWeapon(weaponModelId, settings2) {
+function getWeapon(weaponModelId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getWeapon,
     { p_weapon_model_id: weaponModelId },
-    settings2
+    settings
   );
 }
-function upsertWeapon(payload, settings2) {
+function upsertWeapon(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertWeapon,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteWeapon(weaponModelId, settings2) {
+function deleteWeapon(weaponModelId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteWeapon,
     { p_weapon_model_id: weaponModelId },
-    settings2
+    settings
   );
 }
-function listItemDefs({ search = null } = {}, settings2) {
+function listItemDefs({ search = null } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listItemDefs,
     {
       p_search: search || null
     },
-    settings2
+    settings
   );
 }
-function getItemDef(itemDefId, settings2) {
+function getItemDef(itemDefId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getItemDef,
     { p_item_def_id: itemDefId },
-    settings2
+    settings
   );
 }
-function upsertItemDef(payload, settings2) {
+function upsertItemDef(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertItemDef,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteItemDef(itemDefId, settings2) {
+function deleteItemDef(itemDefId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteItemDef,
     { p_item_def_id: itemDefId },
-    settings2
+    settings
   );
 }
-function listCalibers({ search = null } = {}, settings2) {
+function listCalibers({ search = null } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listCalibers,
     {
       p_search: search || null
     },
-    settings2
+    settings
   );
 }
-function getCaliber(caliberId, settings2) {
+function getCaliber(caliberId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getCaliber,
     { p_caliber_id: caliberId },
-    settings2
+    settings
   );
 }
-function upsertCaliber(payload, settings2) {
+function upsertCaliber(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertCaliber,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteCaliber(caliberId, settings2) {
+function deleteCaliber(caliberId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteCaliber,
     { p_caliber_id: caliberId },
-    settings2
+    settings
   );
 }
-function listAmmoTypes({ search = null } = {}, settings2) {
+function listAmmoTypes({ search = null } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listAmmoTypes,
     {
       p_search: search || null
     },
-    settings2
+    settings
   );
 }
-function getAmmoType(ammoTypeId, settings2) {
+function getAmmoType(ammoTypeId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getAmmoType,
     { p_ammo_type_id: ammoTypeId },
-    settings2
+    settings
   );
 }
-function upsertAmmoType(payload, settings2) {
+function upsertAmmoType(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertAmmoType,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteAmmoType(ammoTypeId, settings2) {
+function deleteAmmoType(ammoTypeId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteAmmoType,
     { p_ammo_type_id: ammoTypeId },
-    settings2
+    settings
   );
 }
-function listMagazineDefs({ search = null } = {}, settings2) {
+function listMagazineDefs({ search = null } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listMagazineDefs,
     {
       p_search: search || null
     },
-    settings2
+    settings
   );
 }
-function getMagazineDef(magazineDefId, settings2) {
+function getMagazineDef(magazineDefId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getMagazineDef,
     { p_magazine_def_id: magazineDefId },
-    settings2
+    settings
   );
 }
-function upsertMagazineDef(payload, settings2) {
+function upsertMagazineDef(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertMagazineDef,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteMagazineDef(magazineDefId, settings2) {
+function deleteMagazineDef(magazineDefId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteMagazineDef,
     { p_magazine_def_id: magazineDefId },
-    settings2
+    settings
   );
 }
-function listSkills({ search = null, categories = [] } = {}, settings2) {
+function listSkills({ search = null, categories = [] } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listSkills,
     {
       p_search: search || null,
       p_categories: Array.isArray(categories) ? categories : []
     },
-    settings2
+    settings
   );
 }
-function getSkill(skillId, settings2) {
+function getSkill(skillId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getSkill,
     { p_skill_def_id: skillId },
-    settings2
+    settings
   );
 }
-function upsertSkill(payload, settings2) {
+function upsertSkill(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertSkill,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteSkill(skillId, settings2) {
+function deleteSkill(skillId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteSkill,
     { p_skill_def_id: skillId },
-    settings2
+    settings
   );
 }
-function listEffects({ search = null, categories = [] } = {}, settings2) {
+function listEffects({ search = null, categories = [] } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listEffects,
     {
       p_search: search || null,
       p_categories: Array.isArray(categories) ? categories : []
     },
-    settings2
+    settings
   );
 }
-function getEffect(effectId, settings2) {
+function getEffect(effectId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getEffect,
     { p_effect_def_id: effectId },
-    settings2
+    settings
   );
 }
-function upsertEffect(payload, settings2) {
+function upsertEffect(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertEffect,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteEffect(effectId, settings2) {
+function deleteEffect(effectId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteEffect,
     { p_effect_def_id: effectId },
-    settings2
+    settings
   );
 }
-function listAbilities({ search = null } = {}, settings2) {
+function listAbilities({ search = null } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listAbilities,
     {
       p_search: search || null
     },
-    settings2
+    settings
   );
 }
-function getAbility(abilityId, settings2) {
+function getAbility(abilityId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getAbility,
     { p_ability_def_id: abilityId },
-    settings2
+    settings
   );
 }
-function upsertAbility(payload, settings2) {
+function upsertAbility(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertAbility,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteAbility(abilityId, settings2) {
+function deleteAbility(abilityId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteAbility,
     { p_ability_def_id: abilityId },
-    settings2
+    settings
   );
 }
 function listPerks({
@@ -15367,7 +15374,7 @@ function listPerks({
   linkedSkillId = null,
   perkType = null,
   resolutionMode = null
-} = {}, settings2) {
+} = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listPerks,
     {
@@ -15376,59 +15383,59 @@ function listPerks({
       p_perk_type: perkType || null,
       p_resolution_mode: resolutionMode || null
     },
-    settings2
+    settings
   );
 }
-function getPerk(perkDefId, settings2) {
+function getPerk(perkDefId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getPerk,
     { p_perk_def_id: perkDefId },
-    settings2
+    settings
   );
 }
-function upsertPerk(payload, settings2) {
+function upsertPerk(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertPerk,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deletePerk(perkDefId, settings2) {
+function deletePerk(perkDefId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deletePerk,
     { p_perk_def_id: perkDefId },
-    settings2
+    settings
   );
 }
-function listEquipmentModels({ search = null, itemTypes = [] } = {}, settings2) {
+function listEquipmentModels({ search = null, itemTypes = [] } = {}, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.listEquipmentModels,
     {
       p_search: search || null,
       p_item_types: Array.isArray(itemTypes) ? itemTypes : []
     },
-    settings2
+    settings
   );
 }
-function getEquipmentModel(equipmentModelId, settings2) {
+function getEquipmentModel(equipmentModelId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.getEquipmentModel,
     { p_equipment_model_id: equipmentModelId },
-    settings2
+    settings
   );
 }
-function upsertEquipmentModel(payload, settings2) {
+function upsertEquipmentModel(payload, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.upsertEquipmentModel,
     { p_payload: payload },
-    settings2
+    settings
   );
 }
-function deleteEquipmentModel(equipmentModelId, settings2) {
+function deleteEquipmentModel(equipmentModelId, settings) {
   return callSupabaseRpc(
     CREATOR_RPC_NAMES.deleteEquipmentModel,
     { p_equipment_model_id: equipmentModelId },
-    settings2
+    settings
   );
 }
 
@@ -17539,7 +17546,7 @@ function setupTacticalMoveTool({ runtime }) {
         const retryResult = await tryRetryStaleMovement({
           preview,
           payloadBase,
-          invokeMutation: (retryPayload, settings2) => combatApi.moveCharacter(retryPayload, settings2),
+          invokeMutation: (retryPayload, settings) => combatApi.moveCharacter(retryPayload, settings),
           source: "combat-movement"
         });
         if (retryResult) {
@@ -18078,7 +18085,7 @@ async function bootstrapBackgroundShell() {
   setupTacticalMoveTool({ runtime });
   startDebugConsole();
   await waitForObrReady();
-  const [player, roomContext, settings2] = await Promise.all([
+  const [player, roomContext, settings] = await Promise.all([
     getPlayerInfo(),
     getRoomSceneContext(),
     loadRoomSupabaseSettings()
@@ -18087,8 +18094,8 @@ async function bootstrapBackgroundShell() {
     runtime,
     player,
     roomContext,
-    settings: settings2,
-    supabaseConfigured: hasSupabaseSettings(settings2)
+    settings,
+    supabaseConfigured: hasSupabaseSettings(settings)
   };
   addDiagnosticEntry(
     "info",

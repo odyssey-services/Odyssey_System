@@ -98,8 +98,13 @@ test("light runtime hydrates heavy weapon data before the first ready payload wh
 });
 
 test("ready selection preloads quickbar runtime before the first ready payload instead of waiting for a later interaction", () => {
+  assert.ok(sceneControllerSrc.includes("let settings = null;"));
+  assert.ok(sceneControllerSrc.includes("let quickbarController = null;"));
   assert.ok(sceneControllerSrc.includes("async function fetchReadyQuickbarRuntime(characterId)"));
   assert.ok(sceneControllerSrc.includes("fetchQuickActionsRuntime(normalizedCharacterId, settings)"));
+  assert.ok(sceneControllerSrc.includes("context = nextContext;"));
+  assert.ok(sceneControllerSrc.includes("settings = nextSettings;"));
+  assert.ok(sceneControllerSrc.includes("quickbarController = configured"));
   assert.ok(sceneControllerSrc.includes("const [runtimeBundle, readyQuickbarRuntime] = await Promise.all(["));
   assert.ok(sceneControllerSrc.includes("fetchReadyQuickbarRuntime(resolvedState.characterId)"));
   assert.ok(sceneControllerSrc.includes("abilitiesRuntime = readyQuickbarRuntime;"));
