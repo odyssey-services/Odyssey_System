@@ -1358,9 +1358,9 @@ export function setupSceneSelection(hooks = {}) {
         if (changed) restoreSelectedWeapon(nextCharacterId, state.runtimeBundle);
         const activeWeapon = pickActiveWeapon(state.runtimeBundle?.armory ?? state.runtimeBundle?.sections?.armory ?? null);
         const activeWeaponId = String(activeWeapon?.id ?? "").trim() || null;
-        ephemeral.selectedWeaponId = activeWeaponId;
+        ephemeral.selectedWeaponId = String(ephemeral.selectedWeaponId ?? "").trim() || activeWeaponId;
         if (nextCharacterId) {
-          if (activeWeaponId) selectedWeaponMemory.set(nextCharacterId, activeWeaponId);
+          if (ephemeral.selectedWeaponId) selectedWeaponMemory.set(nextCharacterId, ephemeral.selectedWeaponId);
           else selectedWeaponMemory.forget(nextCharacterId);
         }
         lastResolvedCharacterId = nextCharacterId;

@@ -276,6 +276,11 @@ test("selected character change and payload broadcast are explicitly logged", ()
   assert.ok(sceneControllerSrc.includes("nextCharacterId"));
 });
 
+test("ready selection preserves an already-restored selectedWeaponId instead of always resetting to activeWeaponId", () => {
+  assert.ok(sceneControllerSrc.includes('ephemeral.selectedWeaponId = String(ephemeral.selectedWeaponId ?? "").trim() || activeWeaponId;'));
+  assert.ok(sceneControllerSrc.includes("if (ephemeral.selectedWeaponId) selectedWeaponMemory.set(nextCharacterId, ephemeral.selectedWeaponId);"));
+});
+
 test("non-empty observed selection schedules resolve when it differs from current or pending", () => {
   assert.ok(sceneControllerSrc.includes("if (observedSignature !== currentSignature || observedSignature !== pendingSignature)"));
   assert.ok(sceneControllerSrc.includes('stableSelectionResolver?.scheduleSelectionSync({ force: false, reason });'));
