@@ -567,6 +567,29 @@ function mergeUiState(baseUi, patchUi) {
   return nextUi;
 }
 
+function mergeWeaponEntry(baseEntry, patchEntry) {
+  if (!patchEntry || typeof patchEntry !== "object") {
+    return patchEntry === undefined ? baseEntry : patchEntry;
+  }
+  const baseId = String(baseEntry?.id ?? "").trim();
+  const patchId = String(patchEntry?.id ?? "").trim();
+  if (!baseId || !patchId || baseId !== patchId) {
+    return patchEntry;
+  }
+  const nextEntry = mergeObject(baseEntry, patchEntry);
+  for (const key of ["ammo", "loadedMagazine", "fireMode"]) {
+    if (patchEntry[key] && typeof patchEntry[key] === "object") {
+      nextEntry[key] = mergeObject(baseEntry?.[key], patchEntry[key]);
+    } else if (patchEntry[key] === undefined && baseEntry?.[key] !== undefined) {
+      nextEntry[key] = baseEntry[key];
+    }
+  }
+  if (patchEntry.reserveMagazines === undefined && baseEntry?.reserveMagazines !== undefined) {
+    nextEntry.reserveMagazines = baseEntry.reserveMagazines;
+  }
+  return nextEntry;
+}
+
 function mergeHudSnapshot(baseSnapshot, patchSnapshot) {
   if (!patchSnapshot || typeof patchSnapshot !== "object") {
     return patchSnapshot === undefined ? baseSnapshot : patchSnapshot;
@@ -577,6 +600,14 @@ function mergeHudSnapshot(baseSnapshot, patchSnapshot) {
     if (patchSnapshot[key] && typeof patchSnapshot[key] === "object") {
       nextSnapshot[key] = mergeObject(baseSnapshot?.[key], patchSnapshot[key]);
     }
+  }
+  if (patchSnapshot.weapon && typeof patchSnapshot.weapon === "object") {
+    nextSnapshot.weapon = {
+      ...(baseSnapshot?.weapon && typeof baseSnapshot.weapon === "object" ? baseSnapshot.weapon : {}),
+      ...nextSnapshot.weapon,
+      primary: mergeWeaponEntry(baseSnapshot?.weapon?.primary, patchSnapshot.weapon.primary),
+      secondary: mergeWeaponEntry(baseSnapshot?.weapon?.secondary, patchSnapshot.weapon.secondary),
+    };
   }
   return nextSnapshot;
 }

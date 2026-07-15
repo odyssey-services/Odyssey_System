@@ -8,14 +8,16 @@
 import { esc, cls } from "./hudDom.js";
 import { panel } from "./HudPanel.js";
 
-function weaponOption(option) {
+function buildWeaponMeta(option) {
   const ammoLabel = option.ammoLabel || "-";
+  const parts = [String(option.type ?? "").trim(), String(ammoLabel ?? "").trim()].filter(Boolean);
+  return parts.join(" ");
+}
+
+function weaponOption(option) {
+  const metaLabel = buildWeaponMeta(option) || "-";
   const selected = option.selected === true;
   const disabled = option.switchAllowed === false;
-  const isOutOfCombat = String(option.combatMode ?? "").trim().toLowerCase() === "out_of_combat";
-  const costLabel = selected
-    ? "Active"
-    : (isOutOfCombat ? "Free switch" : (option.switchCost === "free" ? "Free swap" : "Full MOVE"));
   const title = disabled && option.switchBlockedReason
     ? `${option.name} - ${option.switchBlockedReason}`
     : option.name;
@@ -23,9 +25,7 @@ function weaponOption(option) {
   return `<button type="button" class="${cls("ohud-weapon-option", selected ? "is-selected" : "", disabled ? "is-disabled" : "")}"
     data-action="select-weapon" data-weapon-id="${esc(option.id)}" title="${esc(title)}" ${disabled ? "disabled" : ""}>
     <span class="ohud-weapon-option-name">${esc(option.name)}</span>
-    ${option.type ? `<span class="ohud-weapon-option-type">${esc(option.type)}</span>` : ""}
-    <span class="ohud-weapon-option-ammo">${esc(ammoLabel)}</span>
-    <span class="ohud-weapon-option-ammo">${esc(costLabel)}</span>
+    <span class="ohud-weapon-option-meta">${esc(metaLabel)}</span>
   </button>`;
 }
 

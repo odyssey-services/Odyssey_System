@@ -4551,7 +4551,7 @@ var combatHudModule_default = `/*
   overflow-y: auto; overflow-x: hidden;
 }
 .ohud-weapon-option {
-  display: grid; grid-template-columns: 1fr auto auto; gap: 4px; align-items: center;
+  display: grid; grid-template-columns: 1fr auto; gap: 4px; align-items: center;
   min-width: 0; height: 18px; padding: 1px 5px;
   border: 1px solid var(--odyssey-hud-border); border-radius: 5px;
   background: rgba(10, 16, 31, 0.74); color: var(--odyssey-hud-text);
@@ -4559,11 +4559,10 @@ var combatHudModule_default = `/*
 }
 .ohud-weapon-option.is-selected { border-color: var(--odyssey-cyan); color: var(--odyssey-cyan); }
 .ohud-weapon-option-name,
-.ohud-weapon-option-type {
+.ohud-weapon-option-meta {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.ohud-weapon-option-type,
-.ohud-weapon-option-ammo { color: var(--odyssey-hud-muted); font-size: var(--ohud-font-7-5); }
+.ohud-weapon-option-meta { color: var(--odyssey-hud-muted); font-size: var(--ohud-font-7-5); }
 /* Spare-magazine companion popover: a flowing, full-width row list SIZED TO
  * CONTENT by the controller (see hudPopoverLifecycle.computeCompanionSelectorHeight)
  * \u2014 this list must NEVER be absolutely positioned to a corner (that was the bug:
@@ -7616,19 +7615,20 @@ function renderBattleLogPanel(state) {
 }
 
 // hud/components/WeaponSelectorPanel.js
-function weaponOption(option) {
+function buildWeaponMeta(option) {
   const ammoLabel = option.ammoLabel || "-";
+  const parts = [String(option.type ?? "").trim(), String(ammoLabel ?? "").trim()].filter(Boolean);
+  return parts.join(" ");
+}
+function weaponOption(option) {
+  const metaLabel = buildWeaponMeta(option) || "-";
   const selected = option.selected === true;
   const disabled = option.switchAllowed === false;
-  const isOutOfCombat = String(option.combatMode ?? "").trim().toLowerCase() === "out_of_combat";
-  const costLabel = selected ? "Active" : isOutOfCombat ? "Free switch" : option.switchCost === "free" ? "Free swap" : "Full MOVE";
   const title = disabled && option.switchBlockedReason ? `${option.name} - ${option.switchBlockedReason}` : option.name;
   return `<button type="button" class="${cls("ohud-weapon-option", selected ? "is-selected" : "", disabled ? "is-disabled" : "")}"
     data-action="select-weapon" data-weapon-id="${esc(option.id)}" title="${esc(title)}" ${disabled ? "disabled" : ""}>
     <span class="ohud-weapon-option-name">${esc(option.name)}</span>
-    ${option.type ? `<span class="ohud-weapon-option-type">${esc(option.type)}</span>` : ""}
-    <span class="ohud-weapon-option-ammo">${esc(ammoLabel)}</span>
-    <span class="ohud-weapon-option-ammo">${esc(costLabel)}</span>
+    <span class="ohud-weapon-option-meta">${esc(metaLabel)}</span>
   </button>`;
 }
 function renderWeaponSelectorPanel(state) {
@@ -7939,6 +7939,28 @@ function mergeUiState(baseUi, patchUi) {
   }
   return nextUi;
 }
+function mergeWeaponEntry(baseEntry, patchEntry) {
+  if (!patchEntry || typeof patchEntry !== "object") {
+    return patchEntry === void 0 ? baseEntry : patchEntry;
+  }
+  const baseId = String(baseEntry?.id ?? "").trim();
+  const patchId = String(patchEntry?.id ?? "").trim();
+  if (!baseId || !patchId || baseId !== patchId) {
+    return patchEntry;
+  }
+  const nextEntry = mergeObject(baseEntry, patchEntry);
+  for (const key of ["ammo", "loadedMagazine", "fireMode"]) {
+    if (patchEntry[key] && typeof patchEntry[key] === "object") {
+      nextEntry[key] = mergeObject(baseEntry?.[key], patchEntry[key]);
+    } else if (patchEntry[key] === void 0 && baseEntry?.[key] !== void 0) {
+      nextEntry[key] = baseEntry[key];
+    }
+  }
+  if (patchEntry.reserveMagazines === void 0 && baseEntry?.reserveMagazines !== void 0) {
+    nextEntry.reserveMagazines = baseEntry.reserveMagazines;
+  }
+  return nextEntry;
+}
 function mergeHudSnapshot(baseSnapshot, patchSnapshot) {
   if (!patchSnapshot || typeof patchSnapshot !== "object") {
     return patchSnapshot === void 0 ? baseSnapshot : patchSnapshot;
@@ -7949,6 +7971,14 @@ function mergeHudSnapshot(baseSnapshot, patchSnapshot) {
     if (patchSnapshot[key] && typeof patchSnapshot[key] === "object") {
       nextSnapshot[key] = mergeObject(baseSnapshot?.[key], patchSnapshot[key]);
     }
+  }
+  if (patchSnapshot.weapon && typeof patchSnapshot.weapon === "object") {
+    nextSnapshot.weapon = {
+      ...baseSnapshot?.weapon && typeof baseSnapshot.weapon === "object" ? baseSnapshot.weapon : {},
+      ...nextSnapshot.weapon,
+      primary: mergeWeaponEntry(baseSnapshot?.weapon?.primary, patchSnapshot.weapon.primary),
+      secondary: mergeWeaponEntry(baseSnapshot?.weapon?.secondary, patchSnapshot.weapon.secondary)
+    };
   }
   return nextSnapshot;
 }

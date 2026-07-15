@@ -22,6 +22,7 @@ import { buildCompanionSelectorState } from "../hud/scene/selectionView.js";
 import { renderWeaponSelectorPanel } from "../hud/components/WeaponSelectorPanel.js";
 import { renderMagazineSelectorPanel } from "../hud/components/MagazineSelectorPanel.js";
 import { mapBundleToHudSnapshot } from "../hud/runtime/runtimeBundleMapper.js";
+import { mergeModulePatchIntoSelectionPayload } from "../hud/scene/selectionState.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -154,6 +155,17 @@ test("weapon without caliber appears, with a '-' ammo label", () => {
   assert.ok(html.includes("Plasma Katana") && html.includes("Standard Rifle") && html.includes("Frontier Pistol"));
 });
 
+test("weapon selector always renders type+ammo meta and never status labels", () => {
+  const html = renderWeaponSelectorPanel(buildCompanionSelectorState(readyPayload(mixedArmory())));
+  assert.ok(html.includes("Rifle 30/30"));
+  assert.ok(html.includes("Pistol 12/12"));
+  assert.ok(html.includes("Melee -"));
+  assert.ok(!html.includes("Free switch"));
+  assert.ok(!html.includes("Free swap"));
+  assert.ok(!html.includes("Full MOVE"));
+  assert.ok(!html.includes("Active"));
+});
+
 test("null state -> 'Loading weapons...' (snapshot not arrived)", () => {
   const html = renderWeaponSelectorPanel(null);
   assert.ok(html.includes("Loading weapons"), "controlled loading state");
@@ -239,7 +251,7 @@ test("weaponSelectorOpen flag does not change the available weapon list", () => 
   assert.equal(closed.snapshot.weapon.available.length, 3, "list survives regardless of open state");
 });
 
-test("out-of-combat weapon options show 'Free switch' and stay enabled when server says can_switch_to=true", () => {
+test("out-of-combat weapon options stay enabled when server says can_switch_to=true", () => {
   const armory = mixedArmory();
   armory.combat_context = {
     mode: "out_of_combat",
@@ -249,7 +261,6 @@ test("out-of-combat weapon options show 'Free switch' and stay enabled when serv
   armory.weapons[1].can_switch_to = true;
   armory.weapons[1].switch_block_reason = null;
   const html = renderWeaponSelectorPanel(buildCompanionSelectorState(readyPayload(armory)));
-  assert.ok(html.includes("Free switch"), "out-of-combat switch label should be explicit");
   const rifleChunk = html.slice(html.indexOf("Standard Rifle"), html.indexOf("</button>", html.indexOf("Standard Rifle")));
   assert.ok(!/disabled/.test(rifleChunk), "server-allowed out-of-combat switch must stay enabled");
 });
@@ -261,6 +272,30 @@ test("weapon selector trusts server switchAllowed=false instead of local move he
   const html = renderWeaponSelectorPanel(buildCompanionSelectorState(readyPayload(armory)));
   const rifleChunk = html.slice(html.indexOf("Standard Rifle"), html.indexOf("</button>", html.indexOf("Standard Rifle")));
   assert.match(rifleChunk, /disabled/, "server-blocked weapon must render disabled");
+});
+
+test("module patch keeps richer weapon ammo state when same weapon arrives sparser", () => {
+  const baseArmory = mixedArmory();
+  baseArmory.active_weapon_id = "w-rifle";
+  const basePayload = readyPayload(baseArmory, { selectedWeaponId: "w-rifle" });
+  const merged = mergeModulePatchIntoSelectionPayload(basePayload, {
+    type: "module-patch",
+    scope: "weapon",
+    revision: 2,
+    patch: {
+      hudSnapshot: {
+        weapon: {
+          primary: {
+            id: "w-rifle",
+            name: "Standard Rifle",
+          },
+        },
+      },
+    },
+  });
+  assert.equal(merged.hudSnapshot.weapon.primary.id, "w-rifle");
+  assert.equal(merged.hudSnapshot.weapon.primary.ammo.current, 30);
+  assert.equal(merged.hudSnapshot.weapon.primary.loadedMagazine.current, 30);
 });
 
 test("magazine companion: null state -> loading, ready state -> reads snapshot", () => {

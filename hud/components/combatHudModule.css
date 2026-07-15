@@ -159,7 +159,7 @@
   overflow-y: auto; overflow-x: hidden;
 }
 .ohud-weapon-option {
-  display: grid; grid-template-columns: 1fr auto auto; gap: 4px; align-items: center;
+  display: grid; grid-template-columns: 1fr auto; gap: 4px; align-items: center;
   min-width: 0; height: 18px; padding: 1px 5px;
   border: 1px solid var(--odyssey-hud-border); border-radius: 5px;
   background: rgba(10, 16, 31, 0.74); color: var(--odyssey-hud-text);
@@ -167,11 +167,10 @@
 }
 .ohud-weapon-option.is-selected { border-color: var(--odyssey-cyan); color: var(--odyssey-cyan); }
 .ohud-weapon-option-name,
-.ohud-weapon-option-type {
+.ohud-weapon-option-meta {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.ohud-weapon-option-type,
-.ohud-weapon-option-ammo { color: var(--odyssey-hud-muted); font-size: var(--ohud-font-7-5); }
+.ohud-weapon-option-meta { color: var(--odyssey-hud-muted); font-size: var(--ohud-font-7-5); }
 /* Spare-magazine companion popover: a flowing, full-width row list SIZED TO
  * CONTENT by the controller (see hudPopoverLifecycle.computeCompanionSelectorHeight)
  * — this list must NEVER be absolutely positioned to a corner (that was the bug:
