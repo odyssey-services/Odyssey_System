@@ -3628,10 +3628,26 @@ export function setupSceneSelection(hooks = {}) {
               });
               if (sessionController) void sessionController.refresh();
             }
+            const authoritativeArmory = result?.armory && typeof result.armory === "object"
+              ? result.armory
+              : null;
+            if (authoritativeArmory) {
+              applyAuthoritativeArmoryToHeavyCache(
+                ephemeral.characterId,
+                authoritativeArmory,
+                reloadSession?.id ?? null,
+              );
+              applyHeavyCacheToLastReadyState(ephemeral.characterId);
+              logDebugEvent("magazine", "reload:authoritative-armory-applied", {
+                characterId: ephemeral.characterId,
+                weaponId,
+                magazineId,
+              }, true);
+              broadcastReadyStateUpdate(["weapon"], "reload-confirmed");
+            }
             await refreshHeavyCharacterData(ephemeral.characterId, {
               reason: "reload-success",
               encounterId: reloadSession?.id ?? null,
-              armory: true,
               inventory: true,
             });
             await refreshSelectedCharacterRuntime("reload-success", { refreshQuickbar: true });

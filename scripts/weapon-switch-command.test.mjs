@@ -144,6 +144,14 @@ test("reload status is also marked as weapon-local so its toast stays inside the
   assert.ok(sceneControllerSrc.includes('source: "weapon_overlay"'));
 });
 
+test("reload applies authoritative armory immediately before the background inventory refresh", () => {
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("magazine", "reload:authoritative-armory-applied"'));
+  assert.ok(sceneControllerSrc.includes('broadcastReadyStateUpdate(["weapon"], "reload-confirmed");'));
+  assert.ok(sceneControllerSrc.includes('reason: "reload-success"'));
+  assert.ok(sceneControllerSrc.includes("inventory: true,"));
+  assert.ok(!sceneControllerSrc.includes('reason: "reload-success",\n              encounterId: reloadSession?.id ?? null,\n              armory: true,'));
+});
+
 test("older armory refreshes cannot overwrite a newer switched weapon snapshot", () => {
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "heavy-armory-stale-ignored"'));
   assert.ok(sceneControllerSrc.includes("const refreshStartedAt = Date.now();"));
