@@ -9641,7 +9641,7 @@ function setupSceneSelection(hooks = {}) {
   }
   async function fetchReadyQuickbarRuntime(characterId) {
     const normalizedCharacterId = String(characterId ?? "").trim();
-    if (!normalizedCharacterId || !quickbarController) return null;
+    if (!normalizedCharacterId) return null;
     try {
       const raw = await singleFlightRuntimeRefresh(
         `quickbar:${normalizedCharacterId}`,
@@ -9883,7 +9883,7 @@ function setupSceneSelection(hooks = {}) {
         if (lastState) broadcastReadyStateUpdate(["session"], "session-runtime-loaded");
         if (previousWasActive && !nextIsActive && ephemeral.characterId) {
           scheduleLiveSelectionResolve2("combat-ended", { forceResolve: true });
-          void quickbarController2?.refresh?.();
+          void quickbarController?.refresh?.();
         }
       }
     }) : null;
@@ -9905,7 +9905,7 @@ function setupSceneSelection(hooks = {}) {
         sessionController.applyExternalRuntime(payload.runtime, "tactical-move");
         if (String(payload.characterId ?? "").trim() && String(payload.characterId ?? "").trim() === String(ephemeral.characterId ?? "").trim()) {
           scheduleLiveSelectionResolve2("tactical-move-applied", { forceResolve: true });
-          void quickbarController2?.refresh?.();
+          void quickbarController?.refresh?.();
         }
       });
       if (disposed) {
@@ -9915,7 +9915,7 @@ function setupSceneSelection(hooks = {}) {
       }
     }
     let abilitiesRuntime = null;
-    const quickbarController2 = configured ? setupQuickbarController({
+    const quickbarController = configured ? setupQuickbarController({
       settings: settings2,
       getViewer: () => viewer,
       getSelectedCharacterId: () => ephemeral.characterId ?? null,
@@ -9931,7 +9931,7 @@ function setupSceneSelection(hooks = {}) {
         }
       }
     }) : null;
-    if (quickbarController2) cleanups3.push(() => quickbarController2.cleanup());
+    if (quickbarController) cleanups3.push(() => quickbarController.cleanup());
     function findQuickActionByCharacterActionId(characterActionId) {
       const id = String(characterActionId ?? "").trim();
       if (!id) return null;
@@ -10662,7 +10662,7 @@ function setupSceneSelection(hooks = {}) {
       if (String(abilitiesRuntime?.characterId ?? "").trim() !== String(characterId ?? "").trim()) {
         abilitiesRuntime = null;
       }
-      if (quickbarController2) quickbarController2.onSelectionChanged(characterId ?? null);
+      if (quickbarController) quickbarController.onSelectionChanged(characterId ?? null);
       return true;
     }
     function restoreSelectedWeapon(characterId, bundle) {
@@ -10919,8 +10919,8 @@ function setupSceneSelection(hooks = {}) {
         try {
           await waitForCombatActionIdle(characterId);
           const tasks = [refreshCurrentReadyRuntimeOnly(reason)];
-          if (refreshQuickbar && quickbarController2 && characterId) {
-            tasks.push(quickbarController2.refresh());
+          if (refreshQuickbar && quickbarController && characterId) {
+            tasks.push(quickbarController.refresh());
           }
           await Promise.allSettled(tasks);
           if (lastState?.status === "ready" && lastState?.access?.canView === true && String(lastState?.characterId ?? "").trim() === characterId) {
@@ -11112,7 +11112,7 @@ function setupSceneSelection(hooks = {}) {
           };
           logDebugEvent("skills", "gm-delete-result", { ok: true, type: deleteType, deleteKey }, true);
           await Promise.allSettled([
-            quickbarController2?.refresh?.(),
+            quickbarController?.refresh?.(),
             refreshCurrentReadyRuntimeOnly("gm-delete")
           ]);
         } catch (error) {
@@ -11229,7 +11229,7 @@ function setupSceneSelection(hooks = {}) {
           if (!abilitiesRuntime) {
             ephemeral.commandStatus = { type: "error", message: "Ability runtime is not loaded yet." };
             if (lastState) publishState(lastState);
-            void quickbarController2?.refresh();
+            void quickbarController?.refresh();
           }
           return;
         }
@@ -11381,7 +11381,7 @@ function setupSceneSelection(hooks = {}) {
           if (!abilitiesRuntime) {
             ephemeral.commandStatus = { type: "error", message: "Ability runtime is not loaded yet." };
             if (lastState) publishState(lastState);
-            void quickbarController2?.refresh();
+            void quickbarController?.refresh();
           }
           return;
         }
@@ -11547,7 +11547,7 @@ function setupSceneSelection(hooks = {}) {
           if (!abilitiesRuntime) {
             ephemeral.commandStatus = { type: "error", message: "Ability runtime is not loaded yet." };
             if (lastState) publishState(lastState);
-            void quickbarController2?.refresh();
+            void quickbarController?.refresh();
           }
           return;
         }
@@ -12037,8 +12037,8 @@ function setupSceneSelection(hooks = {}) {
             return;
           }
           await refreshCurrentReadyRuntimeOnly("weapon-runtime-loaded");
-          if (quickbarController2 && characterIdAtRequest) {
-            await quickbarController2.refresh();
+          if (quickbarController && characterIdAtRequest) {
+            await quickbarController.refresh();
           }
           if (isCurrentSource(characterIdAtRequest, selectedItemIdAtRequest)) {
             finalPublishReason = "weapon-switch-finished";

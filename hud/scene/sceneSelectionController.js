@@ -496,7 +496,7 @@ export function setupSceneSelection(hooks = {}) {
 
   async function fetchReadyQuickbarRuntime(characterId) {
     const normalizedCharacterId = String(characterId ?? "").trim();
-    if (!normalizedCharacterId || !quickbarController) return null;
+    if (!normalizedCharacterId) return null;
     try {
       const raw = await singleFlightRuntimeRefresh(
         `quickbar:${normalizedCharacterId}`,
