@@ -69984,26 +69984,12 @@ begin
 end;
 $$;
 
-create or replace function public.odyssey_apply_weapon_operation_session_cost(
-  p_character_id uuid,
-  p_operation text,
-  p_feed_mode text default null,
-  p_expected_session_version integer default null
-)
-returns jsonb
-language plpgsql
-set search_path = public, pg_temp
-as $$
-begin
-  return public.odyssey_apply_weapon_operation_session_cost(
-    p_character_id,
-    p_operation,
-    p_feed_mode,
-    p_expected_session_version,
-    null::uuid
-  );
-end;
-$$;
+drop function if exists public.odyssey_apply_weapon_operation_session_cost(
+  uuid,
+  text,
+  text,
+  integer
+);
 
 create or replace function public.switch_active_weapon(
   p_payload jsonb

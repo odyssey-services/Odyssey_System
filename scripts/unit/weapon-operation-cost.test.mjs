@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { createTestSuite } from "./_tinyTestRunner.mjs";
 import { applyWeaponOperationCostMock } from "./_mockAdapters.mjs";
 
 const { test, run } = createTestSuite("Unit - Weapon Operation Cost");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const supabaseSql = fs.readFileSync(
+  path.resolve(__dirname, "..", "..", "supabase", "odyssey_supabase.sql"),
+  "utf8",
+);
 
 function activeParticipation(overrides = {}) {
   return {
@@ -68,6 +76,16 @@ test("ambiguous combat context blocks operation and spends nothing", () => {
   assert.equal(result.ok, false);
   assert.equal(result.error, "COMBAT_CONTEXT_AMBIGUOUS");
   assert.equal(result.spent, false);
+});
+
+test("sql bundle keeps only the 5-argument weapon-operation cost helper", () => {
+  assert.equal(
+    (supabaseSql.match(/create or replace function public\.odyssey_apply_weapon_operation_session_cost\(/g) ?? []).length,
+    1,
+  );
+  assert.ok(
+    supabaseSql.includes("drop function if exists public.odyssey_apply_weapon_operation_session_cost(\n  uuid,\n  text,\n  text,\n  integer\n);"),
+  );
 });
 
 await run();
