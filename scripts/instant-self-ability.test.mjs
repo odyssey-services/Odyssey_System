@@ -152,11 +152,11 @@ test("9. missing source character blocks execution", () => {
   assert.equal(result.uiBlockReason, INSTANT_ABILITY_BLOCK_REASON.noCharacter);
 });
 
-test("10. not-in-an-active-encounter blocks locally (combat_execute_action has no free-play fallback, unlike perform_attack) — and the handler reuses the EXISTING generic sessionAttackGate for turn/MAIN, no second gate function", () => {
-  const noSession = evaluateInstantAbilityExecution({ sourceCharacterId: "char-1", abilityId: "ability-1", sessionExists: false });
-  assert.equal(noSession.uiAllowed, false);
-  assert.equal(noSession.uiBlockReason, INSTANT_ABILITY_BLOCK_REASON.noActiveEncounter);
-  assert.match(controllerSrc, /const sessionGate = sessionAttackGate\(sessionAtRequest\);/);
+test("10. not-in-an-active-encounter no longer blocks instant/self abilities locally — turn/MAIN are gated only when combat exists", () => {
+  const noSession = evaluateInstantAbilityExecution({ sourceCharacterId: "char-1", abilityId: "ability-1" });
+  assert.equal(noSession.uiAllowed, true);
+  assert.equal(noSession.uiBlockReason, null);
+  assert.match(controllerSrc, /const sessionGate = sessionAtRequest \? sessionAttackGate\(sessionAtRequest\) : \{ blocked: false, reason: null \};/);
 });
 
 test("11. cooldown blocks execution — deriveSlotAvailability (reused unchanged) categorizes a cooldown instant ability as 'cooldown', and QuickbarView dims it", () => {
@@ -265,6 +265,21 @@ test("21. execution payload never includes ammo/magazine/fire-mode fields, and n
   assert.ok(!("context" in payload), "no fabricated context wrapper — combat_execute_action never reads one");
 });
 
+test("21b. out-of-combat instant payload falls back to direct use_ability shape without combat wrappers", () => {
+  const payload = buildInstantAbilityExecutionPayload({
+    sourceCharacterId: "char-1",
+    abilityId: "ability-1",
+    selectedWeaponId: "weapon-1",
+    encounterId: "",
+  });
+  assert.equal(payload.character_id, "char-1");
+  assert.equal(payload.character_ability_id, "ability-1");
+  assert.equal(payload.selected_character_weapon_id, "weapon-1");
+  assert.ok(!("kind" in payload));
+  assert.ok(!("encounter_id" in payload));
+  assert.ok(!("intent" in payload));
+});
+
 /* ── Success handling (22-28) ─────────────────────────────────────────── */
 
 test("22/23/24. a successful result refreshes combat session + selected runtime through the current shared helpers", () => {
@@ -336,10 +351,11 @@ test("33. a stale version response never overwrites newer runtime — isInstantA
 
 /* ── use_ability/combat_execute_action server-side sanity (supporting §5-9) ── */
 
-test("combat_execute_action remains the single instant/self ability execution path", () => {
+test("instant/self ability uses combat_execute_action in combat and use_ability out of combat", () => {
   const payloadSrc = read("hud", "combat", "instantAbilityPayload.js");
   assert.match(payloadSrc, /kind:\s*"ability"/);
-  assert.match(controllerSrc, /resolveInstantAbilityExecution\(ctx, \{ executeAction: \(payload\) => executeAction\(payload, settings\) \}\)/);
+  assert.match(payloadSrc, /await deps\.useAbility\(payload\)/);
+  assert.match(controllerSrc, /useAbility: \(payload\) => useAbility\(payload, settings\)/);
 });
 
 test("server busy retries keep stage information at the shared combat/ability boundary", () => {

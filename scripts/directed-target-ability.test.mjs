@@ -198,13 +198,13 @@ test("12. missing source character blocks execution", () => {
   assert.equal(result.uiBlockReason, DIRECTED_ABILITY_BLOCK_REASON.noCharacter);
 });
 
-test("13. not-in-an-active-encounter blocks locally, and the handler reuses the EXISTING generic sessionAttackGate for turn/MAIN, no second gate function", () => {
-  const noSession = evaluateDirectedAbilityExecution({ sourceCharacterId: "char-1", abilityId: "ability-1", targetCharacterId: "char-2", sessionExists: false });
-  assert.equal(noSession.uiAllowed, false);
-  assert.equal(noSession.uiBlockReason, DIRECTED_ABILITY_BLOCK_REASON.noActiveEncounter);
+test("13. not-in-an-active-encounter no longer blocks directed abilities locally — turn/MAIN are gated only when combat exists", () => {
+  const noSession = evaluateDirectedAbilityExecution({ sourceCharacterId: "char-1", abilityId: "ability-1", targetCharacterId: "char-2" });
+  assert.equal(noSession.uiAllowed, true);
+  assert.equal(noSession.uiBlockReason, null);
   const idx = controllerSrc.indexOf('command?.type === "execute-directed-ability"');
   const block = controllerSrc.slice(idx, controllerSrc.length);
-  assert.match(block, /const sessionGate = sessionAttackGate\(sessionAtRequest\);/);
+  assert.match(block, /const sessionGate = sessionAtRequest \? sessionAttackGate\(sessionAtRequest\) : \{ blocked: false, reason: null \};/);
 });
 
 test("14. cooldown blocks execution — deriveSlotAvailability (reused unchanged) categorizes a cooldown directed ability as 'cooldown'", () => {
@@ -298,6 +298,23 @@ test("25. execution payload never includes ammo/magazine/fire-mode fields", () =
   }
 });
 
+test("25b. out-of-combat directed payload falls back to direct use_ability shape", () => {
+  const payload = buildDirectedAbilityExecutionPayload({
+    sourceCharacterId: "char-1",
+    abilityId: "ability-1",
+    selectedWeaponId: "weapon-1",
+    targetCharacterId: "char-2",
+    encounterId: "",
+  });
+  assert.equal(payload.character_id, "char-1");
+  assert.equal(payload.character_ability_id, "ability-1");
+  assert.equal(payload.selected_character_weapon_id, "weapon-1");
+  assert.equal(payload.target_character_id, "char-2");
+  assert.ok(!("kind" in payload));
+  assert.ok(!("encounter_id" in payload));
+  assert.ok(!("intent" in payload));
+});
+
 /* ── Success handling (26-32) ─────────────────────────────────────────── */
 
 test("26/27/28. a successful result refreshes combat session + selected runtime through the current shared helpers", () => {
@@ -376,10 +393,11 @@ test("38. a stale version response never overwrites newer runtime — isDirected
 
 /* ── no migration for this phase ──────────────────────────────────────── */
 
-test("combat_execute_action remains the single directed ability execution path", () => {
+test("directed ability uses combat_execute_action in combat and use_ability out of combat", () => {
   const payloadSrc = read("hud", "combat", "directedAbilityPayload.js");
   assert.match(payloadSrc, /kind:\s*"ability"/);
-  assert.match(controllerSrc, /resolveDirectedAbilityExecution\(ctx, \{ executeAction: \(payload\) => executeAction\(payload, settings\) \}\)/);
+  assert.match(payloadSrc, /await deps\.useAbility\(payload\)/);
+  assert.match(controllerSrc, /useAbility: \(payload\) => useAbility\(payload, settings\)/);
 });
 
 setTimeout(() => {

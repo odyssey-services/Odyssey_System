@@ -5089,6 +5089,51 @@ function grantReactionAction(payload, settings) {
   );
 }
 
+// api/abilityApi.js
+var abilityApi_exports = {};
+__export(abilityApi_exports, {
+  advanceCharacterAbilityStates: () => advanceCharacterAbilityStates,
+  getCharacterAbilities: () => getCharacterAbilities,
+  reloadCharacterAbility: () => reloadCharacterAbility,
+  syncCharacterResourcePools: () => syncCharacterResourcePools,
+  useAbility: () => useAbility
+});
+function getCharacterAbilities(characterId, settings) {
+  return callSupabaseRpc(
+    ABILITY_RPC_NAMES.getCharacterAbilities,
+    { p_character_id: characterId },
+    settings
+  );
+}
+function syncCharacterResourcePools(characterId, settings) {
+  return callSupabaseRpc(
+    ABILITY_RPC_NAMES.syncCharacterResourcePools,
+    { p_character_id: characterId },
+    settings
+  );
+}
+function useAbility(payload, settings) {
+  return callSupabaseRpc(
+    ABILITY_RPC_NAMES.useAbility,
+    { p_payload: payload },
+    settings
+  );
+}
+function reloadCharacterAbility(payload, settings) {
+  return callSupabaseRpc(
+    ABILITY_RPC_NAMES.reloadCharacterAbility,
+    { p_payload: payload },
+    settings
+  );
+}
+function advanceCharacterAbilityStates(characterId, settings) {
+  return callSupabaseRpc(
+    ABILITY_RPC_NAMES.advanceCharacterAbilityStates,
+    { p_character_id: characterId },
+    settings
+  );
+}
+
 // api/inventoryApi.js
 var inventoryApi_exports = {};
 __export(inventoryApi_exports, {
@@ -5586,8 +5631,7 @@ function isDirectAbilityAttackResultStale(requestCtx, currentCtx) {
 var INSTANT_ABILITY_BLOCK_REASON = Object.freeze({
   noCharacter: "No character loaded.",
   noAbility: "No ability selected.",
-  inFlight: "Ability is resolving.",
-  noActiveEncounter: "Not in an active encounter."
+  inFlight: "Ability is resolving."
 });
 function blocked3(reason) {
   return { uiAllowed: false, uiBlockReason: reason };
@@ -5597,13 +5641,11 @@ function evaluateInstantAbilityExecution(ctx = {}) {
   const {
     sourceCharacterId = null,
     abilityId = null,
-    inFlight = false,
-    sessionExists = false
+    inFlight = false
   } = ctx;
   if (!sourceCharacterId) return blocked3(INSTANT_ABILITY_BLOCK_REASON.noCharacter);
   if (!abilityId) return blocked3(INSTANT_ABILITY_BLOCK_REASON.noAbility);
   if (inFlight) return blocked3(INSTANT_ABILITY_BLOCK_REASON.inFlight);
-  if (!sessionExists) return blocked3(INSTANT_ABILITY_BLOCK_REASON.noActiveEncounter);
   return ALLOWED3;
 }
 function buildInstantAbilityRequestSignature(ctx = {}) {
@@ -5615,11 +5657,19 @@ function isInstantAbilityResultStale(requestCtx, currentCtx) {
 
 // hud/combat/instantAbilityPayload.js
 function buildInstantAbilityExecutionPayload(input = {}) {
+  const encounterId = String(input.encounterId ?? "").trim();
+  if (!encounterId) {
+    return {
+      character_id: String(input.sourceCharacterId ?? "").trim(),
+      character_ability_id: String(input.abilityId ?? "").trim(),
+      selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim()
+    };
+  }
   const payload = {
     kind: "ability",
     include_runtime: false,
     character_id: String(input.sourceCharacterId ?? "").trim(),
-    encounter_id: String(input.encounterId ?? "").trim(),
+    encounter_id: encounterId,
     actor_player_id: String(input.actorPlayerId ?? "").trim(),
     actor_is_gm: !!input.actorIsGm,
     intent: {
@@ -5638,7 +5688,8 @@ function asObject(v) {
 function normalizeInstantAbilityResult(raw) {
   const r = asObject(raw);
   const spent = asObject(r.spent);
-  const result = asObject(r.result);
+  const nestedResult = asObject(r.result);
+  const result = nestedResult && Object.keys(nestedResult).length > 0 ? nestedResult : r;
   const ability = asObject(result.ability);
   const resource = asObject(result.resource);
   return {
@@ -5653,14 +5704,15 @@ function normalizeInstantAbilityResult(raw) {
     resourceRemaining: resource.remaining ?? resource.current_value ?? null,
     narrativeOnly: result.result?.narrative_only === true,
     encounterStateVersion: r.encounter_state_version ?? null,
-    characterStateVersion: r.character_state_version ?? null
+    characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null
   };
 }
 async function resolveInstantAbilityExecution(ctx, deps) {
   const payload = buildInstantAbilityExecutionPayload(ctx);
+  const inCombat = String(ctx?.encounterId ?? "").trim().length > 0;
   let raw;
   try {
-    raw = await deps.executeAction(payload);
+    raw = inCombat ? await deps.executeAction(payload) : await deps.useAbility(payload);
   } catch (error) {
     const code = error?.code ?? error?.details?.code ?? error?.details?.error ?? null;
     return {
@@ -5695,8 +5747,7 @@ var DIRECTED_ABILITY_BLOCK_REASON = Object.freeze({
   // direct-ability-attack uses, since the missing-target situation reads
   // identically to the player regardless of which ability class it is.
   noTarget: "Select a target first.",
-  targetNotLinked: "Target has no linked character.",
-  noActiveEncounter: "Not in an active encounter."
+  targetNotLinked: "Target has no linked character."
 });
 function blocked4(reason) {
   return { uiAllowed: false, uiBlockReason: reason };
@@ -5708,15 +5759,13 @@ function evaluateDirectedAbilityExecution(ctx = {}) {
     abilityId = null,
     targetTokenId = null,
     targetCharacterId = null,
-    inFlight = false,
-    sessionExists = false
+    inFlight = false
   } = ctx;
   if (!sourceCharacterId) return blocked4(DIRECTED_ABILITY_BLOCK_REASON.noCharacter);
   if (!abilityId) return blocked4(DIRECTED_ABILITY_BLOCK_REASON.noAbility);
   if (inFlight) return blocked4(DIRECTED_ABILITY_BLOCK_REASON.inFlight);
   if (!targetTokenId && !targetCharacterId) return blocked4(DIRECTED_ABILITY_BLOCK_REASON.noTarget);
   if (!targetCharacterId) return blocked4(DIRECTED_ABILITY_BLOCK_REASON.targetNotLinked);
-  if (!sessionExists) return blocked4(DIRECTED_ABILITY_BLOCK_REASON.noActiveEncounter);
   return ALLOWED4;
 }
 function buildDirectedAbilityRequestSignature(ctx = {}) {
@@ -5728,11 +5777,20 @@ function isDirectedAbilityResultStale(requestCtx, currentCtx) {
 
 // hud/combat/directedAbilityPayload.js
 function buildDirectedAbilityExecutionPayload(input = {}) {
+  const encounterId = String(input.encounterId ?? "").trim();
+  if (!encounterId) {
+    return {
+      character_id: String(input.sourceCharacterId ?? "").trim(),
+      character_ability_id: String(input.abilityId ?? "").trim(),
+      selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim(),
+      target_character_id: String(input.targetCharacterId ?? "").trim()
+    };
+  }
   const payload = {
     kind: "ability",
     include_runtime: false,
     character_id: String(input.sourceCharacterId ?? "").trim(),
-    encounter_id: String(input.encounterId ?? "").trim(),
+    encounter_id: encounterId,
     actor_player_id: String(input.actorPlayerId ?? "").trim(),
     actor_is_gm: !!input.actorIsGm,
     intent: {
@@ -5752,7 +5810,8 @@ function asObject2(v) {
 function normalizeDirectedAbilityResult(raw) {
   const r = asObject2(raw);
   const spent = asObject2(r.spent);
-  const result = asObject2(r.result);
+  const nestedResult = asObject2(r.result);
+  const result = nestedResult && Object.keys(nestedResult).length > 0 ? nestedResult : r;
   const ability = asObject2(result.ability);
   const resource = asObject2(result.resource);
   return {
@@ -5768,14 +5827,15 @@ function normalizeDirectedAbilityResult(raw) {
     resourceRemaining: resource.remaining ?? resource.current_value ?? null,
     narrativeOnly: result.result?.narrative_only === true,
     encounterStateVersion: r.encounter_state_version ?? null,
-    characterStateVersion: r.character_state_version ?? null
+    characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null
   };
 }
 async function resolveDirectedAbilityExecution(ctx, deps) {
   const payload = buildDirectedAbilityExecutionPayload(ctx);
+  const inCombat = String(ctx?.encounterId ?? "").trim().length > 0;
   let raw;
   try {
-    raw = await deps.executeAction(payload);
+    raw = inCombat ? await deps.executeAction(payload) : await deps.useAbility(payload);
   } catch (error) {
     const code = error?.code ?? error?.details?.code ?? error?.details?.error ?? null;
     return {
@@ -11305,7 +11365,7 @@ function setupSceneSelection(hooks = {}) {
           return;
         }
         const sessionAtRequest = currentMappedSession();
-        const sessionGate = sessionAttackGate(sessionAtRequest);
+        const sessionGate = sessionAtRequest ? sessionAttackGate(sessionAtRequest) : { blocked: false, reason: null };
         if (sessionGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
           ephemeral.directAbilityAttackResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
@@ -11522,7 +11582,10 @@ function setupSceneSelection(hooks = {}) {
               let outcome;
               try {
                 outcome = await executeCombatAbilityWithRetry(
-                  () => resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
+                  () => resolveInstantAbilityExecution(ctx, {
+                    executeAction: (payload) => executeAction(payload, settings),
+                    useAbility: (payload) => useAbility(payload, settings)
+                  }),
                   {
                     characterId: ctx.sourceCharacterId,
                     actionId,
@@ -11666,7 +11729,7 @@ function setupSceneSelection(hooks = {}) {
           if (lastState) publishState(lastState);
           return;
         }
-        const sessionGate = sessionAttackGate(sessionAtRequest);
+        const sessionGate = sessionAtRequest ? sessionAttackGate(sessionAtRequest) : { blocked: false, reason: null };
         if (sessionGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
           ephemeral.directedAbilityExecutionResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
@@ -11716,7 +11779,10 @@ function setupSceneSelection(hooks = {}) {
             let outcome;
             try {
               outcome = await executeCombatAbilityWithRetry(
-                () => resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
+                () => resolveDirectedAbilityExecution(ctx, {
+                  executeAction: (payload) => executeAction(payload, settings),
+                  useAbility: (payload) => useAbility(payload, settings)
+                }),
                 {
                   characterId: ctx.sourceCharacterId,
                   actionId,
@@ -14796,51 +14862,6 @@ async function getSelectedTokenCharacterLinks() {
     token,
     link: getTokenCharacterLink(token)
   }));
-}
-
-// api/abilityApi.js
-var abilityApi_exports = {};
-__export(abilityApi_exports, {
-  advanceCharacterAbilityStates: () => advanceCharacterAbilityStates,
-  getCharacterAbilities: () => getCharacterAbilities,
-  reloadCharacterAbility: () => reloadCharacterAbility,
-  syncCharacterResourcePools: () => syncCharacterResourcePools,
-  useAbility: () => useAbility
-});
-function getCharacterAbilities(characterId, settings) {
-  return callSupabaseRpc(
-    ABILITY_RPC_NAMES.getCharacterAbilities,
-    { p_character_id: characterId },
-    settings
-  );
-}
-function syncCharacterResourcePools(characterId, settings) {
-  return callSupabaseRpc(
-    ABILITY_RPC_NAMES.syncCharacterResourcePools,
-    { p_character_id: characterId },
-    settings
-  );
-}
-function useAbility(payload, settings) {
-  return callSupabaseRpc(
-    ABILITY_RPC_NAMES.useAbility,
-    { p_payload: payload },
-    settings
-  );
-}
-function reloadCharacterAbility(payload, settings) {
-  return callSupabaseRpc(
-    ABILITY_RPC_NAMES.reloadCharacterAbility,
-    { p_payload: payload },
-    settings
-  );
-}
-function advanceCharacterAbilityStates(characterId, settings) {
-  return callSupabaseRpc(
-    ABILITY_RPC_NAMES.advanceCharacterAbilityStates,
-    { p_character_id: characterId },
-    settings
-  );
 }
 
 // api/characterApi.js

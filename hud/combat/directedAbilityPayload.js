@@ -1,11 +1,7 @@
 // Combat HUD — Directed Target Ability Execution (Phase 4.1B.2) payload
-// adapter (PURE). Builds the public.combat_execute_action(jsonb) payload for
-// kind:"ability" — the SAME RPC Phase 4.1B.1 already wired up for
-// instant/self abilities. See
-// docs/PHASE_4_1B_2_DIRECTED_TARGET_ABILITIES_AUDIT.md §5-7: use_ability
-// already reads intent.target_character_id (or the top-level equivalent)
-// and resolves it verbatim when the ability's own target_type isn't 'self'
-// — no server change needed for this ability class either.
+// adapter (PURE). In combat this stays on public.combat_execute_action.
+// Out of combat it falls back to public.use_ability(jsonb), so the same
+// ability can be used without spending MAIN/MOVE.
 //
 // No target_body_part_id/weapon_id/ammo/magazine/fire_mode field is ever
 // built — this ability class needs a target CHARACTER only, never a body
@@ -21,19 +17,28 @@ export { describeError, ERROR_MESSAGES };
  *   abilityId: string,
  *   selectedWeaponId?: (string|null),
  *   targetCharacterId: string,
- *   encounterId: string,
+ *   encounterId?: (string|null),
  *   expectedEncounterVersion?: (number|null),
  *   actorPlayerId?: (string|null),
  *   actorIsGm?: boolean,
  * }} input
- * @returns {object} the exact combat_execute_action(jsonb) payload
+ * @returns {object} the exact RPC payload
  */
 export function buildDirectedAbilityExecutionPayload(input = {}) {
+  const encounterId = String(input.encounterId ?? "").trim();
+  if (!encounterId) {
+    return {
+      character_id: String(input.sourceCharacterId ?? "").trim(),
+      character_ability_id: String(input.abilityId ?? "").trim(),
+      selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim(),
+      target_character_id: String(input.targetCharacterId ?? "").trim(),
+    };
+  }
   const payload = {
     kind: "ability",
     include_runtime: false,
     character_id: String(input.sourceCharacterId ?? "").trim(),
-    encounter_id: String(input.encounterId ?? "").trim(),
+    encounter_id: encounterId,
     actor_player_id: String(input.actorPlayerId ?? "").trim(),
     actor_is_gm: !!input.actorIsGm,
     intent: {
@@ -65,7 +70,8 @@ function asObject(v) {
 export function normalizeDirectedAbilityResult(raw) {
   const r = asObject(raw);
   const spent = asObject(r.spent);
-  const result = asObject(r.result);
+  const nestedResult = asObject(r.result);
+  const result = nestedResult && Object.keys(nestedResult).length > 0 ? nestedResult : r;
   const ability = asObject(result.ability);
   const resource = asObject(result.resource);
   return {
@@ -81,21 +87,23 @@ export function normalizeDirectedAbilityResult(raw) {
     resourceRemaining: resource.remaining ?? resource.current_value ?? null,
     narrativeOnly: result.result?.narrative_only === true,
     encounterStateVersion: r.encounter_state_version ?? null,
-    characterStateVersion: r.character_state_version ?? null,
+    characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null,
   };
 }
 
 /**
- * Run the directed-ability execution RPC. deps: { executeAction(payload) ->
- * Promise<rawResult> }. Returns { ok, payload, raw, normalized, error, code }.
- * Network errors are caught, never thrown to the caller.
+ * Run the directed-ability execution RPC. In combat this uses
+ * combat_execute_action; out of combat it falls back to use_ability.
  */
 export async function resolveDirectedAbilityExecution(ctx, deps) {
   const payload = buildDirectedAbilityExecutionPayload(ctx);
+  const inCombat = String(ctx?.encounterId ?? "").trim().length > 0;
 
   let raw;
   try {
-    raw = await deps.executeAction(payload);
+    raw = inCombat
+      ? await deps.executeAction(payload)
+      : await deps.useAbility(payload);
   } catch (error) {
     const code = error?.code ?? error?.details?.code ?? error?.details?.error ?? null;
     return {

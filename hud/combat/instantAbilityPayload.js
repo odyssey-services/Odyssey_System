@@ -1,8 +1,8 @@
 // Combat HUD — Instant / Self Ability Execution (Phase 4.1B.1) payload
-// adapter (PURE). Builds the public.combat_execute_action(jsonb) payload for
-// kind:"ability" — see docs/PHASE_4_1B_1_INSTANT_SELF_ABILITIES_AUDIT.md §5/6/7
-// for why this RPC (not perform_attack, not a new one) is the correct,
-// already-server-authoritative path for this ability class.
+// adapter (PURE). In combat this goes through public.combat_execute_action
+// (so MAIN/MOVE are spent server-side). Out of combat it falls back to
+// public.use_ability(jsonb), preserving resource/cooldown costs without
+// requiring combat actions.
 //
 // No target_character_id/target_body_part_id/weapon_id/ammo/magazine/
 // fire_mode field is ever built — this ability class has none of those
@@ -21,19 +21,27 @@ export { describeError, ERROR_MESSAGES };
  *   sourceCharacterId: string,
  *   abilityId: string,
  *   selectedWeaponId?: (string|null),
- *   encounterId: string,
+ *   encounterId?: (string|null),
  *   expectedEncounterVersion?: (number|null),
  *   actorPlayerId?: (string|null),
  *   actorIsGm?: boolean,
  * }} input
- * @returns {object} the exact combat_execute_action(jsonb) payload
+ * @returns {object} the exact RPC payload
  */
 export function buildInstantAbilityExecutionPayload(input = {}) {
+  const encounterId = String(input.encounterId ?? "").trim();
+  if (!encounterId) {
+    return {
+      character_id: String(input.sourceCharacterId ?? "").trim(),
+      character_ability_id: String(input.abilityId ?? "").trim(),
+      selected_character_weapon_id: String(input.selectedWeaponId ?? "").trim(),
+    };
+  }
   const payload = {
     kind: "ability",
     include_runtime: false,
     character_id: String(input.sourceCharacterId ?? "").trim(),
-    encounter_id: String(input.encounterId ?? "").trim(),
+    encounter_id: encounterId,
     actor_player_id: String(input.actorPlayerId ?? "").trim(),
     actor_is_gm: !!input.actorIsGm,
     intent: {
@@ -66,7 +74,8 @@ function asObject(v) {
 export function normalizeInstantAbilityResult(raw) {
   const r = asObject(raw);
   const spent = asObject(r.spent);
-  const result = asObject(r.result);
+  const nestedResult = asObject(r.result);
+  const result = nestedResult && Object.keys(nestedResult).length > 0 ? nestedResult : r;
   const ability = asObject(result.ability);
   const resource = asObject(result.resource);
   return {
@@ -81,21 +90,23 @@ export function normalizeInstantAbilityResult(raw) {
     resourceRemaining: resource.remaining ?? resource.current_value ?? null,
     narrativeOnly: result.result?.narrative_only === true,
     encounterStateVersion: r.encounter_state_version ?? null,
-    characterStateVersion: r.character_state_version ?? null,
+    characterStateVersion: r.character_state_version ?? result.combat_state?.state_version ?? null,
   };
 }
 
 /**
- * Run the instant-ability execution RPC. deps: { executeAction(payload) ->
- * Promise<rawResult> }. Returns { ok, payload, raw, normalized, error, code }.
- * Network errors are caught, never thrown to the caller.
+ * Run the instant-ability execution RPC. In combat this uses
+ * combat_execute_action; out of combat it falls back to use_ability.
  */
 export async function resolveInstantAbilityExecution(ctx, deps) {
   const payload = buildInstantAbilityExecutionPayload(ctx);
+  const inCombat = String(ctx?.encounterId ?? "").trim().length > 0;
 
   let raw;
   try {
-    raw = await deps.executeAction(payload);
+    raw = inCombat
+      ? await deps.executeAction(payload)
+      : await deps.useAbility(payload);
   } catch (error) {
     const code = error?.code ?? error?.details?.code ?? error?.details?.error ?? null;
     return {

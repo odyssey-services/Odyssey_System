@@ -18,7 +18,6 @@ export const INSTANT_ABILITY_BLOCK_REASON = Object.freeze({
   noCharacter: "No character loaded.",
   noAbility: "No ability selected.",
   inFlight: "Ability is resolving.",
-  noActiveEncounter: "Not in an active encounter.",
 });
 
 function blocked(reason) {
@@ -32,7 +31,6 @@ const ALLOWED = Object.freeze({ uiAllowed: true, uiBlockReason: null });
  *   sourceCharacterId?: (string|null),
  *   abilityId?: (string|null),
  *   inFlight?: boolean,
- *   sessionExists?: boolean,
  * }} ctx
  * @returns {{ uiAllowed: boolean, uiBlockReason: (string|null) }}
  */
@@ -41,13 +39,11 @@ export function evaluateInstantAbilityExecution(ctx = {}) {
     sourceCharacterId = null,
     abilityId = null,
     inFlight = false,
-    sessionExists = false,
   } = ctx;
 
   if (!sourceCharacterId) return blocked(INSTANT_ABILITY_BLOCK_REASON.noCharacter);
   if (!abilityId) return blocked(INSTANT_ABILITY_BLOCK_REASON.noAbility);
   if (inFlight) return blocked(INSTANT_ABILITY_BLOCK_REASON.inFlight);
-  if (!sessionExists) return blocked(INSTANT_ABILITY_BLOCK_REASON.noActiveEncounter);
   return ALLOWED;
 }
 

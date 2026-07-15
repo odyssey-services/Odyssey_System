@@ -12,10 +12,6 @@
 // that a target is SELECTED and LINKED to a real character, then lets the
 // server accept or reject it.
 //
-// combat_execute_action REQUIRES an active combat encounter (no free-play
-// fallback) — same constraint audited for instant/self abilities in Phase
-// 4.1B.1, unchanged here since both classes go through the same RPC.
-
 export const DIRECTED_ABILITY_BLOCK_REASON = Object.freeze({
   noCharacter: "No character loaded.",
   noAbility: "No ability selected.",
@@ -25,7 +21,6 @@ export const DIRECTED_ABILITY_BLOCK_REASON = Object.freeze({
   // identically to the player regardless of which ability class it is.
   noTarget: "Select a target first.",
   targetNotLinked: "Target has no linked character.",
-  noActiveEncounter: "Not in an active encounter.",
 });
 
 function blocked(reason) {
@@ -41,7 +36,6 @@ const ALLOWED = Object.freeze({ uiAllowed: true, uiBlockReason: null });
  *   targetTokenId?: (string|null),
  *   targetCharacterId?: (string|null),
  *   inFlight?: boolean,
- *   sessionExists?: boolean,
  * }} ctx
  * @returns {{ uiAllowed: boolean, uiBlockReason: (string|null) }}
  */
@@ -52,7 +46,6 @@ export function evaluateDirectedAbilityExecution(ctx = {}) {
     targetTokenId = null,
     targetCharacterId = null,
     inFlight = false,
-    sessionExists = false,
   } = ctx;
 
   if (!sourceCharacterId) return blocked(DIRECTED_ABILITY_BLOCK_REASON.noCharacter);
@@ -62,7 +55,6 @@ export function evaluateDirectedAbilityExecution(ctx = {}) {
   if (!targetCharacterId) return blocked(DIRECTED_ABILITY_BLOCK_REASON.targetNotLinked);
   // Deliberately NO self-target check — see file header. NO body-zone check
   // exists here at all (this ability class has no such concept).
-  if (!sessionExists) return blocked(DIRECTED_ABILITY_BLOCK_REASON.noActiveEncounter);
   return ALLOWED;
 }
 

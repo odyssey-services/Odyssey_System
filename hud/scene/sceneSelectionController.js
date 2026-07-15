@@ -26,6 +26,7 @@ import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/sett
 import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/characterPlacementApi.js";
 import { loadWeaponProfileMagazine, getCharacterArmory, switchWeaponFireMode, switchActiveWeapon } from "../../api/weaponApi.js";
 import { performAttack, executeAction, getActiveRuntime } from "../../api/combatApi.js";
+import { useAbility } from "../../api/abilityApi.js";
 import { getCharacterInventory } from "../../api/inventoryApi.js";
 import { resolveReloadMagazineId, normalizeReloadRpcResult } from "./reloadPolicy.js";
 import { normalizeFireModeRpcResult } from "./fireModePolicy.js";
@@ -2524,7 +2525,7 @@ export function setupSceneSelection(hooks = {}) {
         // server re-checks turn/MAIN inside perform_attack regardless, now
         // for ability attacks too — see migration 102).
         const sessionAtRequest = currentMappedSession();
-        const sessionGate = sessionAttackGate(sessionAtRequest);
+        const sessionGate = sessionAtRequest ? sessionAttackGate(sessionAtRequest) : { blocked: false, reason: null };
         if (sessionGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
           ephemeral.directAbilityAttackResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
@@ -2796,7 +2797,10 @@ export function setupSceneSelection(hooks = {}) {
               let outcome;
               try {
                 outcome = await executeCombatAbilityWithRetry(
-                  () => resolveInstantAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
+                  () => resolveInstantAbilityExecution(ctx, {
+                    executeAction: (payload) => executeAction(payload, settings),
+                    useAbility: (payload) => useAbility(payload, settings),
+                  }),
                   {
                     characterId: ctx.sourceCharacterId,
                     actionId,
@@ -2963,7 +2967,7 @@ export function setupSceneSelection(hooks = {}) {
 
         // Client-side session pre-gate (UX mirror only — the server
         // re-checks turn/MAIN inside combat_execute_action regardless).
-        const sessionGate = sessionAttackGate(sessionAtRequest);
+        const sessionGate = sessionAtRequest ? sessionAttackGate(sessionAtRequest) : { blocked: false, reason: null };
         if (sessionGate.blocked) {
           ephemeral.commandStatus = { type: "error", message: sessionGate.reason };
           ephemeral.directedAbilityExecutionResult = { ok: false, error: "SESSION_GATE", message: sessionGate.reason };
@@ -3016,7 +3020,10 @@ export function setupSceneSelection(hooks = {}) {
             let outcome;
             try {
               outcome = await executeCombatAbilityWithRetry(
-                () => resolveDirectedAbilityExecution(ctx, { executeAction: (payload) => executeAction(payload, settings) }),
+                () => resolveDirectedAbilityExecution(ctx, {
+                  executeAction: (payload) => executeAction(payload, settings),
+                  useAbility: (payload) => useAbility(payload, settings),
+                }),
                 {
                   characterId: ctx.sourceCharacterId,
                   actionId,
