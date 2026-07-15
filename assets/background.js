@@ -13828,6 +13828,24 @@ function fireModeSelectorRect() {
   const height = computeCompanionSelectorHeight(visibleFireModeCount());
   return companionPopoverRectAboveGun(COMPANION_SELECTOR_WIDTH, height);
 }
+async function replaySelectionToCompanion(moduleId, reason) {
+  if (!lastSelectionPayload) return false;
+  try {
+    await lib_default.broadcast.sendMessage(BC_HUD_SELECTION, lastSelectionPayload, {
+      destination: "LOCAL"
+    });
+    logDebugEvent("popover", "companion-fast-replay", {
+      moduleId,
+      reason,
+      status: lastSelectionPayload?.status ?? null,
+      selectedItemId: lastSelectionPayload?.selectedItemId ?? null,
+      characterId: lastSelectionPayload?.characterId ?? null
+    });
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
 async function setGunWeaponSelectorOpen(open) {
   const next = Boolean(open);
   if (next === gunWeaponSelectorOpen) return;
@@ -13842,6 +13860,7 @@ async function setGunWeaponSelectorOpen(open) {
           url: pageUrl("gun-weapon-selector"),
           ...paramsForRect(rect)
         });
+        await replaySelectionToCompanion("gun-weapon-selector", "weapon-selector-opened");
       } catch (_e) {
       }
     }
@@ -13866,6 +13885,7 @@ async function setGunMagazineSelectorOpen(open) {
           url: pageUrl("gun-magazine-selector"),
           ...paramsForRect(rect)
         });
+        await replaySelectionToCompanion("gun-magazine-selector", "magazine-selector-opened");
       } catch (_e) {
       }
     }
@@ -13890,6 +13910,7 @@ async function setGunFireModeSelectorOpen(open) {
           url: pageUrl("gun-fire-mode-selector"),
           ...paramsForRect(rect)
         });
+        await replaySelectionToCompanion("gun-fire-mode-selector", "fire-mode-selector-opened");
       } catch (_e) {
       }
     }

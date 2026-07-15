@@ -29,6 +29,10 @@ const overlaySrc = fs.readFileSync(
   path.join(repoRoot, "hud", "overlay", "combatHudOverlayPage.js"),
   "utf8",
 ).replace(/\r\n/g, "\n");
+const controllerSrc = fs.readFileSync(
+  path.join(repoRoot, "hud", "overlay", "combatHudOverlayController.js"),
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 let passed = 0;
 let failed = 0;
@@ -181,6 +185,14 @@ test("ready payload available immediately -> list, never false empty", () => {
 test("companion selector requests force replay on mount instead of empty selection request", () => {
   assert.ok(overlaySrc.includes("reason: \"companion-mount\""));
   assert.ok(overlaySrc.includes("forceReplay: true"));
+});
+
+test("controller fast-replays the last ready payload when a companion selector opens", () => {
+  assert.ok(controllerSrc.includes("companion-fast-replay"));
+  assert.ok(controllerSrc.includes("weapon-selector-opened"));
+  assert.ok(controllerSrc.includes("magazine-selector-opened"));
+  assert.ok(controllerSrc.includes("fire-mode-selector-opened"));
+  assert.ok(controllerSrc.includes("BC_HUD_SELECTION"));
 });
 
 test("patch before base selection requests replay instead of synthesizing fake selector state", () => {
