@@ -185,10 +185,18 @@ test("14. failure clears pending state unconditionally — reset to null right a
   assert.ok(resetIdx > -1 && okBranchIdx > -1 && resetIdx < okBranchIdx);
 });
 
-test("14b. ACTION_BUSY_RETRY gets exactly one automatic retry with a short delay and explicit retry-result logging", () => {
+test("14b. ACTION_BUSY_RETRY uses bounded shared retries without waiting on its own active-action marker, and logs the final retry result", () => {
+  const helperIdx = controllerSrc.indexOf("async function executeCombatAbilityWithRetry");
+  const helperBlock = controllerSrc.slice(
+    helperIdx,
+    controllerSrc.indexOf("async function refreshCombatSessionSafe", helperIdx),
+  );
   assert.match(controllerSrc, /retryDelayMs = 400/);
-  assert.match(controllerSrc, /if \(normalizeOutcomeCode\(outcome\) === "ACTION_BUSY_RETRY"\)/);
-  assert.match(controllerSrc, /retryAttempt: 1/);
+  assert.match(controllerSrc, /retryLimit = 3/);
+  assert.match(helperBlock, /async function waitForAbilityExecutionReady\(timeoutMs = 3000\)/);
+  assert.doesNotMatch(helperBlock, /activeCombatActionCharacters\.has\(normalizedCharacterId\)/);
+  assert.match(helperBlock, /retryAttempt: attempt \+ 1/);
+  assert.match(helperBlock, /retryAttemptsUsed: attempt/);
   assert.match(controllerSrc, /logDebugEvent\(\s*"abilities",\s*"ability-execute-retry-result"/);
 });
 

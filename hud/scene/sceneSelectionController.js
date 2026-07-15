@@ -378,34 +378,63 @@ export function setupSceneSelection(hooks = {}) {
     actionId,
     debugAction,
     retryDelayMs = 400,
+    retryLimit = 3,
   } = {}) {
-    let outcome = await executor();
-    if (normalizeOutcomeCode(outcome) === "ACTION_BUSY_RETRY") {
-      const normalizedRetryDelayMs = Math.max(0, Number(retryDelayMs) || 0);
+    const normalizedCharacterId = String(characterId ?? "").trim() || null;
+    const normalizedActionId = String(actionId ?? "").trim() || null;
+    const normalizedRetryDelayMs = Math.max(0, Number(retryDelayMs) || 0);
+    const normalizedRetryLimit = Math.max(0, Number(retryLimit) || 0);
+
+    async function waitForAbilityExecutionReady(timeoutMs = 3000) {
+      const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
+      while (Date.now() < deadline) {
+        const locallyBusy = ephemeral.weaponSwitchInFlight
+          || ephemeral.reloadInFlight
+          || ephemeral.fireModeInFlight
+          || combatRuntimePending;
+        if (!locallyBusy) return;
+        await waitMs(50);
+      }
+    }
+
+    let outcome = null;
+    let attempt = 0;
+    while (attempt <= normalizedRetryLimit) {
+      await waitForAbilityExecutionReady();
+      outcome = await executor();
+      if (normalizeOutcomeCode(outcome) !== "ACTION_BUSY_RETRY" || attempt >= normalizedRetryLimit) {
+        break;
+      }
+      const nextDelayMs = normalizedRetryDelayMs * (attempt + 1);
       logDebugEvent(
         "abilities",
         debugAction || "ability-execute-retry",
         {
-          characterId: String(characterId ?? "").trim() || null,
-          characterActionId: String(actionId ?? "").trim() || null,
+          characterId: normalizedCharacterId,
+          characterActionId: normalizedActionId,
           reason: "ACTION_BUSY_RETRY",
-          retryAttempt: 1,
-          retryDelayMs: normalizedRetryDelayMs,
+          retryAttempt: attempt + 1,
+          retryDelayMs: nextDelayMs,
+          retryLimit: normalizedRetryLimit,
           stage: outcome?.raw?.stage ?? outcome?.stage ?? null,
         },
         true,
         "pending",
       );
-      await waitMs(normalizedRetryDelayMs);
-      outcome = await executor();
+      await waitMs(nextDelayMs);
+      attempt += 1;
+    }
+
+    if (attempt > 0) {
       logDebugEvent(
         "abilities",
         "ability-execute-retry-result",
         {
-          characterId: String(characterId ?? "").trim() || null,
-          characterActionId: String(actionId ?? "").trim() || null,
+          characterId: normalizedCharacterId,
+          characterActionId: normalizedActionId,
           ok: outcome?.ok !== false,
           code: normalizeOutcomeCode(outcome),
+          retryAttemptsUsed: attempt,
         },
         outcome?.ok !== false,
       );
