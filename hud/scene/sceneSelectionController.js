@@ -458,6 +458,17 @@ export function setupSceneSelection(hooks = {}) {
     return nextValue;
   }
 
+  function applyAuthoritativeArmoryToHeavyCache(characterId, armory, encounterId = null) {
+    const normalizedCharacterId = String(characterId ?? "").trim();
+    if (!normalizedCharacterId || !armory || typeof armory !== "object") return null;
+    const previous = getHeavyRuntimeCache(normalizedCharacterId) ?? {};
+    return writeHeavyRuntimeCache(normalizedCharacterId, {
+      encounterId: String(encounterId ?? "").trim() || null,
+      armory,
+      canonicalArmory: buildCanonicalArmory(armory, previous.inventory ?? null),
+    });
+  }
+
   function isWeaponHeavyCacheStale(characterId, encounterId = null) {
     const normalizedCharacterId = String(characterId ?? "").trim();
     if (!normalizedCharacterId) return true;
@@ -1076,6 +1087,7 @@ export function setupSceneSelection(hooks = {}) {
       if (!normalizedCharacterId || (!armory && !inventory)) return getHeavyRuntimeCache(normalizedCharacterId);
 
       const normalizedEncounterId = String(encounterId ?? "").trim() || null;
+      const refreshStartedAt = Date.now();
       const tasks = [];
       if (armory) {
         tasks.push({
@@ -1154,9 +1166,29 @@ export function setupSceneSelection(hooks = {}) {
         return getHeavyRuntimeCache(normalizedCharacterId);
       }
 
+      const previous = getHeavyRuntimeCache(normalizedCharacterId) ?? {};
+      const previousUpdatedAt = Number(previous.updatedAt ?? 0);
+      if (
+        nextPatch.armory
+        && Number.isFinite(previousUpdatedAt)
+        && previousUpdatedAt > refreshStartedAt
+      ) {
+        logDebugEvent("weapon", "heavy-armory-stale-ignored", {
+          characterId: normalizedCharacterId,
+          reason,
+          encounterId: normalizedEncounterId,
+          cacheUpdatedAt: previousUpdatedAt,
+          refreshStartedAt,
+        }, true);
+        delete nextPatch.armory;
+      }
+
+      if (Object.keys(nextPatch).length === 0) {
+        return previous;
+      }
+
       nextPatch.encounterId = normalizedEncounterId;
       if (nextPatch.armory || nextPatch.inventory) {
-        const previous = getHeavyRuntimeCache(normalizedCharacterId) ?? {};
         nextPatch.canonicalArmory = buildCanonicalArmory(
           nextPatch.armory ?? previous.armory ?? null,
           nextPatch.inventory ?? previous.inventory ?? null,
@@ -3277,10 +3309,35 @@ export function setupSceneSelection(hooks = {}) {
             resultActiveWeaponId: String(result?.active_weapon_id ?? "").trim() || null,
             activeWeaponIdFromArmory: String(result?.armory?.active_weapon_id ?? "").trim() || null,
           }, true);
+          const authoritativeArmory = result?.armory && typeof result.armory === "object"
+            ? result.armory
+            : null;
+          const authoritativeActiveWeaponId = String(
+            result?.active_weapon_id
+            ?? authoritativeArmory?.active_weapon_id
+            ?? weaponId,
+          ).trim() || null;
+          if (authoritativeArmory) {
+            applyAuthoritativeArmoryToHeavyCache(
+              characterIdAtRequest,
+              authoritativeArmory,
+              session?.exists ? session.id : null,
+            );
+            applyHeavyCacheToLastReadyState(characterIdAtRequest);
+            ephemeral.selectedWeaponId = authoritativeActiveWeaponId;
+            if (characterIdAtRequest && authoritativeActiveWeaponId) {
+              selectedWeaponMemory.set(characterIdAtRequest, authoritativeActiveWeaponId);
+            }
+            logDebugEvent("weapon", "switch_active_weapon:authoritative-armory-applied", {
+              characterId: characterIdAtRequest,
+              targetWeaponId: weaponId,
+              activeWeaponId: authoritativeActiveWeaponId,
+            }, true);
+            broadcastReadyStateUpdate(["weapon"], "weapon-switch-confirmed");
+          }
           await refreshHeavyCharacterData(characterIdAtRequest, {
             reason: "weapon-switched",
             encounterId: session?.exists ? session.id : null,
-            armory: true,
             inventory: true,
           });
           await refreshCombatSessionSafe(sessionController, "weapon-switched");

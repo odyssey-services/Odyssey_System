@@ -65,12 +65,14 @@ test("successful switch flow refreshes combat session and runtime quickbar", () 
   assert.ok(sceneControllerSrc.includes('await refreshCombatSessionSafe(sessionController, "weapon-switched");'));
   assert.ok(sceneControllerSrc.includes('await refreshCurrentReadyRuntimeOnly("weapon-runtime-loaded");'));
   assert.ok(sceneControllerSrc.includes("await quickbarController.refresh();"));
+  assert.ok(sceneControllerSrc.includes('broadcastReadyStateUpdate(["weapon"], "weapon-switch-confirmed");'));
   assert.ok(!sceneControllerSrc.includes('await refreshSelectedCharacterRuntime("weapon-switched", { refreshQuickbar: true });'));
 });
 
 test("successful switch flow does not regress to publishState ReferenceError", () => {
   assert.ok(!sceneControllerSrc.includes("publishState is not defined"));
   assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:success"'));
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "switch_active_weapon:authoritative-armory-applied"'));
   assert.ok(sceneControllerSrc.includes('await refreshHeavyCharacterData(characterIdAtRequest, {'));
   assert.ok(sceneControllerSrc.includes("function publishCurrentState("));
   assert.ok(sceneControllerSrc.includes("function broadcastModulePatches(scopes, reason = \"module-update\")"));
@@ -119,6 +121,23 @@ test("weapon switch refresh path does not re-enter token selection resolution", 
   assert.ok(!sceneControllerSrc.includes('refreshSelectedCharacterRuntime("weapon-switched"'));
   assert.ok(!sceneControllerSrc.includes('selection-resolve-start", {\n            reason: "weapon-switched"'));
   assert.ok(!sceneControllerSrc.includes('publishSelectionTransientState(SELECTION_STATUS.loading'));
+});
+
+test("weapon switch applies authoritative RPC armory before background inventory refresh", () => {
+  assert.ok(sceneControllerSrc.includes("function applyAuthoritativeArmoryToHeavyCache("));
+  assert.ok(sceneControllerSrc.includes("applyHeavyCacheToLastReadyState(characterIdAtRequest);"));
+  assert.ok(sceneControllerSrc.includes("ephemeral.selectedWeaponId = authoritativeActiveWeaponId;"));
+  assert.ok(sceneControllerSrc.includes("selectedWeaponMemory.set(characterIdAtRequest, authoritativeActiveWeaponId);"));
+  assert.ok(sceneControllerSrc.includes('reason: "weapon-switched"'));
+  assert.ok(sceneControllerSrc.includes("inventory: true,"));
+  assert.ok(!sceneControllerSrc.includes('reason: "weapon-switched",\n            encounterId: session?.exists ? session.id : null,\n            armory: true,'));
+});
+
+test("older armory refreshes cannot overwrite a newer switched weapon snapshot", () => {
+  assert.ok(sceneControllerSrc.includes('logDebugEvent("weapon", "heavy-armory-stale-ignored"'));
+  assert.ok(sceneControllerSrc.includes("const refreshStartedAt = Date.now();"));
+  assert.ok(sceneControllerSrc.includes("previousUpdatedAt > refreshStartedAt"));
+  assert.ok(sceneControllerSrc.includes("delete nextPatch.armory;"));
 });
 
 test("popover modules log payload receipt instead of relying on remounts", () => {
