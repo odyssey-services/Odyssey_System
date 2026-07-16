@@ -216,6 +216,66 @@ function mapEffect(ef) {
   };
 }
 
+function mapWeaponFeatureEffect(feature, weaponId = null, index = 0) {
+  const code = str(feature?.code) ?? `weapon-feature-${index + 1}`;
+  const name = str(feature?.name) ?? titleizeToken(code) ?? "Weapon effect";
+  const durationTurns = hasValue(feature?.active_rounds_left)
+    ? num(feature.active_rounds_left, 0)
+    : null;
+  const isNegative = feature?.data?.is_negative === true
+    || feature?.effect_data?.is_negative === true
+    || feature?.is_negative === true;
+  return {
+    id: str(feature?.state_id)
+      ?? str(feature?.feature_def_id)
+      ?? `weapon-feature-${str(weaponId) ?? "unknown"}-${code}`,
+    name,
+    polarity: isNegative ? MODIFIER_POLARITY.negative : MODIFIER_POLARITY.positive,
+    durationTurns,
+    description: str(feature?.description)
+      ?? str(feature?.data?.description)
+      ?? str(feature?.effect_data?.description)
+      ?? "",
+    sourceType: "weapon_feature",
+    effectKey: `weapon-feature:${str(weaponId) ?? "unknown"}:${code}`,
+    removable: false,
+  };
+}
+
+function readActiveWeaponFeatureEffects(bundle) {
+  const armory = section(bundle, "armory");
+  const activeWeapon = pickActiveWeapon(armory);
+  if (!activeWeapon) return [];
+  const weaponId = str(activeWeapon?.id) ?? "unknown";
+  return arr(activeWeapon?.features)
+    .filter((feature) => (
+      feature
+      && (
+        bool(feature?.is_active, false)
+        || num(feature?.active_rounds_left, 0) > 0
+        || num(feature?.active_uses_left, 0) > 0
+      )
+    ))
+    .map((feature, index) => mapWeaponFeatureEffect(feature, weaponId, index));
+}
+
+function uniqueEffects(effects) {
+  const seenKeys = new Set();
+  const seenNames = new Set();
+  const result = [];
+  for (const effect of arr(effects)) {
+    if (!effect) continue;
+    const key = String(effect.effectKey ?? "").trim().toLowerCase();
+    const nameKey = String(effect.name ?? "").trim().toLowerCase();
+    if (key && seenKeys.has(key)) continue;
+    if (!key && nameKey && seenNames.has(nameKey)) continue;
+    if (key) seenKeys.add(key);
+    if (nameKey) seenNames.add(nameKey);
+    result.push(effect);
+  }
+  return result;
+}
+
 function readEffectsRuntime(bundle) {
   const payload = section(bundle, "effects");
   const effectSummary = payload && typeof payload === "object" && !Array.isArray(payload)
@@ -302,7 +362,10 @@ export function mapEntity(bundle) {
 
   const zones = mapZones(combat.body_parts ?? []);
   const { activeEffects } = readEffectsRuntime(bundle);
-  const effects = activeEffects.map(mapEffect);
+  const effects = uniqueEffects([
+    ...activeEffects.map(mapEffect),
+    ...readActiveWeaponFeatureEffects(bundle),
+  ]);
 
   return {
     summary: {
@@ -799,8 +862,37 @@ export function mapSkills(abilitiesSection) {
 // ─── Modifiers ───────────────────────────────────────────────────────────────
 export function mapModifiers(bundle) {
   const { modifierRows } = readEffectsRuntime(bundle);
+  const activeWeapon = pickActiveWeapon(section(bundle, "armory"));
+  const weaponFeatureModifierRows = arr(activeWeapon?.features).flatMap((feature) => {
+    if (
+      !feature
+      || (
+        !bool(feature?.is_active, false)
+        && num(feature?.active_rounds_left, 0) <= 0
+        && num(feature?.active_uses_left, 0) <= 0
+      )
+    ) {
+      return [];
+    }
+    const modifierList = Array.isArray(feature?.data?.modifiers)
+      ? feature.data.modifiers
+      : (Array.isArray(feature?.effect_data?.modifiers) ? feature.effect_data.modifiers : []);
+    const effectCode = str(feature?.code) ?? "weapon_feature";
+    return modifierList
+      .filter((modifier) => modifier && String(modifier?.mode ?? "").trim().toLowerCase() !== "set_min")
+      .map((modifier) => ({
+        effect_codes: [effectCode],
+        effect_keys: [`weapon-feature:${effectCode}`],
+        target: str(modifier?.target) ?? "",
+        attribute: str(modifier?.attribute) ?? null,
+        skill_code: str(modifier?.skill_code ?? modifier?.skill) ?? null,
+        value: num(modifier?.value, 0),
+        aggregation: "stack",
+      }))
+      .filter((modifier) => modifier.target);
+  });
   return {
-    passive: modifierRows.map(mapModifierRow),
+    passive: [...modifierRows, ...weaponFeatureModifierRows].map(mapModifierRow),
     active: [],
     narrative: [],
   };
