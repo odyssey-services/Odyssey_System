@@ -37136,6 +37136,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     currentCharges,
     maxCharges,
     requiresReload,
+    reloadMode = "reset",
     isActive = false,
     activeUsesLeft = null,
     itemName = ""
@@ -37144,7 +37145,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
     const availableQuantity = normalizedItemCode ? getInventoryItemQuantityByCode(normalizedItemCode) : 0;
     const name = itemName || getInventoryItemNameByCode(normalizedItemCode) || normalizedItemCode;
     let disabledReason = null;
-    const canGainCharges = currentCharges < maxCharges || requiresReload;
+    const normalizedReloadMode = String(reloadMode ?? "reset").trim().toLowerCase();
+    const canGainCharges = normalizedReloadMode === "per_charge" ? currentCharges < maxCharges || requiresReload : requiresReload;
     if (isActive && toPositiveInt(activeUsesLeft, 0) > 0) {
       disabledReason = "Feature is still active.";
     } else if (!canGainCharges) {
@@ -37201,6 +37203,7 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         currentCharges,
         maxCharges,
         requiresReload: feature?.requires_reload === true,
+        reloadMode: reloadConfig.mode,
         isActive: feature?.is_active === true,
         activeUsesLeft
       })
@@ -37239,7 +37242,8 @@ function mountCharacterScreen({ root: root2, runtime: runtime2 }) {
         itemCost: reloadConfig.itemCost,
         currentCharges,
         maxCharges,
-        requiresReload
+        requiresReload,
+        reloadMode: reloadConfig.mode
       })
     };
   }

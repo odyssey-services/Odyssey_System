@@ -599,7 +599,15 @@ export function setupSceneSelection(hooks = {}) {
   function hydrateBundleWithHeavyCache(bundle, characterId) {
     if (!bundle || typeof bundle !== "object") return bundle;
     const cacheEntry = getHeavyRuntimeCache(characterId);
-    const canonicalArmory = cacheEntry?.canonicalArmory ?? null;
+    const runtimeArmory = (
+      (bundle.sections && typeof bundle.sections === "object" ? bundle.sections.armory : null)
+      ?? bundle.armory
+      ?? null
+    );
+    const canonicalArmory = buildCanonicalArmory(
+      runtimeArmory ?? cacheEntry?.armory ?? null,
+      cacheEntry?.inventory ?? null,
+    ) ?? cacheEntry?.canonicalArmory ?? null;
     if (!canonicalArmory) return bundle;
     const merged = { ...bundle, armory: canonicalArmory };
     if (merged.sections && typeof merged.sections === "object") {
