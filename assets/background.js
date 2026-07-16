@@ -9950,10 +9950,33 @@ function setupSceneSelection(hooks = {}) {
     if (!bundle || typeof bundle !== "object") return bundle;
     const cacheEntry = getHeavyRuntimeCache(characterId);
     const runtimeArmory = (bundle.sections && typeof bundle.sections === "object" ? bundle.sections.armory : null) ?? bundle.armory ?? null;
-    const canonicalArmory = buildCanonicalArmory(
-      runtimeArmory ?? cacheEntry?.armory ?? null,
-      cacheEntry?.inventory ?? null
-    ) ?? cacheEntry?.canonicalArmory ?? null;
+    const cachedCanonicalArmory = cacheEntry?.canonicalArmory ?? null;
+    let canonicalArmory = cachedCanonicalArmory;
+    if (cachedCanonicalArmory && runtimeArmory && Array.isArray(cachedCanonicalArmory.weapons) && Array.isArray(runtimeArmory.weapons)) {
+      const runtimeWeapons = new Map(
+        runtimeArmory.weapons.filter(Boolean).map((weapon) => [String(weapon?.id ?? "").trim(), weapon])
+      );
+      canonicalArmory = {
+        ...cachedCanonicalArmory,
+        ...runtimeArmory,
+        magazines: cachedCanonicalArmory.magazines,
+        weapons: cachedCanonicalArmory.weapons.map((weapon) => {
+          const runtimeWeapon = runtimeWeapons.get(String(weapon?.id ?? "").trim());
+          if (!runtimeWeapon) return weapon;
+          return {
+            ...weapon,
+            ...runtimeWeapon,
+            model: { ...weapon?.model ?? {}, ...runtimeWeapon?.model ?? {} },
+            active_profile: { ...weapon?.active_profile ?? {}, ...runtimeWeapon?.active_profile ?? {} }
+          };
+        })
+      };
+    } else {
+      canonicalArmory = buildCanonicalArmory(
+        cachedCanonicalArmory ?? runtimeArmory ?? cacheEntry?.armory ?? null,
+        cacheEntry?.inventory ?? null
+      ) ?? cachedCanonicalArmory;
+    }
     if (!canonicalArmory) return bundle;
     const merged = { ...bundle, armory: canonicalArmory };
     if (merged.sections && typeof merged.sections === "object") {
