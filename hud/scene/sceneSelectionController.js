@@ -24,7 +24,7 @@ import {
 } from "../../bridge/obrBridge.js";
 import { loadRoomSupabaseSettings, hasSupabaseSettings } from "../../bridge/settingsBridge.js";
 import { getSceneTokenLinks, getCharacterRuntimeBundle } from "../../api/characterPlacementApi.js";
-import { loadWeaponProfileMagazine, getCharacterArmory, switchWeaponFireMode, switchActiveWeapon } from "../../api/weaponApi.js";
+import { loadWeaponProfileMagazine, getCharacterArmory, switchWeaponFireMode, switchActiveWeapon, deactivateWeaponFeature } from "../../api/weaponApi.js";
 import { performAttack, executeAction, getActiveRuntime } from "../../api/combatApi.js";
 import { useAbility } from "../../api/abilityApi.js";
 import { removeCharacterEffect } from "../../api/effectsApi.js";
@@ -2361,11 +2361,17 @@ export function setupSceneSelection(hooks = {}) {
         const viewerIsGm = String(viewer?.role ?? "").toUpperCase() === "GM";
         const effectId = String(command.effectId ?? "").trim() || null;
         const effectName = String(command.effectName ?? "").trim() || null;
+        const isWeaponFeatureEffect = effectId != null && effectId.startsWith("weapon_feature:");
+        const normalizedEffectId = isWeaponFeatureEffect
+          ? (effectId.slice("weapon_feature:".length).trim() || null)
+          : effectId;
 
         logDebugEvent("effects", "gm-remove-click", {
           type: String(command.type ?? ""),
           effectId,
           effectName,
+          isWeaponFeatureEffect,
+          normalizedEffectId,
         });
 
         if (!viewerIsGm) {
@@ -2377,12 +2383,14 @@ export function setupSceneSelection(hooks = {}) {
           return;
         }
 
-        if (String(command.type ?? "") !== "remove-effect" || !effectId) return;
+        if (String(command.type ?? "") !== "remove-effect" || !normalizedEffectId) return;
         if (activeEffectDeleteInFlight === effectId) return;
 
         activeEffectDeleteInFlight = effectId;
         try {
-          const result = await removeCharacterEffect(effectId, settings);
+          const result = isWeaponFeatureEffect
+            ? await deactivateWeaponFeature(normalizedEffectId, settings)
+            : await removeCharacterEffect(normalizedEffectId, settings);
           if (result?.ok === false) {
             throw new Error(String(result?.message ?? result?.error ?? "Unable to remove active effect."));
           }
@@ -2391,6 +2399,7 @@ export function setupSceneSelection(hooks = {}) {
             ok: true,
             effectId,
             effectName,
+            isWeaponFeatureEffect,
           }, true);
 
           await refreshSelectedCharacterRuntime("active-effect-removed", { refreshQuickbar: false });
@@ -2400,6 +2409,7 @@ export function setupSceneSelection(hooks = {}) {
             ok: false,
             effectId,
             effectName,
+            isWeaponFeatureEffect,
             error: message,
           }, false);
           if (lastState) publishState(lastState);

@@ -8486,14 +8486,14 @@ function mapWeaponFeatureEffect(feature, weaponId = null, index = 0) {
   const durationTurns = hasValue(feature?.active_rounds_left) ? num5(feature.active_rounds_left, 0) : null;
   const isNegative = feature?.data?.is_negative === true || feature?.effect_data?.is_negative === true || feature?.is_negative === true;
   return {
-    id: str3(feature?.state_id) ?? str3(feature?.feature_def_id) ?? `weapon-feature-${str3(weaponId) ?? "unknown"}-${code}`,
+    id: `weapon_feature:${str3(feature?.state_id) ?? str3(feature?.feature_def_id) ?? `weapon-feature-${str3(weaponId) ?? "unknown"}-${code}`}`,
     name,
     polarity: isNegative ? MODIFIER_POLARITY.negative : MODIFIER_POLARITY.positive,
     durationTurns,
     description: str3(feature?.description) ?? str3(feature?.data?.description) ?? str3(feature?.effect_data?.description) ?? "",
     sourceType: "weapon_feature",
     effectKey: `weapon-feature:${str3(weaponId) ?? "unknown"}:${code}`,
-    removable: false
+    removable: true
   };
 }
 function readActiveWeaponFeatureEffects(bundle) {
@@ -11421,10 +11421,14 @@ function setupSceneSelection(hooks = {}) {
         const viewerIsGm = String(viewer?.role ?? "").toUpperCase() === "GM";
         const effectId = String(command.effectId ?? "").trim() || null;
         const effectName = String(command.effectName ?? "").trim() || null;
+        const isWeaponFeatureEffect = effectId != null && effectId.startsWith("weapon_feature:");
+        const normalizedEffectId = isWeaponFeatureEffect ? effectId.slice("weapon_feature:".length).trim() || null : effectId;
         logDebugEvent("effects", "gm-remove-click", {
           type: String(command.type ?? ""),
           effectId,
-          effectName
+          effectName,
+          isWeaponFeatureEffect,
+          normalizedEffectId
         });
         if (!viewerIsGm) {
           logDebugEvent("effects", "gm-remove-result", {
@@ -11434,18 +11438,19 @@ function setupSceneSelection(hooks = {}) {
           }, false);
           return;
         }
-        if (String(command.type ?? "") !== "remove-effect" || !effectId) return;
+        if (String(command.type ?? "") !== "remove-effect" || !normalizedEffectId) return;
         if (activeEffectDeleteInFlight === effectId) return;
         activeEffectDeleteInFlight = effectId;
         try {
-          const result = await removeCharacterEffect(effectId, settings);
+          const result = isWeaponFeatureEffect ? await deactivateWeaponFeature(normalizedEffectId, settings) : await removeCharacterEffect(normalizedEffectId, settings);
           if (result?.ok === false) {
             throw new Error(String(result?.message ?? result?.error ?? "Unable to remove active effect."));
           }
           logDebugEvent("effects", "gm-remove-result", {
             ok: true,
             effectId,
-            effectName
+            effectName,
+            isWeaponFeatureEffect
           }, true);
           await refreshSelectedCharacterRuntime("active-effect-removed", { refreshQuickbar: false });
         } catch (error) {
@@ -11454,6 +11459,7 @@ function setupSceneSelection(hooks = {}) {
             ok: false,
             effectId,
             effectName,
+            isWeaponFeatureEffect,
             error: message
           }, false);
           if (lastState) publishState(lastState);

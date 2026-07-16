@@ -226,9 +226,9 @@ function mapWeaponFeatureEffect(feature, weaponId = null, index = 0) {
     || feature?.effect_data?.is_negative === true
     || feature?.is_negative === true;
   return {
-    id: str(feature?.state_id)
+    id: `weapon_feature:${str(feature?.state_id)
       ?? str(feature?.feature_def_id)
-      ?? `weapon-feature-${str(weaponId) ?? "unknown"}-${code}`,
+      ?? `weapon-feature-${str(weaponId) ?? "unknown"}-${code}`}`,
     name,
     polarity: isNegative ? MODIFIER_POLARITY.negative : MODIFIER_POLARITY.positive,
     durationTurns,
@@ -238,7 +238,7 @@ function mapWeaponFeatureEffect(feature, weaponId = null, index = 0) {
       ?? "",
     sourceType: "weapon_feature",
     effectKey: `weapon-feature:${str(weaponId) ?? "unknown"}:${code}`,
-    removable: false,
+    removable: true,
   };
 }
 
